@@ -233,6 +233,29 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ('const r = await run(this.#tool, ["store", `--label=Orbs: ChatGPT sign-in`, "service", SERVICE, "key", key], value);',
          'const r = await run(this.#tool, ["store", `--label=Orbs: ChatGPT sign-in`, "service", SERVICE, "key", key, value], value);'),
     ], ["chatgpt.test.ts"]),
+    # the brain order (PLAN 1.11)
+    ("Gemini is asked before ChatGPT", "src/brain/brains.ts", [
+        ('      { id: "chatgpt", label: "ChatGPT", endpoint: o.chatgpt, setup: "sign in with ChatGPT (/chatgpt)" },\n      { id: "gemini", label: "Gemini", endpoint: () => this.#gemini(), setup: "add a Gemini API key in Settings" },\n',
+         '      { id: "gemini", label: "Gemini", endpoint: () => this.#gemini(), setup: "add a Gemini API key in Settings" },\n      { id: "chatgpt", label: "ChatGPT", endpoint: o.chatgpt, setup: "sign in with ChatGPT (/chatgpt)" },\n'),
+    ], ["brains.test.ts"]),
+    ("a brain at its limit does not step aside", "src/agent/loop.ts", [
+        ("      if (r.error && ep.chain && !r.text && !r.toolCalls.length && this.#o.chain) {", "      if (false) {"),
+    ], ["brains.test.ts"]),
+    ("no second pass: one refusal is the error", "src/agent/loop.ts", [
+        ("        if (++passes < 3) {", "        if (++passes < 1) {"),
+    ], ["brains.test.ts", "stop.test.ts"]),
+    ("a brain that rested is never first again", "src/brain/chain.ts", [
+        ("      if (r && r.until > now) continue;", "      if (r) continue;"),
+    ], ["brains.test.ts", "chain.test.ts"]),
+    ("a refused Gemini key is kept", "src/brain/brains.ts", [
+        ('    if (res.status === 400 || res.status === 401 || res.status === 403) throw new GeminiKeyError("Gemini refused that key.");\n', ""),
+    ], ["brains.test.ts"]),
+    ("the Gemini key is written into brains.json", "src/brain/brains.ts", [
+        ("    this.#saved = { ...this.#saved, gemini: { model } };", "    this.#saved = { ...this.#saved, gemini: { model, key: k } as { model: string } };"),
+    ], ["brains.test.ts"]),
+    ("the error says nothing of how to set a brain up", "src/brain/chain.ts", [
+        ('    if (s.state === "absent") return `${cap(s.label)}: not set up (${s.setup})`;', '    if (s.state === "absent") return `${cap(s.label)}: not set up`;'),
+    ], ["brains.test.ts", "chain.test.ts"]),
 ]
 
 # the app (PLAN 2.x): paths are inside packages/app

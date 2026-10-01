@@ -41,11 +41,20 @@ test("an error mid-reply keeps the partial reply, and the notice names the trans
 });
 
 test("a server that refuses says how (the HTTP status), and keeps nothing it did not write", async (t) => {
-  const { home } = await agentHome(t, [{ status: 503 }]);
+  // refused on all three passes through the brain order (PLAN 1.11): then the one error
+  const { home } = await agentHome(t, [{ status: 503 }, { status: 503 }, { status: 503 }]);
   home.inbox.send("juniper", "chat:1", "go");
   await home.inbox.idle();
-  assert.match(notices(home).at(-1) ?? "", /HTTP 503/);
+  assert.match(notices(home).at(-1) ?? "", /^No brain could answer after 3 tries\..*it failed \(503\)/);
   assert.equal(home.conversations.list("chat:1").some((m) => m.role === "assistant"), false);
+});
+
+test("a server that refuses once is tried again on the next pass, and answers", async (t) => {
+  const { home } = await agentHome(t, [{ status: 503 }, { chunks: ["back again"] }]);
+  home.inbox.send("juniper", "chat:1", "go");
+  await home.inbox.idle();
+  assert.equal(home.conversations.list("chat:1").filter((m) => m.role === "assistant").at(-1)?.content, "back again");
+  assert.match(notices(home)[0] ?? "", /^My other brain: it failed \(503\)\./, "and said why it stepped aside");
 });
 
 test("the stop reaches the running tool: a long command ends at once and the run says so", async (t) => {

@@ -9,6 +9,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { join } from "node:path";
 import type { Home } from "./home.ts";
 import { UnknownOrbError } from "./inbox.ts";
+import { GeminiKeyError } from "./brain/brains.ts";
 import { version } from "./version.ts";
 
 export type HomeDoor = { port: number; token: string; file: string; close(): Promise<void> };
@@ -163,6 +164,39 @@ async function handle(
         }
         return { chatgpt: await home.chatgpt.status() };
       }
+    }
+  }
+  // The brain order (PLAN 1.11): where each brain stands, the Gemini key, the local coder. A reply
+  // never carries the key; a refused key is never kept.
+  if (method === "GET" && url.pathname === "/brains") return { brains: home.brains.status() };
+  if (parts[0] === "brains" && parts[1] === "gemini" && parts.length === 2) {
+    if (method === "DELETE") {
+      await home.brains.clearGemini();
+      return { brains: home.brains.status() };
+    }
+    if (method === "POST") {
+      try {
+        await home.brains.setGemini(text(await body(req), "key"));
+      } catch (e) {
+        if (e instanceof GeminiKeyError) throw new HttpError(400, e.message);
+        throw e;
+      }
+      return { brains: home.brains.status() };
+    }
+  }
+  if (parts[0] === "brains" && parts[1] === "local" && parts.length === 2) {
+    if (method === "DELETE") {
+      home.brains.setLocal(null);
+      return { brains: home.brains.status() };
+    }
+    if (method === "POST") {
+      const b = await body(req);
+      try {
+        home.brains.setLocal({ baseUrl: text(b, "baseUrl"), model: text(b, "model") });
+      } catch (e) {
+        throw new HttpError(400, e instanceof Error ? e.message : String(e));
+      }
+      return { brains: home.brains.status() };
     }
   }
   if (method === "POST" && url.pathname === "/orbs") {

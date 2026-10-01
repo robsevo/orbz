@@ -9,7 +9,8 @@
 // is not answering, and what would fix it.
 import type { Endpoint } from "./openai.ts";
 
-export type LinkId = "chatgpt" | "gemini" | "local";
+/** ChatGPT, one Gemini key, the preset's own key when there is one (a router, a test), the local coder. */
+export type LinkId = "chatgpt" | "gemini" | "key" | "local";
 
 export type Link = {
   id: LinkId;
@@ -21,9 +22,11 @@ export type Link = {
   setup: string;
 };
 
-export type Rest = { why: string; until: number };
+/** Why a brain rests: at a limit (it will not answer until it resets) or down (nothing answered,
+ * a failure: worth trying again on the chain's next pass). */
+export type Rest = { why: string; until: number; kind: "limit" | "down" };
 
-export type LinkState = { id: LinkId; label: string; state: "ready" | "resting" | "absent"; why: string | null; until: number | null };
+export type LinkState = { id: LinkId; label: string; state: "ready" | "resting" | "absent"; why: string | null; until: number | null; setup: string };
 
 export class NoBrainAnswered extends Error {
   readonly states: LinkState[];
@@ -38,10 +41,11 @@ const clockTime = (ms: number): string => new Date(ms).toTimeString().slice(0, 5
 
 /** The one error, in words: each brain, why it is not answering, and what to do. */
 export function explain(states: LinkState[], tries: number): string {
+  const cap = (t: string): string => t[0]!.toUpperCase() + t.slice(1);
   const lines = states.map((s) => {
-    if (s.state === "absent") return `${s.label}: not set up`;
-    if (s.state === "resting") return `${s.label}: ${s.why}${s.until ? `, back about ${clockTime(s.until)}` : ""}`;
-    return `${s.label}: ready`;
+    if (s.state === "absent") return `${cap(s.label)}: not set up (${s.setup})`;
+    if (s.state === "resting") return `${cap(s.label)}: ${s.why}${s.until ? `, back about ${clockTime(s.until)}` : ""}`;
+    return `${cap(s.label)}: ready`;
   });
   return `No brain could answer after ${tries} tries. ${lines.join(". ")}.`;
 }
@@ -70,8 +74,23 @@ export class BrainChain {
   }
 
   /** A brain could not answer: it rests until `until`, and the next one is asked. */
-  rest(id: LinkId, why: string, until: number): void {
-    this.#rest.set(id, { why, until });
+  rest(id: LinkId, r: Rest): void {
+    this.#rest.set(id, r);
+  }
+
+  /** A new pass through the chain: the brains that were down are tried again; those at a limit wait. */
+  retryDown(): void {
+    for (const [id, r] of this.#rest) if (r.kind === "down") this.#rest.delete(id);
+  }
+
+  /** The chain's clock, for how long a brain rests. */
+  now(): number {
+    return this.#clock();
+  }
+
+  /** The label of a brain by its place, for the notices. */
+  labelOf(id: LinkId): string {
+    return this.links.find((l) => l.id === id)?.label ?? id;
   }
 
   /** Each brain and where it stands, for the error and for Settings. */
@@ -79,8 +98,9 @@ export class BrainChain {
     const now = this.#clock();
     return this.links.map((link) => {
       const r = this.#rest.get(link.id);
-      if (r && r.until > now) return { id: link.id, label: link.label, state: "resting", why: r.why, until: r.until };
-      return link.endpoint() ? { id: link.id, label: link.label, state: "ready", why: null, until: null } : { id: link.id, label: link.label, state: "absent", why: null, until: null };
+      const base = { id: link.id, label: link.label, setup: link.setup };
+      if (r && r.until > now) return { ...base, state: "resting", why: r.why, until: r.until };
+      return link.endpoint() ? { ...base, state: "ready", why: null, until: null } : { ...base, state: "absent", why: null, until: null };
     });
   }
 
@@ -98,13 +118,13 @@ export class BrainChain {
 
 /** How long a brain rests after it could not answer: until its limit resets when the reply says
  * (a Retry-After, a daily quota), a minute when nothing was listening, else a minute too. */
-export function restFor(o: { status: number | null; message: string; retryAfterS?: number | null }, now: number): { why: string; until: number } {
+export function restFor(o: { status: number | null; message: string; retryAfterS?: number | null }, now: number): Rest {
   if (o.status === 429 || /RESOURCE_EXHAUSTED|quota|rate limit|usage limit/i.test(o.message)) {
     const daily = /PerDay|per day|daily/i.test(o.message);
     const s = o.retryAfterS ?? (daily ? 3600 : 60);
-    return { why: daily ? "its daily limit is reached" : "its limit is reached", until: now + s * 1000 };
+    return { why: daily ? "its daily limit is reached" : "its limit is reached", until: now + s * 1000, kind: "limit" };
   }
-  if (o.status === null) return { why: "nothing answered", until: now + 60_000 };
-  if (o.status === 401 || o.status === 403) return { why: "its key was refused", until: now + 3_600_000 };
-  return { why: `it failed (${o.status})`, until: now + 60_000 };
+  if (o.status === null) return { why: "nothing answered", until: now + 60_000, kind: "down" };
+  if (o.status === 401 || o.status === 403) return { why: "its key was refused", until: now + 3_600_000, kind: "limit" };
+  return { why: `it failed (${o.status})`, until: now + 60_000, kind: "down" };
 }

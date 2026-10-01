@@ -91,12 +91,14 @@ export class FakeMailbox implements TriggerSource {
 export async function agentHome(t: TestContext, script: Turn[], more: Partial<HomeOptions> = {}): Promise<{ home: Home; model: FakeModel; dataDir: string }> {
   const model = await fakeModel(t, script);
   const dataDir = more.dataDir ?? tempDir(t);
+  const { agent, ...rest } = more;
   const home = Home.open({
     dataDir,
     protect: [],
     spendCapUsd: null,
     brain: { preset: { id: "t", title: "t", own: null, big: { name: "big", baseUrl: model.url, model: "m", retries: 0 }, teacher: null } },
-    ...more,
+    agent: { passWaitMs: 20, ...agent }, // the brain order's passes, quickly (PLAN 1.11)
+    ...rest,
   });
   t.after(() => home.close());
   if (!home.inbox.orb("juniper")) home.inbox.addOrb("juniper", "Juniper");

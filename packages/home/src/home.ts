@@ -16,6 +16,7 @@ import { HabitShelf } from "./brain/habits.ts";
 import { Ladder, type LadderOptions } from "./brain/ladder.ts";
 import type { Preset } from "./brain/presets.ts";
 import { ChatGPT, type ChatGPTOptions } from "./chatgpt/chatgpt.ts";
+import { Brains, type BrainsOptions } from "./brain/brains.ts";
 import { Spend } from "./brain/spend.ts";
 import { type Card, Conversations } from "./agent/conversation.ts";
 import { AgentRunner, type AgentOptions } from "./agent/loop.ts";
@@ -37,7 +38,7 @@ export type HomeOptions = {
   /** What does the work of a run. Default: the agent loop (PLAN 1.5) on the preset's big brain. */
   runner?: Runner;
   /** Agent loop settings (tools, step limit, compaction) when the default runner is used. */
-  agent?: Partial<Pick<AgentOptions, "tools" | "maxSteps" | "compactAtTokens" | "keepRecentTokens" | "onText">> & {
+  agent?: Partial<Pick<AgentOptions, "tools" | "maxSteps" | "compactAtTokens" | "keepRecentTokens" | "onText" | "passWaitMs">> & {
     /** Test hook: what the rules say for a call (the floor, the one-way switch and away still apply). */
     decide?: (def: ToolDef, args: Record<string, unknown>) => Decision | null;
     /** The plain-English rule matcher. Default: the preset's own brain (else its big brain). */
@@ -58,6 +59,8 @@ export type HomeOptions = {
   /** Continue with ChatGPT (PLAN 1.10): the OS keychain and OpenAI's own servers by default; tests
    * give a stand-in store and their own issuer. Once signed in, the plan answers before the preset. */
   chatgpt?: Partial<Omit<ChatGPTOptions, "dataDir" | "events" | "clock">>;
+  /** The brains after ChatGPT (PLAN 1.11): where the Gemini key is kept, and Gemini's root (a test's fake). */
+  brains?: Pick<BrainsOptions, "store" | "geminiBase">;
   /** Dollars a day the brains may cost, by what the providers report; null for no cap. */
   spendCapUsd?: number | null;
 };
@@ -108,6 +111,8 @@ export class Home {
   readonly agent: AgentRunner | null;
   /** Continue with ChatGPT (PLAN 1.10): the person's plan as the big brain, once they sign in. */
   readonly chatgpt: ChatGPT;
+  /** The brain order (PLAN 1.11): ChatGPT, one Gemini key, the preset's key, the local coder. */
+  readonly brains: Brains;
   /** What happens as it happens, for whoever is watching (the terminal, the web app): every event
    * once committed ("event"), and a reply's text as it streams ("text"). Never stored. */
   readonly live = new EventEmitter();
@@ -139,6 +144,8 @@ export class Home {
     const big = opts.brain?.preset.big ?? null;
     this.chatgpt = new ChatGPT({ dataDir: this.dataDir, events: this.events, clock: this.clock, ...opts.chatgpt });
     const chatgptReady = this.chatgpt.load().then(() => {}, () => {}); // a home never signed in does not touch the keychain
+    this.brains = new Brains({ dataDir: this.dataDir, presetKey: big, chatgpt: () => this.chatgpt.endpoint(), clock: () => this.clock.now(), ...opts.brains });
+    const brainsReady = Promise.all([chatgptReady, this.brains.load().catch(() => {})]).then(() => {}); // nor one with no Gemini key
     this.kit = opts.kit
       ? new Kit({ ...(opts.kit === true ? {} : opts.kit), events: this.events, clock: this.clock, dataDir: this.dataDir })
       : null;
@@ -186,9 +193,10 @@ export class Home {
           clock: this.clock,
           dataDir: this.dataDir,
           background: this.#background,
-          endpoint: () => this.chatgpt.endpoint() ?? big,
+          endpoint: () => this.brains.chain.current()?.ep ?? null,
+          chain: this.brains.chain,
           planLimited: (why) => this.chatgpt.limited(why),
-          ready: () => chatgptReady,
+          ready: () => brainsReady,
           orbName: (orb) => this.inbox.orb(orb)?.name ?? orb,
         });
     this.inbox = new Inboxes(db, this.events, this.clock, opts.runner ?? this.agent!, opts.graceMs);

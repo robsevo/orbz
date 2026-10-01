@@ -26,11 +26,15 @@ export type Streamed = {
   errorCode: string | null;
   /** A plan brain that cannot serve now, and why: the loop asks the next brain (PLAN 1.10). */
   limited: Limited | null;
+  /** The HTTP status of a refused request (null: it never got an answer), and how long the
+   * server asked us to wait (Retry-After, seconds): how long the brain rests (PLAN 1.11). */
+  status: number | null;
+  retryAfterS: number | null;
 };
 
 export const emptyStreamed = (): Streamed => ({
   text: "", toolCalls: [], finish: null, promptTokens: 0, completionTokens: 0, costUsd: null, costSource: "unknown",
-  stopped: false, error: null, errorCode: null, limited: null,
+  stopped: false, error: null, errorCode: null, limited: null, status: null, retryAfterS: null,
 });
 
 export async function streamChat(
@@ -65,6 +69,9 @@ export async function streamChat(
     });
     if (!res.ok || !res.body) {
       out.error = `${ep.name}: HTTP ${res.status}: ${(await res.text()).slice(0, 300)}`;
+      out.status = res.status;
+      const wait = Number(res.headers.get("retry-after"));
+      if (Number.isFinite(wait) && wait > 0) out.retryAfterS = wait;
       return finish();
     }
     const header = res.headers.get("x-litellm-response-cost");

@@ -30,33 +30,45 @@ test("the order: ChatGPT first, then Gemini, then the local coder; each tagged w
 test("a brain at its limit rests, the next answers, and the rested one is first again", () => {
   let now = 1_000_000;
   const c = chain({ chatgpt: true, gemini: true, local: true }, () => now);
-  c.rest("chatgpt", "its usage limit is reached", now + 60_000);
+  c.rest("chatgpt", { why: "its usage limit is reached", until: now + 60_000, kind: "limit" });
   assert.equal(c.current()?.link.id, "gemini");
   assert.equal(c.after("chatgpt")?.label, "Gemini", "the notice names who answers next");
-  c.rest("gemini", "its daily limit is reached", now + 3_600_000);
+  c.rest("gemini", { why: "its daily limit is reached", until: now + 3_600_000, kind: "limit" });
   assert.equal(c.current()?.link.id, "local");
   now += 61_000;
   assert.equal(c.current()?.link.id, "chatgpt", "ChatGPT has rested: first again");
 });
 
+test("a new pass tries again the brains that were down, never one at its limit", () => {
+  const now = 0;
+  const c = chain({ chatgpt: true, gemini: true, local: true }, () => now);
+  c.rest("chatgpt", { why: "its usage limit is reached", until: 3_600_000, kind: "limit" });
+  c.rest("gemini", { why: "nothing answered", until: 60_000, kind: "down" });
+  c.rest("local", { why: "nothing answered", until: 60_000, kind: "down" });
+  assert.equal(c.current(), null);
+  c.retryDown();
+  assert.equal(c.current()?.link.id, "gemini", "Gemini was only down: tried again first");
+  assert.equal(c.states().find((s) => s.id === "chatgpt")?.state, "resting", "ChatGPT still waits for its limit");
+});
+
 test("how long a brain rests comes from its reply", () => {
   const now = 0;
-  assert.deepEqual(restFor({ status: 429, message: "rate limit", retryAfterS: 20 }, now), { why: "its limit is reached", until: 20_000 });
+  assert.deepEqual(restFor({ status: 429, message: "rate limit", retryAfterS: 20 }, now), { why: "its limit is reached", until: 20_000, kind: "limit" });
   assert.equal(restFor({ status: 429, message: "Quota exceeded: GenerateRequestsPerDayPerProjectPerModel-FreeTier" }, now).why, "its daily limit is reached");
   assert.equal(restFor({ status: 429, message: "Quota exceeded: GenerateRequestsPerDayPerProjectPerModel-FreeTier" }, now).until, 3_600_000);
-  assert.deepEqual(restFor({ status: null, message: "fetch failed: ECONNREFUSED" }, now), { why: "nothing answered", until: 60_000 });
+  assert.deepEqual(restFor({ status: null, message: "fetch failed: ECONNREFUSED" }, now), { why: "nothing answered", until: 60_000, kind: "down" });
   assert.equal(restFor({ status: 401, message: "API key not valid" }, now).why, "its key was refused");
 });
 
 test("the one error names every brain and why it is not answering", () => {
   let now = Date.parse("2026-10-01T14:00:00");
   const c = chain({ chatgpt: true }, () => now);
-  c.rest("chatgpt", "its usage limit is reached", now + 3_600_000);
+  c.rest("chatgpt", { why: "its usage limit is reached", until: now + 3_600_000, kind: "limit" });
   const msg = explain(c.states(), 3);
   assert.match(msg, /^No brain could answer after 3 tries\./);
   assert.match(msg, /ChatGPT: its usage limit is reached, back about 15:00/);
-  assert.match(msg, /Gemini: not set up/);
-  assert.match(msg, /the local coder: not set up/);
+  assert.match(msg, /Gemini: not set up \(add a Gemini key\)/, "and what would set it up");
+  assert.match(msg, /The local coder: not set up/);
   // control: a ready brain is said to be ready, never "not set up"
   assert.match(explain(chain({ gemini: true }, () => now).states(), 1), /Gemini: ready/);
 });

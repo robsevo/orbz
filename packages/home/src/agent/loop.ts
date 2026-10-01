@@ -21,6 +21,7 @@ import type { Clock } from "../clock.ts";
 import type { EventLog } from "../events.ts";
 import type { RunContext, RunResult, Runner } from "../inbox.ts";
 import { BrainCallError, chat, type Endpoint, type Limited } from "../brain/openai.ts";
+import { type BrainChain, explain, type LinkId, restFor } from "../brain/chain.ts";
 import { MANAGE_USAGE } from "../chatgpt/chatgpt.ts";
 import type { Spend } from "../brain/spend.ts";
 import type { Card, Conversations, Message, ToolCall } from "./conversation.ts";
@@ -44,6 +45,11 @@ export type AgentOptions = {
   planLimited?: (why: Limited) => Promise<void>;
   /** Resolves once the brains are known (the ChatGPT sign-in read from the keychain). */
   ready?: () => Promise<void>;
+  /** The brain order (PLAN 1.11): a brain that cannot answer rests and the next answers; after
+   * three passes with none answering, the one error. `endpoint()` is its first brain now. */
+  chain?: BrainChain;
+  /** How long the chain waits between passes (1 s, then 2 s). */
+  passWaitMs?: number;
   orbName: (orb: string) => string;
   tools?: ToolDef[];
   /** What decides each call (PLAN 1.6): the floor, the person's rules, the one-way switch, away. */
@@ -74,11 +80,11 @@ export const PLAN_ANSWERS = {
 const est = (text: string): number => Math.ceil(text.length / 4) + 4;
 
 export class AgentRunner implements Runner {
-  readonly #o: Required<Omit<AgentOptions, "redact" | "onText" | "planLimited" | "ready">> & Pick<AgentOptions, "redact" | "onText" | "planLimited" | "ready">;
+  readonly #o: Required<Omit<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain">> & Pick<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain">;
   readonly #tools: Map<string, ToolDef>;
 
   constructor(opts: AgentOptions) {
-    this.#o = { tools: TOOLS, maxSteps: 50, compactAtTokens: 100_000, keepRecentTokens: 20_000, ...opts };
+    this.#o = { tools: TOOLS, maxSteps: 50, compactAtTokens: 100_000, keepRecentTokens: 20_000, passWaitMs: 1000, ...opts };
     this.#tools = new Map(this.#o.tools.map((t) => [t.name, t]));
   }
 
@@ -137,12 +143,28 @@ export class AgentRunner implements Runner {
     // The turn is the person's request this run works on; attended unless only a schedule or trigger woke it.
     const at = this.#site(ctx);
     await this.#o.ready?.();
+    let passes = 0;
     for (let n = 0; n < this.#o.maxSteps; n++) {
       if (ctx.signal.aborted) return this.#ended("stopped", ctx);
       let ep = this.#o.endpoint(); // every step: a plan at its limit since the last one has stepped aside
       if (!ep) {
-        conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "notice", run: ctx.run, content: "No brain is set up yet, so I can't answer. Choose one in settings." });
-        return { outcome: "ok", summary: "no brain" };
+        const chain = this.#o.chain;
+        const states = chain?.states() ?? [];
+        if (!chain || states.every((s) => s.state === "absent")) {
+          conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "notice", run: ctx.run, content: "No brain is set up yet, so I can't answer. Choose one in settings." });
+          return { outcome: "ok", summary: "no brain" };
+        }
+        // some are set up, none can answer now: look again (the ones that were down), three passes in all
+        if (++passes < 3) {
+          chain.retryDown();
+          await abortable(this.#o.passWaitMs * passes, ctx.signal);
+          n--;
+          continue;
+        }
+        const msg = explain(chain.states(), 3);
+        conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "notice", run: ctx.run, content: msg, meta: { error: true, brains: chain.states() } });
+        step("no-brain", { brains: chain.states().map((s) => ({ id: s.id, state: s.state, why: s.why })) });
+        return { outcome: "ok", summary: "no brain answered" };
       }
       const standing = standingContext({ orbName: this.#o.orbName(ctx.orb), brainDir: join(this.#o.dataDir, "brain"), workspace: tctx.workspace });
       await this.#compact(ctx, ep, est(standing));
@@ -179,6 +201,13 @@ export class AgentRunner implements Runner {
           continue;
         }
         return { outcome: "ok", summary: `plan ${r.limited}` };
+      }
+      if (r.error && ep.chain && !r.text && !r.toolCalls.length && this.#o.chain) {
+        // it failed before a word arrived: it steps aside, saying so, and the same step goes to the next
+        this.#stepAside(ctx, ep.chain, { status: r.status, message: r.error, retryAfterS: r.retryAfterS });
+        step("fallback", { from: ep.chain, status: r.status });
+        n--;
+        continue;
       }
       if (r.error) {
         if (r.text) conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "assistant", run: ctx.run, content: r.text, meta: { error: r.error } });
@@ -342,11 +371,25 @@ export class AgentRunner implements Runner {
     await this.#o.planLimited?.(why);
     const next = this.#o.endpoint();
     if (next && !next.plan) {
-      say(`Answering with ${next.name === "big" ? "my other brain" : next.name} until then.`, { fallback: next.name });
+      const label = next.chain && this.#o.chain ? this.#o.chain.labelOf(next.chain) : next.name === "big" ? "my other brain" : next.name;
+      say(`Answering with ${label} until then.`, { fallback: next.chain ?? next.name });
       return next;
     }
     say("No other brain is set up, so this waits for your ChatGPT plan.", { fallback: null });
     return null;
+  }
+
+  /** A brain in the order could not answer: it rests (until its limit resets, or a minute when it
+   * was down), and the person is told who answers instead. */
+  #stepAside(ctx: RunContext, id: LinkId, o: { status: number | null; message: string; retryAfterS: number | null }): void {
+    const chain = this.#o.chain!;
+    const r = restFor(o, chain.now());
+    chain.rest(id, r);
+    const next = chain.after(id);
+    const until = r.kind === "limit" ? ` until about ${new Date(r.until).toTimeString().slice(0, 5)}` : "";
+    const label = chain.labelOf(id);
+    const content = `${label[0]!.toUpperCase()}${label.slice(1)}: ${r.why}${next ? `; answering with ${next.label}${until}` : ""}.`;
+    this.#o.conversations.add({ conversation: ctx.conversation, orb: ctx.orb, role: "notice", run: ctx.run, content, meta: { brain: id, rest: r.kind, fallback: next?.id ?? null } });
   }
 
   async #compact(ctx: RunContext, ep: Endpoint, standingTokens: number): Promise<void> {
@@ -371,8 +414,13 @@ export class AgentRunner implements Runner {
     try {
       r = await chat(ep, ask, { maxTokens: 1500, signal: ctx.signal });
     } catch (e) {
-      if (!(e instanceof BrainCallError && e.limited && ep.plan)) throw e;
-      const next = await this.#limited(ctx, e.limited);
+      if (!(e instanceof BrainCallError)) throw e;
+      let next: Endpoint | null = null;
+      if (e.limited && ep.plan) next = await this.#limited(ctx, e.limited);
+      else if (ep.chain && this.#o.chain) {
+        this.#stepAside(ctx, ep.chain, { status: e.status, message: e.message, retryAfterS: null });
+        next = this.#o.endpoint();
+      }
       if (!next) throw e;
       ep = next;
       r = await chat(ep, ask, { maxTokens: 1500, signal: ctx.signal });
@@ -399,4 +447,13 @@ function parseArgs(call: ToolCall): Record<string, unknown> | null {
   } catch {
     return null;
   }
+}
+
+/** Waits `ms`, or less if the run is stopped meanwhile. */
+function abortable(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal.aborted) return resolve();
+    const t = setTimeout(resolve, ms);
+    signal.addEventListener("abort", () => (clearTimeout(t), resolve()), { once: true });
+  });
 }

@@ -15,6 +15,9 @@ export type Turn = {
   /** After the chunks, cut the connection. */
   drop?: boolean;
   status?: number;
+  /** A refusal's body (Gemini's RESOURCE_EXHAUSTED, say) and its Retry-After, in seconds. */
+  body?: unknown;
+  retryAfter?: number;
 };
 
 export type FakeModel = {
@@ -22,16 +25,27 @@ export type FakeModel = {
   agent: Record<string, unknown>[][];
   summaries: number;
   script: Turn[];
+  /** What GET /models lists (Gemini's OpenAI root lists "models/…" ids), and the keys it was asked with. */
+  models: string[];
+  keys: string[];
+  /** GET /models refuses with this status (a bad key). */
+  modelsStatus?: number;
 };
 
 export async function fakeModel(t: TestContext, script: Turn[] = []): Promise<FakeModel> {
-  const fm: FakeModel = { url: "", agent: [], summaries: 0, script };
+  const fm: FakeModel = { url: "", agent: [], summaries: 0, script, models: [], keys: [] };
   const sse = (o: unknown): string => `data: ${JSON.stringify(o)}\n\n`;
   let ids = 0;
   const server = createServer((req, res) => {
     let raw = "";
     req.on("data", (d) => (raw += String(d)));
     req.on("end", async () => {
+      fm.keys.push(String(req.headers.authorization ?? ""));
+      if (req.method === "GET" && req.url?.endsWith("/models")) {
+        res.writeHead(fm.modelsStatus ?? 200, { "content-type": "application/json" });
+        res.end(JSON.stringify(fm.modelsStatus ? { error: { message: "API key not valid" } } : { object: "list", data: fm.models.map((id) => ({ id, object: "model" })) }));
+        return;
+      }
       const body = JSON.parse(raw || "{}") as { messages?: { content?: unknown }[]; stream?: boolean };
       const msgs = body.messages ?? [];
       if (!body.stream) {
@@ -43,8 +57,8 @@ export async function fakeModel(t: TestContext, script: Turn[] = []): Promise<Fa
       fm.agent.push(msgs as Record<string, unknown>[]);
       const turn = fm.script.shift() ?? {};
       if (turn.status && turn.status >= 400) {
-        res.writeHead(turn.status, { "content-type": "application/json" });
-        res.end(JSON.stringify({ error: { message: "scripted failure" } }));
+        res.writeHead(turn.status, { "content-type": "application/json", ...(turn.retryAfter && { "retry-after": String(turn.retryAfter) }) });
+        res.end(JSON.stringify(turn.body ?? { error: { message: "scripted failure" } }));
         return;
       }
       res.writeHead(200, { "content-type": "text/event-stream" });

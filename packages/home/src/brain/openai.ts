@@ -33,7 +33,7 @@ export type Endpoint = {
   /** Requests here use the person's ChatGPT plan: its replies carry the badge, its limits pass to the next brain. */
   plan?: "chatgpt";
   /** Its place in the brain order (PLAN 1.11, chain.ts): a limit here passes to the next brain. */
-  chain?: "chatgpt" | "gemini" | "local";
+  chain?: "chatgpt" | "gemini" | "key" | "local";
 };
 
 export type CostSource = "reported" | "price-table" | "unknown";
