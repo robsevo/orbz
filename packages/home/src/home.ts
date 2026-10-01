@@ -11,6 +11,10 @@ import { openDb } from "./db.ts";
 import { EventLog } from "./events.ts";
 import { Inboxes, type Runner } from "./inbox.ts";
 import { Kit, type KitOptions } from "./kit.ts";
+import { HabitShelf } from "./brain/habits.ts";
+import { Ladder, type LadderOptions } from "./brain/ladder.ts";
+import type { Preset } from "./brain/presets.ts";
+import { Spend } from "./brain/spend.ts";
 import { Loops, type LoopsOptions } from "./loops.ts";
 import { Schedules } from "./schedule.ts";
 import { Triggers } from "./triggers.ts";
@@ -29,7 +33,14 @@ export type HomeOptions = {
   loops?: Omit<LoopsOptions, "dir" | "protect">;
   /** Run Ash's kit beside the home (PLAN 1.3). Off unless asked for: most tests don't need it. */
   kit?: boolean | Omit<KitOptions, "events" | "clock" | "dataDir">;
+  /** The brain ladder's endpoints (PLAN 1.4). Without one, only habits can answer. */
+  brain?: { preset: Preset } & Pick<LadderOptions, "ownEarned" | "playbook">;
+  /** Dollars a day the brains may cost, by what the providers report; null for no cap. */
+  spendCapUsd?: number | null;
 };
+
+/** The daily spend cap when none is set: small on purpose; the person raises it in settings. */
+export const DEFAULT_SPEND_CAP_USD = 1;
 
 /** A gap between the wall clock and the monotonic clock bigger than this means the machine slept. */
 const WAKE_GAP_MS = 5000;
@@ -64,6 +75,10 @@ export class Home {
   readonly loops: Loops;
   /** Ash's kit, when the home runs one. */
   readonly kit: Kit | null;
+  readonly spend: Spend;
+  readonly shelf: HabitShelf;
+  /** The brain ladder, when a preset is set. */
+  readonly ladder: Ladder | null;
   readonly #db: DatabaseSync;
   readonly #heartbeatMs: number;
   #last: { wall: number; mono: number } | null = null;
@@ -82,13 +97,27 @@ export class Home {
     this.inbox = new Inboxes(db, this.events, this.clock, opts.runner, opts.graceMs);
     this.schedules = new Schedules(db, this.events, this.inbox, this.clock);
     this.triggers = new Triggers(db, this.events, this.inbox, this.clock);
+    this.spend = new Spend(this.events, this.clock, opts.spendCapUsd === undefined ? DEFAULT_SPEND_CAP_USD : opts.spendCapUsd);
     this.loops = new Loops(db, this.events, this.clock, {
+      budgetCapped: () => this.spend.capped(),
       ...opts.loops,
       dir: join(this.dataDir, "loops"),
       protect: opts.protect ?? defaultProtect(this.dataDir),
     });
     this.kit = opts.kit
       ? new Kit({ ...(opts.kit === true ? {} : opts.kit), events: this.events, clock: this.clock, dataDir: this.dataDir })
+      : null;
+    this.shelf = new HabitShelf(this.dataDir, this.kit);
+    this.ladder = opts.brain
+      ? new Ladder({
+          events: this.events,
+          spend: this.spend,
+          shelf: this.shelf,
+          own: opts.brain.preset.own,
+          big: opts.brain.preset.big,
+          ...(opts.brain.ownEarned && { ownEarned: opts.brain.ownEarned }),
+          ...(opts.brain.playbook && { playbook: opts.brain.playbook }),
+        })
       : null;
   }
 

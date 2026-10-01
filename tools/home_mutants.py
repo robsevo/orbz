@@ -64,6 +64,23 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ("      const err = g.died !== null && !(e instanceof KitDiedError) ? new KitDiedError(tool, g.died) : e;",
          "      const err = e;"),
     ], ["kit.test.ts"]),
+    # the brain ladder (PLAN 1.4)
+    ("a spend cap becomes a fall-through to another brain", "src/brain/ladder.ts", [
+        ("    this.#o.spend.check(); // throws SpendCapError: never caught here",
+         "    try { this.#o.spend.check(); } catch (e) { return { why: String(e) }; }"),
+    ], ["ladder.test.ts"]),
+    ("no cap check before a brain call", "src/brain/ladder.ts", [
+        ("    this.#o.spend.check(); // throws SpendCapError: never caught here\n", ""),
+    ], ["ladder.test.ts"]),
+    ("a tripped guard falls through silently", "src/brain/ladder.ts", [
+        ('fell, said: passedOn ? sentence(task.kind, fell, "big") : null });', 'fell, said: null });'),
+    ], ["ladder.test.ts"]),
+    ("the provider's reported cost is ignored", "src/brain/openai.ts", [
+        ('  const header = headers.get("x-litellm-response-cost");', '  const header = null as string | null;'),
+    ], ["ladder.test.ts"]),
+    ("the router preset leaves fallbacks on", "src/brain/presets.ts", [
+        ("extra: { disable_fallbacks: true } };", "extra: {} };"),
+    ], ["ladder.test.ts"]),
     ("one failed spawn counted as two deaths", "src/kit.ts", [
         ("      if (g.died !== null) return;\n      if (partial.trim())", "      if (partial.trim())"),
     ], ["kit.test.ts"]),
@@ -71,15 +88,16 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
 
 
 def copy_home(tmp: Path) -> Path:
-    """A scratch copy laid out like the repo: packages/home beside a kit/ that is the real kit
-    (linked, used read-only), so a copied test finds everything the real one does."""
+    """A scratch copy laid out like the repo: packages/home beside the real kit/ and docs/ (linked,
+    used read-only), so a copied test finds everything the real one does."""
     work = tmp / "packages" / "home"
     if (tmp / "packages").exists():
         shutil.rmtree(tmp / "packages")
     shutil.copytree(HOME_PKG, work, symlinks=True, ignore=shutil.ignore_patterns("node_modules"))
     (work / "node_modules").symlink_to(HOME_PKG / "node_modules", target_is_directory=True)
-    if not (tmp / "kit").exists():
-        (tmp / "kit").symlink_to(REPO / "kit", target_is_directory=True)
+    for shared in ("kit", "docs"):  # read-only inputs the home's tests use (the kit, the bake-off defaults)
+        if not (tmp / shared).exists():
+            (tmp / shared).symlink_to(REPO / shared, target_is_directory=True)
     return work
 
 

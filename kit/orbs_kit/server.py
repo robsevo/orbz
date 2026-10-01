@@ -17,7 +17,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import TypedDict
+from typing import Any, TypedDict
 
 KIT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(KIT / "ash"))
@@ -29,6 +29,8 @@ import secretscan  # noqa: E402
 import speakable  # noqa: E402
 import statepaths  # noqa: E402
 import whenparse  # noqa: E402
+
+from orbs_kit import habits  # noqa: E402
 
 VERSION = "0.0.0"
 
@@ -59,6 +61,13 @@ class When(TypedDict):
     said: str | None
 
 
+class HabitAnswer(TypedDict, total=False):
+    answered: bool
+    output: Any
+    why: str
+    version: int
+
+
 class KitStatus(TypedDict):
     version: str
     pid: int
@@ -74,6 +83,18 @@ class KitStatus(TypedDict):
 def when(text: str, now: float | None = None) -> When:
     epoch = whenparse.resolve(text, now)
     return {"epoch": epoch, "said": whenparse.describe(epoch, now) if epoch is not None else None}
+
+
+@server.tool(description="Let a Python habit answer, if its three code checks agree (PLAN 1.4).")
+def habit_answer(habit_dir: str, input: dict) -> HabitAnswer:  # noqa: A002 - the protocol's word
+    return habits.answer(Path(habit_dir), input)
+
+
+@server.tool(description="Store a habit learned from approved (input, output) cases (PLAN 3.2 calls this "
+                        "only after the harness re-ran it on every case).")
+def habit_learn(habit_dir: str, code: str, approved: list[dict], version: int = 1) -> str:
+    habits.save(Path(habit_dir), code, [(c["input"], c["output"]) for c in approved], version)
+    return habit_dir
 
 
 @server.tool(description="Which kit is running, on which Python, with which state directory.")

@@ -4,7 +4,12 @@ export { version } from "./version.ts";
 export { type Clock, FakeClock, realClock, settle } from "./clock.ts";
 export { HomeLockedError } from "./db.ts";
 export { EventLog, type HomeEvent } from "./events.ts";
-export { Home, type HomeOptions, defaultProtect } from "./home.ts";
+export { DEFAULT_SPEND_CAP_USD, Home, type HomeOptions, defaultProtect } from "./home.ts";
+export { type Habit, type HabitAnswer, HabitShelf, KitHabit, TsHabit } from "./brain/habits.ts";
+export { type Fall, Ladder, type LadderAnswer, type LadderTask, NoBrainError, type Tier, trimHistory } from "./brain/ladder.ts";
+export { BrainCallError, type ChatMessage, chat, type Completion, type Endpoint } from "./brain/openai.ts";
+export { ASH_ROUTER_FREE_SEATS, ashRouter, local, oneKey, openRouter, type Preset, PresetError } from "./brain/presets.ts";
+export { Spend, SpendCapError } from "./brain/spend.ts";
 export {
   Inboxes,
   type Item,

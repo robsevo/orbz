@@ -275,10 +275,22 @@ export class Inboxes {
       }
       const halt = abort.signal.aborted ? (abort.signal.reason as Halt) : null;
       const extra: Record<string, unknown> = { ms: this.#clock.now() - started };
+      // The spend cap stops a run cleanly: it is an outcome of its own, said out loud, not an error.
+      const cap =
+        !halt && "error" in result && isSpendCap(result.error)
+          ? (result.error as { capUsd: number; spentUsd: number; message: string })
+          : null;
+      const capped = cap !== null;
+      if (cap) {
+        extra.cap_usd = cap.capUsd;
+        extra.spent_usd = cap.spentUsd;
+        this.#events.append("notify", { level: "alarm", text: `${o_name(this.orb(orb))} stopped: ${cap.message}.`, run }, { orb, conversation });
+      }
       if ("abandoned" in result) extra.abandoned = true;
-      if ("error" in result && !halt) extra.error = errorText(result.error);
+      if ("error" in result && !halt && !capped) extra.error = errorText(result.error);
       if ("value" in result && result.value?.summary) extra.summary = result.value.summary;
-      const outcome = halt ?? ("error" in result ? "error" : "value" in result ? (result.value?.outcome ?? "ok") : "error");
+      const outcome =
+        halt ?? (capped ? "capped" : "error" in result ? "error" : "value" in result ? (result.value?.outcome ?? "ok") : "error");
       tx(this.#db, () => this.#end(orb, conversation, run, outcome, extra));
     })().finally(() => {
       this.#active.delete(orb);
@@ -347,6 +359,14 @@ function toItem(r: ItemRow): Item {
     fresh: r.fresh === 1,
     queuedAt: r.queued_at,
   };
+}
+
+function isSpendCap(e: unknown): boolean {
+  return e instanceof Error && e.name === "SpendCapError";
+}
+
+function o_name(o: Orb | undefined): string {
+  return o?.name ?? "The orb";
 }
 
 function errorText(e: unknown): string {
