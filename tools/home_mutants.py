@@ -136,6 +136,39 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("two concurrent kit starts spawn two kits", "src/kit.ts", [
         ("    this.#starting ??= this.#start().finally(() => (this.#starting = null));\n    return this.#starting;", "    return this.#start();"),
     ], ["kit.test.ts"]),
+    # plan cards and the gate (PLAN 1.7)
+    ("a feature without its test row reaches the person", "src/plans/format.ts", [
+        ("    if (!next || next.id !== r.id || !next.test) out.push(", "    if (false) out.push("),
+    ], ["plans.test.ts"]),
+    ("a typed count is trusted", "src/plans/gate.ts", [
+        ("  const hard = [...shape(plan, parsed), ...wrongCounts(plan, c)];", "  const hard = [...shape(plan, parsed)];"),
+    ], ["plans.test.ts"]),
+    ("soft objections are never sent back", "src/plans/plans.ts", [
+        ("export const SEND_BACKS = 2;", "export const SEND_BACKS = 0;"),
+    ], ["plans.test.ts"]),
+    ("a change with no new rows is shown", "src/plans/gate.ts", [
+        ("    if (features <= before) hard.push(", "    if (false) hard.push("),
+    ], ["plans.test.ts"]),
+    ("a one-feature plan is shown", "src/plans/gate.ts", [
+        ("  if (features > 0 && features < 2) hard.push(", "  if (false) hard.push("),
+    ], ["plans.test.ts"]),
+    ("a shown plan's text can be rewritten", "src/db.ts", [
+        ("  CREATE TRIGGER plans_body_frozen BEFORE UPDATE OF body, shown ON plans\n    BEGIN SELECT RAISE(ABORT, 'a shown plan is history: its text is never edited'); END;\n", ""),
+    ], ["plans.test.ts"]),
+    # row by row, ticked with proof (PLAN 1.8)
+    ("a failing test ticks the row", "src/plans/board.ts", [
+        ("        const passed = !res.isError;", "        const passed = true;"),
+    ], ["board.test.ts"]),
+    ("a test that cannot fail is accepted", "src/plans/board.ts", [
+        ("    if (CANNOT_FAIL.test(command)) throw", "    if (false) throw"),
+    ], ["board.test.ts"]),
+    ("a feature ticks without its test row", "src/plans/board.ts", [
+        ('        .prepare("UPDATE board SET box = ?, evidence = ?, updated_at = ? WHERE plan = ? AND row IN (?, ?)")',
+         '        .prepare("UPDATE board SET box = ?, evidence = ?, updated_at = ? WHERE plan = ? AND row IN (?, ?) AND test = 0")'),
+    ], ["board.test.ts"]),
+    ("a visual row ticks without pagecheck", "src/plans/board.ts", [
+        ("    if (this.#visual(plan, row)) throw", "    if (false) throw"),
+    ], ["board.test.ts"]),
     ("one failed spawn counted as two deaths", "src/kit.ts", [
         ("      if (g.died !== null) return;\n      if (partial.trim())", "      if (partial.trim())"),
     ], ["kit.test.ts"]),

@@ -34,10 +34,15 @@ export type ToolDef = {
   pause?: CardKind;
   /** The outward act it performs, in the one-way switch's words (shell, open, calendar, send). */
   act?: "shell" | "open" | "calendar" | "send";
+  /** For a shell act whose command is not in its arguments (a row's committed test): the command. */
+  commandOf?: (args: Args) => string;
   /** What it reads that came from outside (a page, a feed, mail): the turn is marked by it. */
   untrusted?: "page" | "feed" | "document" | "mail";
   /** The floor's categories it touches, declared by a tool that does them directly. */
   floor?: (args: Args) => FloorHit[];
+  /** For a pause tool that is checked before the person sees it (a plan): send it back with why,
+   * or show it — `opened` is told the card's id and returns more of the card's meta. */
+  gate?: (args: Args, ctx: ToolContext) => Promise<{ sendBack: string } | { detail: string; meta: Record<string, unknown>; opened?: (card: number) => Record<string, unknown> }>;
   run?: (args: Args, ctx: ToolContext) => Promise<ToolResult>;
 };
 
@@ -170,7 +175,8 @@ export class Background {
   }
 }
 
-function runCommand(command: string, cwd: string, timeoutMs: number, signal?: AbortSignal): Promise<ToolResult> {
+/** Runs a command in `cwd`; a stop kills its whole tree. */
+export function runCommand(command: string, cwd: string, timeoutMs: number, signal?: AbortSignal): Promise<ToolResult> {
   return new Promise((resolveResult) => {
     const [bin, argv] = shellArgv(command);
     let child: ChildProcess;

@@ -31,8 +31,8 @@ export type Message = {
   at: number;
 };
 
-export type CardKind = "approval" | "question" | "connect";
-export type CardStatus = "pending" | "approved" | "denied" | "answered" | "expired";
+export type CardKind = "approval" | "question" | "connect" | "plan";
+export type CardStatus = "pending" | "approved" | "denied" | "answered" | "expired" | "changed" | "saved";
 
 export type Card = {
   id: number;
@@ -213,6 +213,12 @@ export class Conversations {
       .prepare("SELECT * FROM cards WHERE conversation = ? AND status = 'pending' ORDER BY id DESC LIMIT 1")
       .get(conversation) as CardRow | undefined;
     return r && toCard(r);
+  }
+
+  /** Adds to a card's meta (what opening it produced, e.g. the archived plan's id). */
+  annotateCard(id: number, more: Record<string, unknown>): void {
+    const c = this.card(id);
+    if (c) this.#db.prepare("UPDATE cards SET meta = ? WHERE id = ?").run(JSON.stringify({ ...c.meta, ...more }), id);
   }
 
   /** Settles a pending card. Returns undefined if it was not pending (answered twice, or expired). */

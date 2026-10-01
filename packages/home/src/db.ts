@@ -151,6 +151,41 @@ const MIGRATIONS: string[] = [
   );
   ALTER TABLE cards ADD COLUMN meta TEXT NOT NULL DEFAULT '{}';
   `,
+  // v4 (PLAN 1.7): every plan that reached the person, kept from the moment it was shown, its
+  // text never edited afterwards; only its status moves (submitted → approved / changed / saved /
+  // declined).
+  `
+  CREATE TABLE plans (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    orb          TEXT    NOT NULL,
+    conversation TEXT    NOT NULL,
+    card         INTEGER,
+    status       TEXT    NOT NULL,
+    title        TEXT    NOT NULL,
+    body         TEXT    NOT NULL,
+    shown        TEXT    NOT NULL,
+    objections   TEXT    NOT NULL DEFAULT '[]',
+    created_at   INTEGER NOT NULL,
+    updated_at   INTEGER NOT NULL
+  );
+  CREATE TRIGGER plans_body_frozen BEFORE UPDATE OF body, shown ON plans
+    BEGIN SELECT RAISE(ABORT, 'a shown plan is history: its text is never edited'); END;
+  `,
+  // v5 (PLAN 1.8): an approved plan's board — every row's live box, the command that tests it,
+  // and the evidence the home saw when it ran it.
+  `
+  CREATE TABLE board (
+    plan       INTEGER NOT NULL,
+    row        TEXT    NOT NULL,
+    test       INTEGER NOT NULL,
+    box        TEXT    NOT NULL,
+    visual     INTEGER NOT NULL DEFAULT 0,
+    command    TEXT,
+    evidence   TEXT,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (plan, row)
+  );
+  `,
 ];
 
 /** Opens (and migrates) `<dataDir>/home.db`, taking the one-writer lock. */

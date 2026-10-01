@@ -22,6 +22,9 @@ import { feedback } from "./agent/trace.ts";
 import type { Decision, ToolDef } from "./agent/tools.ts";
 import { Guard, Turns } from "./rules/guard.ts";
 import { ModelMatcher, Rules, type Matcher } from "./rules/rules.ts";
+import { planTool, Plans } from "./plans/plans.ts";
+import { Board, boardTools } from "./plans/board.ts";
+import { TOOLS } from "./agent/tools.ts";
 import { Loops, type LoopsOptions } from "./loops.ts";
 import { Schedules } from "./schedule.ts";
 import { Triggers } from "./triggers.ts";
@@ -100,6 +103,10 @@ export class Home {
   readonly agent: AgentRunner | null;
   /** The person's rules (PLAN 1.6). */
   readonly rules: Rules;
+  /** Every plan shown to the person (PLAN 1.7). */
+  readonly plans: Plans;
+  /** Approved plans' rows, ticked only with proof (PLAN 1.8). */
+  readonly board: Board;
   readonly guard: Guard;
   readonly #background = new Background();
   readonly #db: DatabaseSync;
@@ -132,11 +139,18 @@ export class Home {
       ...(opts.agent?.decide && { ruleOverride: opts.agent.decide }),
     });
     const kit = this.kit;
+    this.plans = new Plans(db, this.events, this.clock);
+    this.board = new Board(db, this.events, this.clock);
+    const post = (ctx: { orb: string; conversation: string }, text: string): void => {
+      this.conversations.add({ conversation: ctx.conversation, orb: ctx.orb, role: "notice", content: text, meta: { board: true } });
+    };
     const { decide: _d, matcher: _m, ...agentOpts } = opts.agent ?? {};
+    const tools = agentOpts.tools ?? [...TOOLS, planTool(this.plans, (workspace) => [workspace]), ...boardTools(this.board, post)];
     this.agent = opts.runner
       ? null
       : new AgentRunner({
           ...agentOpts,
+          tools,
           guard: this.guard,
           ...(kit && {
             redact: async (text: string) => {
@@ -223,10 +237,12 @@ export class Home {
 
   /** The person's answer to a card. The run it paused resumes through the inbox, in order. A card
    * that is no longer pending (answered already, or expired by a newer message) is refused. */
-  answerCard(id: number, choice: "approve" | "deny" | "answer" | "always", answer?: string): Card {
+  answerCard(id: number, choice: "approve" | "deny" | "answer" | "always" | "change" | "save", answer?: string): Card {
     const card = this.conversations.card(id);
     if (!card) throw new Error(`no card ${id}`);
     if (card.status !== "pending") throw new Error(`card ${id} is ${card.status}, not waiting for an answer`);
+    if (card.kind === "plan") return this.#answerPlan(card, choice, answer);
+    if (choice === "change" || choice === "save") throw new Error(`card ${id} is not a plan`);
     if ((card.kind === "question") !== (choice === "answer")) {
       throw new Error(card.kind === "question" ? `card ${id} is a question: answer it` : `card ${id} needs approve, deny or always`);
     }
@@ -239,6 +255,23 @@ export class Home {
     const status = choice === "approve" || choice === "always" ? "approved" : choice === "deny" ? "denied" : "answered";
     const done = this.conversations.resolveCard(id, status, choice === "answer" ? (answer ?? "") : null)!;
     this.inbox.enqueue(card.orb, card.conversation, "system", `(card ${id} ${status})`, { data: { resume: id } });
+    return done;
+  }
+
+  /** A plan card: Approve, Change ("go with it, but X"), Save (don't run), or Decline. The archived
+   * plan's status follows; its text never changes. */
+  #answerPlan(card: Card, choice: string, answer?: string): Card {
+    const to = { approve: "approved", change: "changed", save: "saved", deny: "denied" } as const;
+    if (!(choice in to)) throw new Error(`card ${card.id} is a plan: approve, change, save or deny`);
+    if (choice === "change" && !answer?.trim()) throw new Error(`a change says what to change: "go with it, but …"`);
+    const status = to[choice as keyof typeof to];
+    const done = this.conversations.resolveCard(card.id, status, choice === "change" ? answer!.trim() : null)!;
+    const plan = Number(card.meta.plan);
+    if (Number.isInteger(plan) && plan > 0) {
+      this.plans.mark(plan, status === "denied" ? "declined" : status);
+      if (status === "approved") this.board.open(plan, this.plans.get(plan)!.body); // the plan becomes the board
+    }
+    this.inbox.enqueue(card.orb, card.conversation, "system", `(plan ${status})`, { data: { resume: card.id } });
     return done;
   }
 

@@ -95,7 +95,15 @@ export class Guard {
   async verdict(def: ToolDef, args: Record<string, unknown>, at: CallSite): Promise<Verdict & { described: string }> {
     const described = def.describe(args);
     const floor: FloorHit[] = [...(def.floor?.(args) ?? [])];
-    if (def.act === "shell") floor.push(...shellFloor(String(args.command ?? ""), await this.protectedPaths(), homedir()));
+    if (def.act === "shell") {
+      let command = String(args.command ?? "");
+      try {
+        command = def.commandOf?.(args) ?? command;
+      } catch {
+        // no command to read (the tool will refuse on its own)
+      }
+      floor.push(...shellFloor(command, await this.protectedPaths(), homedir()));
+    }
     const override = this.#o.ruleOverride?.(def, args) ?? null;
     const rule = override
       ? { decision: override, why: "" }

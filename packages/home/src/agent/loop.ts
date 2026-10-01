@@ -55,6 +55,15 @@ export type AgentOptions = {
 export const DENIED = "The person said no to this. Don't do it; tell them briefly what you will do instead, if anything.";
 export const EXPIRED = "Not done: the person sent a new message instead of answering.";
 
+/** What the model is told when the person answers a plan card. */
+export const PLAN_ANSWERS = {
+  approved: (_x: string, plan?: number) =>
+    `The person approved the plan (plan ${plan}). Build it row by row: start_row(plan=${plan}, row, test_command) for each feature, build it, then check_row — only the home's run of that test can tick it.`,
+  changed: (x: string, _plan?: number) => `The person said: go with it, but ${x}. Add rows for that (each with its _t test row) and show the plan again with propose_plan.`,
+  saved: (_x?: string, _plan?: number) => "The person saved the plan without running it. Don't build it now; say it is saved.",
+  denied: (_x?: string, _plan?: number) => "The person declined the plan. Don't build it; ask what they want instead.",
+} as const;
+
 const est = (text: string): number => Math.ceil(text.length / 4) + 4;
 
 export class AgentRunner implements Runner {
@@ -185,18 +194,25 @@ export class AgentRunner implements Runner {
       else {
         const refused = def.precheck?.(args, tctx) ?? null;
         const v = refused ? null : await this.#o.guard.verdict(def, args, at);
+        const g = !refused && v!.decision !== "never" && def.gate ? await def.gate(args, tctx) : null;
         if (refused) result = { content: `Refused: ${refused}`, isError: true };
+        else if (g && "sendBack" in g) result = { content: g.sendBack, isError: true }; // checked before anyone sees it
         else if (v!.decision === "never") {
           result = { content: `Not allowed: ${v!.described}${v!.why.length ? ` (${v!.why.join("; ")})` : ""}.`, isError: true };
         } else if (def.pause || v!.decision === "ask") {
-          const title = def.pause === "question" ? "A question for you" : `${this.#o.orbName(ctx.orb)} wants to ${v!.described}`;
+          const title =
+            def.pause === "question" ? "A question for you"
+              : def.pause === "plan" ? `${this.#o.orbName(ctx.orb)} has a plan for you: ${v!.described.replace(/^show a plan: /, "")}`
+                : `${this.#o.orbName(ctx.orb)} wants to ${v!.described}`;
+          const shown = g && "detail" in g ? g : null;
           const card = this.#o.conversations.addCard({
             conversation: ctx.conversation, orb: ctx.orb, run: ctx.run, kind: def.pause ?? "approval",
             tool: def.name, callId: call.id, assistantMsg: msg.id, title,
-            detail: def.pause === "question" ? String(args.question ?? "") : JSON.stringify(args),
+            detail: shown ? shown.detail : def.pause === "question" ? String(args.question ?? "") : JSON.stringify(args),
             notice: v!.why.length && !def.pause ? `${title} (${v!.why.join("; ")})` : title,
-            meta: { turn: at.turn, why: v!.why, floor: v!.floor, mayAlways: v!.mayAlways && !def.pause, act: def.act ?? null, described: v!.described },
+            meta: { turn: at.turn, why: v!.why, floor: v!.floor, mayAlways: v!.mayAlways && !def.pause, act: def.act ?? null, described: v!.described, ...shown?.meta },
           });
+          if (shown?.opened) this.#o.conversations.annotateCard(card.id, shown.opened(card.id));
           step("card", { card: card.id, kind: card.kind, tool: def.name, call_id: call.id, args: await this.#safe(JSON.stringify(args)), why: v!.why });
           return "waiting";
         } else {
@@ -226,7 +242,8 @@ export class AgentRunner implements Runner {
     const call = calls[i]!;
     const args = parseArgs(call) ?? {};
     let result: ToolResult;
-    if (card.status === "answered") result = { content: `The person answered: ${card.answer ?? ""}` };
+    if (card.kind === "plan") result = { content: PLAN_ANSWERS[card.status as keyof typeof PLAN_ANSWERS]?.(card.answer ?? "", Number(card.meta.plan)) ?? DENIED };
+    else if (card.status === "answered") result = { content: `The person answered: ${card.answer ?? ""}` };
     else if (card.status === "denied") result = { content: DENIED };
     else {
       const def = this.#tools.get(card.tool);

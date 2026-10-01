@@ -95,14 +95,20 @@ async function handle(home: Home, req: IncomingMessage, want: Buffer, addr: Retu
     const id = Number(parts[1]);
     const b = await body(req);
     const choice = b.choice;
-    if (choice !== "approve" && choice !== "deny" && choice !== "answer" && choice !== "always") {
-      throw new HttpError(400, '"choice" is approve, deny, always or answer');
+    if (!["approve", "deny", "answer", "always", "change", "save"].includes(String(choice))) {
+      throw new HttpError(400, '"choice" is approve, deny, always, answer, change or save');
     }
     try {
-      return { card: home.answerCard(id, choice, typeof b.answer === "string" ? b.answer : undefined) };
+      return { card: home.answerCard(id, choice as Parameters<Home["answerCard"]>[1], typeof b.answer === "string" ? b.answer : undefined) };
     } catch (e) {
       throw new HttpError(409, e instanceof Error ? e.message : String(e));
     }
+  }
+  if (method === "GET" && parts[0] === "plans" && parts.length === 3 && parts[2] === "board") {
+    return { board: home.board.rows(Number(parts[1])) };
+  }
+  if (method === "GET" && url.pathname === "/plans") {
+    return { plans: home.plans.list(url.searchParams.get("orb") ?? undefined) };
   }
   if (method === "GET" && url.pathname === "/rules") {
     return { rules: home.rules.list(url.searchParams.get("orb")) };
