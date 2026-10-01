@@ -15,6 +15,8 @@ import { type ChildProcess, spawn } from "node:child_process";
 import { lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import type { CardKind } from "./conversation.ts";
+import type { FloorHit } from "../rules/floor.ts";
+import { transportCause } from "./stream.ts";
 
 export type Decision = "allow" | "ask" | "never";
 export type ToolResult = { content: string; isError?: boolean; stoppedByUser?: boolean };
@@ -30,6 +32,12 @@ export type ToolDef = {
   decision: Decision;
   precheck?: (args: Args, ctx: ToolContext) => string | null;
   pause?: CardKind;
+  /** The outward act it performs, in the one-way switch's words (shell, open, calendar, send). */
+  act?: "shell" | "open" | "calendar" | "send";
+  /** What it reads that came from outside (a page, a feed, mail): the turn is marked by it. */
+  untrusted?: "page" | "feed" | "document" | "mail";
+  /** The floor's categories it touches, declared by a tool that does them directly. */
+  floor?: (args: Args) => FloorHit[];
   run?: (args: Args, ctx: ToolContext) => Promise<ToolResult>;
 };
 
@@ -44,7 +52,7 @@ export async function runTool(def: ToolDef, args: Args, ctx: ToolContext): Promi
     return await def.run(args, ctx);
   } catch (e) {
     if (ctx.signal?.aborted) return { content: "Stopped by the user.", isError: true, stoppedByUser: true };
-    return { content: `${def.name} failed: ${e instanceof Error ? e.message : String(e)}`, isError: true };
+    return { content: `${def.name} failed: ${transportCause(e)}`, isError: true }; // the cause's own words (ENOTFOUND…)
   }
 }
 
@@ -224,7 +232,8 @@ export const TOOLS: ToolDef[] = [
       ["command"],
     ),
     describe: (a) => `run \`${s(a.command)}\` in its workspace${a.background ? " (in the background)" : ""}`,
-    decision: "ask", // until the rules (1.6) can allow it
+    decision: "ask", // the person's rules can allow it; the floor still reads every command
+    act: "shell",
     async run(a, ctx) {
       mkdirSync(ctx.workspace, { recursive: true });
       if (a.background) {
@@ -308,6 +317,7 @@ export const TOOLS: ToolDef[] = [
     parameters: obj({ url: { type: "string" } }, ["url"]),
     describe: (a) => `fetch ${s(a.url)}`,
     decision: "allow",
+    untrusted: "page",
     precheck: (a) => (/^https?:\/\//i.test(s(a.url)) ? null : "Only http and https addresses can be fetched."),
     async run(a, ctx) {
       if (ctx.signal?.aborted) return STOPPED;

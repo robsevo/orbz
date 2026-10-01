@@ -77,6 +77,7 @@ export class Kit {
   #state: "stopped" | "starting" | "up" | "restarting" | "gave-up" | "closed" = "stopped";
   #waiting: { resolve: (g: Generation) => void; reject: (e: Error) => void }[] = [];
   #cancelRestart: (() => void) | null = null;
+  #starting: Promise<void> | null = null;
   #n = 0;
 
   constructor(opts: KitOptions) {
@@ -101,7 +102,14 @@ export class Kit {
 
   /** Starts the kit and waits until it has answered the MCP handshake. The first start lets
    * `uv` install the kit's Python and its locked packages if they are missing. */
-  async start(): Promise<void> {
+  start(): Promise<void> {
+    // Two callers starting at once (the home, and something that needs the kit now) share one
+    // start: a second spawn would replace the first kit in the middle of its handshake.
+    this.#starting ??= this.#start().finally(() => (this.#starting = null));
+    return this.#starting;
+  }
+
+  async #start(): Promise<void> {
     if (this.#state === "closed") throw new KitDownError("the home is closing");
     if (this.#gen && this.#gen.died === null) return this.#gen.ready;
     this.#state = "starting";

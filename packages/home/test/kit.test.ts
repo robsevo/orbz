@@ -195,3 +195,10 @@ test("a home that closes while the kit is still starting leaves no kit behind", 
   assert.equal(kit.pid, undefined);
   assert.equal(events.ofType("kit.started").length, 0, "nothing was spawned after the close");
 });
+
+test("two callers starting the kit at once get one kit, not two", async (t) => {
+  const { kit, events } = realKit(t);
+  await Promise.all([kit.start(), kit.start(), kit.start()]);
+  assert.equal(events.ofType("kit.started").length, 1);
+  assert.equal(((await kit.call("kit_status")) as { pid: number }).pid, kit.pid);
+});

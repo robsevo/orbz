@@ -19,6 +19,9 @@ import { type Card, Conversations } from "./agent/conversation.ts";
 import { AgentRunner, type AgentOptions } from "./agent/loop.ts";
 import { Background } from "./agent/tools.ts";
 import { feedback } from "./agent/trace.ts";
+import type { Decision, ToolDef } from "./agent/tools.ts";
+import { Guard, Turns } from "./rules/guard.ts";
+import { ModelMatcher, Rules, type Matcher } from "./rules/rules.ts";
 import { Loops, type LoopsOptions } from "./loops.ts";
 import { Schedules } from "./schedule.ts";
 import { Triggers } from "./triggers.ts";
@@ -29,7 +32,12 @@ export type HomeOptions = {
   /** What does the work of a run. Default: the agent loop (PLAN 1.5) on the preset's big brain. */
   runner?: Runner;
   /** Agent loop settings (tools, step limit, compaction) when the default runner is used. */
-  agent?: Partial<Pick<AgentOptions, "tools" | "decide" | "maxSteps" | "compactAtTokens" | "keepRecentTokens" | "onText">>;
+  agent?: Partial<Pick<AgentOptions, "tools" | "maxSteps" | "compactAtTokens" | "keepRecentTokens" | "onText">> & {
+    /** Test hook: what the rules say for a call (the floor, the one-way switch and away still apply). */
+    decide?: (def: ToolDef, args: Record<string, unknown>) => Decision | null;
+    /** The plain-English rule matcher. Default: the preset's own brain (else its big brain). */
+    matcher?: Matcher | null;
+  };
   clock?: Clock;
   /** The longest the home sleeps between ticks (default 30 s). */
   heartbeatMs?: number;
@@ -90,6 +98,9 @@ export class Home {
   readonly conversations: Conversations;
   /** The agent loop, when it is the runner. */
   readonly agent: AgentRunner | null;
+  /** The person's rules (PLAN 1.6). */
+  readonly rules: Rules;
+  readonly guard: Guard;
   readonly #background = new Background();
   readonly #db: DatabaseSync;
   readonly #heartbeatMs: number;
@@ -109,10 +120,34 @@ export class Home {
     this.spend = new Spend(this.events, this.clock, opts.spendCapUsd === undefined ? DEFAULT_SPEND_CAP_USD : opts.spendCapUsd);
     this.conversations = new Conversations(db, this.events, this.clock);
     const big = opts.brain?.preset.big ?? null;
+    this.kit = opts.kit
+      ? new Kit({ ...(opts.kit === true ? {} : opts.kit), events: this.events, clock: this.clock, dataDir: this.dataDir })
+      : null;
+    this.rules = new Rules(db, this.events, this.clock);
+    const matcherEp = opts.brain?.preset.own ?? big;
+    const matcher: Matcher | null = opts.agent?.matcher !== undefined ? opts.agent.matcher : matcherEp ? new ModelMatcher(matcherEp, this.spend) : null;
+    this.guard = new Guard({
+      db, clock: this.clock, rules: this.rules, turns: new Turns(db, this.clock), kit: this.kit, dataDir: this.dataDir,
+      matcher: () => matcher,
+      ...(opts.agent?.decide && { ruleOverride: opts.agent.decide }),
+    });
+    const kit = this.kit;
+    const { decide: _d, matcher: _m, ...agentOpts } = opts.agent ?? {};
     this.agent = opts.runner
       ? null
       : new AgentRunner({
-          ...opts.agent,
+          ...agentOpts,
+          guard: this.guard,
+          ...(kit && {
+            redact: async (text: string) => {
+              try {
+                const r = await kit.call("redact_text", { text });
+                return typeof r === "string" ? r : null;
+              } catch {
+                return null;
+              }
+            },
+          }),
           conversations: this.conversations,
           events: this.events,
           spend: this.spend,
@@ -131,9 +166,6 @@ export class Home {
       dir: join(this.dataDir, "loops"),
       protect: opts.protect ?? defaultProtect(this.dataDir),
     });
-    this.kit = opts.kit
-      ? new Kit({ ...(opts.kit === true ? {} : opts.kit), events: this.events, clock: this.clock, dataDir: this.dataDir })
-      : null;
     this.shelf = new HabitShelf(this.dataDir, this.kit);
     this.ladder = opts.brain
       ? new Ladder({
@@ -191,14 +223,20 @@ export class Home {
 
   /** The person's answer to a card. The run it paused resumes through the inbox, in order. A card
    * that is no longer pending (answered already, or expired by a newer message) is refused. */
-  answerCard(id: number, choice: "approve" | "deny" | "answer", answer?: string): Card {
+  answerCard(id: number, choice: "approve" | "deny" | "answer" | "always", answer?: string): Card {
     const card = this.conversations.card(id);
     if (!card) throw new Error(`no card ${id}`);
     if (card.status !== "pending") throw new Error(`card ${id} is ${card.status}, not waiting for an answer`);
     if ((card.kind === "question") !== (choice === "answer")) {
-      throw new Error(card.kind === "question" ? `card ${id} is a question: answer it` : `card ${id} needs approve or deny`);
+      throw new Error(card.kind === "question" ? `card ${id} is a question: answer it` : `card ${id} needs approve, deny or always`);
     }
-    const status = choice === "approve" ? "approved" : choice === "deny" ? "denied" : "answered";
+    if (choice === "always") {
+      // "Always allow" writes an exact rule; it is not offered where the floor or the switch asked,
+      // because the next call would ask again whatever the rule said.
+      if (card.meta.mayAlways !== true) throw new Error(`card ${id} cannot be always-allowed: ${(card.meta.why as string[] | undefined)?.join("; ") || "it is not an approval"}`);
+      this.rules.add({ orb: card.orb, text: `Always allow: ${String(card.meta.described)}`, decision: "allow", action: String(card.meta.described), source: "card" });
+    }
+    const status = choice === "approve" || choice === "always" ? "approved" : choice === "deny" ? "denied" : "answered";
     const done = this.conversations.resolveCard(id, status, choice === "answer" ? (answer ?? "") : null)!;
     this.inbox.enqueue(card.orb, card.conversation, "system", `(card ${id} ${status})`, { data: { resume: id } });
     return done;

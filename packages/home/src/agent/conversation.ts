@@ -49,6 +49,8 @@ export type Card = {
   answer: string | null;
   createdAt: number;
   resolvedAt: number | null;
+  /** Why it asks, and what its answer opens (the turn, the act, whether "always" may be offered). */
+  meta: Record<string, unknown>;
 };
 
 /** The message shapes an OpenAI-compatible chat endpoint takes. */
@@ -85,6 +87,7 @@ type CardRow = {
   answer: string | null;
   created_at: number;
   resolved_at: number | null;
+  meta: string;
 };
 
 export const NOT_RUN = "(not run: the turn ended before this call was made)";
@@ -185,15 +188,15 @@ export class Conversations {
 
   /** Opens a card and, in the same transaction, the notice that shows it in the chat: a crash can
    * leave neither or both, never a card nobody sees. */
-  addCard(c: Omit<Card, "id" | "status" | "answer" | "createdAt" | "resolvedAt">): Card {
+  addCard(c: Omit<Card, "id" | "status" | "answer" | "createdAt" | "resolvedAt" | "meta"> & { meta?: Record<string, unknown>; notice?: string }): Card {
     const at = this.#clock.now();
     const id = tx(this.#db, () => {
       const r = this.#db
         .prepare(
-          "INSERT INTO cards (conversation, orb, run, kind, tool, call_id, assistant_msg, title, detail, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+          "INSERT INTO cards (conversation, orb, run, kind, tool, call_id, assistant_msg, title, detail, created_at, meta) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
         )
-        .get(c.conversation, c.orb, c.run, c.kind, c.tool, c.callId, c.assistantMsg, c.title, c.detail, at) as { id: number };
-      this.add({ conversation: c.conversation, orb: c.orb, role: "notice", run: c.run, content: c.title, meta: { card: r.id } });
+        .get(c.conversation, c.orb, c.run, c.kind, c.tool, c.callId, c.assistantMsg, c.title, c.detail, at, JSON.stringify(c.meta ?? {})) as { id: number };
+      this.add({ conversation: c.conversation, orb: c.orb, role: "notice", run: c.run, content: c.notice ?? c.title, meta: { card: r.id } });
       this.#events.append("card.opened", { card: r.id, kind: c.kind, tool: c.tool, title: c.title }, { orb: c.orb, conversation: c.conversation });
       return r.id;
     });
@@ -255,5 +258,6 @@ function toCard(r: CardRow): Card {
     answer: r.answer,
     createdAt: r.created_at,
     resolvedAt: r.resolved_at,
+    meta: parseJson(r.meta),
   };
 }

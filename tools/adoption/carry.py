@@ -71,7 +71,7 @@ SUITES = [
 # winplace), so it comes with the row that rewires it.
 LATER = {
     "speech": "4.3", "listen": "4.3", "sayloop": "4.3",
-    "adapters": "1.6",
+    "adapters": "not carried: Ash's legacy file-slot transport; its approval rule (may_approve: only an explicit act of the person, never text) is the home's card channel (1.6)",
     "learn_review": "3.5", "voice_distill": "3.5", "prefs_model": "3.5", "retrieve": "3.5",
     "lesson": "4.4", "lesson_demos": "4.4", "lessonturn": "4.4", "teachcanvas": "4.4", "tutor": "4.4",
     "day": "4.5", "dayplan": "4.5", "reminders": "4.5", "summarize": "4.5",

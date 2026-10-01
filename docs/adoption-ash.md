@@ -77,7 +77,7 @@ the PLAN row that carries it (PLAN 0.4_t, 1.3_t).
 | Module | Lines | Test suites | Heavy imports | Desktop ties | Status |
 |---|---|---|---|---|---|
 | `oneway.py` | 144 | `test_mail.py`, `test_mail_sort.py`, `test_oneway.py` | — | — | [x] |
-| `adapters.py` | 902 | `test_adapters.py`, `test_audio_parity.py`, `test_chat.py`, `test_controller.py`, `test_controller_wheel.py`, `test_day.py`, `test_learn_panel.py`, `test_learn_review.py`, `test_lecture.py`, `test_lesson_turn.py`, `test_livevoice.py`, `test_prefs_model.py`, `test_reminders.py`, `test_runtime_wiring.py`, `test_seatbroker.py`, `test_turn_journal_gate.py`, `test_turn_lifecycle.py`, `test_tutorstate.py`, `test_voice_clock.py`, `test_voice_fixtures.py` | — | — | [ ] 1.6 |
+| `adapters.py` | 902 | `test_adapters.py`, `test_audio_parity.py`, `test_chat.py`, `test_controller.py`, `test_controller_wheel.py`, `test_day.py`, `test_learn_panel.py`, `test_learn_review.py`, `test_lecture.py`, `test_lesson_turn.py`, `test_livevoice.py`, `test_prefs_model.py`, `test_reminders.py`, `test_runtime_wiring.py`, `test_seatbroker.py`, `test_turn_journal_gate.py`, `test_turn_lifecycle.py`, `test_tutorstate.py`, `test_voice_clock.py`, `test_voice_fixtures.py` | — | — | [ ] not carried: Ash's legacy file-slot transport; its approval rule (may_approve: only an explicit act of the person, never text) is the home's card channel (1.6) |
 | `redact.py` | 45 | `test_desk_redaction.py`, `test_redact.py`, `test_seatbroker.py` | — | — | [x] |
 | `secretscan.py` | 202 | `test_secretscan.py` | — | — | [x] |
 | `write_guard.py` | 484 | `test_constitution_untouchable.py`, `test_run_lock.py`, `test_statepaths.py`, `test_unattended_free.py`, `test_write_guard.py` | — | — | [x] |

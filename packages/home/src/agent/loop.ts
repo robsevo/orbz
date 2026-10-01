@@ -25,7 +25,8 @@ import type { Spend } from "../brain/spend.ts";
 import type { Card, Conversations, Message, ToolCall } from "./conversation.ts";
 import { standingContext } from "./standing.ts";
 import { streamChat } from "./stream.ts";
-import { type Background, type Decision, runTool, type ToolContext, type ToolDef, type ToolResult, TOOLS, toolSpecs } from "./tools.ts";
+import { type Background, runTool, type ToolContext, type ToolDef, type ToolResult, TOOLS, toolSpecs } from "./tools.ts";
+import type { CallSite, Guard } from "../rules/guard.ts";
 
 export type AgentOptions = {
   conversations: Conversations;
@@ -38,8 +39,10 @@ export type AgentOptions = {
   endpoint: () => Endpoint | null;
   orbName: (orb: string) => string;
   tools?: ToolDef[];
-  /** The decision for a call, when rules (PLAN 1.6) have one; else the tool's own default. */
-  decide?: (def: ToolDef, args: Record<string, unknown>, ctx: ToolContext) => Decision;
+  /** What decides each call (PLAN 1.6): the floor, the person's rules, the one-way switch, away. */
+  guard: Guard;
+  /** Checks text for key material before it goes into a trace; null when it could not check. */
+  redact?: (text: string) => Promise<string | null>;
   maxSteps?: number;
   /** Compact when the request would be bigger than this (estimated tokens). */
   compactAtTokens?: number;
@@ -55,7 +58,7 @@ export const EXPIRED = "Not done: the person sent a new message instead of answe
 const est = (text: string): number => Math.ceil(text.length / 4) + 4;
 
 export class AgentRunner implements Runner {
-  readonly #o: Required<Omit<AgentOptions, "decide" | "onText">> & Pick<AgentOptions, "decide" | "onText">;
+  readonly #o: Required<Omit<AgentOptions, "redact" | "onText">> & Pick<AgentOptions, "redact" | "onText">;
   readonly #tools: Map<string, ToolDef>;
 
   constructor(opts: AgentOptions) {
@@ -78,7 +81,7 @@ export class AgentRunner implements Runner {
     };
     mkdirSync(tctx.workspace, { recursive: true });
     const step = this.#stepper(ctx);
-    step("input", { items: ctx.items.map((i) => ({ id: i.id, source: i.source, text: i.text, data: i.data })) });
+    step("input", { items: await Promise.all(ctx.items.map(async (i) => ({ id: i.id, source: i.source, text: await this.#safe(i.text), data: i.data }))) });
 
     let freshened = false;
     for (const item of ctx.items) {
@@ -115,6 +118,8 @@ export class AgentRunner implements Runner {
       return { outcome: "ok", summary: "nothing to answer" };
     }
 
+    // The turn is the person's request this run works on; attended unless only a schedule or trigger woke it.
+    const at = this.#site(ctx);
     const ep = this.#o.endpoint();
     if (!ep) {
       conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "notice", run: ctx.run, content: "No brain is set up yet, so I can't answer. Choose one in settings." });
@@ -139,7 +144,11 @@ export class AgentRunner implements Runner {
           promptTokens: r.promptTokens, completionTokens: r.completionTokens, orb: ctx.orb, conversation: ctx.conversation,
         });
       }
-      step("model", { text: r.text, tool_calls: r.toolCalls, finish: r.finish, stopped: r.stopped, error: r.error, tokens: r.promptTokens + r.completionTokens, cost_usd: r.costUsd });
+      step("model", {
+        text: await this.#safe(r.text),
+        tool_calls: await Promise.all(r.toolCalls.map(async (c) => ({ ...c, arguments: await this.#safe(c.arguments) }))),
+        finish: r.finish, stopped: r.stopped, error: r.error, tokens: r.promptTokens + r.completionTokens, cost_usd: r.costUsd,
+      });
 
       if (r.stopped) {
         if (r.text) conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "assistant", run: ctx.run, content: r.text, meta: { stopped: true } });
@@ -155,7 +164,7 @@ export class AgentRunner implements Runner {
         step("output", { text: r.text });
         return { outcome: "ok", summary: r.text.slice(0, 200) };
       }
-      const calls = await this.#calls(msg, 0, ctx, tctx, step);
+      const calls = await this.#calls(msg, 0, ctx, tctx, step, at);
       if (calls !== "done") return this.#ended(calls, ctx);
     }
     conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "notice", run: ctx.run, content: `I stopped after ${this.#o.maxSteps} steps. Say "go on" and I'll continue.` });
@@ -163,7 +172,7 @@ export class AgentRunner implements Runner {
   }
 
   /** Runs an assistant message's tool calls from `from` on. A call that needs the person opens a card. */
-  async #calls(msg: Message, from: number, ctx: RunContext, tctx: ToolContext, step: Stepper): Promise<"done" | "waiting" | "stopped"> {
+  async #calls(msg: Message, from: number, ctx: RunContext, tctx: ToolContext, step: Stepper, at: CallSite): Promise<"done" | "waiting" | "stopped"> {
     const calls = msg.toolCalls ?? [];
     for (let i = from; i < calls.length; i++) {
       if (ctx.signal.aborted) return "stopped";
@@ -175,25 +184,28 @@ export class AgentRunner implements Runner {
       else if (args === null) result = { content: "The arguments were not a JSON object.", isError: true };
       else {
         const refused = def.precheck?.(args, tctx) ?? null;
-        const decision = refused ? "never" : (this.#o.decide?.(def, args, tctx) ?? def.decision);
+        const v = refused ? null : await this.#o.guard.verdict(def, args, at);
         if (refused) result = { content: `Refused: ${refused}`, isError: true };
-        else if (decision === "never") result = { content: `Not allowed: ${def.describe(args)}.`, isError: true };
-        else if (def.pause || decision === "ask") {
+        else if (v!.decision === "never") {
+          result = { content: `Not allowed: ${v!.described}${v!.why.length ? ` (${v!.why.join("; ")})` : ""}.`, isError: true };
+        } else if (def.pause || v!.decision === "ask") {
+          const title = def.pause === "question" ? "A question for you" : `${this.#o.orbName(ctx.orb)} wants to ${v!.described}`;
           const card = this.#o.conversations.addCard({
             conversation: ctx.conversation, orb: ctx.orb, run: ctx.run, kind: def.pause ?? "approval",
-            tool: def.name, callId: call.id, assistantMsg: msg.id,
-            title: def.pause === "question" ? "A question for you" : `${this.#o.orbName(ctx.orb)} wants to ${def.describe(args)}`,
+            tool: def.name, callId: call.id, assistantMsg: msg.id, title,
             detail: def.pause === "question" ? String(args.question ?? "") : JSON.stringify(args),
+            notice: v!.why.length && !def.pause ? `${title} (${v!.why.join("; ")})` : title,
+            meta: { turn: at.turn, why: v!.why, floor: v!.floor, mayAlways: v!.mayAlways && !def.pause, act: def.act ?? null, described: v!.described },
           });
-          step("card", { card: card.id, kind: card.kind, tool: def.name, call_id: call.id, args });
+          step("card", { card: card.id, kind: card.kind, tool: def.name, call_id: call.id, args: await this.#safe(JSON.stringify(args)), why: v!.why });
           return "waiting";
         } else {
           ctx.activity(def.label);
-          result = await runTool(def, args, tctx);
+          result = await this.#o.guard.result(def, args, at.turn, await runTool(def, args, tctx));
         }
       }
       this.#result(msg, call, result, ctx);
-      step("tool", { call_id: call.id, name: call.name, args, result: result.content, is_error: result.isError === true });
+      step("tool", { call_id: call.id, name: call.name, args: await this.#safe(JSON.stringify(args)), result: await this.#safe(result.content), is_error: result.isError === true });
       if (result.stoppedByUser) return "stopped";
     }
     return "done";
@@ -208,24 +220,40 @@ export class AgentRunner implements Runner {
     const i = calls.findIndex((c) => c.id === card.callId);
     if (!msg || i < 0) return "done";
     if (conv.list(ctx.conversation).some((m) => m.role === "tool" && m.toolCallId === card.callId)) return "done"; // already applied
-    step("answer", { card: card.id, status: card.status, answer: card.answer });
+    // the person answered: they are here, and the request is the one the card was opened for
+    const at: CallSite = { orb: ctx.orb, turn: String(card.meta.turn ?? this.#site(ctx).turn), mode: "attended", signal: ctx.signal };
+    step("answer", { card: card.id, status: card.status, answer: card.answer === null ? null : await this.#safe(card.answer) });
     const call = calls[i]!;
+    const args = parseArgs(call) ?? {};
     let result: ToolResult;
     if (card.status === "answered") result = { content: `The person answered: ${card.answer ?? ""}` };
     else if (card.status === "denied") result = { content: DENIED };
     else {
       const def = this.#tools.get(card.tool);
-      const args = parseArgs(call) ?? {};
       if (!def) result = { content: `There is no tool called ${card.tool}.`, isError: true };
       else {
+        this.#o.guard.approved(at.turn, def); // a fresh yes, for this act, this turn
         ctx.activity(def.label);
-        result = await runTool(def, args, tctx);
+        result = await this.#o.guard.result(def, args, at.turn, await runTool(def, args, tctx));
       }
     }
     this.#result(msg, call, result, ctx);
-    step("tool", { call_id: call.id, name: call.name, args: parseArgs(call), result: result.content, is_error: result.isError === true });
+    step("tool", { call_id: call.id, name: call.name, args: await this.#safe(JSON.stringify(args)), result: await this.#safe(result.content), is_error: result.isError === true });
     if (result.stoppedByUser) return "stopped";
-    return this.#calls(msg, i + 1, ctx, tctx, step);
+    return this.#calls(msg, i + 1, ctx, tctx, step, at);
+  }
+
+  /** The person's request this run works on, and whether anyone is watching. */
+  #site(ctx: RunContext): CallSite {
+    const request = this.#o.conversations.history(ctx.conversation).findLast((m) => m.role === "user");
+    const attended = ctx.items.some((i) => i.source === "chat" || typeof i.data.resume === "number");
+    return { orb: ctx.orb, turn: `${ctx.conversation}#${request?.id ?? 0}`, mode: attended ? "attended" : "away", signal: ctx.signal };
+  }
+
+  /** Text for a trace: checked for key material by the kit, or withheld when it could not be. */
+  async #safe(text: string): Promise<string> {
+    if (!this.#o.redact) return text;
+    return (await this.#o.redact(text)) ?? "(not traced: it could not be checked for secrets)";
   }
 
   /** A new message instead of an answer: the card expires and its calls are answered "not done". */

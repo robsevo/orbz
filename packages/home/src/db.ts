@@ -130,6 +130,27 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX cards_open ON cards (conversation, status);
   `,
+  // v3 (PLAN 1.6): the owner's rules; each turn's one-way state (what untrusted content it read,
+  // what the person opened again), kept here so a restart cannot wash a turn clean; why a card asks.
+  `
+  CREATE TABLE rules (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    orb        TEXT,
+    text       TEXT    NOT NULL,
+    decision   TEXT    NOT NULL,
+    action     TEXT,
+    source     TEXT    NOT NULL,
+    created_at INTEGER NOT NULL,
+    removed_at INTEGER
+  );
+  CREATE TABLE turns (
+    id         TEXT PRIMARY KEY,
+    taints     TEXT    NOT NULL DEFAULT '[]',
+    approved   TEXT    NOT NULL DEFAULT '[]',
+    updated_at INTEGER NOT NULL
+  );
+  ALTER TABLE cards ADD COLUMN meta TEXT NOT NULL DEFAULT '{}';
+  `,
 ];
 
 /** Opens (and migrates) `<dataDir>/home.db`, taking the one-writer lock. */

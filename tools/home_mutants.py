@@ -7,7 +7,9 @@ never touched.
 """
 from __future__ import annotations
 
+import os
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -106,6 +108,34 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("listeners hear an event before it is committed", "src/events.ts", [
         ("    afterCommit(this.#db, () => {", "    ((fn: () => void) => fn())(() => {"),
     ], ["events.test.ts"]),
+    # rules and the floor (PLAN 1.6)
+    ("a rule's allow loosens the floor", "src/rules/policy.ts", [
+        ("  for (const h of f.floor) {\n    d = strictest(d, \"ask\");", "  for (const h of f.floor) {\n    d = f.rule.decision === \"allow\" ? d : strictest(d, \"ask\");"),
+    ], ["rules.test.ts"]),
+    ("a protected write is only asked about, not refused", "src/rules/policy.ts", [
+        ("  if (protectedHit) return { decision: \"never\",", "  if (protectedHit && false) return { decision: \"never\","),
+    ], ["rules.test.ts"]),
+    ("the one-way switch is ignored", "src/rules/policy.ts", [
+        ("  if (f.oneway && !f.oneway.allowed) {\n    d = strictest(d, \"ask\");", "  if (f.oneway && !f.oneway.allowed) {"),
+    ], ["rules.test.ts"]),
+    ("away is not read-only", "src/rules/policy.ts", [
+        ("  if (f.mode === \"away\" && f.outward) {\n    d = strictest(d, \"ask\");", "  if (f.mode === \"away\" && f.outward) {"),
+    ], ["rules.test.ts"]),
+    ("a rule matcher that fails means allow", "src/rules/rules.ts", [
+        ('          decision: decision ? strictest(decision, "ask") : "ask",', '          decision: decision ?? null,'),
+    ], ["rules.test.ts"]),
+    ("'always' is accepted on a card the floor raised", "src/home.ts", [
+        ("      if (card.meta.mayAlways !== true) throw", "      if (false) throw"),
+    ], ["rules.test.ts"]),
+    ("untrusted text reaches the model unfenced", "src/rules/guard.ts", [
+        ("    if (!def.untrusted || r.stoppedByUser) return r;", "    if (true) return r;"),
+    ], ["rules.test.ts"]),
+    ("traces keep what the kit was asked to redact", "src/home.ts", [
+        ('                const r = await kit.call("redact_text", { text });', '                const r = text;'),
+    ], ["rules.test.ts"]),
+    ("two concurrent kit starts spawn two kits", "src/kit.ts", [
+        ("    this.#starting ??= this.#start().finally(() => (this.#starting = null));\n    return this.#starting;", "    return this.#start();"),
+    ], ["kit.test.ts"]),
     ("one failed spawn counted as two deaths", "src/kit.ts", [
         ("      if (g.died !== null) return;\n      if (partial.trim())", "      if (partial.trim())"),
     ], ["kit.test.ts"]),
@@ -127,11 +157,23 @@ def copy_home(tmp: Path) -> Path:
 
 
 def run_suites(work: Path, suites: list[str]) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(["node", "--test", *[str(work / "test" / s) for s in suites]],
-                          cwd=work, capture_output=True, text=True, timeout=600)
+    """The suites, each test given a minute. A run that still hangs past ten is red too: a defect
+    that makes a test hang has been caught as surely as one that makes it fail."""
+    cmd = ["node", "--test", "--test-timeout=60000", *[str(work / "test" / s) for s in suites]]
+    # its own process group, so a hung run is ended with everything it started (a planted defect
+    # that spawns two kits leaves one nobody will stop)
+    p = subprocess.Popen(cmd, cwd=work, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, start_new_session=True)
+    try:
+        out, _ = p.communicate(timeout=600)
+        return subprocess.CompletedProcess(cmd, p.returncode, out, "")
+    except subprocess.TimeoutExpired:
+        os.killpg(p.pid, signal.SIGKILL)
+        out, _ = p.communicate()
+        return subprocess.CompletedProcess(cmd, 124, (out or "") + "\n[hung past 600 s]", "")
 
 
 def main() -> int:
+    sys.stdout.reconfigure(line_buffering=True)  # progress shows as it happens, even into a file
     fails = 0
     suites = sorted({s for *_, ss in MUTANTS for s in ss})
     with tempfile.TemporaryDirectory(prefix="orbs-mutants-") as td:

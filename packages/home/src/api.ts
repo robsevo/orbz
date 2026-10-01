@@ -95,12 +95,27 @@ async function handle(home: Home, req: IncomingMessage, want: Buffer, addr: Retu
     const id = Number(parts[1]);
     const b = await body(req);
     const choice = b.choice;
-    if (choice !== "approve" && choice !== "deny" && choice !== "answer") throw new HttpError(400, '"choice" is approve, deny or answer');
+    if (choice !== "approve" && choice !== "deny" && choice !== "answer" && choice !== "always") {
+      throw new HttpError(400, '"choice" is approve, deny, always or answer');
+    }
     try {
       return { card: home.answerCard(id, choice, typeof b.answer === "string" ? b.answer : undefined) };
     } catch (e) {
       throw new HttpError(409, e instanceof Error ? e.message : String(e));
     }
+  }
+  if (method === "GET" && url.pathname === "/rules") {
+    return { rules: home.rules.list(url.searchParams.get("orb")) };
+  }
+  if (method === "POST" && url.pathname === "/rules") {
+    const b = await body(req);
+    const decision = b.decision;
+    if (decision !== "allow" && decision !== "ask" && decision !== "never") throw new HttpError(400, '"decision" is allow, ask or never');
+    return { rule: home.rules.add({ orb: typeof b.orb === "string" ? b.orb : null, text: text(b, "text"), decision, source: "owner" }) };
+  }
+  if (method === "DELETE" && parts[0] === "rules" && parts.length === 2) {
+    home.rules.remove(Number(parts[1]));
+    return { removed: Number(parts[1]) };
   }
   if (method === "POST" && url.pathname === "/orbs") {
     const b = await body(req);
