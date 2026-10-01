@@ -4,18 +4,25 @@
 // after compaction, and duplicated by re-injection).
 //
 // Orbs writes only the first two lines (who the orb is, where it works). Everything else is the
-// owner's, read as it is (CLAUDE.md rule 6): <data>/brain/CONSTITUTION.md, each skill's name and
-// description from <data>/brain/skills/*/SKILL.md, and <data>/brain/memory/MEMORY.md.
+// owner's, read as it is (CLAUDE.md rule 6): each skill's name and description from
+// <data>/brain/skills/*/SKILL.md, <data>/brain/memory/MEMORY.md, and <data>/brain/CONSTITUTION.md,
+// of which each orb loads his own part (PLAN 3.9, brain/constitution.ts: the core and his
+// specialty's sections, morals left out), with the lines the person approved for him.
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { composeConstitution, sectioned, type Specialty } from "../brain/constitution.ts";
 
-export function standingContext(o: { orbName: string; brainDir: string; workspace: string }): string {
+export function standingContext(o: { orbName: string; brainDir: string; workspace: string; specialty?: Specialty; learned?: string[] }): string {
   const parts = [
-    `You are ${o.orbName}, one of the person's orbs: an assistant that works on its own computer and asks before anything that matters.`,
+    `You are ${o.orbName}, one of the person's orbs: an AI character and assistant that works on its own computer and asks before anything that matters.`,
     `Working directory: ${o.workspace}`,
   ];
-  const constitution = read(join(o.brainDir, "CONSTITUTION.md"));
+  const owner = read(join(o.brainDir, "CONSTITUTION.md"));
+  // a file not in sections (no ## or ### heading) is read whole, as before
+  const cut = Boolean(owner) && sectioned(owner);
+  const constitution = cut ? composeConstitution({ owner, specialty: o.specialty ?? "general", orbName: o.orbName, learned: o.learned }) : owner;
   if (constitution) parts.push(constitution);
+  if (!cut && o.learned?.length) parts.push(`What you have learned (each line approved by the person):\n${o.learned.map((l) => `- ${l}`).join("\n")}`);
   const skills = skillsIndex(join(o.brainDir, "skills"));
   if (skills) parts.push(`Skills you can use:\n${skills}`);
   const memory = read(join(o.brainDir, "memory", "MEMORY.md"));

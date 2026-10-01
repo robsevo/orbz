@@ -17,6 +17,7 @@ import { Ladder, type LadderOptions } from "./brain/ladder.ts";
 import type { Preset } from "./brain/presets.ts";
 import { ChatGPT, type ChatGPTOptions } from "./chatgpt/chatgpt.ts";
 import { Brains, type BrainsOptions } from "./brain/brains.ts";
+import { Learned } from "./brain/learned.ts";
 import { Spend } from "./brain/spend.ts";
 import { type Card, Conversations } from "./agent/conversation.ts";
 import { AgentRunner, type AgentOptions } from "./agent/loop.ts";
@@ -113,6 +114,8 @@ export class Home {
   readonly chatgpt: ChatGPT;
   /** The brain order (PLAN 1.11): ChatGPT, one Gemini key, the preset's key, the local coder. */
   readonly brains: Brains;
+  /** What each orb has learned, each line approved by the person (PLAN 3.9). */
+  readonly learned: Learned;
   /** What happens as it happens, for whoever is watching (the terminal, the web app): every event
    * once committed ("event"), and a reply's text as it streams ("text"). Never stored. */
   readonly live = new EventEmitter();
@@ -144,6 +147,7 @@ export class Home {
     const big = opts.brain?.preset.big ?? null;
     this.chatgpt = new ChatGPT({ dataDir: this.dataDir, events: this.events, clock: this.clock, ...opts.chatgpt });
     const chatgptReady = this.chatgpt.load().then(() => {}, () => {}); // a home never signed in does not touch the keychain
+    this.learned = new Learned(this.dataDir, this.events);
     this.brains = new Brains({ dataDir: this.dataDir, presetKey: big, chatgpt: () => this.chatgpt.endpoint(), clock: () => this.clock.now(), ...opts.brains });
     const brainsReady = Promise.all([chatgptReady, this.brains.load().catch(() => {})]).then(() => {}); // nor one with no Gemini key
     this.kit = opts.kit
@@ -198,6 +202,8 @@ export class Home {
           planLimited: (why) => this.chatgpt.limited(why),
           ready: () => brainsReady,
           orbName: (orb) => this.inbox.orb(orb)?.name ?? orb,
+          orbSpecialty: (orb) => this.inbox.orb(orb)?.specialty ?? "general",
+          learned: (orb) => this.learned.list(orb),
         });
     this.inbox = new Inboxes(db, this.events, this.clock, opts.runner ?? this.agent!, opts.graceMs);
     this.schedules = new Schedules(db, this.events, this.inbox, this.clock);

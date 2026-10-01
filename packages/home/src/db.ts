@@ -186,6 +186,10 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY (plan, row)
   );
   `,
+  // v6 (PLAN 3.9): what each orb does, which decides the part of the owner's constitution he loads
+  `
+  ALTER TABLE orbs ADD COLUMN specialty TEXT NOT NULL DEFAULT 'general';
+  `,
 ];
 
 /** The home's data is the person's: the folder is theirs alone (0700) and so is the database

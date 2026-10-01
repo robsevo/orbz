@@ -256,6 +256,25 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("the error says nothing of how to set a brain up", "src/brain/chain.ts", [
         ('    if (s.state === "absent") return `${cap(s.label)}: not set up (${s.setup})`;', '    if (s.state === "absent") return `${cap(s.label)}: not set up`;'),
     ], ["brains.test.ts", "chain.test.ts"]),
+    # each orb's own constitution (PLAN 3.9)
+    ("morals leak into every orb's constitution", "src/brain/constitution.ts", [
+        ('  refusal_handling: morals("what to help with and what to refuse; Orbs\' floor is code (rule 9)"),', "  refusal_handling: core,"),
+    ], ["constitution.test.ts"]),
+    ("a heading in a fenced example counts as a section", "src/brain/constitution.ts", [
+        ("    if (/^\\s*(```|~~~)/.test(line)) fence = !fence;\n", ""),
+    ], ["constitution.test.ts"]),
+    ("a section the map has not placed is dropped", "src/brain/constitution.ts", [
+        ("  if (!p) return true;", "  if (!p) return false;"),
+    ], ["constitution.test.ts"]),
+    ("one learned file for every orb", "src/brain/learned.ts", [
+        ('    return join(this.#dir, orb, "learned.md");', '    return join(this.#dir, "learned.md");'),
+    ], ["constitution.test.ts"]),
+    ("the owner's agent's name stays in the orb's", "src/brain/constitution.ts", [
+        ("  const agent = ownersAgent(o.owner);", "  const agent = null as string | null;"),
+    ], ["constitution.test.ts"]),
+    ("the orb's specialty is ignored", "src/agent/standing.ts", [
+        ('specialty: o.specialty ?? "general", orbName', 'specialty: "general", orbName'),
+    ], ["constitution.test.ts"]),
 ]
 
 # the app (PLAN 2.x): paths are inside packages/app

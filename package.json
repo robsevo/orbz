@@ -16,7 +16,8 @@
     "carry": "uv run --project kit --locked python tools/adoption/carry.py --check",
     "plan": "uv run --project kit --locked python tools/test_plan_counts.py && uv run --project kit --locked python tools/plan_counts.py --check",
     "check": "pnpm typecheck && pnpm test:ts && pnpm test:kit && pnpm carry && pnpm copyscan && pnpm plan",
-    "check:controls": "uv run --project kit --locked python tools/check_controls.py && uv run --project kit --locked python tools/home_mutants.py"
+    "check:controls": "uv run --project kit --locked python tools/check_controls.py && uv run --project kit --locked python tools/home_mutants.py",
+    "constitution": "node tools/constitution_check.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.3",

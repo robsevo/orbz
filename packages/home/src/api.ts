@@ -10,6 +10,8 @@ import { join } from "node:path";
 import type { Home } from "./home.ts";
 import { UnknownOrbError } from "./inbox.ts";
 import { GeminiKeyError } from "./brain/brains.ts";
+import { SPECIALTY_FAMILIES, type Specialty } from "./brain/constitution.ts";
+import { standingContext } from "./agent/standing.ts";
 import { version } from "./version.ts";
 
 export type HomeDoor = { port: number; token: string; file: string; close(): Promise<void> };
@@ -201,7 +203,29 @@ async function handle(
   }
   if (method === "POST" && url.pathname === "/orbs") {
     const b = await body(req);
-    return { orb: home.inbox.addOrb(text(b, "id"), text(b, "name")) };
+    const specialty = typeof b.specialty === "string" ? b.specialty : "general";
+    if (!(specialty in SPECIALTY_FAMILIES)) throw new HttpError(400, `"${specialty}" is not a specialty`);
+    return { orb: home.inbox.addOrb(text(b, "id"), text(b, "name"), specialty as Specialty) };
+  }
+  // Each orb's own constitution (PLAN 3.9): what he loads, to read; what he learned, which only
+  // the person adds (here, through the door) and can take back.
+  if (parts[0] === "orbs" && parts.length >= 3 && (parts[2] === "constitution" || parts[2] === "learned")) {
+    const orb = decodeURIComponent(parts[1]!);
+    const o = home.inbox.orb(orb);
+    if (!o) throw new HttpError(404, `no orb "${orb}"`);
+    if (method === "GET" && parts[2] === "constitution" && parts.length === 3) {
+      return { constitution: standingContext({ orbName: o.name, brainDir: join(home.dataDir, "brain"), workspace: "", specialty: o.specialty, learned: home.learned.list(orb) }) };
+    }
+    if (parts[2] === "learned") {
+      try {
+        if (method === "GET" && parts.length === 3) return { learned: home.learned.list(orb) };
+        if (method === "POST" && parts.length === 3) return { learned: home.learned.add(orb, text(await body(req), "line")) };
+        if (method === "DELETE" && parts.length === 4) return { learned: home.learned.remove(orb, Number(parts[3])) };
+      } catch (e) {
+        if (e instanceof HttpError) throw e;
+        throw new HttpError(400, e instanceof Error ? e.message : String(e));
+      }
+    }
   }
   if (method === "POST" && parts[0] === "orbs" && parts.length === 3) {
     const orb = decodeURIComponent(parts[1]!);

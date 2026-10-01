@@ -22,6 +22,7 @@ import type { EventLog } from "../events.ts";
 import type { RunContext, RunResult, Runner } from "../inbox.ts";
 import { BrainCallError, chat, type Endpoint, type Limited } from "../brain/openai.ts";
 import { type BrainChain, explain, type LinkId, restFor } from "../brain/chain.ts";
+import type { Specialty } from "../brain/constitution.ts";
 import { MANAGE_USAGE } from "../chatgpt/chatgpt.ts";
 import type { Spend } from "../brain/spend.ts";
 import type { Card, Conversations, Message, ToolCall } from "./conversation.ts";
@@ -51,6 +52,9 @@ export type AgentOptions = {
   /** How long the chain waits between passes (1 s, then 2 s). */
   passWaitMs?: number;
   orbName: (orb: string) => string;
+  /** What the orb does, and what the person approved for him to remember: his constitution (PLAN 3.9). */
+  orbSpecialty?: (orb: string) => Specialty;
+  learned?: (orb: string) => string[];
   tools?: ToolDef[];
   /** What decides each call (PLAN 1.6): the floor, the person's rules, the one-way switch, away. */
   guard: Guard;
@@ -80,7 +84,7 @@ export const PLAN_ANSWERS = {
 const est = (text: string): number => Math.ceil(text.length / 4) + 4;
 
 export class AgentRunner implements Runner {
-  readonly #o: Required<Omit<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain">> & Pick<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain">;
+  readonly #o: Required<Omit<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned">> & Pick<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned">;
   readonly #tools: Map<string, ToolDef>;
 
   constructor(opts: AgentOptions) {
@@ -166,7 +170,10 @@ export class AgentRunner implements Runner {
         step("no-brain", { brains: chain.states().map((s) => ({ id: s.id, state: s.state, why: s.why })) });
         return { outcome: "ok", summary: "no brain answered" };
       }
-      const standing = standingContext({ orbName: this.#o.orbName(ctx.orb), brainDir: join(this.#o.dataDir, "brain"), workspace: tctx.workspace });
+      const standing = standingContext({
+        orbName: this.#o.orbName(ctx.orb), brainDir: join(this.#o.dataDir, "brain"), workspace: tctx.workspace,
+        specialty: this.#o.orbSpecialty?.(ctx.orb), learned: this.#o.learned?.(ctx.orb),
+      });
       await this.#compact(ctx, ep, est(standing));
       ep = this.#o.endpoint() ?? ep; // compaction may have met the plan's limit and moved on
       this.#o.spend.check(); // SpendCapError: the inbox stops the run cleanly ("capped")

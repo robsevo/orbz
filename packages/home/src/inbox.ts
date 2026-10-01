@@ -3,6 +3,7 @@
 // waiting item plus every item right behind it bound for the same conversation, and runs them
 // as one turn. Pause stops the run and keeps its work queued for resume; stop drops the queue.
 // A run cut off by a crash or a shutdown goes back to the head of the queue, marked interrupted.
+import { SPECIALTY_FAMILIES, type Specialty } from "./brain/constitution.ts";
 import type { DatabaseSync } from "node:sqlite";
 import type { Clock } from "./clock.ts";
 import { parseJson, tx } from "./db.ts";
@@ -10,7 +11,7 @@ import type { EventLog } from "./events.ts";
 
 export type Source = "chat" | "schedule" | "trigger" | "system";
 export type OrbStatus = "idle" | "working" | "waiting" | "paused";
-export type Orb = { id: string; name: string; status: OrbStatus; activity: string | null; createdAt: number };
+export type Orb = { id: string; name: string; status: OrbStatus; activity: string | null; createdAt: number; specialty: Specialty };
 
 export type Item = {
   id: number;
@@ -54,7 +55,7 @@ type ItemRow = {
   fresh: number;
   queued_at: number;
 };
-type OrbRow = { id: string; name: string; status: OrbStatus; activity: string | null; created_at: number };
+type OrbRow = { id: string; name: string; status: OrbStatus; activity: string | null; created_at: number; specialty: string };
 
 export class UnknownOrbError extends Error {
   constructor(orb: string) {
@@ -81,13 +82,14 @@ export class Inboxes {
     this.#graceMs = graceMs;
   }
 
-  addOrb(id: string, name: string): Orb {
+  addOrb(id: string, name: string, specialty: Specialty = "general"): Orb {
     if (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(id)) throw new Error(`orb id "${id}": use 1-40 of a-z, 0-9 and -`);
     if (this.orb(id)) throw new Error(`orb "${id}" already exists`);
+    if (!(specialty in SPECIALTY_FAMILIES)) throw new Error(`"${specialty}" is not a specialty`);
     const at = this.#clock.now();
     tx(this.#db, () => {
-      this.#db.prepare("INSERT INTO orbs (id, name, created_at) VALUES (?, ?, ?)").run(id, name, at);
-      this.#events.append("orb.added", { name }, { orb: id });
+      this.#db.prepare("INSERT INTO orbs (id, name, created_at, specialty) VALUES (?, ?, ?, ?)").run(id, name, at, specialty);
+      this.#events.append("orb.added", { name, specialty }, { orb: id });
     });
     return this.orb(id)!;
   }
@@ -345,7 +347,7 @@ export class Inboxes {
 type Settled<T> = { value: T } | { error: unknown } | { abandoned: true };
 
 function toOrb(r: OrbRow): Orb {
-  return { id: r.id, name: r.name, status: r.status, activity: r.activity, createdAt: r.created_at };
+  return { id: r.id, name: r.name, status: r.status, activity: r.activity, createdAt: r.created_at, specialty: (r.specialty in SPECIALTY_FAMILIES ? r.specialty : "general") as Specialty };
 }
 
 function toItem(r: ItemRow): Item {
