@@ -1,0 +1,23 @@
+{
+  "name": "orbs",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.5.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node packages/home/src/main.ts",
+    "typecheck": "pnpm -r typecheck",
+    "test:ts": "node tools/run-ts-tests.mjs",
+    "test:kit": "uv run --project kit --locked python kit/tests/run.py",
+    "copyscan": "uv run --project kit --locked python tools/copyscan/test_copyscan.py && uv run --project kit --locked python tools/copyscan/copyscan.py",
+    "plan": "uv run --project kit --locked python tools/test_plan_counts.py && uv run --project kit --locked python tools/plan_counts.py --check",
+    "check": "pnpm typecheck && pnpm test:ts && pnpm test:kit && pnpm copyscan && pnpm plan",
+    "check:controls": "uv run --project kit --locked python tools/check_controls.py && uv run --project kit --locked python tools/home_mutants.py"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "typescript": "7.0.2"
+  }
+}

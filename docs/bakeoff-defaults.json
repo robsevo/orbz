@@ -1,6 +1,6 @@
 {
  "partial": true,
- "still_to_measure": "big brain: cloud-brain (calendar, and its quota-hit cases), free-flash3; own brain: free-flash25, free-flash; teacher: think-brain (invoice, calendar), cloud-brain. Their free Gemini quota was exhausted by the spike runs on 2026-10-01; re-run after Ash's gym window.",
+ "still_to_measure": "the Gemini big brains (`cloud-brain`, `free-flash3`) and Gemini teachers (`think-brain`, `cloud-brain`) \u2014 their free pools are shared with Ash and were empty on 2026-10-01 (`gemini-3.8-flash`: 1,946 requests, 410 per-day refusals); and the ChatGPT models once sign-in (1.10) exists, since the owner chose ChatGPT only.",
  "big": {
   "seat": "bedrock-brain",
   "rate": 1.0
@@ -8,5 +8,9 @@
  "teacher": {
   "seat": "nim-ultra",
   "rate": 0.889
+ },
+ "own": {
+  "seat": "free-flash",
+  "rate": 0.667
  }
 }
