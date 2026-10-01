@@ -2,7 +2,7 @@
 // only goes up. SQLite triggers refuse UPDATE and DELETE, and AUTOINCREMENT never reuses a number.
 import type { DatabaseSync, StatementSync } from "node:sqlite";
 import type { Clock } from "./clock.ts";
-import { parseJson } from "./db.ts";
+import { afterCommit, parseJson } from "./db.ts";
 
 export type HomeEvent = {
   seq: number;
@@ -19,6 +19,7 @@ type Row = { seq: number; at: number; type: string; orb: string | null; conversa
 
 export class EventLog {
   readonly #clock: Clock;
+  readonly #db: DatabaseSync;
   readonly #insert: StatementSync;
   readonly #since: StatementSync;
   readonly #ofType: StatementSync;
@@ -26,6 +27,7 @@ export class EventLog {
 
   constructor(db: DatabaseSync, clock: Clock) {
     this.#clock = clock;
+    this.#db = db;
     this.#insert = db.prepare(
       "INSERT INTO events (at, type, orb, conversation, data) VALUES (?, ?, ?, ?, ?) RETURNING seq",
     );
@@ -38,13 +40,16 @@ export class EventLog {
     const json = JSON.stringify(data);
     const row = this.#insert.get(at, type, where.orb ?? null, where.conversation ?? null, json) as { seq: number };
     const e: HomeEvent = { seq: row.seq, at, type, orb: where.orb ?? null, conversation: where.conversation ?? null, data };
-    for (const fn of this.#listeners) {
-      try {
-        fn(e);
-      } catch {
-        // a listener (the API's event stream) must never break the writer
+    // Listeners hear it once it is on disk: inside a transaction, only after the commit.
+    afterCommit(this.#db, () => {
+      for (const fn of this.#listeners) {
+        try {
+          fn(e);
+        } catch {
+          // a listener (the API's event stream) must never break the writer
+        }
       }
-    }
+    });
     return row.seq;
   }
 

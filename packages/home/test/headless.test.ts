@@ -64,11 +64,14 @@ test("one command starts a headless home; it answers only with its token, refuse
   assert.equal(made.status, 200);
   const sent = await fetch(`${base}/orbs/juniper/messages`, { method: "POST", headers: auth, body: JSON.stringify({ text: "hello" }) });
   assert.equal(sent.status, 200);
-  const finished = await until("the run to finish", async () => {
+  await until("the run to finish", async () => {
     const r = (await (await fetch(`${base}/events`, { headers: auth })).json()) as { events: { type: string; data: Record<string, unknown> }[] };
     return r.events.find((e) => e.type === "run.finished");
   });
-  assert.equal(finished.data.summary, "no brain yet", "without a brain it says so instead of pretending");
+  const chat = (await (await fetch(`${base}/conversations/chat:main/messages`, { headers: auth })).json()) as { messages: { role: string; content: string }[] };
+  assert.deepEqual(chat.messages.map((m) => m.role), ["user", "notice"]);
+  assert.match(chat.messages[1]!.content, /No brain is set up yet/, "without a brain it says so instead of pretending");
+  assert.equal((await fetch(`${base}/cards/999`, { method: "POST", headers: auth, body: JSON.stringify({ choice: "approve" }) })).status, 409);
   assert.equal((await fetch(`${base}/orbs/nobody/pause`, { method: "POST", headers: auth })).status, 404);
 
   const twin = start(dataDir);

@@ -10,6 +10,10 @@ export { type Fall, Ladder, type LadderAnswer, type LadderTask, NoBrainError, ty
 export { BrainCallError, type ChatMessage, chat, type Completion, type Endpoint } from "./brain/openai.ts";
 export { ASH_ROUTER_FREE_SEATS, ashRouter, local, oneKey, openRouter, type Preset, PresetError } from "./brain/presets.ts";
 export { Spend, SpendCapError } from "./brain/spend.ts";
+export { type Card, Conversations, type Message, type ModelMessage } from "./agent/conversation.ts";
+export { AgentRunner, type AgentOptions } from "./agent/loop.ts";
+export { Background, runTool, type ToolDef, type ToolResult, TOOLS } from "./agent/tools.ts";
+export { script, trace } from "./agent/trace.ts";
 export {
   Inboxes,
   type Item,

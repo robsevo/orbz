@@ -79,8 +79,33 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ('  const header = headers.get("x-litellm-response-cost");', '  const header = null as string | null;'),
     ], ["ladder.test.ts"]),
     ("the router preset leaves fallbacks on", "src/brain/presets.ts", [
-        ("extra: { disable_fallbacks: true } };", "extra: {} };"),
+        ("extra: { disable_fallbacks: true }, price:", "extra: {}, price:"),
     ], ["ladder.test.ts"]),
+    # the agent loop (PLAN 1.5)
+    ("a stop throws the partial reply away", "src/agent/loop.ts", [
+        ('        if (r.text) conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "assistant", run: ctx.run, content: r.text, meta: { stopped: true } });\n', ""),
+    ], ["stop.test.ts"]),
+    ("a stop does not reach a running command", "src/agent/tools.ts", [
+        ('    signal?.addEventListener("abort", onAbort, { once: true });\n    child.on("error", (e) => finish({ content: `The command failed', '    child.on("error", (e) => finish({ content: `The command failed'),
+    ], ["tools.test.ts"]),
+    ("a stop kills the shell but not its children", "src/agent/tools.ts", [
+        ('    else process.kill(-child.pid, "SIGKILL");', '    else child.kill("SIGKILL");'),
+    ], ["tools.test.ts"]),
+    ("a new message does not expire the open card", "src/agent/loop.ts", [
+        ("      if (open) this.#expire(open, ctx);\n", ""),
+    ], ["agent.test.ts"]),
+    ("a re-run after a crash is taken for a new message", "src/agent/loop.ts", [
+        ("      if (conv.hasItem(ctx.conversation, item.id)) continue;\n      const open", "      const open"),
+    ], ["agent.test.ts"]),
+    ("a denied card runs its call anyway", "src/agent/loop.ts", [
+        ('    else if (card.status === "denied") result = { content: DENIED };\n', ""),
+    ], ["agent.test.ts"]),
+    ("compaction summaries are ignored", "src/agent/conversation.ts", [
+        ('    if (!summary) return live.filter((m) => m.role !== "summary");', '    if (summary || !summary) return live.filter((m) => m.role !== "summary");'),
+    ], ["survive.test.ts"]),
+    ("listeners hear an event before it is committed", "src/events.ts", [
+        ("    afterCommit(this.#db, () => {", "    ((fn: () => void) => fn())(() => {"),
+    ], ["events.test.ts"]),
     ("one failed spawn counted as two deaths", "src/kit.ts", [
         ("      if (g.died !== null) return;\n      if (partial.trim())", "      if (partial.trim())"),
     ], ["kit.test.ts"]),

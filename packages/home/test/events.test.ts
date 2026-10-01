@@ -47,3 +47,25 @@ test("one writer: a second home on the same data directory is refused until the 
   const again = Home.open({ dataDir, runner: new Recorder(), protect: [] }); // control: the lock is released
   await again.close();
 });
+
+test("a listener hears an event only once its transaction commits, never one that rolled back", async (t) => {
+  const { tx } = await import("../src/db.ts");
+  const { DatabaseSync: DB } = await import("node:sqlite");
+  const { EventLog } = await import("../src/events.ts");
+  const { realClock } = await import("../src/clock.ts");
+  const db = new DB(":memory:");
+  db.exec("CREATE TABLE events (seq INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER, type TEXT, orb TEXT, conversation TEXT, data TEXT)");
+  const log = new EventLog(db, realClock);
+  const heard: string[] = [];
+  log.listen((e) => heard.push(e.type));
+  tx(db, () => {
+    log.append("inside");
+    assert.deepEqual(heard, [], "not yet: the transaction has not committed");
+  });
+  assert.deepEqual(heard, ["inside"]);
+  assert.throws(() => tx(db, () => { log.append("rolled-back"); throw new Error("no"); }));
+  assert.deepEqual(heard, ["inside"], "an event that never reached the disk is never announced");
+  log.append("outside");
+  assert.deepEqual(heard, ["inside", "outside"], "control: outside a transaction it is heard at once");
+  t.after(() => db.close());
+});

@@ -15,6 +15,10 @@ import { HabitShelf } from "./brain/habits.ts";
 import { Ladder, type LadderOptions } from "./brain/ladder.ts";
 import type { Preset } from "./brain/presets.ts";
 import { Spend } from "./brain/spend.ts";
+import { type Card, Conversations } from "./agent/conversation.ts";
+import { AgentRunner, type AgentOptions } from "./agent/loop.ts";
+import { Background } from "./agent/tools.ts";
+import { feedback } from "./agent/trace.ts";
 import { Loops, type LoopsOptions } from "./loops.ts";
 import { Schedules } from "./schedule.ts";
 import { Triggers } from "./triggers.ts";
@@ -22,7 +26,10 @@ import { version } from "./version.ts";
 
 export type HomeOptions = {
   dataDir: string;
-  runner: Runner;
+  /** What does the work of a run. Default: the agent loop (PLAN 1.5) on the preset's big brain. */
+  runner?: Runner;
+  /** Agent loop settings (tools, step limit, compaction) when the default runner is used. */
+  agent?: Partial<Pick<AgentOptions, "tools" | "decide" | "maxSteps" | "compactAtTokens" | "keepRecentTokens" | "onText">>;
   clock?: Clock;
   /** The longest the home sleeps between ticks (default 30 s). */
   heartbeatMs?: number;
@@ -79,6 +86,11 @@ export class Home {
   readonly shelf: HabitShelf;
   /** The brain ladder, when a preset is set. */
   readonly ladder: Ladder | null;
+  /** What was said in every conversation, and the cards runs paused on. */
+  readonly conversations: Conversations;
+  /** The agent loop, when it is the runner. */
+  readonly agent: AgentRunner | null;
+  readonly #background = new Background();
   readonly #db: DatabaseSync;
   readonly #heartbeatMs: number;
   #last: { wall: number; mono: number } | null = null;
@@ -94,10 +106,25 @@ export class Home {
     this.clock = opts.clock ?? realClock;
     this.#heartbeatMs = opts.heartbeatMs ?? 30_000;
     this.events = new EventLog(db, this.clock);
-    this.inbox = new Inboxes(db, this.events, this.clock, opts.runner, opts.graceMs);
+    this.spend = new Spend(this.events, this.clock, opts.spendCapUsd === undefined ? DEFAULT_SPEND_CAP_USD : opts.spendCapUsd);
+    this.conversations = new Conversations(db, this.events, this.clock);
+    const big = opts.brain?.preset.big ?? null;
+    this.agent = opts.runner
+      ? null
+      : new AgentRunner({
+          ...opts.agent,
+          conversations: this.conversations,
+          events: this.events,
+          spend: this.spend,
+          clock: this.clock,
+          dataDir: this.dataDir,
+          background: this.#background,
+          endpoint: () => big,
+          orbName: (orb) => this.inbox.orb(orb)?.name ?? orb,
+        });
+    this.inbox = new Inboxes(db, this.events, this.clock, opts.runner ?? this.agent!, opts.graceMs);
     this.schedules = new Schedules(db, this.events, this.inbox, this.clock);
     this.triggers = new Triggers(db, this.events, this.inbox, this.clock);
-    this.spend = new Spend(this.events, this.clock, opts.spendCapUsd === undefined ? DEFAULT_SPEND_CAP_USD : opts.spendCapUsd);
     this.loops = new Loops(db, this.events, this.clock, {
       budgetCapped: () => this.spend.capped(),
       ...opts.loops,
@@ -162,6 +189,26 @@ export class Home {
     return this.#ticking;
   }
 
+  /** The person's answer to a card. The run it paused resumes through the inbox, in order. A card
+   * that is no longer pending (answered already, or expired by a newer message) is refused. */
+  answerCard(id: number, choice: "approve" | "deny" | "answer", answer?: string): Card {
+    const card = this.conversations.card(id);
+    if (!card) throw new Error(`no card ${id}`);
+    if (card.status !== "pending") throw new Error(`card ${id} is ${card.status}, not waiting for an answer`);
+    if ((card.kind === "question") !== (choice === "answer")) {
+      throw new Error(card.kind === "question" ? `card ${id} is a question: answer it` : `card ${id} needs approve or deny`);
+    }
+    const status = choice === "approve" ? "approved" : choice === "deny" ? "denied" : "answered";
+    const done = this.conversations.resolveCard(id, status, choice === "answer" ? (answer ?? "") : null)!;
+    this.inbox.enqueue(card.orb, card.conversation, "system", `(card ${id} ${status})`, { data: { resume: id } });
+    return done;
+  }
+
+  /** The owner's verdict on a run, for the gym (PLAN 3.x). */
+  feedback(run: number, verdict: "approve" | "correct", note = ""): void {
+    feedback(this.events, run, verdict, note);
+  }
+
   async close(): Promise<void> {
     if (this.#closed) return;
     this.#closed = true;
@@ -170,6 +217,7 @@ export class Home {
     await this.inbox.close();
     await this.loops.close();
     await this.kit?.close();
+    this.#background.close();
     this.events.append("home.stopped", {});
     this.#db.close();
   }

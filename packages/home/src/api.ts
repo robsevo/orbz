@@ -85,6 +85,23 @@ async function handle(home: Home, req: IncomingMessage, want: Buffer, addr: Retu
     if (!Number.isInteger(since) || !Number.isInteger(limit) || limit < 1) throw new HttpError(400, "since and limit are whole numbers");
     return { events: home.events.since(since, limit) };
   }
+  if (method === "GET" && parts[0] === "conversations" && parts.length === 3 && parts[2] === "messages") {
+    const conv = decodeURIComponent(parts[1]!);
+    const since = Number(url.searchParams.get("since") ?? 0);
+    if (!Number.isInteger(since)) throw new HttpError(400, "since is a whole number");
+    return { messages: home.conversations.list(conv, since), card: home.conversations.openCard(conv) ?? null };
+  }
+  if (method === "POST" && parts[0] === "cards" && parts.length === 2) {
+    const id = Number(parts[1]);
+    const b = await body(req);
+    const choice = b.choice;
+    if (choice !== "approve" && choice !== "deny" && choice !== "answer") throw new HttpError(400, '"choice" is approve, deny or answer');
+    try {
+      return { card: home.answerCard(id, choice, typeof b.answer === "string" ? b.answer : undefined) };
+    } catch (e) {
+      throw new HttpError(409, e instanceof Error ? e.message : String(e));
+    }
+  }
   if (method === "POST" && url.pathname === "/orbs") {
     const b = await body(req);
     return { orb: home.inbox.addOrb(text(b, "id"), text(b, "name")) };

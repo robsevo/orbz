@@ -87,7 +87,8 @@ export function ashRouter(o: { baseUrl?: string; defaultsFile?: string } = {}): 
     if (typeof s !== "string" || !ASH_ROUTER_FREE_SEATS.includes(s)) {
       throw new PresetError(`the ${role} seat ${JSON.stringify(s)} is not a known free seat; paid seats need the owner's OK per run`);
     }
-    return { name: `${role}:${s}`, baseUrl, model: s, extra: { disable_fallbacks: true } };
+    // Free seats cost nothing; the price says so where the router reports no cost (a streamed reply).
+    return { name: `${role}:${s}`, baseUrl, model: s, extra: { disable_fallbacks: true }, price: { inputPerM: 0, outputPerM: 0 } };
   };
   return { id: "ash-router", title: "This machine's router (free seats only)", own: seat("own"), big: seat("big"), teacher: seat("teacher") };
 }

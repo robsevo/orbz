@@ -96,6 +96,40 @@ const MIGRATIONS: string[] = [
     last_due INTEGER NOT NULL
   );
   `,
+  // v2 (PLAN 1.5): what the orb and the person said, per conversation, and the cards it paused on.
+  `
+  CREATE TABLE messages (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    conversation TEXT    NOT NULL,
+    orb          TEXT    NOT NULL,
+    run          INTEGER,
+    role         TEXT    NOT NULL,
+    content      TEXT    NOT NULL DEFAULT '',
+    tool_calls   TEXT,
+    tool_call_id TEXT,
+    meta         TEXT    NOT NULL DEFAULT '{}',
+    at           INTEGER NOT NULL
+  );
+  CREATE INDEX messages_conversation ON messages (conversation, id);
+
+  CREATE TABLE cards (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    conversation  TEXT    NOT NULL,
+    orb           TEXT    NOT NULL,
+    run           INTEGER NOT NULL,
+    kind          TEXT    NOT NULL,
+    tool          TEXT    NOT NULL,
+    call_id       TEXT    NOT NULL,
+    assistant_msg INTEGER NOT NULL,
+    title         TEXT    NOT NULL,
+    detail        TEXT    NOT NULL,
+    status        TEXT    NOT NULL DEFAULT 'pending',
+    answer        TEXT,
+    created_at    INTEGER NOT NULL,
+    resolved_at   INTEGER
+  );
+  CREATE INDEX cards_open ON cards (conversation, status);
+  `,
 ];
 
 /** Opens (and migrates) `<dataDir>/home.db`, taking the one-writer lock. */
@@ -131,19 +165,35 @@ function migrate(db: DatabaseSync): void {
   }
 }
 
+const commitHooks = new WeakMap<DatabaseSync, (() => void)[]>();
+
+/** Runs `fn` once the current transaction has committed (now, if there is none); never if it
+ * rolls back. What the outside world is told must not run ahead of what is on disk. */
+export function afterCommit(db: DatabaseSync, fn: () => void): void {
+  if (!db.isTransaction) return fn();
+  const q = commitHooks.get(db) ?? [];
+  q.push(fn);
+  commitHooks.set(db, q);
+}
+
 /** Runs `fn` in one transaction (the home is the only writer, so IMMEDIATE never waits). Called
  * inside another transaction, it joins that one. */
 export function tx<T>(db: DatabaseSync, fn: () => T): T {
   if (db.isTransaction) return fn();
   db.exec("BEGIN IMMEDIATE");
+  let out: T;
   try {
-    const out = fn();
+    out = fn();
     db.exec("COMMIT");
-    return out;
   } catch (e) {
     db.exec("ROLLBACK");
+    commitHooks.delete(db);
     throw e;
   }
+  const hooks = commitHooks.get(db) ?? [];
+  commitHooks.delete(db);
+  for (const h of hooks) h();
+  return out;
 }
 
 export function parseJson(text: unknown): Record<string, unknown> {

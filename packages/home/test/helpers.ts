@@ -6,6 +6,7 @@ import { FakeClock } from "../src/clock.ts";
 import { Home, type HomeOptions } from "../src/home.ts";
 import type { RunContext, RunResult, Runner } from "../src/inbox.ts";
 import type { TriggerEvent, TriggerSource } from "../src/triggers.ts";
+import { fakeModel, type FakeModel, type Turn } from "./fakes/model.ts";
 
 export function tempDir(t: TestContext): string {
   const dir = mkdtempSync(join(tmpdir(), "orbs-home-"));
@@ -84,4 +85,21 @@ export class FakeMailbox implements TriggerSource {
   arrive(id: string, at: number, from: string): void {
     this.mail.push({ id, at, summary: `New email from ${from}`, data: { from } });
   }
+}
+
+/** A home whose runner is the agent loop, on a scripted streaming model, with the orb juniper. */
+export async function agentHome(t: TestContext, script: Turn[], more: Partial<HomeOptions> = {}): Promise<{ home: Home; model: FakeModel; dataDir: string }> {
+  const model = await fakeModel(t, script);
+  const dataDir = more.dataDir ?? tempDir(t);
+  const home = Home.open({
+    dataDir,
+    protect: [],
+    spendCapUsd: null,
+    brain: { preset: { id: "t", title: "t", own: null, big: { name: "big", baseUrl: model.url, model: "m", retries: 0 }, teacher: null } },
+    ...more,
+  });
+  t.after(() => home.close());
+  if (!home.inbox.orb("juniper")) home.inbox.addOrb("juniper", "Juniper");
+  home.start();
+  return { home, model, dataDir };
 }
