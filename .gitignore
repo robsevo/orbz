@@ -8,3 +8,5 @@ spike/runs/
 spike/.habits/
 tools/copyscan/.opendot/
 kit/ash/models/
+packages/app/dist/
+packages/app/renders/

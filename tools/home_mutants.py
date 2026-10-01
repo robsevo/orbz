@@ -19,6 +19,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 HOME_PKG = REPO / "packages" / "home"
 TERMINAL_PKG = REPO / "packages" / "terminal"
+APP_PKG = REPO / "packages" / "app"
 
 # (the defect, the file, its edits as (exact text, replacement), the suites that must go red)
 MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
@@ -174,6 +175,16 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("one failed spawn counted as two deaths", "src/kit.ts", [
         ("      if (g.died !== null) return;\n      if (partial.trim())", "      if (partial.trim())"),
     ], ["kit.test.ts"]),
+    # the home's data is the person's (10-01: ~/.orbs was 0755, home.db 0644)
+    ("an old home's folder is left open to every user", "src/db.ts", [
+        ("  if (fresh || existsSync(file) || readdirSync(dataDir).length === 0) chmodSync(dataDir, 0o700);\n", ""),
+    ], ["privacy.test.ts"]),
+    ("the database is created with the umask's mode", "src/db.ts", [
+        ('  closeSync(openSync(file, "a", 0o600));\n', ""),
+    ], ["privacy.test.ts"]),
+    ("an old home's database keeps its loose mode", "src/db.ts", [
+        ("  for (const f of [file, `${file}-wal`, `${file}-shm`]) if (existsSync(f)) chmodSync(f, 0o600);\n", ""),
+    ], ["privacy.test.ts"]),
     # Continue with ChatGPT (PLAN 1.10)
     ("the sign-in's state is not checked", "src/chatgpt/chatgpt.ts", [
         ('      if (q.get("state") !== state) {', "      if (false) {"),
@@ -222,6 +233,51 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ('const r = await run(this.#tool, ["store", `--label=Orbs: ChatGPT sign-in`, "service", SERVICE, "key", key], value);',
          'const r = await run(this.#tool, ["store", `--label=Orbs: ChatGPT sign-in`, "service", SERVICE, "key", key, value], value);'),
     ], ["chatgpt.test.ts"]),
+]
+
+# the app (PLAN 2.x): paths are inside packages/app
+APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
+    ("a light-mode hue is too pale to read", "src/design/tokens.ts", [
+        ("const LIGHT_TARGET = 4.8;", "const LIGHT_TARGET = 3.0;"),
+    ], ["design.test.ts"]),
+    ("the token lint is blind to named colours", "test/lint.ts", [
+        ('[NAMED, "a named colour"], ', ""),
+    ], ["design.test.ts"]),
+    ("Ash loses his azure", "src/design/tokens.ts", [
+        ("dark: i === 0 ? AZURE : oklch(a.L, a.C, angle)", "dark: oklch(a.L, a.C, angle + 4)"),
+    ], ["design.test.ts"]),
+    ("an orb's colour does not follow the light theme", "src/design/tokens.ts", [
+        ("    hueRules(\"light\", ':root[data-theme=\"light\"] '),\n", ""),
+        ("    `@media (prefers-color-scheme: light) { ${hueRules(\"light\", ':root:not([data-theme=\"dark\"]) ')} }`,\n", ""),
+    ], ["render.test.ts"]),
+    ("the smallest type falls under the floor", "src/design/tokens.ts", [
+        ("  caption2: [11, 13, 400],", "  caption2: [9, 13, 400],"),
+    ], ["design.test.ts", "render.test.ts"]),
+    ("the harness does not see a spill", "test/harness.ts", [
+        ("      if (r.left < -1 || r.right > vw + 1) out.push(", "      if (false) out.push("),
+    ], ["render.test.ts"]),
+    ("a mouth is drawn below his eyes", "src/orb/glsl.ts", [
+        ("      body = mix(body, eyeC, eyeA*0.92*faceA);",
+         "      body = mix(body, eyeC, eyeA*0.92*faceA);\n      body = mix(body, eyeC, smoothstep(0.03, 0.012, abs(length(f - vec2(0.0, 0.30)) - 0.12)) * step(0.34, f.y) * step(abs(f.x), 0.12) * faceA);"),
+    ], ["characters.test.ts"]),
+    ("a borrowed name slips into the list", "src/orb/spec.ts", [
+        ('  "Oscar", "Luna",', '  "Oscar", "Alfred", "Luna",'),
+    ], ["spec.test.ts"]),
+    ("a voice keeps Kokoro's name for it", "src/orb/spec.ts", [
+        ('af_bella: "Sunny",', 'af_bella: "Bella",'),
+    ], ["spec.test.ts"]),
+    ("the same dice make a different orb", "src/orb/spec.ts", [
+        ("    name: orbName(r),", "    name: orbName(Math.random),"),
+    ], ["spec.test.ts"]),
+    ("a shape is too big for its box", "src/orb/spec.ts", [
+        ("bumps: 7, bumpSize: 0.065, scale: 0.87 }),", "bumps: 7, bumpSize: 0.065, scale: 1.45 }),"),
+    ], ["characters.test.ts"]),
+    ("a hat floats off the top of his head", "src/orb/glsl.ts", [
+        ("*(1.0 - 0.5*uSquash) - 0.03*Rg;", "*(1.0 - 0.5*uSquash) + 0.55*Rg;"),
+    ], ["characters.test.ts"]),
+    ("the specimen scrolls sideways on a phone", "src/specimen.tsx", [
+        ('gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 420px), 1fr))"', 'gridTemplateColumns: "repeat(auto-fit, minmax(420px, 1fr))"'),
+    ], ["render.test.ts"]),
 ]
 
 # the `orbs` terminal (PLAN 1.9): paths are inside packages/terminal
@@ -277,13 +333,15 @@ def copy_home(tmp: Path) -> Path:
     pkgs = tmp / "packages"
     if pkgs.exists():
         shutil.rmtree(pkgs)
-    for src in (HOME_PKG, TERMINAL_PKG):
+    for src in (HOME_PKG, TERMINAL_PKG, APP_PKG):
         work = pkgs / src.name
-        shutil.copytree(src, work, symlinks=True, ignore=shutil.ignore_patterns("node_modules"))
+        shutil.copytree(src, work, symlinks=True, ignore=shutil.ignore_patterns("node_modules", "dist", "renders"))
         (work / "node_modules").symlink_to(src / "node_modules", target_is_directory=True)
     for shared in ("kit", "docs"):  # read-only inputs the home's tests use (the kit, the bake-off defaults)
         if not (tmp / shared).exists():
             (tmp / shared).symlink_to(REPO / shared, target_is_directory=True)
+    if not (tmp / "tsconfig.base.json").exists():  # the app's build reads it (Vite follows tsconfig's extends)
+        (tmp / "tsconfig.base.json").symlink_to(REPO / "tsconfig.base.json")
     return pkgs
 
 
@@ -309,6 +367,7 @@ def main() -> int:
     fails = 0
     planted = [(name, f"home/{rel}", edits, [f"home/test/{s}" for s in ss]) for name, rel, edits, ss in MUTANTS]
     planted += [(name, f"terminal/{rel}", edits, [f"terminal/test/{s}" for s in ss]) for name, rel, edits, ss in TERMINAL_MUTANTS]
+    planted += [(name, f"app/{rel}", edits, [f"app/test/{s}" for s in ss]) for name, rel, edits, ss in APP_MUTANTS]
     if "--only" in sys.argv:
         only = sys.argv[sys.argv.index("--only") + 1]
         planted = [m for m in planted if only in m[1] or only in m[0] or any(only in s for s in m[3])]

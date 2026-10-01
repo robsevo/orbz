@@ -1,7 +1,7 @@
 // The home's one database. SQLite in WAL mode with EXCLUSIVE locking: the first write takes a
 // file lock that is held until the process exits, so a second home on the same data directory is
 // refused by SQLite itself, on every OS, and a crashed home leaves no stale lock behind.
-import { mkdirSync } from "node:fs";
+import { chmodSync, closeSync, existsSync, mkdirSync, openSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
@@ -188,10 +188,25 @@ const MIGRATIONS: string[] = [
   `,
 ];
 
+/** The home's data is the person's: the folder is theirs alone (0700) and so is the database
+ * (0600), whatever the umask, and a home made before this had its looser modes tightened when it
+ * opens. A folder that was already there with other things in it, and is not a home, keeps its
+ * mode (it is the person's own folder); the database in it is still theirs alone. */
+function makePrivate(dataDir: string): string {
+  const fresh = !existsSync(dataDir);
+  mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+  const file = join(dataDir, "home.db");
+  if (process.platform === "win32") return file;
+  if (fresh || existsSync(file) || readdirSync(dataDir).length === 0) chmodSync(dataDir, 0o700);
+  // made owner-only before SQLite opens it: SQLite gives its WAL file the database's mode
+  closeSync(openSync(file, "a", 0o600));
+  for (const f of [file, `${file}-wal`, `${file}-shm`]) if (existsSync(f)) chmodSync(f, 0o600);
+  return file;
+}
+
 /** Opens (and migrates) `<dataDir>/home.db`, taking the one-writer lock. */
 export function openDb(dataDir: string): DatabaseSync {
-  mkdirSync(dataDir, { recursive: true });
-  const db = new DatabaseSync(join(dataDir, "home.db"), { timeout: 0 });
+  const db = new DatabaseSync(makePrivate(dataDir), { timeout: 0 });
   try {
     // EXCLUSIVE must be set before WAL is entered, so WAL keeps no shared-memory file for others.
     db.exec("PRAGMA locking_mode = EXCLUSIVE");

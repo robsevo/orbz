@@ -47,7 +47,8 @@ EXACT_RUN = 40    # identical tokens in a row = copied
 NORM_RUN = 70     # identical normalized tokens in a row = copied with renames
 # A normalized run counts only if it has the structure of code: at least one identifier or
 # keyword per STRUCTURE_EVERY tokens. With strings normalized to S, any long table of string
-# pairs ({"a": "b", "c": "d", ...}: a MIME map, a pronunciation lexicon) is the same S : S , run
+# pairs ({"a": "b", "c": "d", ...}: a MIME map, a pronunciation lexicon; or {a: "b", ...} with
+# bare keys, whose keys are not counted as names) is the same S : S , run
 # as every other one; that is data with nothing of anyone's code in it. Exact mode is untouched,
 # so pasting their actual table is still caught.
 STRUCTURE_EVERY = 10
@@ -179,8 +180,17 @@ def longest_run(a: list[str], b: list[str], ia: int, ib: int) -> tuple[int, int,
 
 
 def has_structure(norm_run: list[str]) -> bool:
-    """True when a normalized run reads as code (names and keywords), not a table of literals."""
-    named = sum(1 for tok in norm_run if tok == "I" or tok in _KEYWORDS)
+    """True when a normalized run reads as code (names and keywords), not a table of literals. A
+    name that is only a key in front of a literal (`ENTER: "Enter"`, `af_bella: "Sunny"`) is part of
+    the table, not a name the code uses: an unquoted-key table is data as much as a quoted one."""
+    named = 0
+    for i, tok in enumerate(norm_run):
+        if tok in _KEYWORDS:
+            named += 1
+        elif tok == "I":
+            if i + 2 < len(norm_run) and norm_run[i + 1] == ":" and norm_run[i + 2] in ("S", "N"):
+                continue
+            named += 1
     return named * STRUCTURE_EVERY >= len(norm_run)
 
 

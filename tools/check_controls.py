@@ -37,6 +37,11 @@ PLANTS = [
     ("a failing terminal test", "packages/terminal/test/planted_control.test.ts",
      'import assert from "node:assert/strict";\nimport { test } from "node:test";\n\n'
      'test("planted control: the terminal must fail", () => {\n  assert.equal(1, 2);\n});\n', "planted control: the terminal must fail"),
+    # the app (PLAN 2.x): a third package, held to the same gate
+    ("a type error in the app", "packages/app/src/planted_control.ts",
+     'export const planted: number = "not a number";\n', "planted_control.ts"),
+    ("a colour written outside the tokens", "packages/app/src/planted_colour.ts",
+     'export const planted = { color: "#ff3b30" };\n', "a hex colour: #ff3b30"),
 ]
 
 

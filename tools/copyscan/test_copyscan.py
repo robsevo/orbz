@@ -131,6 +131,16 @@ with tempfile.TemporaryDirectory() as td:
     rc, out = scan(tree(td / "o7b", {"packages/home/types.ts": THEIR_TABLE}), theirs7)
     check("C.7b CONTROL: their table pasted verbatim is still caught", rc == 1 and "exact" in out, out)
 
+    # C.7c — the same with bare keys (`KEY: "value"`): a key in front of a literal is the table's,
+    # not a name the code uses (found 2026-10-01: our voice names against their key map)
+    their_keys = "const KEY_MAP = {\n" + "".join(f'  K{i}: "v{i}", W{i}: "w{i}",\n' for i in range(40)) + "};\n"
+    our_keys = "const NAMES = {\n" + "".join(f'  n{i}: "x{i}", m{i}: "y{i}",\n' for i in range(40)) + "};\n"
+    theirs7c = tree(td / "theirs7c", {"src/keys.ts": their_keys})
+    rc, out = scan(tree(td / "o7c", {"packages/app/names.ts": our_keys}), theirs7c)
+    check("C.7c a table with bare keys and different values is not a copy", rc == 0, out)
+    rc, out = scan(tree(td / "o7d", {"packages/app/keys.ts": their_keys}), theirs7c)
+    check("C.7d CONTROL: their bare-key table pasted verbatim is still caught", rc == 1 and "exact" in out, out)
+
     # C.5 — a scan that cannot run must not read as a pass.
     rc, out = scan(td / "o2", td / "does-not-exist")
     check("C.5 missing Open Dot tree exits 2, never 0", rc == 2, out)
