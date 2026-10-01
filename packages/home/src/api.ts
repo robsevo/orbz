@@ -140,6 +140,31 @@ async function handle(
     home.rules.remove(Number(parts[1]));
     return { removed: Number(parts[1]) };
   }
+  // Continue with ChatGPT (PLAN 1.10). Status and the sign-in URL only: no reply carries a token.
+  if (method === "GET" && url.pathname === "/chatgpt") return { chatgpt: await home.chatgpt.status() };
+  if (method === "POST" && parts[0] === "chatgpt" && parts.length === 2) {
+    switch (parts[1]) {
+      case "sign-in": {
+        const { url: signIn, done } = await home.chatgpt.begin();
+        void done.catch(() => {}); // the outcome arrives as chatgpt.connected or chatgpt.sign_in_failed
+        return { url: signIn };
+      }
+      case "sign-out":
+        await home.chatgpt.signOut();
+        return { chatgpt: await home.chatgpt.status() };
+      case "resume":
+        home.chatgpt.resume();
+        return { chatgpt: await home.chatgpt.status() };
+      case "model": {
+        try {
+          home.chatgpt.setModel(text(await body(req), "slug"));
+        } catch (e) {
+          throw new HttpError(409, e instanceof Error ? e.message : String(e));
+        }
+        return { chatgpt: await home.chatgpt.status() };
+      }
+    }
+  }
   if (method === "POST" && url.pathname === "/orbs") {
     const b = await body(req);
     return { orb: home.inbox.addOrb(text(b, "id"), text(b, "name")) };

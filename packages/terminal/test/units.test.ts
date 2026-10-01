@@ -60,11 +60,12 @@ test("no mouth: a face differs from the bare glass only in its two eyes", () => 
 });
 
 test("the splash: him and the facts, no line wider than W; without colour he is block characters", () => {
-  const facts = { orb: "Juniper", version: "0.0.0", door: "127.0.0.1:41234", online: true, kit: "up", dataDir: "/home/someone/a/very/long/path/to/the/orbs/data/dir", chat: "chat:main · new" };
+  const facts = { orb: "Juniper", version: "0.0.0", door: "127.0.0.1:41234", online: true, kit: "up", brain: { text: "ChatGPT plan · owner@example.com", plan: true }, dataDir: "/home/someone/a/very/long/path/to/the/orbs/data/dir", chat: "chat:main · new" };
   const plain = splashLines(facts, { color: false });
   for (const l of plain) assert.ok([...l].length <= W, `${[...l].length} > ${W}: ${l}`);
   assert.match(plain.join("\n"), /Juniper {2}orbs v0\.0\.0/);
   assert.match(plain.join("\n"), /data {4}…/, "a long path is cut from the left, where it says least");
+  assert.match(plain.join("\n"), /brain {3}ChatGPT plan · owner@example\.…$/m, "anything else from the right");
   assert.match(plain.join("\n"), /█/);
   assert.doesNotMatch(plain.join("\n"), /\x1b/);
   const away = splashLines({ ...facts, online: false }, { color: false }).join("\n");

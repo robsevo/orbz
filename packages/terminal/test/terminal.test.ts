@@ -10,15 +10,18 @@ import { serve } from "../../home/src/api.ts";
 import type { Home } from "../../home/src/home.ts";
 import { agentHome, tempDir } from "../../home/test/helpers.ts";
 import type { Turn } from "../../home/test/fakes/model.ts";
+import { fakeChatGPT } from "../../home/test/fakes/chatgpt.ts";
+import { MemoryStore } from "../../home/src/chatgpt/store.ts";
+import { fileURLToPath } from "node:url";
 import { Pty } from "./pty.ts";
 
 const skip = process.platform === "win32" ? "a pty needs a POSIX terminal (Windows gets ConPTY with the app, PLAN 2.x)" : false;
 
-async function terminal(t: import("node:test").TestContext, script: Turn[], more: Parameters<typeof agentHome>[2] = {}) {
+async function terminal(t: import("node:test").TestContext, script: Turn[], more: Parameters<typeof agentHome>[2] = {}, env: Record<string, string> = {}) {
   const h = await agentHome(t, script, more);
   const door = await serve(h.home);
   t.after(() => door.close());
-  const pty = await Pty.open(t, ["--data", h.dataDir, "--orb", "juniper"], { env: { ORBS_BOOT: "0" } });
+  const pty = await Pty.open(t, ["--data", h.dataDir, "--orb", "juniper"], { env: { ORBS_BOOT: "0", ...env } });
   await pty.waitFor(/Ask Juniper to do anything/);
   return { ...h, pty };
 }
@@ -132,4 +135,32 @@ test("with no home on the data directory the terminal says how to start one, and
   const pty = await Pty.open(t, ["--data", tempDir(t)]);
   assert.equal(await pty.exited, 3);
   assert.match(pty.text(), /no home is running on .* start one with `pnpm start --data /);
+});
+
+test("Continue with ChatGPT from the terminal: /chatgpt signs in, the badge shows only on the plan's replies, a limit leads with Manage usage", { skip }, async (t) => {
+  const openai = await fakeChatGPT(t);
+  const browser = fileURLToPath(new URL("./fixtures/browser.mjs", import.meta.url));
+  const { pty } = await terminal(t, [{ chunks: ["Hello from the router."] }], { chatgpt: { store: new MemoryStore(), issuer: openai.issuer, apiBase: openai.apiBase } }, { ORBS_OPEN: browser });
+  assert.match(pty.screen.text(), /brain\s+\/chatgpt: your ChatGPT plan$/m, "the splash says how to use the plan");
+  pty.type("/chatgpt\r");
+  await pty.onScreen(/Signed in to ChatGPT as owner@example\.com\. You're using your ChatGPT plan\./);
+  assert.match(pty.screen.text(), /Continue with ChatGPT: your browser should open[\s\S]*http:\/\/127\.0\.0\.1:\d+\/api\/accounts\/authorize\?/, "the link is printed too");
+  assert.doesNotMatch(pty.screen.text(), /Using ChatGPT plan/, "control: no badge before the plan has answered");
+  openai.script = [{ chunks: ["Hello ", "from your plan."] }];
+  pty.type("hi\r");
+  await pty.onScreen(/• Hello from your plan\.[\s\S]*Juniper · idle · kit off · chat:main · Using ChatGPT plan · Manage usage/);
+  assert.ok(pty.raw.includes("\x1b]8;;https://chatgpt.com/settings/usage\x1b\\Manage usage"), "Manage usage is a link to ChatGPT's usage settings");
+  openai.script = [{ status: 429, code: "subscription_sharing_usage_limit_exceeded" }];
+  pty.type("again\r");
+  // the committed rows, not the reply's live copy (which can be drawn before they land)
+  await pty.onScreen(/› again\n[\s\S]*▲ Usage limit reached[\s\S]*Answering with my other brain[\s\S]*• Hello from the router\.[\s\S]*Juniper · idle · kit off · chat:main$/m);
+  const screen = pty.screen.text();
+  const at = (re: RegExp): number => screen.search(re);
+  assert.ok(at(/▲ Usage limit reached/) >= 0, screen);
+  assert.ok(at(/▲ Usage limit reached/) < at(/Review your plan or this app's limit in ChatGPT settings\./));
+  assert.ok(at(/Review your plan/) < at(/^ {4}Manage usage https:\/\/chatgpt\.com\/settings\/usage$/m), "Manage usage, the primary action, under the message");
+  assert.ok(at(/Manage usage https/) < at(/Answering with my other brain until then\./), "and before the fallback");
+  assert.ok(at(/Answering with my other brain/) < at(/• Hello from the router\./));
+  assert.doesNotMatch(screen.split("\n").filter((l) => l.includes("Juniper · idle")).at(-1)!, /Using ChatGPT plan/, "the router's reply does not wear the badge");
+  assert.ok(pty.screen.lines().every((l) => [...l].length <= 100), "the link codes take no room on screen");
 });

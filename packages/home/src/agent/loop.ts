@@ -20,7 +20,8 @@ import { join } from "node:path";
 import type { Clock } from "../clock.ts";
 import type { EventLog } from "../events.ts";
 import type { RunContext, RunResult, Runner } from "../inbox.ts";
-import { chat, type Endpoint } from "../brain/openai.ts";
+import { BrainCallError, chat, type Endpoint, type Limited } from "../brain/openai.ts";
+import { MANAGE_USAGE } from "../chatgpt/chatgpt.ts";
 import type { Spend } from "../brain/spend.ts";
 import type { Card, Conversations, Message, ToolCall } from "./conversation.ts";
 import { standingContext } from "./standing.ts";
@@ -35,8 +36,14 @@ export type AgentOptions = {
   clock: Clock;
   dataDir: string;
   background: Background;
-  /** The brain the loop talks to (the preset's big brain). */
+  /** The brain the loop talks to, asked again at every step: the ChatGPT plan when it can serve,
+   * else the preset's big brain. */
   endpoint: () => Endpoint | null;
+  /** A plan brain could not serve (PLAN 1.10): it pauses or forgets itself, so the next
+   * `endpoint()` is the next brain. */
+  planLimited?: (why: Limited) => Promise<void>;
+  /** Resolves once the brains are known (the ChatGPT sign-in read from the keychain). */
+  ready?: () => Promise<void>;
   orbName: (orb: string) => string;
   tools?: ToolDef[];
   /** What decides each call (PLAN 1.6): the floor, the person's rules, the one-way switch, away. */
@@ -67,7 +74,7 @@ export const PLAN_ANSWERS = {
 const est = (text: string): number => Math.ceil(text.length / 4) + 4;
 
 export class AgentRunner implements Runner {
-  readonly #o: Required<Omit<AgentOptions, "redact" | "onText">> & Pick<AgentOptions, "redact" | "onText">;
+  readonly #o: Required<Omit<AgentOptions, "redact" | "onText" | "planLimited" | "ready">> & Pick<AgentOptions, "redact" | "onText" | "planLimited" | "ready">;
   readonly #tools: Map<string, ToolDef>;
 
   constructor(opts: AgentOptions) {
@@ -129,16 +136,17 @@ export class AgentRunner implements Runner {
 
     // The turn is the person's request this run works on; attended unless only a schedule or trigger woke it.
     const at = this.#site(ctx);
-    const ep = this.#o.endpoint();
-    if (!ep) {
-      conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "notice", run: ctx.run, content: "No brain is set up yet, so I can't answer. Choose one in settings." });
-      return { outcome: "ok", summary: "no brain" };
-    }
-
+    await this.#o.ready?.();
     for (let n = 0; n < this.#o.maxSteps; n++) {
       if (ctx.signal.aborted) return this.#ended("stopped", ctx);
+      let ep = this.#o.endpoint(); // every step: a plan at its limit since the last one has stepped aside
+      if (!ep) {
+        conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "notice", run: ctx.run, content: "No brain is set up yet, so I can't answer. Choose one in settings." });
+        return { outcome: "ok", summary: "no brain" };
+      }
       const standing = standingContext({ orbName: this.#o.orbName(ctx.orb), brainDir: join(this.#o.dataDir, "brain"), workspace: tctx.workspace });
       await this.#compact(ctx, ep, est(standing));
+      ep = this.#o.endpoint() ?? ep; // compaction may have met the plan's limit and moved on
       this.#o.spend.check(); // SpendCapError: the inbox stops the run cleanly ("capped")
       const messages = [{ role: "system" as const, content: standing }, ...conv.toModel(conv.history(ctx.conversation))];
       ctx.activity("Thinking");
@@ -163,12 +171,22 @@ export class AgentRunner implements Runner {
         if (r.text) conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "assistant", run: ctx.run, content: r.text, meta: { stopped: true } });
         return this.#ended("stopped", ctx);
       }
+      if (r.limited && ep.plan) {
+        // the plan cannot serve this: say so (Manage usage first), then the same step on the next brain
+        const next = await this.#limited(ctx, r.limited);
+        if (next) {
+          n--;
+          continue;
+        }
+        return { outcome: "ok", summary: `plan ${r.limited}` };
+      }
       if (r.error) {
         if (r.text) conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "assistant", run: ctx.run, content: r.text, meta: { error: r.error } });
         conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "notice", run: ctx.run, content: `I couldn't finish: ${r.error}`, meta: { error: true } });
         throw new Error(r.error);
       }
-      const msg = conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "assistant", run: ctx.run, content: r.text, toolCalls: r.toolCalls });
+      // `plan` marks a reply the ChatGPT plan served to completion: the only replies that carry its badge
+      const msg = conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "assistant", run: ctx.run, content: r.text, toolCalls: r.toolCalls, ...(ep.plan && { meta: { plan: ep.plan } }) });
       if (!r.toolCalls.length) {
         step("output", { text: r.text });
         return { outcome: "ok", summary: r.text.slice(0, 200) };
@@ -307,6 +325,30 @@ export class AgentRunner implements Runner {
 
   /** Compaction: when the request would be too big, the older part of the conversation becomes a
    * summary. The newest turns stay as they are; a cut never falls inside a tool exchange. */
+  /** A plan brain could not serve: the person is told why, first, with what to do about it; then the
+   * plan steps aside. Returns the brain that answers instead, or null when there is none. */
+  async #limited(ctx: RunContext, why: Limited): Promise<Endpoint | null> {
+    const conv = this.#o.conversations;
+    const say = (content: string, meta: Record<string, unknown>): void => {
+      conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "notice", run: ctx.run, content, meta });
+    };
+    if (why === "usage-limit") {
+      say("Usage limit reached. Review your plan or this app's limit in ChatGPT settings.", { limit: why, action: { label: "Manage usage", url: MANAGE_USAGE } });
+    } else if (why === "not-eligible") {
+      say("ChatGPT plan use isn't available for this account, workspace or policy.", { limit: why });
+    } else {
+      say("The ChatGPT sign-in has lapsed. Sign in again to use your plan (/chatgpt).", { limit: why });
+    }
+    await this.#o.planLimited?.(why);
+    const next = this.#o.endpoint();
+    if (next && !next.plan) {
+      say(`Answering with ${next.name === "big" ? "my other brain" : next.name} until then.`, { fallback: next.name });
+      return next;
+    }
+    say("No other brain is set up, so this waits for your ChatGPT plan.", { fallback: null });
+    return null;
+  }
+
   async #compact(ctx: RunContext, ep: Endpoint, standingTokens: number): Promise<void> {
     const conv = this.#o.conversations;
     const hist = conv.history(ctx.conversation);
@@ -324,7 +366,17 @@ export class AgentRunner implements Runner {
       .join("\n");
     this.#o.spend.check();
     ctx.activity("Tidying the conversation");
-    const r = await chat(ep, [{ role: "user", content: `Summarise this conversation so far, keeping every decision, fact, file and open task:\n\n${text}` }], { maxTokens: 1500, signal: ctx.signal });
+    const ask = [{ role: "user" as const, content: `Summarise this conversation so far, keeping every decision, fact, file and open task:\n\n${text}` }];
+    let r: Awaited<ReturnType<typeof chat>>;
+    try {
+      r = await chat(ep, ask, { maxTokens: 1500, signal: ctx.signal });
+    } catch (e) {
+      if (!(e instanceof BrainCallError && e.limited && ep.plan)) throw e;
+      const next = await this.#limited(ctx, e.limited);
+      if (!next) throw e;
+      ep = next;
+      r = await chat(ep, ask, { maxTokens: 1500, signal: ctx.signal });
+    }
     this.#o.spend.record({ tier: "big", model: ep.model, costUsd: r.costUsd, costSource: r.costSource, promptTokens: r.promptTokens, completionTokens: r.completionTokens, orb: ctx.orb, conversation: ctx.conversation });
     conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "summary", run: ctx.run, content: r.text, meta: { covers_to: middle.at(-1)!.id } });
     this.#o.events.append("conversation.compacted", { run: ctx.run, covered: middle.length, kept: hist.length - k }, { orb: ctx.orb, conversation: ctx.conversation });

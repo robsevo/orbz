@@ -4,7 +4,7 @@ defect in a scratch copy of packages/home (or packages/terminal, PLAN 1.9_t), an
 must go red. The repo itself is never touched.
 
     pnpm check:controls      # runs this after tools/check_controls.py
-    tools/home_mutants.py --only terminal/    # just the mutants whose file or name has this text
+    tools/home_mutants.py --only terminal/    # just the mutants whose file, name or suite has this text
 """
 from __future__ import annotations
 
@@ -174,6 +174,54 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("one failed spawn counted as two deaths", "src/kit.ts", [
         ("      if (g.died !== null) return;\n      if (partial.trim())", "      if (partial.trim())"),
     ], ["kit.test.ts"]),
+    # Continue with ChatGPT (PLAN 1.10)
+    ("the sign-in's state is not checked", "src/chatgpt/chatgpt.ts", [
+        ('      if (q.get("state") !== state) {', "      if (false) {"),
+    ], ["chatgpt.test.ts"]),
+    ("the ID token's signature is not checked", "src/chatgpt/oauth.ts", [
+        ("  if (!signed) throw", "  if (false) throw"),
+    ], ["chatgpt.test.ts"]),
+    ("the ID token's issuer is not checked", "src/chatgpt/oauth.ts", [
+        ("  if (claims.iss !== o.issuer) throw", "  if (false) throw"),
+    ], ["chatgpt.test.ts"]),
+    ("the ID token's audience is not checked", "src/chatgpt/oauth.ts", [
+        ("  if (!aud.includes(o.audience)) throw", "  if (false) throw"),
+    ], ["chatgpt.test.ts"]),
+    ("the ID token's nonce is not checked", "src/chatgpt/oauth.ts", [
+        ("  if (claims.nonce !== o.nonce) throw", "  if (false) throw"),
+    ], ["chatgpt.test.ts"]),
+    ("an expired ID token is accepted", "src/chatgpt/oauth.ts", [
+        ('  if (typeof claims.exp !== "number" || claims.exp < now - 60) throw', "  if (false) throw"),
+    ], ["chatgpt.test.ts"]),
+    ("the PKCE verifier is not sent", "src/chatgpt/oauth.ts", [
+        ("    code_verifier: p.verifier,", '    code_verifier: "",'),
+    ], ["chatgpt.test.ts"]),
+    ("a token is written into the event log", "src/chatgpt/chatgpt.ts", [
+        ('this.#o.events.append("chatgpt.connected", { email: who.email, sharing, model: this.#reg.model });',
+         'this.#o.events.append("chatgpt.connected", { email: who.email, sharing, model: this.#reg.model, token: t.accessToken });'),
+    ], ["chatgpt.test.ts"]),
+    ("a usage limit is not passed to the next brain", "src/agent/loop.ts", [
+        ("      if (r.limited && ep.plan) {", "      if (false) {"),
+    ], ["chatgpt.test.ts"]),
+    ("every reply wears the plan's badge", "src/agent/loop.ts", [
+        ("...(ep.plan && { meta: { plan: ep.plan } })", '...{ meta: { plan: "chatgpt" } }'),
+    ], ["chatgpt.test.ts"]),
+    ("a usage limit says nothing of Manage usage", "src/agent/loop.ts", [
+        ('{ limit: why, action: { label: "Manage usage", url: MANAGE_USAGE } }', "{ limit: why }"),
+    ], ["chatgpt.test.ts"]),
+    ("a usage limit does not pause the plan", "src/chatgpt/chatgpt.ts", [
+        ("      this.#paused = { until: this.#o.clock.now() + this.#o.pauseMs, why };\n", "      this.#paused = { until: 0, why };\n"),
+    ], ["chatgpt.test.ts"]),
+    ("a token is used until the moment it lapses", "src/chatgpt/chatgpt.ts", [
+        ("    if (t.expiresAt - 60_000 > this.#o.clock.now()) return t.accessToken;", "    if (t.expiresAt > this.#o.clock.now()) return t.accessToken;"),
+    ], ["chatgpt.test.ts"]),
+    ("a reply without response.completed counts", "src/agent/responses.ts", [
+        ('    if (!completed) return fail("the reply ended before it completed", null);\n', ""),
+    ], ["chatgpt.test.ts"]),
+    ("the keychain is handed the secret on its command line", "src/chatgpt/store.ts", [
+        ('const r = await run(this.#tool, ["store", `--label=Orbs: ChatGPT sign-in`, "service", SERVICE, "key", key], value);',
+         'const r = await run(this.#tool, ["store", `--label=Orbs: ChatGPT sign-in`, "service", SERVICE, "key", key, value], value);'),
+    ], ["chatgpt.test.ts"]),
 ]
 
 # the `orbs` terminal (PLAN 1.9): paths are inside packages/terminal
@@ -213,6 +261,9 @@ TERMINAL_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("the bean gets a mouth", "src/bean.ts", [
         ("  return null; // no mouth: his eyes are the face", "  return kind !== \"none\" && dy === 4 && Math.abs(dx - 0.5) <= 1.5 ? EYE : null;"),
     ], ["units.test.ts"]),
+    ("the terminal shows the plan's badge whoever answered", "src/app.ts", [
+        ('        if (!m.meta.stopped && !m.meta.error) this.plan = m.meta.plan === "chatgpt";', "        this.plan = true;"),
+    ], ["terminal.test.ts"]),
     ("the screen model ignores erases (a desync would read as fine)", "test/screen.ts", [
         ('      case "K":\n', '      case "K":\n        break;\n'),
     ], ["units.test.ts"]),
@@ -260,7 +311,7 @@ def main() -> int:
     planted += [(name, f"terminal/{rel}", edits, [f"terminal/test/{s}" for s in ss]) for name, rel, edits, ss in TERMINAL_MUTANTS]
     if "--only" in sys.argv:
         only = sys.argv[sys.argv.index("--only") + 1]
-        planted = [m for m in planted if only in m[1] or only in m[0]]
+        planted = [m for m in planted if only in m[1] or only in m[0] or any(only in s for s in m[3])]
         if not planted:
             print(f"no mutant matches --only {only!r}")
             return 1

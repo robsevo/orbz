@@ -5,7 +5,8 @@
 // The result always carries the partial text. A stop comes back as `stopped: true`; a transport
 // failure as `error` with the cause's code (ECONNRESET, ECONNREFUSED…) when there is one.
 import type { ModelMessage, ToolCall } from "./conversation.ts";
-import type { CostSource, Endpoint } from "../brain/openai.ts";
+import type { CostSource, Endpoint, Limited } from "../brain/openai.ts";
+import { streamResponses } from "./responses.ts";
 
 export type ToolSpec = { type: "function"; function: { name: string; description: string; parameters: Record<string, unknown> } };
 
@@ -21,24 +22,24 @@ export type Streamed = {
   stopped: boolean;
   /** The request failed; `text` is what had arrived by then. */
   error: string | null;
+  /** The server's error code, when it sent one. */
+  errorCode: string | null;
+  /** A plan brain that cannot serve now, and why: the loop asks the next brain (PLAN 1.10). */
+  limited: Limited | null;
 };
+
+export const emptyStreamed = (): Streamed => ({
+  text: "", toolCalls: [], finish: null, promptTokens: 0, completionTokens: 0, costUsd: null, costSource: "unknown",
+  stopped: false, error: null, errorCode: null, limited: null,
+});
 
 export async function streamChat(
   ep: Endpoint,
   body: { messages: ModelMessage[]; tools?: ToolSpec[]; maxTokens?: number },
   opts: { signal?: AbortSignal; onText?: (delta: string) => void } = {},
 ): Promise<Streamed> {
-  const out: Streamed = {
-    text: "",
-    toolCalls: [],
-    finish: null,
-    promptTokens: 0,
-    completionTokens: 0,
-    costUsd: null,
-    costSource: "unknown",
-    stopped: false,
-    error: null,
-  };
+  if (ep.api === "responses") return streamResponses(ep, body, opts);
+  const out = emptyStreamed();
   const calls: { id: string; name: string; arguments: string }[] = [];
   let reportedCost: number | null = null;
   const headers: Record<string, string> = { "content-type": "application/json" };

@@ -15,6 +15,7 @@ import { Kit, type KitOptions } from "./kit.ts";
 import { HabitShelf } from "./brain/habits.ts";
 import { Ladder, type LadderOptions } from "./brain/ladder.ts";
 import type { Preset } from "./brain/presets.ts";
+import { ChatGPT, type ChatGPTOptions } from "./chatgpt/chatgpt.ts";
 import { Spend } from "./brain/spend.ts";
 import { type Card, Conversations } from "./agent/conversation.ts";
 import { AgentRunner, type AgentOptions } from "./agent/loop.ts";
@@ -54,6 +55,9 @@ export type HomeOptions = {
   kit?: boolean | Omit<KitOptions, "events" | "clock" | "dataDir">;
   /** The brain ladder's endpoints (PLAN 1.4). Without one, only habits can answer. */
   brain?: { preset: Preset } & Pick<LadderOptions, "ownEarned" | "playbook">;
+  /** Continue with ChatGPT (PLAN 1.10): the OS keychain and OpenAI's own servers by default; tests
+   * give a stand-in store and their own issuer. Once signed in, the plan answers before the preset. */
+  chatgpt?: Partial<Omit<ChatGPTOptions, "dataDir" | "events" | "clock">>;
   /** Dollars a day the brains may cost, by what the providers report; null for no cap. */
   spendCapUsd?: number | null;
 };
@@ -102,6 +106,8 @@ export class Home {
   readonly conversations: Conversations;
   /** The agent loop, when it is the runner. */
   readonly agent: AgentRunner | null;
+  /** Continue with ChatGPT (PLAN 1.10): the person's plan as the big brain, once they sign in. */
+  readonly chatgpt: ChatGPT;
   /** What happens as it happens, for whoever is watching (the terminal, the web app): every event
    * once committed ("event"), and a reply's text as it streams ("text"). Never stored. */
   readonly live = new EventEmitter();
@@ -131,6 +137,8 @@ export class Home {
     this.spend = new Spend(this.events, this.clock, opts.spendCapUsd === undefined ? DEFAULT_SPEND_CAP_USD : opts.spendCapUsd);
     this.conversations = new Conversations(db, this.events, this.clock);
     const big = opts.brain?.preset.big ?? null;
+    this.chatgpt = new ChatGPT({ dataDir: this.dataDir, events: this.events, clock: this.clock, ...opts.chatgpt });
+    const chatgptReady = this.chatgpt.load().then(() => {}, () => {}); // a home never signed in does not touch the keychain
     this.kit = opts.kit
       ? new Kit({ ...(opts.kit === true ? {} : opts.kit), events: this.events, clock: this.clock, dataDir: this.dataDir })
       : null;
@@ -178,7 +186,9 @@ export class Home {
           clock: this.clock,
           dataDir: this.dataDir,
           background: this.#background,
-          endpoint: () => big,
+          endpoint: () => this.chatgpt.endpoint() ?? big,
+          planLimited: (why) => this.chatgpt.limited(why),
+          ready: () => chatgptReady,
           orbName: (orb) => this.inbox.orb(orb)?.name ?? orb,
         });
     this.inbox = new Inboxes(db, this.events, this.clock, opts.runner ?? this.agent!, opts.graceMs);
@@ -298,6 +308,7 @@ export class Home {
     await this.inbox.close();
     await this.loops.close();
     await this.kit?.close();
+    this.chatgpt.close();
     this.#background.close();
     this.events.append("home.stopped", {});
     this.#db.close();

@@ -25,6 +25,7 @@ export type SplashFacts = {
   door: string; // where the home answered, e.g. 127.0.0.1:41234
   online: boolean;
   kit: string | null; // the kit's state, or null when the home runs without one
+  brain: { text: string; plan: boolean }; // what answers: the ChatGPT plan, or how to get it
   dataDir: string;
   chat: string; // the conversation, and how much of it there is
 };
@@ -33,7 +34,8 @@ export function tildify(dir: string, home = process.env.HOME ?? ""): string {
   return home && (dir === home || dir.startsWith(`${home}/`)) ? `~${dir.slice(home.length)}` : dir;
 }
 
-const clip = (v: string): string => (v.length > VMAX ? `…${v.slice(-(VMAX - 1))}` : v);
+// a path is cut from the left, where it says least; anything else from the right
+const clip = (v: string, path = false): string => (v.length <= VMAX ? v : path ? `…${v.slice(-(VMAX - 1))}` : `${v.slice(0, VMAX - 1)}…`);
 
 /** The splash at one moment: him (with `face` and `lift`) and the facts. */
 export function splashLines(f: SplashFacts, o: { face?: Face; lift?: number; color?: boolean } = {}): string[] {
@@ -41,7 +43,7 @@ export function splashLines(f: SplashFacts, o: { face?: Face; lift?: number; col
   const col = (c: RGB): string => (color ? `\x1b[38;2;${c[0]};${c[1]};${c[2]}m` : "");
   const rst = color ? "\x1b[0m" : "";
   const bold = color ? "\x1b[1m" : "";
-  const fact = (label: string, value: string, c: RGB = CREAM): string => `${col(DIM)}${label.padEnd(LABELW)}${rst}${col(c)}${clip(value)}${rst}`;
+  const fact = (label: string, value: string, c: RGB = CREAM, path = false): string => `${col(DIM)}${label.padEnd(LABELW)}${rst}${col(c)}${clip(value, path)}${rst}`;
   const face = o.face ?? "open";
   const text = [
     "",
@@ -49,8 +51,9 @@ export function splashLines(f: SplashFacts, o: { face?: Face; lift?: number; col
     `${col(CREAM)}${face === "shut" ? "waking up…" : f.online ? "ready when you are." : "his home is not answering."}${rst}`,
     "",
     `${col(DIM)}${"home".padEnd(LABELW)}${f.door}  ${rst}${col(f.online ? OK : WARN)}● ${f.online ? "online" : "no answer"}${rst}`,
+    fact("brain", f.brain.text, f.brain.plan ? CREAM : DIM),
     fact("kit", f.kit ?? "off", f.kit === "up" ? CREAM : WARN),
-    fact("data", tildify(f.dataDir)),
+    fact("data", tildify(f.dataDir), CREAM, true),
     fact("chat", f.chat),
     "",
     `${col(DIM)}Enter sends · Esc stops · Ctrl+C quits${rst}`,

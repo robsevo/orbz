@@ -15,6 +15,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Box, Static, Text, useApp, useInput, useWindowSize } from "ink";
 import type { Card, HomeClient, HomeEvent, Message, Orb, TextDelta } from "./client.ts";
+import { openUrl } from "./open.ts";
 
 const h = React.createElement;
 
@@ -32,6 +33,7 @@ export type Item =
   | { key: string; kind: "tool"; verb: string; what: string }
   | { key: string; kind: "result"; text: string; error: boolean }
   | { key: string; kind: "asked"; text: string; status: string }
+  | { key: string; kind: "limit"; title: string; body: string; label: string; url: string }
   | { key: string; kind: "notice"; text: string; warn: boolean }
   | { key: string; kind: "rule"; text: string };
 
@@ -76,6 +78,8 @@ export class Transcript {
   readonly #held = new Map<number, Message>();
   /** The call that has no result yet, as the activity line says it: ["Running", "sleep 30"]. */
   running: [string, string] | null = null;
+  /** The newest reply was served by the person's ChatGPT plan: the badge shows (PLAN 1.10). */
+  plan = false;
 
   items(m: Message, cards: Record<string, string> = {}): Item[] {
     const k = `m${m.id}`;
@@ -94,6 +98,7 @@ export class Transcript {
           this.#calls.set(c.id, said);
           this.running = [said[1], oneLine(said[2], 80)];
         }
+        if (!m.meta.stopped && !m.meta.error) this.plan = m.meta.plan === "chatgpt";
         return m.content.trim() ? [{ key: k, kind: "speech", text: m.content, ...(m.meta.stopped === true && { stopped: true }) }] : [];
       }
       case "tool": {
@@ -116,7 +121,13 @@ export class Transcript {
           }
           return [{ key: k, kind: "asked", text: m.content, status }];
         }
-        return [{ key: k, kind: "notice", text: m.content, warn: Boolean(m.meta.stopped) || /^(error|no brain|stopped)/i.test(m.content) }];
+        const action = m.meta.action as { label?: unknown; url?: unknown } | undefined;
+        if (action && typeof action.label === "string" && typeof action.url === "string") {
+          // a plan's limit: its title, what to do, and the action first (OpenAI's "Manage usage")
+          const [title, ...rest] = m.content.split(/(?<=\.)\s+/);
+          return [{ key: k, kind: "limit", title: (title ?? m.content).replace(/\.$/, ""), body: rest.join(" "), label: action.label, url: action.url }];
+        }
+        return [{ key: k, kind: "notice", text: m.content, warn: Boolean(m.meta.stopped) || Boolean(m.meta.limit) || /^(error|no brain|stopped)/i.test(m.content) }];
       }
       case "summary":
         return [{ key: k, kind: "rule", text: "earlier messages were summarised to make room" }];
@@ -157,8 +168,16 @@ function Row({ item }: { item: Item }): React.ReactElement {
       const tone = item.status === "approved" || item.status === "answered" ? ACCENT : item.status === "denied" ? WARN : DIM;
       return hang(h(Text, { color: DIM }, "  ? "), h(Text, { color: DIM }, `${item.text} · `, h(Text, { color: tone }, ANSWERED[item.status] ?? item.status)));
     }
+    case "limit":
+      return h(
+        Box,
+        { marginTop: 1, flexDirection: "column", width: Math.max(20, columns) },
+        h(Text, null, h(Text, { color: WARN }, "  ▲ "), h(Text, { bold: true }, item.title)),
+        item.body ? h(Text, { color: DIM }, `    ${item.body}`) : null,
+        h(Text, null, "    ", h(Text, { color: ACCENT, bold: true }, item.label), h(Text, { color: DIM }, ` ${item.url}`)),
+      );
     case "notice":
-      return h(Box, { marginTop: 1 }, h(Text, { color: item.warn ? WARN : DIM }, `  ${item.text}`));
+      return hang(h(Text, null, "  "), h(Text, { color: item.warn ? WARN : DIM }, item.text));
     case "rule":
       return h(Box, { marginTop: 1 }, h(Text, { color: DIM }, `── ${item.text} ──`));
   }
@@ -225,6 +244,22 @@ export function activityLine(spin: string, running: [string, string] | null, act
   return h(Text, { wrap: "truncate-end" }, h(Text, { color: ACCENT }, `${spin} `), running ? h(Text, { bold: true }, verb) : verb, said ? ` ${said}` : "", h(Text, { color: DIM }, tail));
 }
 
+export const MANAGE_USAGE = "https://chatgpt.com/settings/usage";
+
+/** A terminal hyperlink (OSC 8): the text is clickable where the terminal supports it. */
+const link = (url: string, text: string): string => `\x1b]8;;${url}\x1b\\${text}\x1b]8;;\x1b\\`;
+
+/** What the screen says when the home's ChatGPT connection changes: [text, as a warning]. */
+const CHATGPT_SAYS: Record<string, (d: Record<string, unknown>) => [string, boolean]> = {
+  "chatgpt.connected": (d) => [
+    `Signed in to ChatGPT${typeof d.email === "string" ? ` as ${d.email}` : ""}. ${d.sharing ? "You're using your ChatGPT plan." : "ChatGPT did not allow plan use for this account."}`,
+    !d.sharing,
+  ],
+  "chatgpt.sign_in_failed": (d) => [`Not signed in to ChatGPT: ${String(d.why)}.`, true],
+  "chatgpt.signed_out": (d) => [`Signed out of ChatGPT (${String(d.why)}).`, false],
+  "chatgpt.resumed": () => ["Your ChatGPT plan is back on.", false],
+};
+
 export type AppProps = {
   client: HomeClient;
   orb: Orb;
@@ -260,6 +295,7 @@ export function App(p: AppProps): React.ReactElement {
   const [problem, setProblem] = useState<string | null>(null);
   const [kit, setKit] = useState(p.kit);
   const [tick, setTick] = useState(0);
+  const [plan, setPlan] = useState(transcript.plan); // the badge: the newest reply came from the ChatGPT plan
 
   const lastMsg = useRef(p.history.at(-1)?.id ?? 0);
   const streamRef = useRef("");
@@ -288,6 +324,7 @@ export function App(p: AppProps): React.ReactElement {
         const rows = fresh.flatMap((m) => transcript.items(m, r.cards));
         setItems((xs) => [...xs, ...rows]);
         setRunning(transcript.running);
+        setPlan(transcript.plan);
         setSettling((s) => (s && fresh.some((m) => m.id === s.msg) ? null : s));
         const said = fresh.filter((m) => m.role === "user").map((m) => m.content);
         if (said.length) {
@@ -318,6 +355,8 @@ export function App(p: AppProps): React.ReactElement {
     const mine = (e: { orb?: string | null; conversation?: string | null }): boolean => e.orb === p.orb.id && e.conversation === p.conversation;
     const onEvent = (e: HomeEvent): void => {
       seq = Math.max(seq, e.seq);
+      const said = CHATGPT_SAYS[e.type]?.(e.data);
+      if (said) say(said[0], said[1]);
       const k = KIT_STATES[e.type];
       if (k) setKit(k);
       if (e.orb !== p.orb.id) return;
@@ -410,10 +449,30 @@ export function App(p: AppProps): React.ReactElement {
     setInput(s);
   };
 
+  // /chatgpt: Continue with ChatGPT (PLAN 1.10), handled here rather than sent to the orb
+  const chatgpt = (arg: string): void => {
+    const post = (path: string): Promise<unknown> => p.client.post(path).catch((e: unknown) => say(`ChatGPT: ${(e as Error).message}`));
+    if (arg === "") {
+      void p.client
+        .post<{ url: string }>("/chatgpt/sign-in")
+        .then(({ url }) => {
+          say(`Continue with ChatGPT: your browser should open. If it doesn't, open this link on this computer:\n${url}`, false);
+          openUrl(url);
+        })
+        .catch((e: unknown) => say(`ChatGPT: ${(e as Error).message}`));
+    } else if (arg === "off") void post("/chatgpt/sign-out");
+    else if (arg === "resume") void post("/chatgpt/resume");
+    else say("/chatgpt signs in with your ChatGPT plan · /chatgpt off signs out · /chatgpt resume lifts a usage-limit pause", false);
+  };
+
   const submit = (): void => {
     const text = typed.current.trim();
     if (!text) return;
     setTyped("");
+    if (!card && /^\/chatgpt\b/.test(text)) {
+      chatgpt(text.slice("/chatgpt".length).trim());
+      return;
+    }
     if (card && changing) answer("change", text);
     else if (card && card.kind === "question") answer("answer", text);
     else if (!card) {
@@ -480,6 +539,12 @@ export function App(p: AppProps): React.ReactElement {
       h(Text, { color: ACCENT, bold: true }, "› "),
       input ? h(Text, null, input, h(Text, { inverse: true }, " ")) : h(Text, null, h(Text, { inverse: true }, placeholder[0]), h(Text, { color: DIM }, placeholder.slice(1))),
     ),
-    h(Text, { color: DIM }, `  ${p.orb.name} · ${busy ? "working" : card ? "waiting for you" : "idle"} · kit ${kit ?? "off"} · ${p.conversation}`),
+    h(
+      Text,
+      { color: DIM },
+      `  ${p.orb.name} · ${busy ? "working" : card ? "waiting for you" : "idle"} · kit ${kit ?? "off"} · ${p.conversation}`,
+      // OpenAI's indicator, only while the newest reply came from the plan, with its Manage usage link
+      plan ? h(Text, null, " · ", h(Text, { color: ACCENT }, "Using ChatGPT plan"), " · ", link(MANAGE_USAGE, "Manage usage")) : null,
+    ),
   );
 }

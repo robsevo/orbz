@@ -8,6 +8,8 @@
 // is it estimated from the endpoint's price table, marked as an estimate. A call whose cost
 // cannot be known at all says so (`unknown`), so the spend cap is never silently blind.
 
+import { streamResponses } from "../agent/responses.ts";
+
 export type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 
 export type Endpoint = {
@@ -24,6 +26,12 @@ export type Endpoint = {
   timeoutMs?: number;
   /** Retries on a busy or failing server (default 2: after 1 s, then 2 s). */
   retries?: number;
+  /** The protocol: chat completions (the default), or OpenAI's Responses API (the ChatGPT plan, PLAN 1.10). */
+  api?: "chat" | "responses";
+  /** A bearer token fetched for each request (an OAuth access token, refreshed when due), in place of apiKey. */
+  token?: () => Promise<string>;
+  /** Requests here use the person's ChatGPT plan: its replies carry the badge, its limits pass to the next brain. */
+  plan?: "chatgpt";
 };
 
 export type CostSource = "reported" | "price-table" | "unknown";
@@ -41,12 +49,17 @@ export type Completion = {
 
 export class BrainCallError extends Error {
   readonly status: number | null;
-  constructor(endpoint: string, message: string, status: number | null = null) {
+  /** Why a plan brain cannot serve now (its usage limit, eligibility, a lapsed sign-in): ask the next one. */
+  readonly limited: Limited | null;
+  constructor(endpoint: string, message: string, status: number | null = null, limited: Limited | null = null) {
     super(`${endpoint}: ${message}`);
     this.name = "BrainCallError";
     this.status = status;
+    this.limited = limited;
   }
 }
+
+export type Limited = "usage-limit" | "not-eligible" | "signed-out";
 
 const RETRYABLE = new Set([408, 429, 500, 502, 503, 504]);
 
@@ -56,6 +69,7 @@ export async function chat(
   messages: ChatMessage[],
   opts: { maxTokens?: number; signal?: AbortSignal; retries?: number } = {},
 ): Promise<Completion> {
+  if (ep.api === "responses") return completeViaResponses(ep, messages, opts);
   const body = JSON.stringify({ model: ep.model, messages, max_tokens: opts.maxTokens ?? 4000, ...ep.extra });
   const headers: Record<string, string> = { "content-type": "application/json" };
   if (ep.apiKey) headers.authorization = `Bearer ${ep.apiKey}`;
@@ -101,6 +115,13 @@ export async function chat(
       finish: choice.finish_reason ?? null,
     };
   }
+}
+
+/** A completion on the Responses API, which the ChatGPT plan only serves streamed: collected here. */
+async function completeViaResponses(ep: Endpoint, messages: ChatMessage[], opts: { signal?: AbortSignal }): Promise<Completion> {
+  const r = await streamResponses(ep, { messages }, opts.signal ? { signal: opts.signal } : {});
+  if (r.error) throw new BrainCallError(ep.name, r.error.replace(`${ep.name}: `, ""), null, r.limited);
+  return { text: r.text, promptTokens: r.promptTokens, completionTokens: r.completionTokens, costUsd: r.costUsd, costSource: r.costSource, served: ep.model, finish: r.finish };
 }
 
 type ChatResponse = {

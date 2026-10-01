@@ -44,6 +44,13 @@ if (!orb && values.orb) {
 }
 if (!orb) fail(2, `this home has no orbs yet: \`pnpm orbs --orb <name>\` makes one`);
 
+const plan = await client
+  .get<{ chatgpt: { connected: boolean; sharing: boolean; account: { email: string | null } | null } }>("/chatgpt")
+  .then((r) => r.chatgpt)
+  .catch(() => null);
+const brain = plan?.connected && plan.sharing
+  ? { text: `ChatGPT plan${plan.account?.email ? ` · ${plan.account.email}` : ""}`, plan: true }
+  : { text: "/chatgpt: your ChatGPT plan", plan: false };
 const first = await client.get<{ messages: Message[]; cards: Record<string, string>; card: Card | null }>(`/conversations/${encodeURIComponent(conversation)}/messages`);
 const tty = Boolean(process.stdout.isTTY);
 const port = new URL(client.base).port;
@@ -55,6 +62,7 @@ await playSplash(
     door: `127.0.0.1:${port}`,
     online: true,
     kit: status.kit?.state ?? null,
+    brain,
     dataDir: status.dataDir,
     chat: `${conversation} · ${first.messages.length ? `${first.messages.length} messages` : "new"}`,
   },
