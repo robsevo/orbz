@@ -254,7 +254,7 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ("  caption2: [11, 13, 400],", "  caption2: [9, 13, 400],"),
     ], ["design.test.ts", "render.test.ts"]),
     ("the harness does not see a spill", "test/harness.ts", [
-        ("      if (r.left < -1 || r.right > vw + 1) out.push(", "      if (false) out.push("),
+        ("      if (!inScroller && (r.left < -1 || r.right > vw + 1)) out.push(", "      if (false) out.push("),
     ], ["render.test.ts"]),
     ("a mouth is drawn below his eyes", "src/orb/glsl.ts", [
         ("      body = mix(body, eyeC, eyeA*0.92*faceA);",
@@ -275,6 +275,45 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("a hat floats off the top of his head", "src/orb/glsl.ts", [
         ("*(1.0 - 0.5*uSquash) - 0.03*Rg;", "*(1.0 - 0.5*uSquash) + 0.55*Rg;"),
     ], ["characters.test.ts"]),
+    ("a created orb can still be edited", "src/orbs.tsx", [
+        ("{making ? <Creator me={me} edit={edit}", "{true ? <Creator me={me} edit={edit}"),
+    ], ["office.test.ts"]),
+    ("deleting an orb does not ask", "src/orbs.tsx", [
+        ('<button onClick={() => setAsking(true)} style={{ ...s.btn, justifySelf: "start"', '<button onClick={onDelete} style={{ ...s.btn, justifySelf: "start"'),
+    ], ["office.test.ts"]),
+    ("a name already in the office is allowed", "src/orbs.tsx", [
+        ("taken(name) ? `Someone in the office", "false ? `Someone in the office"),
+    ], ["office.test.ts"]),
+    ("a grid leaves one item alone", "src/ui/balance.ts", [
+        ("export function balanceColumns(n: number, max: number): number | null {\n  if (n <= max)", "export function balanceColumns(n: number, max: number): number | null {\n  if (n > max) return max;\n  if (n <= max)"),
+    ], ["feel.units.test.ts", "office.test.ts"]),
+    ("a press does not squish", "src/design/tokens.ts", [
+        ("translate: 0 1px; scale: .94;", "translate: 0 1px; scale: 1;"),
+    ], ["feel.test.ts"]),
+    ("the click sounds on the release, not the press", "src/ui/feel.ts", [
+        ('  doc.addEventListener("pointerdown", down, true);', '  doc.addEventListener("pointerup", down, true);'),
+    ], ["feel.test.ts"]),
+    ("quick presses do not climb", "src/ui/sound.ts", [
+        ("    streak = t - last < 650 ? Math.min(streak + 1, 6) : 0;", "    streak = 0;"),
+    ], ["feel.test.ts"]),
+    ("the sound switch is ignored", "src/ui/sound.ts", [
+        ("  if (!on) return;\n  const t = performance.now();", "  const t = performance.now();"),
+    ], ["feel.test.ts"]),
+    ("a click that pops", "src/ui/sound.ts", [
+        ("dur: 0.065, gain, attack: 0.0015 }", "dur: 0.065, gain, attack: 0 }"),
+    ], ["feel.units.test.ts", "feel.test.ts"]),
+    ("he does not react to what you choose", "src/orbs.tsx", [
+        ("    if (g && Object.keys(patch).length < 4", "    if (false && g && Object.keys(patch).length < 4"),
+    ], ["feel.test.ts"]),
+    ("glasses are not drawn", "src/orb/glsl.ts", [
+        ("  if (uSpecs > 0.5) {", "  if (uSpecs > 99.0) {"),
+    ], ["characters.test.ts"]),
+    ("sunglasses are clear", "src/orb/glsl.ts", [
+        ("    col = mix(col, uLensCol*0.85, lensA*uLensDark);", "    col = mix(col, uLensCol*0.85, lensA*0.0);"),
+    ], ["characters.test.ts"]),
+    ("a hat takes his glasses off", "src/orb/spec.ts", [
+        ("    specs: g.id,", '    specs: c.hat === "none" ? g.id : 0,'),
+    ], ["spec.test.ts"]),
     ("the specimen scrolls sideways on a phone", "src/specimen.tsx", [
         ('gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 420px), 1fr))"', 'gridTemplateColumns: "repeat(auto-fit, minmax(420px, 1fr))"'),
     ], ["render.test.ts"]),

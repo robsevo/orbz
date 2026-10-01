@@ -5,8 +5,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ORB_FS } from "../src/orb/glsl.ts";
 import {
-  ASH, EYES, lookOf, NOT_OURS, PEOPLE_NAMES, PERSONALITIES, SHAPES, sheetOf, SPECIALTIES, surprise, VOICES, WEAR, withPersonality,
-  type PersonalityName,
+  ASH, EYES, GLASSES, HATS, isShades, lookOf, NOT_OURS, PEOPLE_NAMES, PERSONALITIES, SHAPES, sheetOf, SPECIALTIES, surprise, VOICES, wearing, withPersonality,
+  type GlassesName, type HatName, type PersonalityName,
 } from "../src/orb/spec.ts";
 
 test("names: people's names from our list, never the Dots film's own or an assistant's", () => {
@@ -69,9 +69,32 @@ test("Ash's bean keeps his numbers exactly", () => {
 });
 
 test("no mouth anywhere: not in the spec, and not in the shader's code (its comments say so, its code does not draw one)", () => {
-  const keys = [...Object.keys(SHAPES), ...Object.keys(EYES), ...Object.keys(WEAR), ...Object.keys(PERSONALITIES)];
+  const keys = [...Object.keys(SHAPES), ...Object.keys(EYES), ...Object.keys(HATS), ...Object.keys(GLASSES), ...Object.keys(PERSONALITIES)];
   assert.deepEqual(keys.filter((k) => /\b(mouths?|smiles?|lips?|cheeks?|grins?)\b/i.test(k)), [], "(whole words: a star clip is not a lip)");
   const code = ORB_FS.split("\n").map((l) => l.replace(/\/\/.*$/, "")).join("\n");
   assert.doesNotMatch(code, /mouth|smile|cheek|grin/i);
   assert.match(ORB_FS, /NO MOUTH/, "control: the scan reads the shader (the owner's rule is in its comments)");
+});
+
+test("a hat and glasses are two choices: both can be worn at once, and each reaches the shader", () => {
+  const hats = Object.keys(HATS) as HatName[];
+  const glasses = Object.keys(GLASSES) as GlassesName[];
+  assert.ok(!hats.some((h) => /glasses|shades|monocle|goggles/.test(h)), "no glasses left among the hats");
+  assert.equal(new Set(hats.map((h) => HATS[h].id)).size, hats.length, "every hat its own shape number");
+  assert.equal(new Set(glasses.map((g) => GLASSES[g].id)).size, glasses.length, "every pair its own style number");
+  for (const h of hats) {
+    for (const g of glasses) {
+      const look = lookOf({ ...ASH, hat: h, glasses: g });
+      assert.equal(look.acc, HATS[h].id);
+      assert.equal(look.specs, GLASSES[g].id);
+    }
+  }
+  assert.ok(glasses.filter(isShades).length >= 3, "sunglasses among them (owner, 10-01: 'can also be sunglasses')");
+  assert.equal(wearing({ hat: "beret", glasses: "round" }, "in"), " in a beret and round glasses");
+  assert.equal(wearing({ hat: "antenna", glasses: "none" }, "with"), " with an antenna");
+  assert.equal(wearing({ hat: "none", glasses: "aviators" }, "with"), " with aviators");
+  assert.equal(wearing({ hat: "none", glasses: "none" }, "in"), "", "control: nothing on, nothing said");
+  const rolled = Array.from({ length: 400 }, (_, i) => surprise(i * 31));
+  assert.ok(rolled.some((c) => c.hat !== "none" && c.glasses !== "none"), "the dice put both on sometimes");
+  assert.ok(rolled.some((c) => c.glasses === "none"), "and leave his eyes bare sometimes");
 });

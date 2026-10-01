@@ -4,7 +4,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { build } from "vite";
-import { launch, serveDir } from "../test/harness.ts";
+import { launch, plainNewOrb, serveDir } from "../test/harness.ts";
 const out = mkdtempSync(join(tmpdir(), "orbs-margins-"));
 await build({ root: new URL("..", import.meta.url).pathname, logLevel: "silent", build: { outDir: out, emptyOutDir: true } });
 const site = await serveDir(out);
@@ -13,7 +13,8 @@ const page = await browser.newPage({ viewport: { width: 1280, height: 1100 }, de
 await page.addInitScript(() => { (globalThis as { __orbsTime?: number }).__orbsTime = 3.4; });
 await page.goto(`${site.url}/orbs.html`);
 await page.waitForSelector("canvas", { state: "attached" });
-for (const tab of ["Shape", "Wears"]) {
+await plainNewOrb(page);
+for (const tab of ["Shape", "Eyes", "Hat", "Glasses"]) {
   await page.getByRole("tab", { name: tab }).click();
   await page.waitForTimeout(300);
   const rows = await page.evaluate(() => [...document.querySelectorAll<HTMLButtonElement>("button[data-pick]")].map((b) => {

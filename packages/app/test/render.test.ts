@@ -67,7 +67,7 @@ for (const theme of ["dark", "light"] as const) {
   }
 }
 
-test("controls: an element planted too wide and a 9 px label are both caught", { skip }, async () => {
+test("controls: a planted too-wide row, a 9 px label, a lone last item and a one-word last line are each caught", { skip }, async () => {
   const page = await open("dark", "phone");
   try {
     assert.deepEqual(await measure(page), [], "control's baseline: the page is clean before the plant");
@@ -81,10 +81,25 @@ test("controls: an element planted too wide and a 9 px label are both caught", {
       tiny.style.fontSize = "9px";
       document.querySelector("section")!.append(tiny);
     });
+    await page.evaluate(() => {
+      // a grid of five in two columns (the fifth alone), and a title squeezed so its last word is alone
+      const grid = document.createElement("div");
+      grid.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:4px;width:200px";
+      for (let i = 0; i < 5; i++) grid.append(Object.assign(document.createElement("span"), { textContent: `item ${i}` }));
+      document.querySelector("section")!.append(grid);
+      // a title squeezed to just less than its whole width, wrapped greedily: its last word drops alone
+      const title = document.createElement("h3");
+      title.textContent = "The Cheerful Frontend Builder";
+      title.style.cssText = "width:max-content;font:700 20px/24px sans-serif;text-wrap:wrap;margin:0";
+      document.querySelector("section")!.append(title);
+      title.style.width = `${title.getBoundingClientRect().width - 12}px`;
+    });
     const kinds = new Set((await measure(page)).map((f) => f.kind));
     assert.ok(kinds.has("spill"), "the wide row reaches outside the window");
     assert.ok(kinds.has("hscroll"), "and makes the page scroll sideways");
     assert.ok(kinds.has("minfont"), "the 9 px label is under the floor");
+    assert.ok(kinds.has("orphan"), "the fifth item alone on its row is an orphan");
+    assert.ok(kinds.has("widow"), "a title ending on one word alone is a widow");
   } finally {
     await page.close();
   }

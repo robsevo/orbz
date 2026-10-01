@@ -158,8 +158,8 @@ export function lifeFrame(o: LifeInput, t: number): OrbFrame {
     f.sway[0] += 1.5 * Math.max(-1, Math.min(1, px * 0.5));
   }
   if (o.still) {
-    f.blink = 0;
-    return f;
+    // a portrait: the same pose for every orb, so a picker compares the choices and not the moment
+    return Object.assign(f, { blink: 0, breath: 0, morph: 0.55, gaze: [0, 0], sway: [0, 0], tilt: 0 });
   }
   for (const p of o.plays ?? []) apply(f, p.gesture, t - p.at);
   return f;

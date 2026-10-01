@@ -1,6 +1,6 @@
 // A character (PLAN 2.2): one spec per orb, and the shader draws all of it. Every orb is a
 // different Ash: his glass, his liquid, his light, his eyes' sparkle, in another shape, with other
-// eyes, wearing something, in his own colour and voice. And each has a personality (owner,
+// eyes, a hat and glasses, in his own colour and voice. And each has a personality (owner,
 // 2026-10-01: "each has a diff personality, thats what were going for"): it decides how he moves
 // when he is left alone, which voices suit him, and how he talks, so the parts you pick go together.
 // The starter shapes are our own; the owner names and redraws them. No mouth on any of them, no
@@ -72,10 +72,12 @@ export const EYES = {
 } satisfies Record<string, { a: V4; b: V4 }>;
 export type EyesName = keyof typeof EYES;
 
-// ── what he wears ──────────────────────────────────────────────────────────────────────────────
+// ── what he wears: a hat, and glasses ──────────────────────────────────────────────────────────
+// Two choices, not one (owner, 2026-10-01: "what if we want glasses and a hat? make them 2
+// categories ... different glasses, different hats ... can also be sunglasses").
 type Paint = "accent" | Material;
-/** The shader's shape number, what its two parts are made of, and its slant. */
-export const WEAR = {
+/** A hat: the shader's shape number, what its two parts are made of, and its slant. */
+export const HATS = {
   none: { id: 0, main: "ink", second: "ink", tilt: 0 },
   "top hat": { id: 1, main: "ink", second: "accent", tilt: -0.16 },
   beanie: { id: 2, main: "accent", second: "cream", tilt: 0.08 },
@@ -96,9 +98,33 @@ export const WEAR = {
   "cowboy hat": { id: 17, main: "gold", second: "ink", tilt: -0.1 },
   propeller: { id: 18, main: "accent", second: "steel", tilt: 0.06 },
   "star clip": { id: 19, main: "gold", second: "gold", tilt: 0 },
-  glasses: { id: 20, main: "ink", second: "ink", tilt: 0 },
+  beret: { id: 20, main: "accent", second: "ink", tilt: 0.16 },
+  "hard hat": { id: 21, main: "gold", second: "cream", tilt: -0.04 },
+  "bucket hat": { id: 22, main: "accent", second: "cream", tilt: 0.05 },
 } satisfies Record<string, { id: number; main: Paint; second: Paint; tilt: number }>;
-export type WearName = keyof typeof WEAR;
+export type HatName = keyof typeof HATS;
+
+/** Glasses, worn on his eyes: how a sentence says them, the shader's style number, the frame, a strap's colour (goggles),
+ * and the lens: its tint and how much of his eyes it hides (sunglasses are dark; clear ones are 0). */
+export const GLASSES = {
+  none: { say: "", id: 0, frame: "ink", second: "ink", lens: "ink", dark: 0 },
+  round: { say: "round glasses", id: 1, frame: "ink", second: "ink", lens: "ink", dark: 0 },
+  square: { say: "square glasses", id: 2, frame: "ink", second: "ink", lens: "ink", dark: 0 },
+  "cat-eye": { say: "cat-eye glasses", id: 3, frame: "ink", second: "ink", lens: "ink", dark: 0 },
+  "big round": { say: "big round glasses", id: 4, frame: "accent", second: "accent", lens: "ink", dark: 0 },
+  reading: { say: "reading glasses", id: 5, frame: "gold", second: "gold", lens: "ink", dark: 0 },
+  monocle: { say: "a monocle", id: 6, frame: "gold", second: "gold", lens: "ink", dark: 0 },
+  hearts: { say: "heart glasses", id: 7, frame: "rose", second: "rose", lens: "rose", dark: 0.5 },
+  stars: { say: "star glasses", id: 8, frame: "gold", second: "gold", lens: "accent", dark: 0.38 },
+  aviators: { say: "aviators", id: 9, frame: "gold", second: "gold", lens: "shade", dark: 0.86 },
+  shades: { say: "shades", id: 10, frame: "ink", second: "ink", lens: "shade", dark: 0.9 },
+  "round shades": { say: "round shades", id: 11, frame: "gold", second: "gold", lens: "shade", dark: 0.86 },
+  goggles: { say: "goggles", id: 12, frame: "steel", second: "accent", lens: "steel", dark: 0.16 },
+  visor: { say: "a visor", id: 13, frame: "accent", second: "accent", lens: "shade", dark: 0.84 },
+} satisfies Record<string, { say: string; id: number; frame: Paint; second: Paint; lens: Paint; dark: number }>;
+export type GlassesName = keyof typeof GLASSES;
+/** Sunglasses: the ones that hide his eyes. */
+export const isShades = (g: GlassesName): boolean => GLASSES[g].dark >= 0.7;
 
 // ── finish ─────────────────────────────────────────────────────────────────────────────────────
 /** His glass (owner, on Ash, 2026-09-24: "add more colors, like black, grey, maybe some gradients"):
@@ -237,22 +263,22 @@ export const SKILLS = ["Planning", "Frontend", "Backend", "Data", "Testing", "De
 type Lean = [number, number, number, number, number, number, number, number]; // 1..5, in SKILLS order
 
 export const SPECIALTIES = {
-  general: { label: "General", title: "All-Rounder", focus: "a bit of everything, done properly", lean: [3, 3, 3, 3, 3, 3, 3, 3], wear: "none" },
-  planning: { label: "Planning", title: "Planner", focus: "plans, roadmaps and breaking work into rows", lean: [5, 2, 2, 3, 3, 3, 4, 2], wear: "grad cap" },
-  frontend: { label: "Frontend", title: "Frontend Builder", focus: "interfaces: components, layout, CSS, accessibility", lean: [2, 5, 2, 2, 3, 4, 2, 1], wear: "headphones" },
-  backend: { label: "Backend", title: "Backend Engineer", focus: "servers, APIs, databases and the jobs behind them", lean: [3, 2, 5, 4, 3, 1, 2, 3], wear: "glasses" },
-  fullstack: { label: "Full stack", title: "Full-Stack Builder", focus: "end to end: the interface, the server and the glue", lean: [3, 4, 4, 3, 3, 3, 2, 3], wear: "cap" },
-  design: { label: "Design", title: "Designer", focus: "how it looks and feels: layout, type, colour, flow", lean: [3, 3, 1, 1, 2, 5, 3, 1], wear: "flower" },
-  data: { label: "Data", title: "Data Wrangler", focus: "data: cleaning, queries, charts and what they mean", lean: [3, 1, 3, 5, 3, 2, 3, 2], wear: "glasses" },
-  devops: { label: "DevOps", title: "Ops Keeper", focus: "builds, deploys, servers and keeping things up", lean: [3, 1, 3, 2, 3, 1, 2, 5], wear: "propeller" },
-  mobile: { label: "Mobile", title: "App Maker", focus: "phone apps: screens, gestures, offline, stores", lean: [2, 4, 3, 2, 3, 4, 2, 2], wear: "antenna" },
-  testing: { label: "Testing", title: "Bug Hunter", focus: "tests that can fail, and finding what breaks", lean: [3, 3, 3, 2, 5, 1, 2, 3], wear: "glasses" },
-  security: { label: "Security", title: "Guardian", focus: "keeping secrets secret and doors shut", lean: [3, 2, 4, 2, 4, 1, 2, 4], wear: "horns" },
-  writing: { label: "Writing", title: "Wordsmith", focus: "docs, posts, emails and clear words", lean: [3, 1, 1, 1, 2, 3, 5, 1], wear: "star clip" },
-  research: { label: "Research", title: "Researcher", focus: "finding out, reading widely, citing sources", lean: [4, 1, 2, 3, 2, 2, 4, 1], wear: "wizard hat" },
-  assistant: { label: "Assistant", title: "Assistant", focus: "the inbox, the calendar, trips and errands", lean: [4, 1, 1, 2, 2, 2, 4, 2], wear: "bow" },
-  tutor: { label: "Tutor", title: "Tutor", focus: "teaching: explaining step by step until it lands", lean: [4, 2, 2, 2, 2, 3, 4, 1], wear: "halo" },
-} satisfies Record<string, { label: string; title: string; focus: string; lean: Lean; wear: WearName }>;
+  general: { label: "General", title: "All-Rounder", focus: "a bit of everything, done properly", lean: [3, 3, 3, 3, 3, 3, 3, 3], hat: "none", glasses: "none" },
+  planning: { label: "Planning", title: "Planner", focus: "plans, roadmaps and breaking work into rows", lean: [5, 2, 2, 3, 3, 3, 4, 2], hat: "grad cap", glasses: "reading" },
+  frontend: { label: "Frontend", title: "Frontend Builder", focus: "interfaces: components, layout, CSS, accessibility", lean: [2, 5, 2, 2, 3, 4, 2, 1], hat: "headphones", glasses: "none" },
+  backend: { label: "Backend", title: "Backend Engineer", focus: "servers, APIs, databases and the jobs behind them", lean: [3, 2, 5, 4, 3, 1, 2, 3], hat: "none", glasses: "square" },
+  fullstack: { label: "Full stack", title: "Full-Stack Builder", focus: "end to end: the interface, the server and the glue", lean: [3, 4, 4, 3, 3, 3, 2, 3], hat: "cap", glasses: "none" },
+  design: { label: "Design", title: "Designer", focus: "how it looks and feels: layout, type, colour, flow", lean: [3, 3, 1, 1, 2, 5, 3, 1], hat: "beret", glasses: "cat-eye" },
+  data: { label: "Data", title: "Data Wrangler", focus: "data: cleaning, queries, charts and what they mean", lean: [3, 1, 3, 5, 3, 2, 3, 2], hat: "none", glasses: "round" },
+  devops: { label: "DevOps", title: "Ops Keeper", focus: "builds, deploys, servers and keeping things up", lean: [3, 1, 3, 2, 3, 1, 2, 5], hat: "hard hat", glasses: "goggles" },
+  mobile: { label: "Mobile", title: "App Maker", focus: "phone apps: screens, gestures, offline, stores", lean: [2, 4, 3, 2, 3, 4, 2, 2], hat: "antenna", glasses: "none" },
+  testing: { label: "Testing", title: "Bug Hunter", focus: "tests that can fail, and finding what breaks", lean: [3, 3, 3, 2, 5, 1, 2, 3], hat: "none", glasses: "big round" },
+  security: { label: "Security", title: "Guardian", focus: "keeping secrets secret and doors shut", lean: [3, 2, 4, 2, 4, 1, 2, 4], hat: "none", glasses: "aviators" },
+  writing: { label: "Writing", title: "Wordsmith", focus: "docs, posts, emails and clear words", lean: [3, 1, 1, 1, 2, 3, 5, 1], hat: "star clip", glasses: "round" },
+  research: { label: "Research", title: "Researcher", focus: "finding out, reading widely, citing sources", lean: [4, 1, 2, 3, 2, 2, 4, 1], hat: "wizard hat", glasses: "big round" },
+  assistant: { label: "Assistant", title: "Assistant", focus: "the inbox, the calendar, trips and errands", lean: [4, 1, 1, 2, 2, 2, 4, 2], hat: "bow", glasses: "none" },
+  tutor: { label: "Tutor", title: "Tutor", focus: "teaching: explaining step by step until it lands", lean: [4, 2, 2, 2, 2, 3, 4, 1], hat: "halo", glasses: "reading" },
+} satisfies Record<string, { label: string; title: string; focus: string; lean: Lean; hat: HatName; glasses: GlassesName }>;
 export type SpecialtyName = keyof typeof SPECIALTIES;
 
 // ── the character sheet ────────────────────────────────────────────────────────────────────────
@@ -292,7 +318,7 @@ export function sheetOf(c: Character): Sheet {
   const r = rng(c.seed);
   const clamp = (v: number): number => Math.max(1, Math.min(5, Math.round(v)));
   const shapeWord = c.shape === "bean" ? "glass bean" : `${c.shape}-shaped orb`;
-  const wear = c.wear === "none" ? "" : ` in ${/^[aeiou]/.test(c.wear) ? "an" : "a"} ${c.wear}`;
+  const wear = wearing(c, "in");
   return {
     title: `the ${P.label} ${S.title}`,
     traits: TRAITS.map((name, i) => ({ name, value: clamp(TRAIT_BASE[c.personality][i]! + (r() - 0.5) * 1.2) })),
@@ -317,12 +343,20 @@ export type Character = {
   finish: FinishName;
   shape: ShapeName;
   eyes: EyesName;
-  wear: WearName;
+  hat: HatName;
+  glasses: GlassesName;
   voice: string;
   goo: number;
 };
 
-export const ASH: Character = { name: "Ash", personality: "steady", specialty: "general", seed: 1, hue: "azure", hue2: null, finish: "glass", shape: "bean", eyes: "ash", wear: "none", voice: "ash", goo: 0.55 };
+export const ASH: Character = { name: "Ash", personality: "steady", specialty: "general", seed: 1, hue: "azure", hue2: null, finish: "glass", shape: "bean", eyes: "ash", hat: "none", glasses: "none", voice: "ash", goo: 0.55 };
+
+/** " in a beret and round glasses", " with aviators": what he has on, as words. */
+export function wearing(c: Pick<Character, "hat" | "glasses">, word: "in" | "with"): string {
+  const hat = c.hat === "none" ? "" : `${/^[aeiou]/.test(c.hat) ? "an" : "a"} ${c.hat}`;
+  const both = [hat, GLASSES[c.glasses].say].filter(Boolean).join(" and ");
+  return both ? ` ${word} ${both}` : "";
+}
 
 /** Whether an orb speaks a reply: never when he is silent, never when the app is set to text or silence. */
 export const speaks = (c: Character, replies: Replies): boolean => replies === "speak" && c.voice !== "silent";
@@ -336,11 +370,13 @@ function paint(p: Paint, hue: HueName): [number, number, number] {
 export function lookOf(c: Character): OrbLook {
   const s = SHAPES[c.shape];
   const e = EYES[c.eyes];
-  const w = WEAR[c.wear];
+  const w = HATS[c.hat];
+  const g = GLASSES[c.glasses];
   return {
     shapeA: [...s.a], shapeB: [...s.b], shapeC: [...s.c], shapeD: [...s.d], shapeE: [...s.e], shapeF: [...s.f],
     eyeA: [...e.a] as V4, eyeB: [...e.b] as V4,
     acc: w.id, accCol: paint(w.main, c.hue), accCol2: paint(w.second, c.hue), accTilt: w.tilt,
+    specs: g.id, specsCol: paint(g.frame, c.hue), specsCol2: paint(g.second, c.hue), lensCol: paint(g.lens, c.hue), lensDark: g.dark,
   };
 }
 
@@ -365,7 +401,7 @@ export function withPersonality(c: Character, p: PersonalityName): Character {
 
 /** "Lumen the teal ghost with an antenna": a name you can keep or change. */
 export function describe(c: Character): string {
-  const wear = c.wear === "none" ? "" : ` with ${/^[aeiou]/.test(c.wear) ? "an" : "a"} ${c.wear}`;
+  const wear = wearing(c, "with");
   const colour = c.hue2 ? `${c.hue}-and-${c.hue2}` : c.finish === "glass" ? c.hue : `${FINISHES[c.finish].label.toLowerCase()} ${c.hue}`;
   return `${c.name} the ${colour} ${c.shape}${wear}`;
 }
@@ -391,7 +427,8 @@ export function surprise(seed: number): Character {
     finish: r() < 0.75 ? "glass" : pickOne(Object.keys(FINISHES) as FinishName[], r),
     shape: pickOne(Object.keys(SHAPES) as ShapeName[], r),
     eyes: r() < 0.7 ? P.eyes : pickOne(Object.keys(EYES) as EyesName[], r),
-    wear: r() < 0.5 ? SPECIALTIES[specialty].wear : pickOne(Object.keys(WEAR) as WearName[], r),
+    hat: r() < 0.5 ? SPECIALTIES[specialty].hat : pickOne(Object.keys(HATS) as HatName[], r),
+    glasses: r() < 0.5 ? SPECIALTIES[specialty].glasses : r() < 0.5 ? "none" : pickOne(Object.keys(GLASSES) as GlassesName[], r),
     voice: pickOne(P.voices.filter((v) => v !== "ash"), r) ?? "silent",
     goo: Math.max(0, Math.min(1, P.goo + (r() - 0.5) * 0.2)),
   };

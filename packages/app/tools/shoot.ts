@@ -1,10 +1,10 @@
-// Renders the character creator at desk and phone sizes, each picker tab included, and saves the
-// pictures the owner looks at: `node tools/shoot.ts <dir>` (measure() findings are printed too).
+// Renders the app at desk and phone sizes, an orb in the office and a new orb on every tab, and
+// saves the pictures the owner looks at: `node tools/shoot.ts <dir>` (measure() findings print too).
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { build } from "vite";
-import { launch, measure, serveDir } from "../test/harness.ts";
+import { launch, measure, plainNewOrb, serveDir } from "../test/harness.ts";
 const APP = new URL("..", import.meta.url).pathname;
 const out = mkdtempSync(join(tmpdir(), "orbs-shoot-"));
 await build({ root: APP, logLevel: "silent", build: { outDir: out, emptyOutDir: true } });
@@ -21,16 +21,19 @@ for (const [name, vp] of [["desk", { width: 1280, height: 1100 }], ["phone", { w
   await page.waitForSelector("canvas", { state: "attached" });
   await page.evaluate(() => document.fonts.ready);
   await page.waitForTimeout(600);
-  console.log(name, "errors:", errs.slice(0, 3), "findings:", (await measure(page)).slice(0, 6));
-  await page.screenshot({ path: join(dir, `orbs-${name}.png`), fullPage: true });
-  if (name === "desk") {
-    for (const tab of ["Shape", "Eyes", "Wears", "Voice", "Personality"]) {
-      await page.getByRole("tab", { name: tab }).click();
-      await page.waitForTimeout(400);
-      const panel = page.getByRole("tablist").locator("..");
-      await panel.screenshot({ path: join(dir, `tab-${tab.toLowerCase()}.png`) });
-      console.log(tab, "findings:", (await measure(page)).slice(0, 4));
-    }
+  console.log(name, "office", "errors:", errs.slice(0, 3), "findings:", await measure(page));
+  await page.screenshot({ path: join(dir, `office-${name}.png`), fullPage: true });
+  await plainNewOrb(page);
+  await page.waitForTimeout(500);
+  console.log(name, "new", "findings:", await measure(page));
+  await page.screenshot({ path: join(dir, `new-${name}.png`), fullPage: true });
+  for (const tab of ["Personality", "Specialty", "Shape", "Eyes", "Hat", "Glasses", "Colour", "Voice"]) {
+    await page.getByRole("tab", { name: tab }).click();
+    await page.waitForTimeout(400);
+    const panel = page.getByRole("tablist").locator("..");
+    if (name === "desk") await panel.screenshot({ path: join(dir, `tab-${tab.toLowerCase()}.png`) });
+    const f = await measure(page);
+    if (f.length) console.log(name, tab, "findings:", f);
   }
   await page.close();
 }

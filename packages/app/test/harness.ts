@@ -3,9 +3,13 @@
 // What it reports is what a person would see go wrong:
 //
 //   hscroll   the page scrolls sideways (phone first: never)
-//   spill     an element's box reaches outside the window, or outside the box that clips it
+//   spill     an element's box reaches outside the window, or outside the box that clips it (what
+//             a sideways scroller holds beyond its edge is scrolled, not spilled)
 //   overflow  text runs past its own box without being cut on purpose (an ellipsis)
 //   minfont   text smaller than the floor of 10
+//   orphan    a row of items (a grid, a wrapped list) whose last row holds one item alone (owner,
+//             10-01: "i hate when like just 1 item is lingering in a table or header")
+//   widow     a title or a line of text whose last line is one word on its own
 //
 // Ash's tools/panel_render.mjs is the model; this is our own code.
 import { existsSync, globSync, readFileSync } from "node:fs";
@@ -14,7 +18,7 @@ import { homedir } from "node:os";
 import { extname, join, normalize } from "node:path";
 import { chromium, type Browser, type Page } from "playwright-core";
 
-export type Finding = { kind: "hscroll" | "spill" | "overflow" | "minfont"; what: string };
+export type Finding = { kind: "hscroll" | "spill" | "overflow" | "minfont" | "orphan" | "widow"; what: string };
 export const SIZES = { phone: { width: 390, height: 844 }, desk: { width: 1280, height: 900 } } as const;
 
 /** A Chromium to drive: $ORBS_CHROME, Playwright's own, a cached one, or Chrome itself. */
@@ -62,10 +66,18 @@ export async function serveDir(dir: string): Promise<{ url: string; close(): Pro
   return { url: `http://127.0.0.1:${port}`, close: () => new Promise((r) => server.close(() => r())) };
 }
 
-/** Everything wrong with the page as it is now. Runs in the page. */
-export function measure(page: Page): Promise<Finding[]> {
+/** Everything wrong with the page once it is at rest: every press, bounce and arrival finished. */
+export async function measure(page: Page): Promise<Finding[]> {
+  await page.evaluate(() =>
+    Promise.all(
+      document
+        .getAnimations()
+        .filter((a) => Number.isFinite(Number(a.effect?.getComputedTiming().endTime)))
+        .map((a) => a.finished.catch(() => undefined)),
+    ),
+  );
   return page.evaluate((MIN) => {
-    const out: { kind: "hscroll" | "spill" | "overflow" | "minfont"; what: string }[] = [];
+    const out: { kind: "hscroll" | "spill" | "overflow" | "minfont" | "orphan" | "widow"; what: string }[] = [];
     const name = (el: Element): string => {
       const t = (el.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 40);
       return `<${el.tagName.toLowerCase()}${el.id ? `#${el.id}` : ""}>${t ? ` "${t}"` : ""}`;
@@ -79,14 +91,24 @@ export function measure(page: Page): Promise<Finding[]> {
       }
       return null;
     };
+    // a row that scrolls sideways on purpose (ui/Balanced.tsx OneLine, the tab bar) holds what does
+    // not fit inside its own box: that is scrolled, not spilled; the scroller itself is still checked
+    const scrolled = (el: Element): boolean => {
+      for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+        const o = getComputedStyle(p).overflowX;
+        if (o === "auto" || o === "scroll") return true;
+      }
+      return false;
+    };
     for (const el of document.body.querySelectorAll("*")) {
       const s = getComputedStyle(el);
       if (s.display === "none" || s.visibility === "hidden" || s.position === "fixed") continue;
       const r = el.getBoundingClientRect();
       if (r.width === 0 && r.height === 0) continue;
-      if (r.left < -1 || r.right > vw + 1) out.push({ kind: "spill", what: `${name(el)} reaches ${Math.round(r.left)}..${Math.round(r.right)} in a ${vw}px window` });
+      const inScroller = scrolled(el);
+      if (!inScroller && (r.left < -1 || r.right > vw + 1)) out.push({ kind: "spill", what: `${name(el)} reaches ${Math.round(r.left)}..${Math.round(r.right)} in a ${vw}px window` });
       const clip = clipOf(el);
-      if (clip && clip !== document.documentElement && clip !== document.body) {
+      if (!inScroller && clip && clip !== document.documentElement && clip !== document.body) {
         const c = clip.getBoundingClientRect();
         if (r.left < c.left - 1 || r.right > c.right + 1) out.push({ kind: "spill", what: `${name(el)} is cut by ${name(clip)}` });
       }
@@ -98,11 +120,72 @@ export function measure(page: Page): Promise<Finding[]> {
       }
     }
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    const words = new Map<Element, { tops: Map<number, number>; n: number }>();
     for (let n = walker.nextNode(); n; n = walker.nextNode()) {
       if (!n.textContent?.trim() || !n.parentElement) continue;
       const px = Number.parseFloat(getComputedStyle(n.parentElement).fontSize);
       if (px < MIN) out.push({ kind: "minfont", what: `${name(n.parentElement)} is ${px}px` });
+      // where each word sits, line by line, for the widow check (by the block the text flows in)
+      let block: Element = n.parentElement;
+      while (getComputedStyle(block).display === "inline" && block.parentElement) block = block.parentElement;
+      const s = getComputedStyle(block);
+      if (s.whiteSpace === "nowrap" || s.textOverflow === "ellipsis" || block.closest("svg")) continue;
+      const text = n.textContent;
+      const entry = words.get(block) ?? { tops: new Map<number, number>(), n: 0 };
+      for (const m of text.matchAll(/\S+/g)) {
+        const r = document.createRange();
+        r.setStart(n, m.index);
+        r.setEnd(n, m.index + m[0].length);
+        const rect = r.getClientRects()[0];
+        if (!rect) continue;
+        const top = Math.round(rect.top / 4) * 4; // a line, give or take a sub-pixel
+        entry.tops.set(top, (entry.tops.get(top) ?? 0) + 1);
+        entry.n++;
+      }
+      words.set(block, entry);
+    }
+    for (const [block, w] of words) {
+      if (w.tops.size < 2 || w.n < 3) continue;
+      const last = Math.max(...w.tops.keys());
+      if (w.tops.get(last) === 1) out.push({ kind: "widow", what: `${name(block)} ends on one word alone` });
+    }
+    // orphans: a container whose children wrap into rows, the last row a single child
+    for (const el of document.body.querySelectorAll("*")) {
+      const s = getComputedStyle(el);
+      const wraps = s.display === "grid" || s.display === "inline-grid" || ((s.display === "flex" || s.display === "inline-flex") && s.flexWrap === "wrap");
+      if (!wraps) continue;
+      const kids = [...el.children].filter((k) => getComputedStyle(k).display !== "none" && (k as HTMLElement).offsetParent !== null);
+      if (kids.length < 3) continue;
+      const rows = new Map<number, number>();
+      for (const k of kids) {
+        const top = Math.round(k.getBoundingClientRect().top / 4) * 4;
+        rows.set(top, (rows.get(top) ?? 0) + 1);
+      }
+      if (rows.size < 2) continue;
+      const counts = [...rows.keys()].sort((a, b) => a - b).map((t) => rows.get(t)!);
+      // a one-column list is rows of one by design; a lone item after fuller rows is an orphan
+      if (counts.at(-1) === 1 && Math.max(...counts) > 1) out.push({ kind: "orphan", what: `${name(el)}: its last row is one item alone (${counts.join("+")})` });
     }
     return out;
   }, 10);
+}
+
+/** Starts a new orb on the app's page and dresses him plainly, the way the picker limits were
+ * measured: Ash's bean, eyes and colour, glass, no hat, no glasses, Ash's goo. The rest (his name,
+ * his personality) stays as the dice left it. */
+export async function plainNewOrb(page: Page): Promise<void> {
+  await page.getByRole("button", { name: "New orb" }).first().click();
+  await page.getByRole("tab", { name: "Colour" }).click();
+  await page.getByRole("button", { name: "azure", exact: true }).click();
+  await page.getByRole("button", { name: "Glass", exact: true }).click();
+  await page.getByRole("button", { name: "No gradient" }).click();
+  await page.getByLabel("How gooey").fill("55");
+  await page.getByRole("tab", { name: "Hat" }).click();
+  await page.locator('button[data-pick="none"]').click();
+  await page.getByRole("tab", { name: "Glasses" }).click();
+  await page.locator('button[data-pick="none"]').click();
+  await page.getByRole("tab", { name: "Eyes" }).click();
+  await page.locator('button[data-pick="ash"]').click();
+  await page.getByRole("tab", { name: "Shape" }).click();
+  await page.locator('button[data-pick="bean"]').click();
 }

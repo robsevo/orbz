@@ -49,6 +49,12 @@ export type OrbLook = {
   accCol: [number, number, number];
   accCol2: [number, number, number];
   accTilt: number;
+  /** Glasses: the style (0 none), the frame, a strap, the lens's tint and how dark it is. */
+  specs: number;
+  specsCol: [number, number, number];
+  specsCol2: [number, number, number];
+  lensCol: [number, number, number];
+  lensDark: number;
 };
 
 /** His proportions: Ash's window is 112 wide with his centre 58 down and 66 below him. An orb in
@@ -56,6 +62,9 @@ export type OrbLook = {
  * came within 2 px of the frame's top at rest, and a hop would have cut it off); below him is as
  * it was, with no room for a name, which a page shows itself. */
 export const DESIGN = { w: 112, h: 162, cy: 96 / 162, radius: 33, edge: 0.22 } as const;
+export type Framing = { readonly w: number; readonly h: number; readonly cy: number; readonly radius: number; readonly edge: number };
+/** A close-up of his face, for choosing eyes and glasses: he fills the frame, hats and all cut off. */
+export const PORTRAIT: Framing = { w: 112, h: 104, cy: 0.5, radius: 50, edge: 0.16 };
 
 /** Ash's page draws his shader at three times its size and lets the compositor smooth it (index.1.js
  * SS = 3): his liquid is fine detail that comes out blocky at the screen's own size. This draws at
@@ -65,7 +74,7 @@ const SUPERSAMPLE = 1.5;
 const UNIFORMS = [
   "uRes", "uTime", "uLevel", "uState", "uWake", "uR", "uCy", "uEdge", "uBreath", "uBlink", "uMorph", "uGaze", "uSway",
   "uHappy", "uSleepy", "uYawn", "uSurprise", "uTilt", "uMad", "uJiggle", "uHue", "uSat", "uVal", "uHue2", "uGrad", "uTint",
-  "uShapeA", "uShapeB", "uShapeC", "uShapeD", "uShapeE", "uShapeF", "uGoo", "uSquash", "uEyeA", "uEyeB", "uAcc", "uAccCol", "uAccCol2", "uAccTilt",
+  "uShapeA", "uShapeB", "uShapeC", "uShapeD", "uShapeE", "uShapeF", "uGoo", "uSquash", "uEyeA", "uEyeB", "uAcc", "uAccCol", "uAccCol2", "uAccTilt", "uSpecs", "uSpecsCol", "uSpecsCol2", "uLensCol", "uLensDark",
 ] as const;
 
 type Uniforms = Record<(typeof UNIFORMS)[number], WebGLUniformLocation | null>;
@@ -99,8 +108,8 @@ export class OrbRenderer {
     this.#u = Object.fromEntries(UNIFORMS.map((n) => [n, gl.getUniformLocation(prog, n)])) as Uniforms;
   }
 
-  /** Draws one orb into `target` (a 2D canvas), filling it the way his window holds him. */
-  draw(target: HTMLCanvasElement, look: OrbLook, f: OrbFrame, time: number): void {
+  /** Draws one orb into `target` (a 2D canvas), filling it the way his window holds him (or closer). */
+  draw(target: HTMLCanvasElement, look: OrbLook, f: OrbFrame, time: number, framing: Framing = DESIGN): void {
     const { gl } = this;
     const w = Math.round(target.width * SUPERSAMPLE);
     const h = Math.round(target.height * SUPERSAMPLE);
@@ -111,13 +120,13 @@ export class OrbRenderer {
     gl.viewport(0, 0, w, h);
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
-    const scale = Math.min(w / DESIGN.w, h / DESIGN.h);
+    const scale = Math.min(w / framing.w, h / framing.h);
     const u = this.#u;
     gl.uniform2f(u.uRes, w, h);
     gl.uniform1f(u.uTime, time);
-    gl.uniform1f(u.uR, DESIGN.radius * scale);
-    gl.uniform1f(u.uCy, DESIGN.cy);
-    gl.uniform1f(u.uEdge, DESIGN.edge);
+    gl.uniform1f(u.uR, framing.radius * scale);
+    gl.uniform1f(u.uCy, framing.cy);
+    gl.uniform1f(u.uEdge, framing.edge);
     gl.uniform1f(u.uLevel, f.level);
     gl.uniform1f(u.uState, f.state);
     gl.uniform1f(u.uWake, f.wake);
@@ -153,6 +162,11 @@ export class OrbRenderer {
     gl.uniform3f(u.uAccCol, ...look.accCol);
     gl.uniform3f(u.uAccCol2, ...look.accCol2);
     gl.uniform1f(u.uAccTilt, look.accTilt);
+    gl.uniform1f(u.uSpecs, look.specs);
+    gl.uniform3f(u.uSpecsCol, ...look.specsCol);
+    gl.uniform3f(u.uSpecsCol2, ...look.specsCol2);
+    gl.uniform3f(u.uLensCol, ...look.lensCol);
+    gl.uniform1f(u.uLensDark, look.lensDark);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     const ctx = target.getContext("2d")!;
     ctx.imageSmoothingEnabled = true;

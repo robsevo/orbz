@@ -3,7 +3,7 @@
 // poke (a hop, or a squish), he pops in when he appears, and at rest he fidgets on his own.
 import { useEffect, useMemo, useRef, type CSSProperties } from "react";
 import { addOrb, drawOne, now } from "./loop.ts";
-import { DESIGN } from "./renderer.ts";
+import { DESIGN, PORTRAIT, type Framing } from "./renderer.ts";
 import { fidgets, type Gesture, type OrbState, type Play } from "./life.ts";
 import { describe, finishOf, lookOf, motionOf, type Character } from "./spec.ts";
 
@@ -24,12 +24,15 @@ export type OrbProps = {
   every?: number;
   /** Drawn once and held: a picker's thumbnail, a still avatar. */
   still?: boolean;
+  /** "portrait": a close-up of his face (choosing eyes or glasses), instead of his whole window. */
+  framing?: "window" | "portrait";
   style?: CSSProperties;
 };
 
 const seedOf = (s: string): number => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 9973, 7) / 97;
 
-export function Orb({ character, size = 120, state = "idle", gesture = null, fidget = true, poke = true, tint = 0.8, every = 1, still = false, style }: OrbProps) {
+export function Orb({ character, size = 120, state = "idle", gesture = null, fidget = true, poke = true, tint = 0.8, every = 1, still = false, framing = "window", style }: OrbProps) {
+  const frame: Framing = framing === "portrait" ? PORTRAIT : DESIGN;
   const ref = useRef<HTMLCanvasElement>(null);
   const plays = useRef<Play[]>([]);
   const pointer = useRef<[number, number] | null>(null);
@@ -49,13 +52,14 @@ export function Orb({ character, size = 120, state = "idle", gesture = null, fid
     const canvas = ref.current!;
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     canvas.width = Math.round(size * dpr);
-    canvas.height = Math.round(((size * DESIGN.h) / DESIGN.w) * dpr);
+    canvas.height = Math.round(((size * frame.h) / frame.w) * dpr);
     const own = fidgets(seed, 3600, motionOf(live.current.character));
     if (globalThis.__orbsTime === undefined && !still) play("pop"); // on a held clock (a render check) the pop would hold at its peak
     const entry = {
       canvas,
       visible: true,
       every,
+      framing: frame,
       look: () => lookOf(live.current.character),
       input: () => ({
         ...(() => {
@@ -73,8 +77,8 @@ export function Orb({ character, size = 120, state = "idle", gesture = null, fid
     io.observe(canvas);
     const move = (ev: PointerEvent): void => {
       const r = canvas.getBoundingClientRect();
-      const R = (r.width * DESIGN.radius) / DESIGN.w;
-      pointer.current = [(ev.clientX - (r.left + r.width / 2)) / R, (ev.clientY - (r.top + r.height * DESIGN.cy)) / R];
+      const R = (r.width * frame.radius) / frame.w;
+      pointer.current = [(ev.clientX - (r.left + r.width / 2)) / R, (ev.clientY - (r.top + r.height * frame.cy)) / R];
     };
     const away = (): void => {
       pointer.current = null;
@@ -93,7 +97,7 @@ export function Orb({ character, size = 120, state = "idle", gesture = null, fid
       window.removeEventListener("pointermove", move);
       document.removeEventListener("pointerleave", away);
     };
-  }, [size, seed, every, still, ...(still ? [JSON.stringify(character)] : [])]);
+  }, [size, seed, every, still, frame, ...(still ? [JSON.stringify(character)] : [])]);
 
   return (
     <canvas
@@ -101,7 +105,8 @@ export function Orb({ character, size = 120, state = "idle", gesture = null, fid
       role="img"
       aria-label={`${describe(character)}, ${state}`}
       onClick={poke ? () => play(Math.random() < 0.65 ? "hop" : "squish") : undefined}
-      style={{ width: size, height: (size * DESIGN.h) / DESIGN.w, display: "block", cursor: poke ? "pointer" : undefined, ...style }}
+      data-sound={poke ? "poke" : undefined}
+      style={{ width: size, height: (size * frame.h) / frame.w, display: "block", cursor: poke ? "pointer" : undefined, ...style }}
     />
   );
 }

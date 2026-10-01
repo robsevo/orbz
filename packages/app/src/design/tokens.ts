@@ -133,6 +133,8 @@ export const MATERIALS = {
   steel: parseHex("#A9B2BC"),
   leaf: parseHex("#7DC27A"),
   gold: parseHex("#D9AE55"),
+  shade: parseHex("#14161C"), // a sunglass lens: near black, a breath of blue
+  rose: parseHex("#E8708A"), // heart glasses are pink whatever colour he is
 } as const;
 export type Material = keyof typeof MATERIALS;
 
@@ -219,8 +221,27 @@ export function stylesheet(fontUrl = "fonts/Nunito.ttf"): string {
     hueRules("light", ':root[data-theme="light"] '),
     `*, *::before, *::after { box-sizing: border-box; }`,
     `html, body { margin: 0; background: var(--ground); color: var(--text-2); font: var(--t-body); -webkit-font-smoothing: antialiased; text-size-adjust: 100%; }`,
-    `body { overflow-x: hidden; }`,
+    `body { overflow-x: hidden; text-wrap: pretty; }`,
+    // titles, labels and anything in a button wrap balanced: no word left alone on a last line
+    `h1, h2, h3, h4, button, label { text-wrap: balance; }`,
+    `.one-line > * { flex: 0 0 auto; }`,
+    `.one-line::-webkit-scrollbar { display: none; }`,
+    // a row that scrolls fades out at the edge where there is more (ui/Balanced.tsx useMore)
+    `.one-line[data-more="right"] { mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }`,
+    `.one-line[data-more="left"] { mask-image: linear-gradient(to left, #000 calc(100% - 28px), transparent); }`,
+    `.one-line[data-more="left right"] { mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); }`,
     `.num { font-variant-numeric: tabular-nums; }`,
+    // a press you can feel (owner, 10-01): down it squishes at once, up it springs back past where
+    // it was; a thing just chosen bounces. The press is `translate` and `scale`, the bounce is
+    // `transform`, so the two add up instead of one cancelling the other.
+    `button { transition: translate var(--m-base) var(--m-spring), scale var(--m-base) var(--m-spring), background-color var(--m-fast) ease, box-shadow var(--m-fast) ease, color var(--m-fast) ease; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }`,
+    `@media (hover: hover) { button:hover:not(:disabled) { translate: 0 -1px; } }`,
+    `button:active:not(:disabled) { translate: 0 1px; scale: .94; transition-duration: 70ms; transition-timing-function: ease-out; }`,
+    `button[aria-pressed="true"] { animation: orbs-picked 420ms var(--m-spring); }`,
+    `@keyframes orbs-picked { 0% { transform: scale(.9); } 60% { transform: scale(1.05); } 100% { transform: none; } }`,
+    `@keyframes orbs-roll { 0% { rotate: 0deg; scale: 1; } 45% { scale: 1.3; } 100% { rotate: 360deg; scale: 1; } }`,
+    `@keyframes orbs-arrive { 0% { transform: scale(.6); opacity: 0; } 60% { transform: scale(1.06); opacity: 1; } 100% { transform: none; } }`,
+    `@keyframes orbs-leave { to { transform: scale(.5); opacity: 0; } }`,
     `@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }`,
   ].join("\n");
 }

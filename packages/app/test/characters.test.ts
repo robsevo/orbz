@@ -1,8 +1,10 @@
 // PLAN 2.2_t, as rendered: the character creator, built by Vite and drawn by his real shader in
-// Chromium (its software WebGL on a machine with no GPU). Every shape, eyes and wear thumbnail is
-// drawn and sits inside its box; and there is no mouth, by pixels: below his eyes there is nothing as
-// dark as an eye. The controls: the eye band itself is dark (so the probe sees a face when there is
-// one), and a pixel probe on an empty canvas finds no body.
+// Chromium (its software WebGL on a machine with no GPU), on a new orb dressed plainly (Ash's
+// bean, no hat, no glasses). Every shape, eyes, hat and glasses thumbnail is drawn whole and sits
+// inside its frame; every pair of glasses is drawn over his eyes, and sunglasses darken them; and
+// there is no mouth, by pixels: below his eyes there is nothing as dark as an eye. The controls:
+// the eye band itself is dark (so the probe sees a face when there is one), and "none" compared
+// with itself differs by nothing.
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -11,9 +13,9 @@ import { fileURLToPath } from "node:url";
 import { after, before, test } from "node:test";
 import { build } from "vite";
 import type { Browser, Page } from "playwright-core";
-import { findChrome, launch, serveDir } from "./harness.ts";
-import { DESIGN } from "../src/orb/renderer.ts";
-import { ASH, EYES, lookOf } from "../src/orb/spec.ts";
+import { findChrome, launch, plainNewOrb, serveDir } from "./harness.ts";
+import { PORTRAIT } from "../src/orb/renderer.ts";
+import { ASH, EYES, GLASSES, isShades, lookOf, type GlassesName } from "../src/orb/spec.ts";
 
 const APP = fileURLToPath(new URL("..", import.meta.url));
 const skip = findChrome() ? false : "no Chromium on this machine";
@@ -34,6 +36,7 @@ before(async () => {
   });
   await page.goto(`${site.url}/orbs.html`);
   await page.waitForSelector("canvas", { state: "attached" });
+  await plainNewOrb(page);
 });
 
 after(async () => {
@@ -91,15 +94,17 @@ function probeThumbs(p: Page): Promise<Probe[]> {
 }
 
 // Measured on 2026-10-01 (tools/margins.ts): the narrowest any option comes to its frame, less a
-// small cushion. A body a third too big, or a hat that floats, falls outside them.
+// small cushion. A body a third too big, or a hat that floats, falls outside them. Eyes and
+// glasses are shown close up (renderer.ts PORTRAIT), so he fills more of their frames.
 const LIMITS: Record<string, { top: number; side: number; bottom: number }> = {
   Shape: { top: 0.33, side: 0.17, bottom: 0.18 },
-  Eyes: { top: 0.33, side: 0.17, bottom: 0.18 },
-  Wears: { top: 0.09, side: 0.14, bottom: 0.18 },
+  Eyes: { top: 0.1, side: 0.11, bottom: 0.04 },
+  Hat: { top: 0.12, side: 0.16, bottom: 0.18 },
+  Glasses: { top: 0.1, side: 0.11, bottom: 0.04 },
 };
 const FLOATS = new Set(["halo"]); // the one thing worn that does not touch him, on purpose
 
-for (const tab of ["Shape", "Eyes", "Wears"]) {
+for (const tab of ["Shape", "Eyes", "Hat", "Glasses"]) {
   test(`every ${tab.toLowerCase()} is drawn whole, in one piece, with room around it in its frame`, { skip }, async () => {
     await page.getByRole("tab", { name: tab }).click();
     await page.waitForTimeout(300);
@@ -122,7 +127,7 @@ test("no mouth, by pixels: below his eyes nothing is as dark as an eye (and the 
   await page.waitForTimeout(300);
   const picks = ["ash", "big", "dots", "ovals", "beans", "sleepy"] as const;
   // where his face is, from his frame's own geometry and each eye style's numbers (spec.ts EYES)
-  const geometry = { w: DESIGN.w, h: DESIGN.h, cy: DESIGN.cy, radius: DESIGN.radius, scale: lookOf(ASH).shapeD[1] };
+  const geometry = { w: PORTRAIT.w, h: PORTRAIT.h, cy: PORTRAIT.cy, radius: PORTRAIT.radius, scale: lookOf(ASH).shapeD[1] };
   const eyes = Object.fromEntries(picks.map((k) => [k, EYES[k].a]));
   const bands = await page.evaluate(({ picks, geometry, eyes }) =>
     picks.map((pick) => {
@@ -157,4 +162,60 @@ test("no mouth, by pixels: below his eyes nothing is as dark as an eye (and the 
     const floor = b.eye + 0.5 * (b.glass - b.eye);
     assert.ok(b.below > floor, `${b.pick}: something dark below his eyes (${b.below.toFixed(2)}, under ${floor.toFixed(2)}): a mouth?`);
   }
+});
+
+/** Each glasses thumbnail against the one with none, over his eyes: how much differs, and how much
+ * darker it is there. */
+function glassesOverEyes(p: Page, picks: string[]): Promise<{ pick: string; diff: number; darker: number }[]> {
+  const geometry = { w: PORTRAIT.w, h: PORTRAIT.h, cy: PORTRAIT.cy, radius: PORTRAIT.radius, scale: lookOf(ASH).shapeD[1] };
+  const eye = EYES.ash.a; // the plain new orb has Ash's eyes
+  return p.evaluate(({ picks, geometry, eye }) => {
+    const pixels = (pick: string): Uint8ClampedArray => {
+      const c = document.querySelector<HTMLButtonElement>(`button[data-pick="${pick}"]`)!.querySelector("canvas")!;
+      return c.getContext("2d")!.getImageData(0, 0, c.width, c.height).data;
+    };
+    const c0 = document.querySelector<HTMLButtonElement>('button[data-pick="none"]')!.querySelector("canvas")!;
+    const W = c0.width, H = c0.height;
+    const k = Math.min(W / geometry.w, H / geometry.h);
+    const Rs = geometry.radius * k * geometry.scale * 0.94;
+    const cx = W / 2, cy = H * geometry.cy;
+    const [, , gap, ey] = eye as number[];
+    // the band across both eyes, out to a lens's width either side
+    const y0 = Math.round(cy + (ey! - 0.22) * Rs), y1 = Math.round(cy + (ey! + 0.22) * Rs);
+    const x0 = Math.round(cx - (gap! + 0.3) * Rs), x1 = Math.round(cx + (gap! + 0.3) * Rs);
+    const base = pixels("none");
+    return picks.map((pick) => {
+      const d = pixels(pick);
+      let diff = 0, lumA = 0, lumB = 0, n = 0;
+      for (let y = y0; y <= y1; y++) {
+        for (let x = x0; x <= x1; x++) {
+          const i = (y * W + x) * 4;
+          diff += Math.abs(d[i]! - base[i]!) + Math.abs(d[i + 1]! - base[i + 1]!) + Math.abs(d[i + 2]! - base[i + 2]!);
+          lumA += 0.2126 * base[i]! + 0.7152 * base[i + 1]! + 0.0722 * base[i + 2]!;
+          lumB += 0.2126 * d[i]! + 0.7152 * d[i + 1]! + 0.0722 * d[i + 2]!;
+          n++;
+        }
+      }
+      return { pick, diff: diff / (n * 3 * 255), darker: (lumA - lumB) / (n * 255) };
+    });
+  }, { picks, geometry, eye });
+}
+
+test("every pair of glasses is drawn over his eyes, and sunglasses darken them", { skip }, async () => {
+  await page.getByRole("tab", { name: "Glasses" }).click();
+  await page.waitForTimeout(300);
+  const names = Object.keys(GLASSES) as GlassesName[];
+  const rows = await glassesOverEyes(page, names);
+  const none = rows.find((r) => r.pick === "none")!;
+  if (process.env.ORBS_PRINT) console.log(rows.map((r) => `${r.pick} ${r.diff.toFixed(3)} ${r.darker.toFixed(3)}`).join("\n"));
+  assert.ok(none.diff < 0.001, `control: none against itself differs by nothing (${none.diff})`);
+  for (const r of rows) {
+    if (r.pick === "none") continue;
+    // measured 10-01: a monocle (one eye) changes the least, 0.024; sunglasses darken the band by
+    // 0.115 to 0.214, clear frames by at most 0.061
+    assert.ok(r.diff > 0.015, `${r.pick}: hardly anything drawn over his eyes (${r.diff.toFixed(3)})`);
+    if (isShades(r.pick as GlassesName)) assert.ok(r.darker > 0.085, `${r.pick}: sunglasses that do not darken his eyes (${r.darker.toFixed(3)})`);
+    else assert.ok(r.darker < 0.085, `${r.pick}: clear glasses that hide his eyes (${r.darker.toFixed(3)})`);
+  }
+  assert.ok(names.filter(isShades).length >= 3, "there are sunglasses to choose from");
 });

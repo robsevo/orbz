@@ -4,6 +4,7 @@
 import { StrictMode, useState, type CSSProperties, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { HUES, hue, orbAttr, stylesheet, TYPE, type Hue, type TypeStyle } from "./design/tokens.ts";
+import { Balanced, OneLine } from "./ui/Balanced.tsx";
 
 const page: CSSProperties = { maxWidth: 1040, margin: "0 auto", padding: "var(--s6) var(--margin) var(--s7)" };
 const glass: CSSProperties = {
@@ -129,11 +130,11 @@ function Specimen() {
       <div style={{ ...glass, marginTop: "var(--s5)", display: "grid", gap: "0 var(--s6)", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 420px), 1fr))" }}>
         <div style={{ minWidth: 0 }}>
           <Section title="Orb colours: the only accent">
-            <div style={{ display: "grid", gap: "var(--s2) var(--s4)", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))" }}>
+            <Balanced min={120} gap={10}>
               {HUES.map((h) => (
                 <OrbName key={h.name} h={h} />
               ))}
-            </div>
+            </Balanced>
           </Section>
           <Section title="In a chat">
             <Chat />
@@ -146,7 +147,7 @@ function Specimen() {
             ))}
           </Section>
           <Section title="Surfaces and text">
-            <div style={{ display: "grid", gap: "var(--s3)", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))" }}>
+            <Balanced min={150} gap={12}>
               <Swatch name="Ground" varName="--ground" />
               <Swatch name="Glass card" varName="--card" />
               <Swatch name="Raised" varName="--raised" />
@@ -154,10 +155,10 @@ function Specimen() {
               <Swatch name="Reading" varName="--text-2" text />
               <Swatch name="Secondary" varName="--text-3" text />
               <Swatch name="Alert" varName="--alert" text />
-            </div>
+            </Balanced>
           </Section>
           <Section title="The grid">
-            <div style={{ display: "flex", alignItems: "end", gap: "var(--s2)", flexWrap: "wrap" }}>
+            <OneLine gap={8} style={{ alignItems: "end", justifyContent: "flex-start" }}>
               {[4, 8, 12, 16, 24, 32, 48, 64].map((px) => (
                 <div key={px} style={{ display: "grid", justifyItems: "center", gap: "var(--s1)" }}>
                   <span aria-hidden style={{ width: px, height: px, borderRadius: 4, background: "var(--raised)", boxShadow: "inset 0 0 0 .5px var(--hairline)" }} />
@@ -166,7 +167,7 @@ function Specimen() {
                   </span>
                 </div>
               ))}
-            </div>
+            </OneLine>
           </Section>
         </div>
       </div>
