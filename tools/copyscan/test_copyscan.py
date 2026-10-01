@@ -72,6 +72,11 @@ RENAMED = (
     .replace("load", "busyness").replace("weight", "cost").replace("skills", "talents")
 )
 
+# A table of string pairs. Theirs and ours share no entry, only the shape `"k": "v",` that every
+# such table has; with strings normalized, the shapes are identical token for token.
+THEIR_TABLE = "export const TYPES = {\n" + "".join(f'  ".x{i}": "type/{i}",\n' for i in range(40)) + "};\n"
+OUR_TABLE = "LEXICON = {\n" + "".join(f'    "word{i}": "sound {i}",\n' for i in range(40)) + "}\n"
+
 # A tiny idiom anyone would write; must NOT be called a copy.
 IDIOM = 'export function now(): number {\n  return Date.now();\n}\n'
 
@@ -117,6 +122,14 @@ with tempfile.TemporaryDirectory() as td:
     commented = "/*\n" + PASTED + "*/\n" + OURS_CLEAN
     rc, out = scan(tree(td / "o4", {"packages/home/notes.ts": commented}), theirs)
     check("C.4 code quoted in a comment is not shipped code", rc == 0, out)
+
+    # C.7 — a table of string pairs is data: the same shape as theirs, none of their content.
+    theirs7 = tree(td / "theirs7", {"src/types.ts": THEIR_TABLE})
+    rc, out = scan(tree(td / "o7", {"kit/ash/lexicon.py": OUR_TABLE}), theirs7)
+    check("C.7 a table of different string pairs is not a copy", rc == 0, out)
+    # ...but their table, pasted, still is (exact mode is not loosened)
+    rc, out = scan(tree(td / "o7b", {"packages/home/types.ts": THEIR_TABLE}), theirs7)
+    check("C.7b CONTROL: their table pasted verbatim is still caught", rc == 1 and "exact" in out, out)
 
     # C.5 — a scan that cannot run must not read as a pass.
     rc, out = scan(td / "o2", td / "does-not-exist")

@@ -20,3 +20,4 @@ export { hashFiles, type LoopDef, type LoopEntry, type LoopPlan, type LoopResult
 export { type Schedule, Schedules, scheduleConversation } from "./schedule.ts";
 export { type Trigger, type TriggerEvent, Triggers, type TriggerSource, triggerConversation } from "./triggers.ts";
 export { serve, type HomeDoor } from "./api.ts";
+export { CRASH_LOOP_RESTARTS, Kit, KitDiedError, KitDownError, type KitOptions, kitPython } from "./kit.ts";

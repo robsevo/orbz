@@ -25,7 +25,7 @@ const runner: Runner = {
 
 let home: Home;
 try {
-  home = Home.open({ dataDir, runner });
+  home = Home.open({ dataDir, runner, kit: true });
 } catch (e) {
   if (e instanceof HomeLockedError) {
     console.error(e.message);

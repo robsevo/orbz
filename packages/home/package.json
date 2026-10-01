@@ -10,6 +10,7 @@
     "typecheck": "tsc -p ."
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "1.31.0",
     "croner": "10.0.1"
   }
 }

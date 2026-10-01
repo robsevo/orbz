@@ -28,7 +28,9 @@ PLANTS = [
      'import assert from "node:assert/strict";\nimport { test } from "node:test";\n\n'
      'test("planted control: must fail", () => {\n  assert.equal(1, 2);\n});\n', "planted control: must fail"),
     ("a failing kit test", "kit/tests/test_planted_control.py",
-     'raise SystemExit("planted control: must fail")\n', "FAIL  test_planted_control.py"),
+     'raise SystemExit("planted control: must fail")\n', "FAIL  tests/test_planted_control.py"),
+    ("a file in kit/ash that carry.py did not carry", "kit/ash/planted_control.py",
+     "x = 1\n", "kit/ash/planted_control.py is not carried"),
 ]
 
 

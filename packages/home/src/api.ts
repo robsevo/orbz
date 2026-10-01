@@ -75,6 +75,7 @@ async function handle(home: Home, req: IncomingMessage, want: Buffer, addr: Retu
       pid: process.pid,
       dataDir: home.dataDir,
       loopsOff: home.loops.disabledReason(),
+      kit: home.kit ? { state: home.kit.state, pid: home.kit.pid ?? null } : null,
       orbs: home.inbox.orbs().map((o) => ({ ...o, queued: home.inbox.queued(o.id).length })),
     };
   }

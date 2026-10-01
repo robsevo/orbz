@@ -10,6 +10,7 @@ import { type Clock, realClock } from "./clock.ts";
 import { openDb } from "./db.ts";
 import { EventLog } from "./events.ts";
 import { Inboxes, type Runner } from "./inbox.ts";
+import { Kit, type KitOptions } from "./kit.ts";
 import { Loops, type LoopsOptions } from "./loops.ts";
 import { Schedules } from "./schedule.ts";
 import { Triggers } from "./triggers.ts";
@@ -26,6 +27,8 @@ export type HomeOptions = {
   /** Files no loop may change. Default: the owner's brain and rules, and Orbs' own source. */
   protect?: string[];
   loops?: Omit<LoopsOptions, "dir" | "protect">;
+  /** Run Ash's kit beside the home (PLAN 1.3). Off unless asked for: most tests don't need it. */
+  kit?: boolean | Omit<KitOptions, "events" | "clock" | "dataDir">;
 };
 
 /** A gap between the wall clock and the monotonic clock bigger than this means the machine slept. */
@@ -59,6 +62,8 @@ export class Home {
   readonly schedules: Schedules;
   readonly triggers: Triggers;
   readonly loops: Loops;
+  /** Ash's kit, when the home runs one. */
+  readonly kit: Kit | null;
   readonly #db: DatabaseSync;
   readonly #heartbeatMs: number;
   #last: { wall: number; mono: number } | null = null;
@@ -82,6 +87,9 @@ export class Home {
       dir: join(this.dataDir, "loops"),
       protect: opts.protect ?? defaultProtect(this.dataDir),
     });
+    this.kit = opts.kit
+      ? new Kit({ ...(opts.kit === true ? {} : opts.kit), events: this.events, clock: this.clock, dataDir: this.dataDir })
+      : null;
   }
 
   /** Opens the home on a data directory. Throws HomeLockedError if another home holds it. */
@@ -92,12 +100,17 @@ export class Home {
     return home;
   }
 
-  /** Starts ticking and starts every orb that has work waiting. */
+  /** Starts ticking, starts every orb that has work waiting, and starts the kit. A kit that
+   * fails to start is in the event log (`kit.died`, then a restart or `kit.gave_up`); the home
+   * keeps running without it. */
   start(): void {
     if (this.#started || this.#closed) return;
     this.#started = true;
     this.inbox.pumpAll();
     void this.tick();
+    this.kit?.start().catch((e: unknown) => {
+      this.events.append("kit.start_failed", { error: e instanceof Error ? e.message : String(e) });
+    });
   }
 
   /** One tick now (also what the timer calls). Ticks never overlap; a tick asked for during one
@@ -127,6 +140,7 @@ export class Home {
     await this.#ticking;
     await this.inbox.close();
     await this.loops.close();
+    await this.kit?.close();
     this.events.append("home.stopped", {});
     this.#db.close();
   }

@@ -45,6 +45,12 @@ K = 12            # tokens per fingerprinted k-gram
 WINDOW = 6        # winnowing window
 EXACT_RUN = 40    # identical tokens in a row = copied
 NORM_RUN = 70     # identical normalized tokens in a row = copied with renames
+# A normalized run counts only if it has the structure of code: at least one identifier or
+# keyword per STRUCTURE_EVERY tokens. With strings normalized to S, any long table of string
+# pairs ({"a": "b", "c": "d", ...}: a MIME map, a pronunciation lexicon) is the same S : S , run
+# as every other one; that is data with nothing of anyone's code in it. Exact mode is untouched,
+# so pasting their actual table is still caught.
+STRUCTURE_EVERY = 10
 
 _TOKEN = re.compile(
     r"""
@@ -172,6 +178,12 @@ def longest_run(a: list[str], b: list[str], ia: int, ib: int) -> tuple[int, int,
     return s_a, s_b, e_a - s_a
 
 
+def has_structure(norm_run: list[str]) -> bool:
+    """True when a normalized run reads as code (names and keywords), not a table of literals."""
+    named = sum(1 for tok in norm_run if tok == "I" or tok in _KEYWORDS)
+    return named * STRUCTURE_EVERY >= len(norm_run)
+
+
 def compare(ours: list[Source], theirs: list[Source]) -> list[dict]:
     findings = []
     for mode, attr, threshold in (("exact", "exact", EXACT_RUN), ("normalized", "norm", NORM_RUN)):
@@ -189,6 +201,8 @@ def compare(ours: list[Source], theirs: list[Source]) -> list[dict]:
                     tseq = getattr(t, attr)
                     for opos in positions:
                         s_o, s_t, n = longest_run(seq, tseq, opos, tpos)
+                        if mode == "normalized" and not has_structure(seq[s_o:s_o + n]):
+                            continue
                         if n >= threshold and n > best.get(t.rel, {}).get("tokens", 0):
                             best[t.rel] = {
                                 "mode": mode,

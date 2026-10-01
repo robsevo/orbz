@@ -2,5 +2,26 @@
 name = "orbs-kit"
 version = "0.0.0"
 description = "Ash's Python kit inside Orbs, run by the home as an MCP server over stdio (PLAN 1.3)"
-requires-python = ">=3.12"
-dependencies = []
+requires-python = ">=3.13,<3.14"  # kokoro-onnx supports <3.14; uv installs exactly this Python
+dependencies = [
+    "en-core-web-sm",
+    "faster-whisper==1.2.1",
+    "kokoro-onnx==0.6.1",
+    "mcp==2.2.0",
+    "misaki[en]==0.9.4",
+    "numpy>=2.4",
+    "openwakeword==0.6.0",
+    "scipy>=1.17",
+    "tzdata>=2026.4",
+]
+
+# Ash's voice stack, slimmed to ONNX (PLAN "Keeping the kit slim"): no torch, no tflite, no
+# compiler. openWakeWord asks for tflite-runtime on Linux, which has no wheels for this Python
+# and is what pinned Ash to 3.11; the kit runs openWakeWord on ONNX (wake.py already does), so
+# `exclude-dependencies` removes it on every platform. misaki (its spacy path pulls torch) and pyworld
+# (compiles from source) are optional in voice.py and are not installed.
+[tool.uv]
+exclude-dependencies = ["tflite-runtime", "spacy-curated-transformers", "phonemizer-fork"]
+
+[tool.uv.sources]
+en-core-web-sm = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" }
