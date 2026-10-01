@@ -61,7 +61,7 @@ export type HomeOptions = {
    * give a stand-in store and their own issuer. Once signed in, the plan answers before the preset. */
   chatgpt?: Partial<Omit<ChatGPTOptions, "dataDir" | "events" | "clock">>;
   /** The brains after ChatGPT (PLAN 1.11): where the Gemini key is kept, and Gemini's root (a test's fake). */
-  brains?: Pick<BrainsOptions, "store" | "geminiBase">;
+  brains?: Pick<BrainsOptions, "store" | "geminiBase" | "tavilyBase">;
   /** Dollars a day the brains may cost, by what the providers report; null for no cap. */
   spendCapUsd?: number | null;
 };
@@ -204,6 +204,7 @@ export class Home {
           orbName: (orb) => this.inbox.orb(orb)?.name ?? orb,
           orbSpecialty: (orb) => this.inbox.orb(orb)?.specialty ?? "general",
           learned: (orb) => this.learned.list(orb),
+          searchKey: () => this.brains.searchKey(),
         });
     this.inbox = new Inboxes(db, this.events, this.clock, opts.runner ?? this.agent!, opts.graceMs);
     this.schedules = new Schedules(db, this.events, this.inbox, this.clock);

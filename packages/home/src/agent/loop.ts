@@ -23,6 +23,7 @@ import type { RunContext, RunResult, Runner } from "../inbox.ts";
 import { BrainCallError, chat, type Endpoint, type Limited } from "../brain/openai.ts";
 import { type BrainChain, explain, type LinkId, restFor } from "../brain/chain.ts";
 import type { Specialty } from "../brain/constitution.ts";
+import type { SearchKey } from "./web.ts";
 import { MANAGE_USAGE } from "../chatgpt/chatgpt.ts";
 import type { Spend } from "../brain/spend.ts";
 import type { Card, Conversations, Message, ToolCall } from "./conversation.ts";
@@ -55,6 +56,8 @@ export type AgentOptions = {
   /** What the orb does, and what the person approved for him to remember: his constitution (PLAN 3.9). */
   orbSpecialty?: (orb: string) => Specialty;
   learned?: (orb: string) => string[];
+  /** The person's web-search key, when a search needs it (PLAN 3.10). */
+  searchKey?: () => Promise<SearchKey | null>;
   tools?: ToolDef[];
   /** What decides each call (PLAN 1.6): the floor, the person's rules, the one-way switch, away. */
   guard: Guard;
@@ -84,7 +87,7 @@ export const PLAN_ANSWERS = {
 const est = (text: string): number => Math.ceil(text.length / 4) + 4;
 
 export class AgentRunner implements Runner {
-  readonly #o: Required<Omit<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned">> & Pick<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned">;
+  readonly #o: Required<Omit<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned" | "searchKey">> & Pick<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned" | "searchKey">;
   readonly #tools: Map<string, ToolDef>;
 
   constructor(opts: AgentOptions) {
@@ -104,6 +107,7 @@ export class AgentRunner implements Runner {
       workspace: this.workspace(ctx.orb),
       signal: ctx.signal,
       background: this.#o.background,
+      ...(this.#o.searchKey && { searchKey: this.#o.searchKey }),
     };
     mkdirSync(tctx.workspace, { recursive: true });
     const step = this.#stepper(ctx);

@@ -145,6 +145,16 @@ export function ownersAgent(text: string): string | null {
   return first ? (/^([\p{L}][\p{L}\d'-]*)/u.exec(first.title)?.[1] ?? null) : null;
 }
 
+/** How a researcher works (PLAN 3.10), ported from Ash's researcher (brain/agents/researcher.md):
+ * the orbs whose work is finding things out load it, whatever the owner's file holds. */
+export const RESEARCHERS: readonly Specialty[] = ["research", "factcheck", "analyst", "travel", "career", "marketing", "product"];
+export const RESEARCH_METHOD = `## How you research
+You are called when the answer lives on the live web, not in what you already know. Search with method: start broad, then narrow. Pick query words from the answer's own vocabulary (the exact error text, the spec number, the product's real name), the most distinctive first, and add the year for anything that moves fast. If results come back weak, change the words instead of repeating the query. Work several angles when one will not cover it (official docs, release notes, issue trackers, people's reports), and read whole pages with web_fetch when snippets are not enough: a snippet is not a source.
+
+Weigh sources: the original beats an aggregator (a company's own post, official docs, a paper or a government site over a listicle), and recent beats stale for anything that moves. Anything live or volatile (a price, a version, a benchmark, a score) needs two independent sources before you state it as fact; with one, say so plainly ("reported by X, not independently confirmed"). Numbers carry units; dates are absolute, never "recently". When sources disagree, list each, never average them.
+
+Return a tight brief: the answer first, then the facts it rests on, each with the address of the page that says it, then what is still uncertain or disputed and how sure you are. Cite only sources that bear on the answer. If the web does not settle the question, say exactly that, and what evidence would.`;
+
 /** One orb's constitution: the core and his specialty's sections, in the file's order, in his name,
  * then what the person approved for him to remember. */
 export function composeConstitution(o: { owner: string; specialty: Specialty; orbName: string; learned?: string[] }): string {
@@ -155,6 +165,7 @@ export function composeConstitution(o: { owner: string; specialty: Specialty; or
     if (!loads(SECTION_MAP[s.key], o.specialty) || !s.body) continue;
     parts.push(`${"#".repeat(Math.max(2, s.level))} ${s.title}\n${rename(s.body)}`);
   }
+  if (RESEARCHERS.includes(o.specialty)) parts.push(RESEARCH_METHOD);
   if (o.learned?.length) parts.push(`## What ${o.orbName} has learned (each line approved by the person)\n${o.learned.map((l) => `- ${l}`).join("\n")}`);
   return parts.join("\n\n");
 }

@@ -9,7 +9,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { join } from "node:path";
 import type { Home } from "./home.ts";
 import { UnknownOrbError } from "./inbox.ts";
-import { GeminiKeyError } from "./brain/brains.ts";
+import { KeyRefusedError } from "./brain/brains.ts";
 import { SPECIALTY_FAMILIES, type Specialty } from "./brain/constitution.ts";
 import { standingContext } from "./agent/standing.ts";
 import { version } from "./version.ts";
@@ -180,7 +180,22 @@ async function handle(
       try {
         await home.brains.setGemini(text(await body(req), "key"));
       } catch (e) {
-        if (e instanceof GeminiKeyError) throw new HttpError(400, e.message);
+        if (e instanceof KeyRefusedError) throw new HttpError(400, e.message);
+        throw e;
+      }
+      return { brains: home.brains.status() };
+    }
+  }
+  if (parts[0] === "brains" && parts[1] === "search" && parts.length === 2) {
+    if (method === "DELETE") {
+      await home.brains.clearSearch();
+      return { brains: home.brains.status() };
+    }
+    if (method === "POST") {
+      try {
+        await home.brains.setSearch(text(await body(req), "key"));
+      } catch (e) {
+        if (e instanceof KeyRefusedError) throw new HttpError(400, e.message);
         throw e;
       }
       return { brains: home.brains.status() };

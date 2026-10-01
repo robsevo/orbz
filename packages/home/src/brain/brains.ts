@@ -18,6 +18,8 @@ export const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/ope
 /** What answers when the key's model list could not be read: a flash every free key has had. */
 export const GEMINI_FALLBACK_MODEL = "gemini-3.5-flash";
 const KEY = "orbs.gemini";
+const SEARCH_KEY = "orbs.tavily";
+export const TAVILY_BASE = "https://api.tavily.com";
 
 /** The newest plain flash a key may use ("gemini-3.8-flash" over "-lite" and "-preview"). */
 export function pickGeminiModel(ids: string[]): string {
@@ -29,21 +31,23 @@ export function pickGeminiModel(ids: string[]): string {
   return flash[0]?.id ?? GEMINI_FALLBACK_MODEL;
 }
 
-export class GeminiKeyError extends Error {
+export class KeyRefusedError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = "GeminiKeyError";
+    this.name = "KeyRefusedError";
   }
 }
 
 export type LocalCoder = { baseUrl: string; model: string };
-type Saved = { gemini?: { model: string }; local?: LocalCoder };
+type Saved = { gemini?: { model: string }; local?: LocalCoder; search?: true };
 
 export type BrainsOptions = {
   dataDir: string;
   store?: SecretStore;
   /** Gemini's API root (a test points it at a fake). */
   geminiBase?: string;
+  /** Tavily's API root, for web search (a test points it at a fake). */
+  tavilyBase?: string;
   /** The preset's own big brain, when the home has one: after Gemini, before the local coder. */
   presetKey?: Endpoint | null;
   /** ChatGPT's endpoint now (null when signed out or paused at its limit). */
@@ -110,14 +114,14 @@ export class Brains {
    * newest flash it may use (brains.json). A refused key is never kept. */
   async setGemini(key: string, fetcher: typeof fetch = fetch): Promise<{ model: string }> {
     const k = key.trim();
-    if (!/^[\w-]{20,}$/.test(k)) throw new GeminiKeyError("That doesn't look like a Gemini API key.");
+    if (!/^[\w-]{20,}$/.test(k)) throw new KeyRefusedError("That doesn't look like a Gemini API key.");
     let res: Response;
     try {
       res = await fetcher(`${this.#o.geminiBase ?? GEMINI_BASE}/models`, { headers: { authorization: `Bearer ${k}` }, signal: AbortSignal.timeout(15_000) });
     } catch {
-      throw new GeminiKeyError("Gemini could not be reached to check the key. Try again in a moment.");
+      throw new KeyRefusedError("Gemini could not be reached to check the key. Try again in a moment.");
     }
-    if (res.status === 400 || res.status === 401 || res.status === 403) throw new GeminiKeyError("Gemini refused that key.");
+    if (res.status === 400 || res.status === 401 || res.status === 403) throw new KeyRefusedError("Gemini refused that key.");
     let model = GEMINI_FALLBACK_MODEL;
     if (res.ok) {
       const j = (await res.json().catch(() => ({}))) as { data?: { id?: string }[] };
@@ -128,6 +132,30 @@ export class Brains {
     this.#saved = { ...this.#saved, gemini: { model } };
     this.#write();
     return { model };
+  }
+
+  /** The person's Tavily key, for the researchers' web search (PLAN 3.10): kept like the Gemini
+   * key, in the keychain, never in a file. Checked for its shape; Tavily says if it refuses it. */
+  async setSearch(key: string): Promise<void> {
+    const k = key.trim();
+    if (!/^tvly-[\w-]{10,}$/.test(k)) throw new KeyRefusedError("That doesn't look like a Tavily key (they start with tvly-).");
+    await (await this.#storeP()).set(SEARCH_KEY, k);
+    this.#saved = { ...this.#saved, search: true };
+    this.#write();
+  }
+
+  async clearSearch(): Promise<void> {
+    await (await this.#storeP()).delete(SEARCH_KEY);
+    const { search: _, ...rest } = this.#saved;
+    this.#saved = rest;
+    this.#write();
+  }
+
+  /** The search key and where it is used, read from the keychain only when a search needs it. */
+  async searchKey(): Promise<{ key: string; base: string } | null> {
+    if (!this.#saved.search) return null;
+    const k = await (await this.#storeP()).get(SEARCH_KEY);
+    return k ? { key: k, base: this.#o.tavilyBase ?? TAVILY_BASE } : null;
   }
 
   async clearGemini(): Promise<void> {
@@ -146,7 +174,7 @@ export class Brains {
   }
 
   /** For Settings and the door: each brain, in order, and where it stands. Never a key. */
-  status(): { order: ReturnType<BrainChain["states"]>; gemini: { model: string } | null; local: LocalCoder | null } {
-    return { order: this.chain.states(), gemini: this.#saved.gemini && this.#geminiKey ? { model: this.#saved.gemini.model } : null, local: this.#saved.local ?? null };
+  status(): { order: ReturnType<BrainChain["states"]>; gemini: { model: string } | null; local: LocalCoder | null; search: boolean } {
+    return { order: this.chain.states(), gemini: this.#saved.gemini && this.#geminiKey ? { model: this.#saved.gemini.model } : null, local: this.#saved.local ?? null, search: Boolean(this.#saved.search) };
   }
 }

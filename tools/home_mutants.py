@@ -275,6 +275,25 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("the orb's specialty is ignored", "src/agent/standing.ts", [
         ('specialty: o.specialty ?? "general", orbName', 'specialty: "general", orbName'),
     ], ["constitution.test.ts"]),
+    # the researchers' tools (PLAN 3.10)
+    ("the web tools may reach loopback", "src/agent/net.ts", [
+        ("    a === 0 || a === 10 || a === 127 ||", "    a === 0 || a === 10 ||"),
+    ], ["web.test.ts"]),
+    ("an IPv4-mapped address in hex slips through", "src/agent/net.ts", [
+        ("  const hex = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(s);\n", "  const hex = null as RegExpExecArray | null;\n"),
+    ], ["web.test.ts"]),
+    ("the connection's own lookup is not checked (DNS rebinding)", "src/agent/net.ts", [
+        ("      const bad = list.find((a) => refused(a.address));\n      if (bad) return cb(", "      const bad = undefined as { address: string } | undefined;\n      if (bad) return cb("),
+    ], ["web.test.ts"]),
+    ("a long page is cut by score, not kept in its order", "src/agent/web.ts", [
+        ("  return { text: scored.filter((s) => keep.has(s.i)).map((s) => s.p).join(\"\\n\\n\"), trimmed: true };", "  return { text: [...scored].sort((a, b) => b.score - a.score).filter((s) => keep.has(s.i)).map((s) => s.p).join(\"\\n\\n\"), trimmed: true };"),
+    ], ["web.test.ts"]),
+    ("a blocked domain the provider returned is passed on", "src/agent/web.ts", [
+        ("  if (block.length) results = results.filter((r) => !block.some((d) => domainMatch(hostOf(String(r.url)), d)));\n", ""),
+    ], ["web.test.ts"]),
+    ("researchers lose their method", "src/brain/constitution.ts", [
+        ("  if (RESEARCHERS.includes(o.specialty)) parts.push(RESEARCH_METHOD);\n", ""),
+    ], ["web.test.ts"]),
 ]
 
 # the app (PLAN 2.x): paths are inside packages/app

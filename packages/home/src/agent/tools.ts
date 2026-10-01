@@ -17,10 +17,15 @@ import { basename, dirname, join, resolve, sep } from "node:path";
 import type { CardKind } from "./conversation.ts";
 import type { FloorHit } from "../rules/floor.ts";
 import { transportCause } from "./stream.ts";
+import { type SearchKey, webFetch, webSearch } from "./web.ts";
 
 export type Decision = "allow" | "ask" | "never";
 export type ToolResult = { content: string; isError?: boolean; stoppedByUser?: boolean };
-export type ToolContext = { orb: string; conversation: string; workspace: string; signal?: AbortSignal; background: Background };
+export type ToolContext = {
+  orb: string; conversation: string; workspace: string; signal?: AbortSignal; background: Background;
+  /** The person's web-search key (Tavily), read from the keychain when a search needs it (PLAN 3.10). */
+  searchKey?: () => Promise<SearchKey | null>;
+};
 type Args = Record<string, unknown>;
 
 export type ToolDef = {
@@ -317,28 +322,39 @@ export const TOOLS: ToolDef[] = [
     },
   },
   {
-    name: "web_fetch",
-    label: "Reading the web",
-    description: "Fetch a web page or file over http(s) and get its text.",
-    parameters: obj({ url: { type: "string" } }, ["url"]),
-    describe: (a) => `fetch ${s(a.url)}`,
+    name: "web_search",
+    label: "Searching the web",
+    description:
+      "Search the web. Returns SNIPPETS: a title, an address and a one-line preview per result. A snippet is not the source and is not enough to explain, compare or analyse anything: read the pages worth reading with web_fetch. One query answers one narrow question; for anything broader, search several angles.",
+    parameters: obj(
+      {
+        query: { type: "string", description: "The search." },
+        allowed_domains: { type: "array", items: { type: "string" }, description: "Only results from these sites." },
+        blocked_domains: { type: "array", items: { type: "string" }, description: "Never results from these sites." },
+      },
+      ["query"],
+    ),
+    describe: (a) => `search the web for "${s(a.query)}"`,
     decision: "allow",
     untrusted: "page",
-    precheck: (a) => (/^https?:\/\//i.test(s(a.url)) ? null : "Only http and https addresses can be fetched."),
     async run(a, ctx) {
       if (ctx.signal?.aborted) return STOPPED;
-      const signal = ctx.signal ? AbortSignal.any([ctx.signal, AbortSignal.timeout(30_000)]) : AbortSignal.timeout(30_000);
-      try {
-        const res = await fetch(s(a.url), { signal, redirect: "follow" });
-        const text = await res.text();
-        const readable = /html/i.test(res.headers.get("content-type") ?? "")
-          ? text.replace(/<(script|style)[\s\S]*?<\/\1>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim()
-          : text;
-        return { content: clip(`HTTP ${res.status}\n${readable}`), isError: !res.ok };
-      } catch (e) {
-        if (ctx.signal?.aborted) return { content: "Stopped by the user.", isError: true, stoppedByUser: true };
-        throw e;
-      }
+      return webSearch(a, (await ctx.searchKey?.()) ?? null, ctx.signal);
+    },
+  },
+  {
+    name: "web_fetch",
+    label: "Reading the web",
+    description:
+      "Read a web page (or a PDF, or JSON) and get its text. This is how a source is actually read. `prompt` says what you are looking for: it picks which parts of a long page are kept. Only http and https; private and local addresses are refused.",
+    parameters: obj({ url: { type: "string" }, prompt: { type: "string", description: "What you want from the page." } }, ["url"]),
+    describe: (a) => `read ${s(a.url)}`,
+    decision: "allow",
+    untrusted: "page",
+    precheck: (a) => (/^https?:\/\//i.test(s(a.url)) ? null : "Only http and https addresses can be read."),
+    async run(a, ctx) {
+      if (ctx.signal?.aborted) return STOPPED;
+      return webFetch(a, ctx.signal);
     },
   },
   {
