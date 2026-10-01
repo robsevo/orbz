@@ -3,6 +3,7 @@
 // notices whether the machine slept since the last one, queues what came due, starts due loops
 // and asks the triggers what happened. It sleeps until the next due time, never longer than a
 // heartbeat, so a machine that wakes is caught up within one heartbeat.
+import { EventEmitter } from "node:events";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { DatabaseSync } from "node:sqlite";
@@ -101,6 +102,9 @@ export class Home {
   readonly conversations: Conversations;
   /** The agent loop, when it is the runner. */
   readonly agent: AgentRunner | null;
+  /** What happens as it happens, for whoever is watching (the terminal, the web app): every event
+   * once committed ("event"), and a reply's text as it streams ("text"). Never stored. */
+  readonly live = new EventEmitter();
   /** The person's rules (PLAN 1.6). */
   readonly rules: Rules;
   /** Every plan shown to the person (PLAN 1.7). */
@@ -144,12 +148,18 @@ export class Home {
     const post = (ctx: { orb: string; conversation: string }, text: string): void => {
       this.conversations.add({ conversation: ctx.conversation, orb: ctx.orb, role: "notice", content: text, meta: { board: true } });
     };
-    const { decide: _d, matcher: _m, ...agentOpts } = opts.agent ?? {};
+    const { decide: _d, matcher: _m, onText: userOnText, ...agentOpts } = opts.agent ?? {};
+    this.live.setMaxListeners(0);
+    this.events.listen((e) => this.live.emit("event", e));
     const tools = agentOpts.tools ?? [...TOOLS, planTool(this.plans, (workspace) => [workspace]), ...boardTools(this.board, post)];
     this.agent = opts.runner
       ? null
       : new AgentRunner({
           ...agentOpts,
+          onText: (e) => {
+            this.live.emit("text", e);
+            userOnText?.(e);
+          },
           tools,
           guard: this.guard,
           ...(kit && {

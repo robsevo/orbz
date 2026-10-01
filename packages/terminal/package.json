@@ -1,0 +1,19 @@
+{
+  "name": "@orbs/terminal",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "orbs": "./src/main.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "ink": "^7.1.1",
+    "react": "^19.3.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0"
+  }
+}

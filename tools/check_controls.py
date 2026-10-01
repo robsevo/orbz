@@ -31,6 +31,12 @@ PLANTS = [
      'raise SystemExit("planted control: must fail")\n', "FAIL  tests/test_planted_control.py"),
     ("a file in kit/ash that carry.py did not carry", "kit/ash/planted_control.py",
      "x = 1\n", "kit/ash/planted_control.py is not carried"),
+    # the terminal (PLAN 1.9) is a second package: a package the gate skipped would pass in silence
+    ("a type error in the terminal", "packages/terminal/src/planted_control.ts",
+     'export const planted: number = "not a number";\n', "planted_control.ts"),
+    ("a failing terminal test", "packages/terminal/test/planted_control.test.ts",
+     'import assert from "node:assert/strict";\nimport { test } from "node:test";\n\n'
+     'test("planted control: the terminal must fail", () => {\n  assert.equal(1, 2);\n});\n', "planted control: the terminal must fail"),
 ]
 
 

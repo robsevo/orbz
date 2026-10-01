@@ -27,8 +27,10 @@ export async function serve(home: Home, opts: { port?: number } = {}): Promise<H
   const token = randomBytes(24).toString("base64url");
   const want = Buffer.from(`Bearer ${token}`);
   const server = createServer((req, res) => {
-    handle(home, req, want, server.address())
-      .then((body) => send(res, 200, body))
+    handle(home, req, want, server.address(), res)
+      .then((body) => {
+        if (body !== STREAMING) send(res, 200, body);
+      })
       .catch((e: unknown) => {
         const status = e instanceof HttpError ? e.status : e instanceof UnknownOrbError ? 404 : 500;
         send(res, status, { error: e instanceof Error ? e.message : String(e) });
@@ -57,7 +59,15 @@ export async function serve(home: Home, opts: { port?: number } = {}): Promise<H
   };
 }
 
-async function handle(home: Home, req: IncomingMessage, want: Buffer, addr: ReturnType<ReturnType<typeof createServer>["address"]>): Promise<unknown> {
+export const STREAMING = Symbol("streaming");
+
+async function handle(
+  home: Home,
+  req: IncomingMessage,
+  want: Buffer,
+  addr: ReturnType<ReturnType<typeof createServer>["address"]>,
+  res?: ServerResponse,
+): Promise<unknown> {
   const port = addr && typeof addr !== "string" ? addr.port : -1;
   if (req.headers.host !== `127.0.0.1:${port}` && req.headers.host !== `localhost:${port}`) {
     throw new HttpError(403, "the home only answers on the loopback address");
@@ -69,11 +79,14 @@ async function handle(home: Home, req: IncomingMessage, want: Buffer, addr: Retu
   const parts = url.pathname.split("/").filter(Boolean);
   const method = req.method ?? "GET";
 
+  if (method === "GET" && url.pathname === "/stream") return stream(home, req, res!, Number(url.searchParams.get("since") ?? 0));
+
   if (method === "GET" && url.pathname === "/status") {
     return {
       version,
       pid: process.pid,
       dataDir: home.dataDir,
+      seq: home.events.head(),
       loopsOff: home.loops.disabledReason(),
       kit: home.kit ? { state: home.kit.state, pid: home.kit.pid ?? null } : null,
       orbs: home.inbox.orbs().map((o) => ({ ...o, queued: home.inbox.queued(o.id).length })),
@@ -89,7 +102,11 @@ async function handle(home: Home, req: IncomingMessage, want: Buffer, addr: Retu
     const conv = decodeURIComponent(parts[1]!);
     const since = Number(url.searchParams.get("since") ?? 0);
     if (!Number.isInteger(since)) throw new HttpError(400, "since is a whole number");
-    return { messages: home.conversations.list(conv, since), card: home.conversations.openCard(conv) ?? null };
+    const messages = home.conversations.list(conv, since);
+    // how each card these rows mention was answered, so a reader can say so beside its record
+    const cards: Record<string, string> = {};
+    for (const m of messages) if (m.role === "notice" && typeof m.meta.card === "number") cards[m.meta.card] = home.conversations.card(m.meta.card)?.status ?? "gone";
+    return { messages, cards, card: home.conversations.openCard(conv) ?? null };
   }
   if (method === "POST" && parts[0] === "cards" && parts.length === 2) {
     const id = Number(parts[1]);
@@ -147,6 +164,27 @@ async function handle(home: Home, req: IncomingMessage, want: Buffer, addr: Retu
     }
   }
   throw new HttpError(404, `no ${method} ${url.pathname}`);
+}
+
+/** Server-sent events: what happened since `since`, then everything as it happens, plus a reply's
+ * text as it streams. A comment line every 15 s keeps proxies from closing a quiet stream. */
+function stream(home: Home, req: IncomingMessage, res: ServerResponse, since: number): typeof STREAMING {
+  res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-store", connection: "keep-alive" });
+  const out = (kind: string, data: unknown): void => {
+    res.write(`event: ${kind}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+  for (const e of home.events.since(Number.isInteger(since) ? since : 0, 1000)) out("event", e);
+  const onEvent = (e: unknown): void => out("event", e);
+  const onText = (e: unknown): void => out("text", e);
+  home.live.on("event", onEvent);
+  home.live.on("text", onText);
+  const beat = setInterval(() => res.write(": beat\n\n"), 15_000);
+  req.on("close", () => {
+    clearInterval(beat);
+    home.live.off("event", onEvent);
+    home.live.off("text", onText);
+  });
+  return STREAMING;
 }
 
 async function body(req: IncomingMessage): Promise<Record<string, unknown>> {

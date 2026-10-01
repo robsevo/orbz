@@ -53,6 +53,12 @@ export class EventLog {
     return row.seq;
   }
 
+  /** The newest event's number (0 for an empty log): where a reader that wants only what comes next starts. */
+  head(): number {
+    const r = this.#db.prepare("SELECT max(seq) AS seq FROM events").get() as { seq: number | null };
+    return r.seq ?? 0;
+  }
+
   since(seq = 0, limit = 1000): HomeEvent[] {
     return (this.#since.all(seq, limit) as Row[]).map(toEvent);
   }

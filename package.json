@@ -8,6 +8,7 @@
   },
   "scripts": {
     "start": "node packages/home/src/main.ts",
+    "orbs": "node packages/terminal/src/main.ts",
     "typecheck": "pnpm -r typecheck",
     "test:ts": "node tools/run-ts-tests.mjs",
     "test:kit": "uv run --project kit --locked python kit/tests/run.py",

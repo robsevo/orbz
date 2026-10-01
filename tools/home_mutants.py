@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Controls for the home's tests (PLAN 1.2_t; CLAUDE.md rule 4): each mutant plants one real
-defect in a scratch copy of packages/home, and the named suite must go red. The repo itself is
-never touched.
+defect in a scratch copy of packages/home (or packages/terminal, PLAN 1.9_t), and the named suite
+must go red. The repo itself is never touched.
 
     pnpm check:controls      # runs this after tools/check_controls.py
+    tools/home_mutants.py --only terminal/    # just the mutants whose file or name has this text
 """
 from __future__ import annotations
 
@@ -17,6 +18,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 HOME_PKG = REPO / "packages" / "home"
+TERMINAL_PKG = REPO / "packages" / "terminal"
 
 # (the defect, the file, its edits as (exact text, replacement), the suites that must go red)
 MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
@@ -174,25 +176,71 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ], ["kit.test.ts"]),
 ]
 
+# the `orbs` terminal (PLAN 1.9): paths are inside packages/terminal
+TERMINAL_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
+    ("Esc does not stop the run", "src/app.ts", [
+        ("      else if (busy) stop();", "      else if (busy) void 0;"),
+    ], ["terminal.test.ts"]),
+    ("after a stop the screen still says he is working", "src/app.ts", [
+        ("        setBusy(false);\n        setActivity(null);\n        setRunning(null);\n", "        setActivity(null);\n        setRunning(null);\n"),
+    ], ["terminal.test.ts"]),
+    ("after a stop the keys are read but nothing is drawn (Ash's Ink freeze, as seen)", "src/app.ts", [
+        ("  useInput((ch, key) => {\n", "  const frozen = useRef(false);\n  useInput((ch, key) => {\n    if (frozen.current) return;\n"),
+        ("      else if (busy) stop();", "      else if (busy) { stop(); frozen.current = true; }"),
+    ], ["terminal.test.ts"]),
+    ("a stopped reply's words are dropped (the freeze's cause)", "src/app.ts", [
+        ("        return m.content.trim() ? [{ key: k, kind: \"speech\"", "        return m.content.trim() && m.meta.stopped !== true ? [{ key: k, kind: \"speech\""),
+    ], ["terminal.test.ts"]),
+    ("a reply's live copy is left on screen beside the committed one", "src/app.ts", [
+        ("        setSettling((s) => (s && fresh.some((m) => m.id === s.msg) ? null : s));", "        setSettling((s) => s);"),
+    ], ["terminal.test.ts"]),
+    ("a card's record is shown before it is answered", "src/app.ts", [
+        ('          if (!status || status === "pending") {', "          if (false) {"),
+    ], ["terminal.test.ts"]),
+    ("a call's row is drawn before it has run", "src/app.ts", [
+        ("        return m.content.trim() ? [{ key: k, kind: \"speech\"", "        if ((m.toolCalls ?? []).length) return [{ key: `${k}x`, kind: \"tool\", verb: \"Ran\", what: oneLine(this.running?.[1] ?? \"\") }];\n        return m.content.trim() ? [{ key: k, kind: \"speech\""),
+    ], ["terminal.test.ts"]),
+    ("a card answers to any key", "src/app.ts", [
+        ("      const k = cardKeys(card!).find(([c]) => c === ch.toLowerCase());",
+         "      const k = cardKeys(card!).find(([c]) => c === ch.toLowerCase()) ?? cardKeys(card!)[0];"),
+    ], ["terminal.test.ts"]),
+    ("an Enter typed in the same read as its text is lost", "src/app.ts", [
+        ("    ch.split(/\\r\\n?|\\n/).forEach(", "    [ch.replace(/[\\r\\n]+/g, \" \")].forEach("),
+    ], ["terminal.test.ts"]),
+    ("\"always\" offered when the home did not offer it", "src/app.ts", [
+        ("  if (card.meta.mayAlways === true) keys.push(", "  keys.push("),
+    ], ["units.test.ts"]),
+    ("the bean gets a mouth", "src/bean.ts", [
+        ("  return null; // no mouth: his eyes are the face", "  return kind !== \"none\" && dy === 4 && Math.abs(dx - 0.5) <= 1.5 ? EYE : null;"),
+    ], ["units.test.ts"]),
+    ("the screen model ignores erases (a desync would read as fine)", "test/screen.ts", [
+        ('      case "K":\n', '      case "K":\n        break;\n'),
+    ], ["units.test.ts"]),
+]
+
 
 def copy_home(tmp: Path) -> Path:
-    """A scratch copy laid out like the repo: packages/home beside the real kit/ and docs/ (linked,
-    used read-only), so a copied test finds everything the real one does."""
-    work = tmp / "packages" / "home"
-    if (tmp / "packages").exists():
-        shutil.rmtree(tmp / "packages")
-    shutil.copytree(HOME_PKG, work, symlinks=True, ignore=shutil.ignore_patterns("node_modules"))
-    (work / "node_modules").symlink_to(HOME_PKG / "node_modules", target_is_directory=True)
+    """A scratch copy laid out like the repo: packages/home and packages/terminal beside the real
+    kit/ and docs/ (linked, used read-only), so a copied test finds everything the real one does.
+    Returns the copied packages/ directory."""
+    pkgs = tmp / "packages"
+    if pkgs.exists():
+        shutil.rmtree(pkgs)
+    for src in (HOME_PKG, TERMINAL_PKG):
+        work = pkgs / src.name
+        shutil.copytree(src, work, symlinks=True, ignore=shutil.ignore_patterns("node_modules"))
+        (work / "node_modules").symlink_to(src / "node_modules", target_is_directory=True)
     for shared in ("kit", "docs"):  # read-only inputs the home's tests use (the kit, the bake-off defaults)
         if not (tmp / shared).exists():
             (tmp / shared).symlink_to(REPO / shared, target_is_directory=True)
-    return work
+    return pkgs
 
 
 def run_suites(work: Path, suites: list[str]) -> subprocess.CompletedProcess[str]:
-    """The suites, each test given a minute. A run that still hangs past ten is red too: a defect
-    that makes a test hang has been caught as surely as one that makes it fail."""
-    cmd = ["node", "--test", "--test-timeout=60000", *[str(work / "test" / s) for s in suites]]
+    """The suites (paths inside `work`, the copied packages/), each test given a minute. A run that
+    still hangs past ten is red too: a defect that makes a test hang has been caught as surely as
+    one that makes it fail."""
+    cmd = ["node", "--test", "--test-timeout=60000", *[str(work / s) for s in suites]]
     # its own process group, so a hung run is ended with everything it started (a planted defect
     # that spawns two kits leaves one nobody will stop)
     p = subprocess.Popen(cmd, cwd=work, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, start_new_session=True)
@@ -208,7 +256,15 @@ def run_suites(work: Path, suites: list[str]) -> subprocess.CompletedProcess[str
 def main() -> int:
     sys.stdout.reconfigure(line_buffering=True)  # progress shows as it happens, even into a file
     fails = 0
-    suites = sorted({s for *_, ss in MUTANTS for s in ss})
+    planted = [(name, f"home/{rel}", edits, [f"home/test/{s}" for s in ss]) for name, rel, edits, ss in MUTANTS]
+    planted += [(name, f"terminal/{rel}", edits, [f"terminal/test/{s}" for s in ss]) for name, rel, edits, ss in TERMINAL_MUTANTS]
+    if "--only" in sys.argv:
+        only = sys.argv[sys.argv.index("--only") + 1]
+        planted = [m for m in planted if only in m[1] or only in m[0]]
+        if not planted:
+            print(f"no mutant matches --only {only!r}")
+            return 1
+    suites = sorted({s for *_, ss in planted for s in ss})
     with tempfile.TemporaryDirectory(prefix="orbs-mutants-") as td:
         tmp = Path(td)
         # M.0, the control for every line below: the copy with NOTHING planted must be green.
@@ -220,7 +276,7 @@ def main() -> int:
             print("\n".join("    " + l for l in (base.stdout + base.stderr).splitlines()[-25:]))
             print("the baseline is red, so the mutants below would prove nothing")
             return 1
-        for name, rel, edits, suites_for in MUTANTS:
+        for name, rel, edits, suites_for in planted:
             work = copy_home(tmp)
             f = work / rel
             text = f.read_text()
@@ -233,7 +289,7 @@ def main() -> int:
                 text = text.replace(old, new, 1)
             f.write_text(text)
             caught = run_suites(work, suites_for).returncode != 0
-            print(f"{'PASS' if caught else 'FAIL'}  M: {', '.join(suites_for)} catches: {name}")
+            print(f"{'PASS' if caught else 'FAIL'}  M: {', '.join(s.split('/test/')[-1] for s in suites_for)} catches: {name}")
             fails += not caught
     print("ALL PASS" if not fails else f"{fails} FAILED")
     return 1 if fails else 0
