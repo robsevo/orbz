@@ -1,0 +1,9 @@
+# caches and generated media stay out of git
+.cache/
+__pycache__/
+*.pyc
+.venv/
+node_modules/
+spike/runs/
+spike/.habits/
+tools/copyscan/.opendot/

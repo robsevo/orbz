@@ -1,0 +1,12 @@
+{
+ "partial": true,
+ "still_to_measure": "big brain: cloud-brain (calendar, and its quota-hit cases), free-flash3; own brain: free-flash25, free-flash; teacher: think-brain (invoice, calendar), cloud-brain. Their free Gemini quota was exhausted by the spike runs on 2026-10-01; re-run after Ash's gym window.",
+ "big": {
+  "seat": "bedrock-brain",
+  "rate": 1.0
+ },
+ "teacher": {
+  "seat": "nim-ultra",
+  "rate": 0.889
+ }
+}
