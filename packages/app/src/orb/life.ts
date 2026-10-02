@@ -126,6 +126,9 @@ export type LifeInput = {
   val?: number;
   turn2?: number;
   grad?: number;
+  /** A finish's own: how much colour he holds at rest (over `tint`), and a glow he keeps. */
+  tintOf?: number;
+  glow?: number;
   motion?: Motion;
   plays?: Play[];
   /** Where the pointer is, from his centre, in his radii (null when it is away). */
@@ -141,7 +144,7 @@ export function lifeFrame(o: LifeInput, t: number): OrbFrame {
   const level = talking ? Math.max(0, 0.3 + 0.3 * Math.sin(t * 5.1 + s) + 0.22 * Math.sin(t * 11.3 + s * 2)) : 0;
   const m = o.motion ?? DEFAULT_MOTION;
   const f: OrbFrame = {
-    hue: o.turn, tint: o.tint, state: STATE[o.state], level, wake: 0,
+    hue: o.turn, tint: o.tintOf ?? o.tint, state: STATE[o.state], level, wake: o.glow ?? 0,
     breath: Math.sin(t * 1.15 * m.breath + s * 4) * (0.7 + 0.3 * noise(t * 0.2, s)),
     blink: blinkAt(t, s),
     morph: 0.25 + 0.6 * noise(t * 0.07, s + 3),

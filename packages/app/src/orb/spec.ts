@@ -101,6 +101,16 @@ export const HATS = {
   beret: { id: 20, main: "accent", second: "ink", tilt: 0.16 },
   "hard hat": { id: 21, main: "gold", second: "cream", tilt: -0.04 },
   "bucket hat": { id: 22, main: "accent", second: "cream", tilt: 0.05 },
+  eyeshade: { id: 23, main: "leaf", second: "ink", tilt: 0 },
+  headset: { id: 24, main: "ink", second: "accent", tilt: 0 },
+  sweatband: { id: 25, main: "cream", second: "accent", tilt: -0.04 },
+  apple: { id: 26, main: "rose", second: "leaf", tilt: 0.08 },
+  "straw hat": { id: 27, main: "gold", second: "accent", tilt: -0.06 },
+  fedora: { id: 28, main: "ink", second: "accent", tilt: -0.08 },
+  deerstalker: { id: 29, main: "gold", second: "ink", tilt: 0.04 },
+  "sun visor": { id: 30, main: "cream", second: "accent", tilt: -0.05 },
+  "flower crown": { id: 31, main: "rose", second: "gold", tilt: 0 },
+  "viking helmet": { id: 32, main: "steel", second: "cream", tilt: 0 },
 } satisfies Record<string, { id: number; main: Paint; second: Paint; tilt: number }>;
 export type HatName = keyof typeof HATS;
 
@@ -121,6 +131,10 @@ export const GLASSES = {
   "round shades": { say: "round shades", id: 11, frame: "gold", second: "gold", lens: "shade", dark: 0.86 },
   goggles: { say: "goggles", id: 12, frame: "steel", second: "accent", lens: "steel", dark: 0.16 },
   visor: { say: "a visor", id: 13, frame: "accent", second: "accent", lens: "shade", dark: 0.84 },
+  rectangle: { say: "rectangle glasses", id: 14, frame: "ink", second: "ink", lens: "ink", dark: 0 },
+  "half-rims": { say: "half-rim glasses", id: 15, frame: "ink", second: "ink", lens: "ink", dark: 0 },
+  sport: { say: "sport shades", id: 16, frame: "accent", second: "accent", lens: "shade", dark: 0.86 },
+  "rose tint": { say: "rose-tinted glasses", id: 17, frame: "gold", second: "gold", lens: "rose", dark: 0.45 },
 } satisfies Record<string, { say: string; id: number; frame: Paint; second: Paint; lens: Paint; dark: number }>;
 export type GlassesName = keyof typeof GLASSES;
 /** Sunglasses: the ones that hide his eyes. */
@@ -135,7 +149,14 @@ export const FINISHES = {
   smoke: { label: "Smoke", sat: 0.85, val: 0.66 },
   black: { label: "Black", sat: 1, val: 0.4 }, // Ash's own Black
   grey: { label: "Grey", sat: 0, val: 1 },
-} satisfies Record<string, { label: string; sat: number; val: number }>;
+  // more colour from the same 24 hues (owner, 10-01: "give more orb colors ... to fit those personalities")
+  // a finish may also say how much colour he holds at rest (`tint`, over the page's own) and give
+  // him a glow of his own (`glow`, the bloom he has when he wakes, kept a little)
+  pastel: { label: "Pastel", sat: 0.55, val: 1.1, tint: 0.95 },
+  deep: { label: "Deep", sat: 1.25, val: 0.6, tint: 1 },
+  neon: { label: "Neon", sat: 1.7, val: 1.12, tint: 1, glow: 0.35 },
+  frost: { label: "Frost", sat: 0.4, val: 1.32, tint: 0.55 },
+} satisfies Record<string, { label: string; sat: number; val: number; tint?: number; glow?: number }>;
 export type FinishName = keyof typeof FINISHES;
 
 // ── names ──────────────────────────────────────────────────────────────────────────────────────
@@ -256,29 +277,73 @@ export type PersonalityName = keyof typeof PERSONALITIES;
 
 // ── specialty ──────────────────────────────────────────────────────────────────────────────────
 // What he does (owner, 2026-10-01: "thats what the orb specializes in, whether its frontend,
-// backend, general, planning, full stack"). It titles him, gives him the focus his brain is told,
-// and sets where he LEANS on the skills radar. Leanings are where he starts, not what he has earned:
-// levels and XP come only from graded work and the owner's approvals (CLAUDE.md rule 8; PLAN 5.x).
-export const SKILLS = ["Planning", "Frontend", "Backend", "Data", "Testing", "Design", "Writing", "Ops"] as const;
+// backend, general, planning, full stack", then "a much bigger roster", then "real life skills
+// that we need but dont necessarily have ... an accountant ... one thats good at excel and
+// microsoft office ... lifecoach persona, dietician persona ... personal trainer"). Five families.
+// It titles him, gives him the focus his brain is told, and sets where he LEANS on the skills
+// radar. Leanings are where he starts, not what he has earned: levels and XP come only from graded
+// work and the owner's approvals (CLAUDE.md rule 8; PLAN 5.x). A role a licence stands behind says
+// so on his sheet (`limits`): he is a persona that helps, never the professional.
+export const SKILLS = ["Planning", "Building", "Data", "Design", "Words", "Research", "Money", "Care"] as const;
 type Lean = [number, number, number, number, number, number, number, number]; // 1..5, in SKILLS order
 
+export const FAMILIES = { build: "Build", think: "Think", make: "Make", business: "Business", life: "Life" } as const;
+export type Family = keyof typeof FAMILIES;
+
+type Specialty = { family: Family; label: string; title: string; focus: string; lean: Lean; hat: HatName; glasses: GlassesName; limits?: string };
+
 export const SPECIALTIES = {
-  general: { label: "General", title: "All-Rounder", focus: "a bit of everything, done properly", lean: [3, 3, 3, 3, 3, 3, 3, 3], hat: "none", glasses: "none" },
-  planning: { label: "Planning", title: "Planner", focus: "plans, roadmaps and breaking work into rows", lean: [5, 2, 2, 3, 3, 3, 4, 2], hat: "grad cap", glasses: "reading" },
-  frontend: { label: "Frontend", title: "Frontend Builder", focus: "interfaces: components, layout, CSS, accessibility", lean: [2, 5, 2, 2, 3, 4, 2, 1], hat: "headphones", glasses: "none" },
-  backend: { label: "Backend", title: "Backend Engineer", focus: "servers, APIs, databases and the jobs behind them", lean: [3, 2, 5, 4, 3, 1, 2, 3], hat: "none", glasses: "square" },
-  fullstack: { label: "Full stack", title: "Full-Stack Builder", focus: "end to end: the interface, the server and the glue", lean: [3, 4, 4, 3, 3, 3, 2, 3], hat: "cap", glasses: "none" },
-  design: { label: "Design", title: "Designer", focus: "how it looks and feels: layout, type, colour, flow", lean: [3, 3, 1, 1, 2, 5, 3, 1], hat: "beret", glasses: "cat-eye" },
-  data: { label: "Data", title: "Data Wrangler", focus: "data: cleaning, queries, charts and what they mean", lean: [3, 1, 3, 5, 3, 2, 3, 2], hat: "none", glasses: "round" },
-  devops: { label: "DevOps", title: "Ops Keeper", focus: "builds, deploys, servers and keeping things up", lean: [3, 1, 3, 2, 3, 1, 2, 5], hat: "hard hat", glasses: "goggles" },
-  mobile: { label: "Mobile", title: "App Maker", focus: "phone apps: screens, gestures, offline, stores", lean: [2, 4, 3, 2, 3, 4, 2, 2], hat: "antenna", glasses: "none" },
-  testing: { label: "Testing", title: "Bug Hunter", focus: "tests that can fail, and finding what breaks", lean: [3, 3, 3, 2, 5, 1, 2, 3], hat: "none", glasses: "big round" },
-  security: { label: "Security", title: "Guardian", focus: "keeping secrets secret and doors shut", lean: [3, 2, 4, 2, 4, 1, 2, 4], hat: "none", glasses: "aviators" },
-  writing: { label: "Writing", title: "Wordsmith", focus: "docs, posts, emails and clear words", lean: [3, 1, 1, 1, 2, 3, 5, 1], hat: "star clip", glasses: "round" },
-  research: { label: "Research", title: "Researcher", focus: "finding out, reading widely, citing sources", lean: [4, 1, 2, 3, 2, 2, 4, 1], hat: "wizard hat", glasses: "big round" },
-  assistant: { label: "Assistant", title: "Assistant", focus: "the inbox, the calendar, trips and errands", lean: [4, 1, 1, 2, 2, 2, 4, 2], hat: "bow", glasses: "none" },
-  tutor: { label: "Tutor", title: "Tutor", focus: "teaching: explaining step by step until it lands", lean: [4, 2, 2, 2, 2, 3, 4, 1], hat: "halo", glasses: "reading" },
-} satisfies Record<string, { label: string; title: string; focus: string; lean: Lean; hat: HatName; glasses: GlassesName }>;
+  // build
+  general: { family: "build", label: "General", title: "All-Rounder", focus: "a bit of everything, done properly", lean: [3, 3, 3, 3, 3, 3, 3, 3], hat: "none", glasses: "none" },
+  frontend: { family: "build", label: "Frontend", title: "Frontend Builder", focus: "interfaces: components, layout, CSS, accessibility", lean: [2, 5, 2, 4, 2, 2, 1, 2], hat: "headphones", glasses: "none" },
+  backend: { family: "build", label: "Backend", title: "Backend Engineer", focus: "servers, APIs, databases and the jobs behind them", lean: [3, 5, 4, 1, 2, 2, 1, 1], hat: "none", glasses: "square" },
+  fullstack: { family: "build", label: "Full stack", title: "Full-Stack Builder", focus: "end to end: the interface, the server and the glue", lean: [3, 5, 3, 3, 2, 2, 1, 1], hat: "cap", glasses: "none" },
+  mobile: { family: "build", label: "Mobile", title: "App Maker", focus: "phone apps: screens, gestures, offline, stores", lean: [3, 5, 2, 4, 2, 2, 1, 2], hat: "antenna", glasses: "none" },
+  devops: { family: "build", label: "DevOps", title: "Ops Keeper", focus: "builds, deploys, servers and keeping things up", lean: [3, 5, 3, 1, 2, 2, 2, 1], hat: "hard hat", glasses: "goggles" },
+  testing: { family: "build", label: "Testing", title: "Bug Hunter", focus: "tests that can fail, and finding what breaks", lean: [3, 4, 3, 1, 2, 4, 1, 1], hat: "none", glasses: "big round" },
+  security: { family: "build", label: "Security", title: "Guardian", focus: "keeping secrets secret and doors shut", lean: [3, 4, 2, 1, 2, 4, 2, 2], hat: "none", glasses: "aviators" },
+  data: { family: "build", label: "Data", title: "Data Wrangler", focus: "data: cleaning, queries, charts and what they mean", lean: [3, 3, 5, 2, 2, 3, 2, 1], hat: "none", glasses: "round" },
+  ai: { family: "build", label: "AI", title: "AI Builder", focus: "models, prompts, evals and the pipes between them", lean: [3, 4, 4, 1, 2, 4, 1, 1], hat: "none", glasses: "visor" },
+  games: { family: "build", label: "Games", title: "Game Maker", focus: "games: play, levels, physics and feel", lean: [3, 4, 2, 5, 2, 2, 1, 2], hat: "propeller", glasses: "stars" },
+  automation: { family: "build", label: "Automation", title: "Automator", focus: "scripts and workflows that do the boring parts for you", lean: [3, 4, 3, 1, 2, 2, 2, 2], hat: "none", glasses: "rectangle" },
+  // think
+  planning: { family: "think", label: "Planning", title: "Planner", focus: "plans, roadmaps and breaking work into rows", lean: [5, 2, 2, 2, 4, 3, 2, 2], hat: "grad cap", glasses: "reading" },
+  lead: { family: "think", label: "Team lead", title: "Team Lead", focus: "running the team: who does what, unblocking, deciding", lean: [5, 2, 2, 2, 4, 2, 2, 4], hat: "crown", glasses: "none" },
+  product: { family: "think", label: "Product", title: "Product Manager", focus: "what to build and why: users, priorities, trade-offs", lean: [5, 2, 3, 3, 4, 3, 2, 3], hat: "none", glasses: "half-rims" },
+  research: { family: "think", label: "Research", title: "Researcher", focus: "finding out, reading widely, citing sources", lean: [3, 1, 3, 1, 4, 5, 1, 2], hat: "wizard hat", glasses: "big round" },
+  factcheck: { family: "think", label: "Fact-checking", title: "Fact-Checker", focus: "checking claims against sources, and saying what holds", lean: [2, 1, 3, 1, 4, 5, 1, 1], hat: "deerstalker", glasses: "monocle" },
+  analyst: { family: "think", label: "Analysis", title: "Analyst", focus: "numbers into answers: reports, trends, forecasts", lean: [3, 2, 5, 2, 3, 4, 4, 1], hat: "none", glasses: "half-rims" },
+  architect: { family: "think", label: "Architecture", title: "Architect", focus: "how a system fits together, before it is built", lean: [5, 4, 3, 3, 3, 3, 1, 1], hat: "none", glasses: "rectangle" },
+  // make
+  design: { family: "make", label: "Design", title: "Designer", focus: "how it looks and feels: layout, type, colour, flow", lean: [3, 2, 1, 5, 3, 2, 1, 3], hat: "beret", glasses: "cat-eye" },
+  writing: { family: "make", label: "Writing", title: "Wordsmith", focus: "docs, posts, emails and clear words", lean: [3, 1, 1, 2, 5, 3, 1, 2], hat: "star clip", glasses: "round" },
+  editing: { family: "make", label: "Editing", title: "Editor", focus: "tightening words: clarity, tone, the last pass", lean: [3, 1, 1, 2, 5, 4, 1, 2], hat: "none", glasses: "reading" },
+  marketing: { family: "make", label: "Marketing", title: "Marketer", focus: "getting the word out: campaigns, launches, the story", lean: [4, 1, 3, 3, 5, 3, 3, 3], hat: "fedora", glasses: "shades" },
+  social: { family: "make", label: "Social media", title: "Social Media Manager", focus: "posts, captions, the calendar and the replies", lean: [3, 1, 2, 4, 5, 2, 2, 3], hat: "cap", glasses: "hearts" },
+  video: { family: "make", label: "Video", title: "Video Maker", focus: "videos and podcasts: scripts, cuts, captions", lean: [3, 2, 1, 5, 4, 2, 1, 2], hat: "headphones", glasses: "round shades" },
+  // business
+  accountant: { family: "business", label: "Accounting", title: "Accountant", focus: "the books: bills and when they are due, budgets, receipts, taxes; he tells you before a bill is due", lean: [4, 1, 4, 1, 2, 2, 5, 2], hat: "eyeshade", glasses: "half-rims", limits: "Not a licensed accountant: he keeps your books in order and asks one before anything is filed." },
+  office: { family: "business", label: "Office", title: "Office Pro", focus: "Excel, Word and PowerPoint: sheets and formulas, documents, decks", lean: [3, 2, 4, 4, 4, 2, 3, 2], hat: "headset", glasses: "rectangle" },
+  sales: { family: "business", label: "Sales", title: "Sales Lead", focus: "leads, pitches, follow-ups and closing", lean: [4, 1, 2, 2, 4, 2, 4, 4], hat: "fedora", glasses: "none" },
+  support: { family: "business", label: "Support", title: "Support Hero", focus: "answering customers kindly and fixing what they hit", lean: [3, 2, 1, 1, 4, 2, 1, 5], hat: "headset", glasses: "none" },
+  people: { family: "business", label: "People", title: "People Partner", focus: "hiring, onboarding and looking after the team", lean: [4, 1, 1, 1, 4, 2, 2, 5], hat: "flower crown", glasses: "none" },
+  operations: { family: "business", label: "Operations", title: "Operations Manager", focus: "keeping the business running: suppliers, orders, processes", lean: [5, 1, 3, 1, 3, 2, 4, 3], hat: "cap", glasses: "square" },
+  paperwork: { family: "business", label: "Paperwork", title: "Paperwork Pro", focus: "contracts, forms and the fine print, read carefully", lean: [4, 1, 2, 1, 5, 4, 3, 2], hat: "none", glasses: "half-rims", limits: "Not a lawyer: he reads closely and says what to ask one." },
+  // life
+  assistant: { family: "life", label: "Assistant", title: "Assistant", focus: "the inbox, the calendar, trips and errands", lean: [5, 1, 2, 1, 4, 2, 2, 4], hat: "bow", glasses: "none" },
+  tutor: { family: "life", label: "Tutor", title: "Tutor", focus: "teaching: explaining step by step until it lands", lean: [4, 1, 1, 2, 4, 4, 1, 4], hat: "halo", glasses: "reading" },
+  coach: { family: "life", label: "Life coach", title: "Life Coach", focus: "goals, habits and the next small step; he checks in", lean: [4, 1, 1, 1, 4, 2, 2, 5], hat: "sun visor", glasses: "rose tint", limits: "Not a therapist: for anything heavy he helps you find one." },
+  dietitian: { family: "life", label: "Dietitian", title: "Dietitian", focus: "meals, nutrition and shopping lists that fit you", lean: [4, 1, 3, 1, 3, 3, 2, 5], hat: "apple", glasses: "round", limits: "Not a licensed dietitian: general guidance; a doctor for anything medical." },
+  trainer: { family: "life", label: "Trainer", title: "Personal Trainer", focus: "workouts, form and progress; he keeps you moving", lean: [4, 1, 2, 1, 2, 2, 1, 5], hat: "sweatband", glasses: "sport", limits: "Not a certified trainer: he starts gently and says when to ask a professional." },
+  health: { family: "life", label: "Health", title: "Health Coach", focus: "food and fitness together: meals, workouts, sleep", lean: [4, 1, 2, 1, 3, 3, 1, 5], hat: "sweatband", glasses: "rose tint", limits: "Not a doctor or a licensed dietitian: general guidance only." },
+  chef: { family: "life", label: "Cooking", title: "Home Chef", focus: "recipes, meal plans and what to cook tonight", lean: [3, 1, 1, 3, 3, 2, 2, 5], hat: "chef hat", glasses: "none" },
+  travel: { family: "life", label: "Travel", title: "Travel Planner", focus: "trips: routes, bookings, packing and a plan B", lean: [5, 1, 2, 1, 3, 4, 3, 3], hat: "straw hat", glasses: "round shades" },
+  money: { family: "life", label: "Money", title: "Money Coach", focus: "your own money: budgets, savings, subscriptions to cancel", lean: [4, 1, 3, 1, 3, 2, 5, 3], hat: "none", glasses: "round", limits: "Not a financial adviser: he organises, and never invests for you." },
+  home: { family: "life", label: "Home", title: "Home Manager", focus: "the house: bills, repairs, chores and deliveries", lean: [5, 1, 2, 1, 3, 2, 4, 4], hat: "bucket hat", glasses: "none" },
+  events: { family: "life", label: "Events", title: "Event Planner", focus: "parties and events: guests, venues, timings, the cake", lean: [5, 1, 2, 3, 3, 2, 3, 4], hat: "party hat", glasses: "stars" },
+  career: { family: "life", label: "Career", title: "Career Coach", focus: "CVs, applications, interviews and the next move", lean: [4, 1, 1, 2, 5, 3, 2, 4], hat: "none", glasses: "half-rims" },
+  language: { family: "life", label: "Languages", title: "Language Buddy", focus: "practising a language with you, a little every day", lean: [3, 1, 1, 1, 5, 2, 1, 4], hat: "beret", glasses: "none" },
+} satisfies Record<string, Specialty>;
 export type SpecialtyName = keyof typeof SPECIALTIES;
 
 // ── the character sheet ────────────────────────────────────────────────────────────────────────
@@ -381,9 +446,9 @@ export function lookOf(c: Character): OrbLook {
 }
 
 /** His finish as the shader takes it: palette turns, saturation, brightness, the gradient. */
-export function finishOf(c: Character): { turn: number; sat: number; val: number; turn2: number; grad: number } {
-  const f = FINISHES[c.finish];
-  return { turn: ORB_TURNS[c.hue], sat: f.sat, val: f.val, turn2: ORB_TURNS[c.hue2 ?? c.hue], grad: c.hue2 ? 1 : 0 };
+export function finishOf(c: Character): { turn: number; sat: number; val: number; turn2: number; grad: number; tint: number | null; glow: number } {
+  const f: { sat: number; val: number; tint?: number; glow?: number } = FINISHES[c.finish];
+  return { turn: ORB_TURNS[c.hue], sat: f.sat, val: f.val, turn2: ORB_TURNS[c.hue2 ?? c.hue], grad: c.hue2 ? 1 : 0, tint: f.tint ?? null, glow: f.glow ?? 0 };
 }
 
 /** How he moves when left alone, from his personality. */

@@ -156,15 +156,21 @@ export async function measure(page: Page): Promise<Finding[]> {
       if (!wraps) continue;
       const kids = [...el.children].filter((k) => getComputedStyle(k).display !== "none" && (k as HTMLElement).offsetParent !== null);
       if (kids.length < 3) continue;
-      const rows = new Map<number, number>();
+      const rows = new Map<number, Element[]>();
       for (const k of kids) {
         const top = Math.round(k.getBoundingClientRect().top / 4) * 4;
-        rows.set(top, (rows.get(top) ?? 0) + 1);
+        rows.set(top, [...(rows.get(top) ?? []), k]);
       }
       if (rows.size < 2) continue;
-      const counts = [...rows.keys()].sort((a, b) => a - b).map((t) => rows.get(t)!);
-      // a one-column list is rows of one by design; a lone item after fuller rows is an orphan
-      if (counts.at(-1) === 1 && Math.max(...counts) > 1) out.push({ kind: "orphan", what: `${name(el)}: its last row is one item alone (${counts.join("+")})` });
+      const ordered = [...rows.keys()].sort((a, b) => a - b).map((t) => rows.get(t)!);
+      const counts = ordered.map((r) => r.length);
+      // a one-column list is rows of one by design, and an item that takes the whole row fills it;
+      // a lone item narrower than the rows above it is an orphan
+      const lone = ordered.at(-1)!;
+      const widest = Math.max(...ordered.slice(0, -1).map((r) => r.at(-1)!.getBoundingClientRect().right - r[0]!.getBoundingClientRect().left));
+      if (lone.length === 1 && Math.max(...counts) > 1 && lone[0]!.getBoundingClientRect().width < widest * 0.9) {
+        out.push({ kind: "orphan", what: `${name(el)}: its last row is one item alone (${counts.join("+")})` });
+      }
     }
     return out;
   }, 10);
@@ -177,7 +183,7 @@ export async function plainNewOrb(page: Page): Promise<void> {
   await page.getByRole("button", { name: "New orb" }).first().click();
   await page.getByRole("tab", { name: "Colour" }).click();
   await page.getByRole("button", { name: "azure", exact: true }).click();
-  await page.getByRole("button", { name: "Glass", exact: true }).click();
+  await page.locator('button[data-pick="glass"]').click();
   await page.getByRole("button", { name: "No gradient" }).click();
   await page.getByLabel("How gooey").fill("55");
   await page.getByRole("tab", { name: "Hat" }).click();

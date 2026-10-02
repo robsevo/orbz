@@ -314,6 +314,21 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("a hat takes his glasses off", "src/orb/spec.ts", [
         ("    specs: g.id,", '    specs: c.hat === "none" ? g.id : 0,'),
     ], ["spec.test.ts"]),
+    ("the accountant forgets the bills", "src/orb/spec.ts", [
+        ('focus: "the books: bills and when they are due, budgets, receipts, taxes; he tells you before a bill is due"', 'focus: "the books: budgets, receipts, taxes"'),
+    ], ["spec.test.ts"]),
+    ("a dietitian stops saying what he is not", "src/orb/spec.ts", [
+        (', limits: "Not a licensed dietitian: general guidance; a doctor for anything medical." }', " }"),
+    ], ["spec.test.ts"]),
+    ("the sheet hides what a role is not", "src/orbs.tsx", [
+        ('      {"limits" in SPECIALTIES[c.specialty] && (', '      {false && "limits" in SPECIALTIES[c.specialty] && ('),
+    ], ["office.test.ts"]),
+    ("two finishes look alike", "src/orb/spec.ts", [
+        ('  neon: { label: "Neon", sat: 1.7, val: 1.12, tint: 1, glow: 0.35 },', '  neon: { label: "Neon", sat: 1, val: 1 },'),
+    ], ["characters.test.ts"]),
+    ("two across, the odd one out is left alone", "src/ui/balance.ts", [
+        ("  if (max === 2) return { cols: 2, spans: [...Array(n - 1).fill(1), 2] };", "  if (max === 2) return { cols: 2, spans: Array(n).fill(1) };"),
+    ], ["feel.units.test.ts", "office.test.ts"]),
     ("the specimen scrolls sideways on a phone", "src/specimen.tsx", [
         ('gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 420px), 1fr))"', 'gridTemplateColumns: "repeat(auto-fit, minmax(420px, 1fr))"'),
     ], ["render.test.ts"]),

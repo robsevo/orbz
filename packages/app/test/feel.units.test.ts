@@ -14,17 +14,20 @@ test("a grid never leaves one item alone on its last row, at any count and any w
       const rows = rowsOf(plan);
       assert.equal(rows.reduce((a, b) => a + b, 0), n, `${n} at ${max}: every item placed`);
       assert.ok(Math.max(...rows) <= Math.max(1, max), `${n} at ${max}: no row wider than fits (${rows})`);
-      if (Math.max(...rows) > 1) assert.notEqual(rows.at(-1), 1, `${n} at ${max}: one alone (${rows})`);
+      // one alone on the last row only when it takes the whole row
+      if (Math.max(...rows) > 1 && rows.at(-1) === 1) assert.equal(plan.spans.at(-1), plan.cols, `${n} at ${max}: one alone (${rows})`);
       for (const s of plan.spans) assert.ok(Number.isInteger(s) && s >= 1, `${n} at ${max}: a span of ${s}`);
-      if (max >= 3 && n >= 2) assert.ok(rows.length < n, `${n} at ${max}: fell back to one column (${rows})`);
+      if (max >= 2 && n >= 2) assert.ok(rows.length < n, `${n} at ${max}: fell back to one column (${rows})`);
     }
   }
   assert.deepEqual(rowsOf(planGrid(8, 4)), [4, 4], "eight in fours");
   assert.deepEqual(rowsOf(planGrid(8, 3)), [2, 2, 2, 2], "eight: four rows of two, not 3 + 3 + 2");
   assert.deepEqual(rowsOf(planGrid(13, 4)), [4, 3, 3, 3], "thirteen at four across: even rows, not one column");
   assert.deepEqual(rowsOf(planGrid(13, 5)), [5, 5, 3]);
+  assert.deepEqual(rowsOf(planGrid(24, 16)), [12, 12], "24 in twelves, not 16 + 8");
   // control: the check above does see a lone item when there is one
   assert.deepEqual(rowsOf({ cols: 2, spans: [1, 1, 1] }), [2, 1]);
+  assert.deepEqual(planGrid(7, 2), { cols: 2, spans: [1, 1, 1, 1, 1, 1, 2] }, "seven, two across: three pairs and a full row");
 });
 
 test("an 'add one' tile takes the whole first row when that is what saves the rest", () => {

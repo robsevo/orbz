@@ -3,7 +3,7 @@
 // alone on its last row (the arithmetic is ui/balance.ts). A row of choices stays on one line; when the screen is too narrow for
 // it, it scrolls sideways, and a fade at its edge shows there is more. The render harness reports
 // an orphan wherever this is not used.
-import { Children, cloneElement, isValidElement, useLayoutEffect, useRef, useState, type CSSProperties, type ReactElement, type ReactNode, type RefObject } from "react";
+import { Children, isValidElement, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 import { layoutOf, type GridPlan } from "./balance.ts";
 
 export function Balanced({ min, gap = 8, lead, children, style }: { min: number; gap?: number; lead?: ReactNode; children: ReactNode; style?: CSSProperties }) {
@@ -35,7 +35,12 @@ export function Balanced({ min, gap = 8, lead, children, style }: { min: number;
         </div>
       )}
       {items.map((child, i) =>
-        span(i) === 1 || !isValidElement(child) ? child : cloneElement(child as ReactElement<{ style?: CSSProperties }>, { style: { ...(child as ReactElement<{ style?: CSSProperties }>).props.style, gridColumn: `span ${span(i)}` } }),
+        span(i) === 1 ? child : (
+          // its own cell, so the span holds whatever the item is (a component may not take a style)
+          <div key={isValidElement(child) ? child.key ?? i : i} style={{ display: "grid", gridColumn: `span ${span(i)}`, minWidth: 0 }}>
+            {child}
+          </div>
+        ),
       )}
     </div>
   );

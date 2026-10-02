@@ -1,7 +1,8 @@
 // PLAN 2.2_t, as rendered: the character creator, built by Vite and drawn by his real shader in
 // Chromium (its software WebGL on a machine with no GPU), on a new orb dressed plainly (Ash's
 // bean, no hat, no glasses). Every shape, eyes, hat and glasses thumbnail is drawn whole and sits
-// inside its frame; every pair of glasses is drawn over his eyes, and sunglasses darken them; and
+// inside its frame; every pair of glasses is drawn over his eyes, and sunglasses darken them;
+// every finish can be told from the others; and
 // there is no mouth, by pixels: below his eyes there is nothing as dark as an eye. The controls:
 // the eye band itself is dark (so the probe sees a face when there is one), and "none" compared
 // with itself differs by nothing.
@@ -218,4 +219,34 @@ test("every pair of glasses is drawn over his eyes, and sunglasses darken them",
     else assert.ok(r.darker < 0.085, `${r.pick}: clear glasses that hide his eyes (${r.darker.toFixed(3)})`);
   }
   assert.ok(names.filter(isShades).length >= 3, "there are sunglasses to choose from");
+});
+
+test("every finish can be told from every other, by the colour of his glass", { skip }, async () => {
+  await page.getByRole("tab", { name: "Colour" }).click();
+  await page.waitForTimeout(300);
+  const means = await page.evaluate(() =>
+    [...document.querySelectorAll<HTMLButtonElement>("button[data-pick]")].map((b) => {
+      const c = b.querySelector("canvas")!;
+      const d = c.getContext("2d")!.getImageData(0, 0, c.width, c.height).data;
+      let r = 0, g = 0, bl = 0, n = 0;
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i + 3]! < 200) continue;
+        r += d[i]!; g += d[i + 1]!; bl += d[i + 2]!; n++;
+      }
+      return { pick: b.dataset.pick!, rgb: [r / n / 255, g / n / 255, bl / n / 255] as [number, number, number] };
+    }),
+  );
+  assert.ok(means.length >= 9, `control: the finishes are on the page (${means.length})`);
+  if (process.env.ORBS_PRINT) console.log(means.map((m) => `${m.pick} ${m.rgb.map((x) => x.toFixed(3)).join(" ")}`).join("\n"));
+  let closest = { a: "", b: "", d: Infinity };
+  for (const a of means) {
+    for (const b of means) {
+      if (a.pick >= b.pick) continue;
+      const d = Math.hypot(a.rgb[0] - b.rgb[0], a.rgb[1] - b.rgb[1], a.rgb[2] - b.rgb[2]);
+      if (d < closest.d) closest = { a: a.pick, b: b.pick, d };
+    }
+  }
+  if (process.env.ORBS_PRINT) console.log("closest", closest);
+  // measured 10-01: the nearest pair, frost and pearl, 0.032 apart in mean colour
+  assert.ok(closest.d > 0.025, `${closest.a} and ${closest.b} look alike (${closest.d.toFixed(3)} apart)`);
 });

@@ -5,8 +5,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ORB_FS } from "../src/orb/glsl.ts";
 import {
-  ASH, EYES, GLASSES, HATS, isShades, lookOf, NOT_OURS, PEOPLE_NAMES, PERSONALITIES, SHAPES, sheetOf, SPECIALTIES, surprise, VOICES, wearing, withPersonality,
-  type GlassesName, type HatName, type PersonalityName,
+  ASH, EYES, FAMILIES, FINISHES, GLASSES, HATS, isShades, lookOf, NOT_OURS, PEOPLE_NAMES, PERSONALITIES, SHAPES, sheetOf, SPECIALTIES, surprise, VOICES, wearing, withPersonality,
+  type Family, type GlassesName, type HatName, type PersonalityName, type SpecialtyName,
 } from "../src/orb/spec.ts";
 
 test("names: people's names from our list, never the Dots film's own or an assistant's", () => {
@@ -97,4 +97,24 @@ test("a hat and glasses are two choices: both can be worn at once, and each reac
   const rolled = Array.from({ length: 400 }, (_, i) => surprise(i * 31));
   assert.ok(rolled.some((c) => c.hat !== "none" && c.glasses !== "none"), "the dice put both on sometimes");
   assert.ok(rolled.some((c) => c.glasses === "none"), "and leave his eyes bare sometimes");
+});
+
+test("the roster: five families, wide enough to staff an office, the real-life roles the owner named among them", () => {
+  const all = Object.keys(SPECIALTIES) as SpecialtyName[];
+  assert.ok(all.length >= 40, `${all.length} specialties`);
+  for (const f of Object.keys(FAMILIES) as Family[]) assert.ok(all.filter((k) => SPECIALTIES[k].family === f).length >= 5, `${f} has a handful`);
+  // owner, 10-01: an accountant (bills due), Excel and Office, a life coach, a dietitian, both at once, a personal trainer
+  for (const k of ["accountant", "office", "coach", "dietitian", "health", "trainer", "research", "planning", "frontend", "backend", "fullstack", "general"]) assert.ok(k in SPECIALTIES, k);
+  assert.match(SPECIALTIES.accountant.focus, /bill/, "the accountant keeps the bills, and their due dates");
+  assert.match(SPECIALTIES.office.focus, /Excel/);
+  for (const k of all) {
+    const S = SPECIALTIES[k];
+    assert.ok(S.hat in HATS && S.glasses in GLASSES, `${k} wears what exists`);
+    assert.equal(S.lean.length, 8);
+  }
+  assert.equal(new Set(all.map((x) => SPECIALTIES[x].title)).size, all.length, "no two share a title");
+  // a role a licence stands behind says so on his sheet, and the rest do not pretend to need it
+  for (const k of ["accountant", "dietitian", "trainer", "health", "coach", "money", "paperwork"] as SpecialtyName[]) assert.match((SPECIALTIES[k] as { limits?: string }).limits ?? "", /^Not a/, `${k} says what he is not`);
+  assert.equal((SPECIALTIES.frontend as { limits?: string }).limits, undefined, "control: a builder needs no such line");
+  assert.ok(Object.keys(FINISHES).length >= 9 && Object.keys(HATS).length >= 30 && Object.keys(GLASSES).length >= 17, "more colours, hats and glasses to suit them");
 });

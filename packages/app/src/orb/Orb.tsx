@@ -64,7 +64,7 @@ export function Orb({ character, size = 120, state = "idle", gesture = null, fid
       input: () => ({
         ...(() => {
           const f = finishOf(live.current.character);
-          return { turn: f.turn, sat: f.sat, val: f.val, turn2: f.turn2, grad: f.grad };
+          return { turn: f.turn, sat: f.sat, val: f.val, turn2: f.turn2, grad: f.grad, glow: f.glow, ...(f.tint !== null && { tintOf: f.tint }) };
         })(),
         motion: motionOf(live.current.character),
         still,

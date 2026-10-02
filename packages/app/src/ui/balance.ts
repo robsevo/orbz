@@ -5,11 +5,13 @@
 export type GridPlan = { cols: number; spans: number[] };
 
 /** The most even columns, up to `max`, that never leave a single item alone on the last row, or
- * null when no column count does (13 in four, three or two). It gives up one column to fill every
- * row exactly: eight in four, or in two, not three, three and two. */
+ * null when no column count does (13 in four, three or two). It gives up a few columns (to 70%)
+ * for rows all the same length, or one column at any width: eight in four, or in two, not three,
+ * three and two; 24 in twelves, not sixteen and eight. */
 export function balanceColumns(n: number, max: number): number | null {
   if (n <= max) return Math.max(1, n);
-  if (n % max === 0) return max;
+  // rows that are all the same length, when a few columns fewer gives them (24 in twelves, not 16 + 8)
+  for (let c = max; c >= Math.max(2, Math.ceil(max * 0.7)); c--) if (n % c === 0) return c;
   if (max - 1 >= 2 && n % (max - 1) === 0) return max - 1;
   for (let c = max; c >= Math.max(2, max - 1); c--) if (n % c >= 2) return c;
   return null;
@@ -17,11 +19,13 @@ export function balanceColumns(n: number, max: number): number | null {
 
 /** A plan for `n` items at most `max` across. Plain columns when they work (losing at most one);
  * otherwise rows as even as they can be (13 at four across: 4, 3, 3, 3), each item spanning its
- * share of a common track count. Only two across with an odd count stays one column. */
+ * share of a common track count. Two across with an odd count: pairs, and the last one takes the
+ * whole row (a full row is not a straggler; half of one is). */
 export function planGrid(n: number, max: number): GridPlan {
   const c = balanceColumns(n, max);
   if (c !== null) return { cols: c, spans: Array(n).fill(1) };
-  if (max <= 2) return { cols: 1, spans: Array(n).fill(1) };
+  if (max <= 1) return { cols: 1, spans: Array(n).fill(1) };
+  if (max === 2) return { cols: 2, spans: [...Array(n - 1).fill(1), 2] };
   const rows = Math.ceil(n / max);
   const base = Math.floor(n / rows);
   const extra = n % rows; // the first `extra` rows hold one more

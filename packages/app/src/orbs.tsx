@@ -18,8 +18,8 @@ import { installFeel } from "./ui/feel.ts";
 import { setSounds, soundsOn } from "./ui/sound.ts";
 import type { Gesture, OrbState } from "./orb/life.ts";
 import {
-  ASH, EYES, FINISHES, GLASSES, HATS, orbName, PERSONALITIES, REPLIES, SHAPES, sheetOf, speaks, SPECIALTIES, surprise, voice, VOICES, withPersonality,
-  type Character, type EyesName, type FinishName, type GlassesName, type HatName, type PersonalityName, type Replies, type ShapeName, type SpecialtyName,
+  ASH, EYES, FAMILIES, FINISHES, GLASSES, HATS, orbName, PERSONALITIES, REPLIES, SHAPES, sheetOf, speaks, SPECIALTIES, surprise, voice, VOICES, withPersonality,
+  type Character, type EyesName, type Family, type FinishName, type GlassesName, type HatName, type PersonalityName, type Replies, type ShapeName, type SpecialtyName,
 } from "./orb/spec.ts";
 
 const OFFICE: Character[] = [
@@ -34,6 +34,8 @@ const OFFICE: Character[] = [
   { name: "Benny", personality: "silly", specialty: "fullstack", seed: 18, hue: "coral", hue2: "marigold", finish: "glass", shape: "bean", eyes: "wink", hat: "party hat", glasses: "stars", voice: "am_santa", goo: 0.85 },
   { name: "June", personality: "shy", specialty: "writing", seed: 19, hue: "orchid", hue2: null, finish: "pearl", shape: "drop", eyes: "droopy", hat: "flower", glasses: "round", voice: "af_nicole", goo: 0.6 },
   { name: "Nico", personality: "techy", specialty: "testing", seed: 20, hue: "amber", hue2: null, finish: "glass", shape: "squircle", eyes: "dots", hat: "none", glasses: "goggles", voice: "am_echo", goo: 0.45 },
+  { name: "Ada", personality: "dapper", specialty: "accountant", seed: 22, hue: "jade", hue2: null, finish: "glass", shape: "egg", eyes: "beans", hat: "eyeshade", glasses: "half-rims", voice: "bf_emma", goo: 0.35 },
+  { name: "Cal", personality: "brave", specialty: "trainer", seed: 23, hue: "apricot", hue2: null, finish: "neon", shape: "blob", eyes: "wide", hat: "sweatband", glasses: "sport", voice: "am_fenrir", goo: 0.7 },
   { name: "Gus", personality: "grumpy", specialty: "devops", seed: 21, hue: "mint", hue2: null, finish: "black", shape: "cub", eyes: "beans", hat: "hard hat", glasses: "shades", voice: "am_onyx", goo: 0.4 },
 ];
 
@@ -177,6 +179,10 @@ function Sheet({ c, onRename, replies }: { c: Character; onRename?: (name: strin
         </span>
       </div>
       <p style={{ margin: 0, font: "400 15px/21px var(--font)", color: "var(--text-2)" }}>{sh.bio}</p>
+      {/* a role a licence stands behind says so: he is a persona that helps, never the professional */}
+      {"limits" in SPECIALTIES[c.specialty] && (
+        <p style={{ margin: 0, font: "400 13px/18px var(--font)", color: "var(--text-3)" }}>{(SPECIALTIES[c.specialty] as { limits: string }).limits}</p>
+      )}
       <div style={{ display: "grid", gap: 4 }}>
         <Head>Quirk</Head>
         <span style={{ font: "400 14px/20px var(--font)", color: "var(--text-2)" }}>{cap(sh.quirk)}.</span>
@@ -204,7 +210,7 @@ function Sheet({ c, onRename, replies }: { c: Character; onRename?: (name: strin
   );
 }
 
-function Thumbs<T extends string>({ c, options, field, label, onPick, size = 64, face = false }: { c: Character; options: T[]; field: "shape" | "eyes" | "hat" | "glasses"; label: (o: T) => string; onPick: (o: T) => void; size?: number; face?: boolean }) {
+function Thumbs<T extends string>({ c, options, field, label, onPick, size = 64, face = false }: { c: Character; options: T[]; field: "shape" | "eyes" | "hat" | "glasses" | "finish"; label: (o: T) => string; onPick: (o: T) => void; size?: number; face?: boolean }) {
   return (
     <Balanced min={size + 20}>
       {options.map((o) => {
@@ -315,7 +321,18 @@ function Creator({ me, edit, replies, setReplies }: { me: Character; edit: (p: P
         <Cards value={me.personality} entries={(Object.keys(PERSONALITIES) as PersonalityName[]).map((k) => [k, PERSONALITIES[k].label, PERSONALITIES[k].blurb])} onPick={(p) => edit(withPersonality(me, p))} />
       )}
       {tab === "Specialty" && (
-        <Cards value={me.specialty} entries={(Object.keys(SPECIALTIES) as SpecialtyName[]).map((k) => [k, SPECIALTIES[k].label, cap(SPECIALTIES[k].focus)])} onPick={(specialty) => edit({ specialty })} />
+        <div style={{ display: "grid", gap: "var(--s4)" }}>
+          {(Object.keys(FAMILIES) as Family[]).map((fam) => (
+            <div key={fam} style={{ display: "grid", gap: 8 }}>
+              <Head>{FAMILIES[fam]}</Head>
+              <Cards
+                value={me.specialty}
+                entries={(Object.keys(SPECIALTIES) as SpecialtyName[]).filter((k) => SPECIALTIES[k].family === fam).map((k) => [k, SPECIALTIES[k].title, cap(SPECIALTIES[k].focus)])}
+                onPick={(specialty) => edit({ specialty })}
+              />
+            </div>
+          ))}
+        </div>
       )}
       {tab === "Shape" && <Thumbs c={me} options={Object.keys(SHAPES) as ShapeName[]} field="shape" label={cap} onPick={(shape) => edit({ shape })} />}
       {tab === "Eyes" && <Thumbs c={me} options={Object.keys(EYES) as EyesName[]} field="eyes" label={cap} onPick={(eyes) => edit({ eyes })} size={88} face />}
@@ -330,13 +347,7 @@ function Creator({ me, edit, replies, setReplies }: { me: Character; edit: (p: P
           </Balanced>
           <div style={{ display: "grid", gap: 8 }}>
             <Head>Finish</Head>
-            <OneLine style={{ justifyContent: "flex-start" }}>
-              {(Object.keys(FINISHES) as FinishName[]).map((f) => (
-                <button key={f} onClick={() => edit({ finish: f })} aria-pressed={me.finish === f} style={{ ...s.chip, ...chosen(me.finish === f) }}>
-                  {FINISHES[f].label}
-                </button>
-              ))}
-            </OneLine>
+            <Thumbs c={me} options={Object.keys(FINISHES) as FinishName[]} field="finish" label={(f) => FINISHES[f].label} onPick={(finish) => edit({ finish })} size={60} face />
           </div>
           <div style={{ display: "grid", gap: 8 }}>
             <Head>Gradient: a second colour, top to bottom</Head>

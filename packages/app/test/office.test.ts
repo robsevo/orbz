@@ -122,6 +122,22 @@ test("deleting asks first; 'Keep him' keeps him, and 'Delete' lets him go", { sk
   }
 });
 
+test("a role a licence stands behind says so on his sheet; a builder's sheet does not", { skip }, async () => {
+  const page = await open();
+  try {
+    await page.getByRole("button", { name: "New orb" }).first().click();
+    await page.getByRole("tab", { name: "Specialty" }).click();
+    await page.getByRole("button", { name: /^Dietitian/ }).click();
+    assert.equal(await page.getByText("Not a licensed dietitian", { exact: false }).count(), 1, "the dietitian says what he is not");
+    await page.getByRole("button", { name: /^Accountant/ }).click();
+    assert.equal(await page.getByText("Not a licensed accountant", { exact: false }).count(), 1);
+    await page.getByRole("button", { name: /^Frontend Builder/ }).click();
+    assert.equal(await page.getByText(/^Not a /).count(), 0, "control: a builder needs no such line");
+  } finally {
+    await page.close();
+  }
+});
+
 for (const theme of ["dark", "light"] as const) {
   for (const size of ["phone", "desk"] as const) {
     test(`the layout rule at ${size} size in ${theme}: the office and every tab of the creator, clean`, { skip }, async () => {

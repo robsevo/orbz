@@ -293,6 +293,76 @@ vec2 accSDF(vec2 q){
     float band = max(crown, abs(q.y + 0.03) - 0.045);
     return band < 0.0 ? vec2(band, 1.0) : vec2(min(crown, brim), 0.0);
   }
+  if (id == 23) {       // an accountant's eyeshade: a green visor over his brow, on a dark band
+    float w = 0.50 + 0.12*clamp((q.y - 0.06)/0.26, 0.0, 1.0);    // it widens as it comes down
+    float shade = sdBox(vec2(q.x*0.50/w, q.y - 0.20), vec2(0.50, 0.13), 0.05);
+    float band = sdBox(q - vec2(0.0, 0.07), vec2(0.52, 0.035), 0.03);
+    return band < 0.0 ? vec2(band, 1.0) : vec2(min(shade, band), 0.0);
+  }
+  if (id == 24) {       // a headset: the band, one cup, and a little mic on its arm
+    float band = max(abs(length(q - vec2(0.0, 0.70)) - 0.73) - 0.03, q.y - 0.62);
+    float cup = sdBox(q - vec2(-0.66, 0.66), vec2(0.09, 0.16), 0.08);
+    float arm = sdCap(q, vec2(-0.63, 0.80), vec2(-0.34, 1.00), 0.022);
+    float mic = length(q - vec2(-0.30, 1.01)) - 0.05;
+    return pick(pick(vec2(band, 1.0), vec2(min(cup, arm), 0.0)), vec2(mic, 1.0));
+  }
+  if (id == 25) {       // a sweatband round his forehead, a stripe through it
+    float band = max(abs(q.y - 0.17) - 0.065, length(q - vec2(0.0, 0.70)) - 0.72);
+    float stripe = max(band, abs(q.y - 0.17) - 0.018);
+    return stripe < 0.0 ? vec2(stripe, 1.0) : vec2(band, 0.0);
+  }
+  if (id == 26) {       // an apple on his head: two round halves, a stem, a leaf
+    float apple = min(length(q - vec2(-0.08, -0.15)) - 0.17, length(q - vec2(0.08, -0.15)) - 0.17);
+    apple = max(apple, -(length(q - vec2(0.0, -0.36)) - 0.05));   // the dimple at the top
+    float stem = sdCap(q, vec2(0.0, -0.28), vec2(0.04, -0.42), 0.022);
+    float leaf = sdEll(rot(q - vec2(0.13, -0.38), -0.5), vec2(0.10, 0.045));
+    return pick(vec2(apple, 0.0), vec2(min(stem, leaf), 1.0));
+  }
+  if (id == 27) {       // a straw hat: a wide brim, a low crown, a band
+    float brim = sdEll(q - vec2(0.0, 0.03), vec2(0.80, 0.085));
+    float crown = sdBox(q - vec2(0.0, -0.13), vec2(0.34, 0.15), 0.11);
+    float band = max(crown, abs(q.y + 0.02) - 0.045);
+    return band < 0.0 ? vec2(band, 1.0) : vec2(min(brim, crown), 0.0);
+  }
+  if (id == 28) {       // a fedora: a brim turned down a touch, a pinched crown, a band
+    float brim = sdEll(vec2(q.x, q.y - 0.10*q.x*q.x) - vec2(0.0, 0.03), vec2(0.62, 0.06));
+    float crown = sdBox(q - vec2(0.0, -0.19), vec2(0.31, 0.18), 0.11) + 0.05*exp(-pow(q.x/0.08, 2.0))*step(q.y, -0.28);
+    float band = max(crown, abs(q.y + 0.04) - 0.045);
+    return band < 0.0 ? vec2(band, 1.0) : vec2(min(brim, crown), 0.0);
+  }
+  if (id == 29) {       // a deerstalker: a checked cap, its flaps down at the sides, a bow on top
+    float cap = max(sdEll(q - vec2(0.0, 0.08), vec2(0.54, 0.46)), q.y - 0.10);
+    float flaps = min(sdEll(q - vec2(-0.53, 0.16), vec2(0.10, 0.17)), sdEll(q - vec2(0.53, 0.16), vec2(0.10, 0.17)));
+    float bow = min(sdEll(q - vec2(-0.07, -0.40), vec2(0.07, 0.04)), sdEll(q - vec2(0.07, -0.40), vec2(0.07, 0.04)));
+    float body = min(cap, flaps);
+    float check = min(abs(fract(q.x*5.0) - 0.5), abs(fract(q.y*5.0) - 0.5));   // the check's lines
+    return bow < 0.0 ? vec2(bow, 1.0) : body < 0.0 && check < 0.07 ? vec2(body, 1.0) : vec2(min(body, bow), 0.0);
+  }
+  if (id == 30) {       // a sun visor: a band round his head and a wide brim, no crown
+    float band = max(abs(q.y - 0.12) - 0.05, length(q - vec2(0.0, 0.70)) - 0.72);
+    float brim = sdEll(q - vec2(0.12, 0.03), vec2(0.70, 0.11));
+    return band < 0.0 ? vec2(band, 1.0) : vec2(min(band, brim), 0.0);
+  }
+  if (id == 31) {       // a crown of flowers along the top of his head
+    float petals = 1e5, middles = 1e5;
+    for (int i = 0; i < 5; i++) {
+      float a = -2.45 + 0.4*float(i);                             // round the top of his head
+      vec2 c = vec2(0.0, 0.70) + 0.71*vec2(cos(a), sin(a));   // sat on him, every flower touching his head
+      vec2 b = q - c;
+      float ang = atan(b.y, b.x) + 0.6*float(i), rr = length(b);
+      petals = min(petals, rr - 0.135*(0.70 + 0.30*cos(5.0*ang)));
+      middles = min(middles, rr - 0.05);
+    }
+    return middles < 0.0 ? vec2(middles, 1.0) : vec2(petals, 0.0);
+  }
+  if (id == 32) {       // a viking's helmet: a steel dome, a band, two horns
+    float dome = max(sdEll(q - vec2(0.0, 0.08), vec2(0.52, 0.48)), q.y - 0.10);
+    float band = max(dome, abs(q.y - 0.04) - 0.05);
+    float h1 = sdTri(q, vec2(-0.50, 0.02), vec2(-0.36, -0.14), vec2(-0.80, -0.46)) - 0.025;
+    float h2 = sdTri(q, vec2(0.50, 0.02), vec2(0.36, -0.14), vec2(0.80, -0.46)) - 0.025;
+    float horns = min(h1, h2);
+    return horns < 0.0 || band < 0.0 ? vec2(min(horns, band), 1.0) : vec2(min(dome, horns), 0.0);
+  }
   if (id == 8) {        // headphones: the band over his head, a cup on each side
     // the band rests on his head and the cups on his sides (both hovered a hair off him until 10-01)
     float band = max(abs(length(q - vec2(0.0, 0.70)) - 0.73) - 0.035, q.y - 0.62);
@@ -357,12 +427,15 @@ vec4 specsSDF(vec2 f){
     else if (id == 9) d = max(sdEll(rot(m - vec2(0.05, 0.10), -0.50), vec2(L*1.28, Ly*0.98)), -Ly*0.62 - v.y);   // aviators: a teardrop, flat on top, drooping outward
     else if (id == 10) d = sdBox(vec2(v.x*(1.0 + 0.30*v.y/Ly), v.y), vec2(L*1.12, Ly*0.74), 0.07);   // shades: wider at the top
     else if (id == 12) d = sdEll(v, vec2(L, Ly)*1.22);                              // goggles
+    else if (id == 14) d = sdBox(v, vec2(L*1.12, Ly*0.62), 0.03);                   // rectangle
+    else if (id == 15) d = sdBox(v, vec2(L*1.08, Ly*0.78), 0.06);                   // half-rims (the brow drawn thick below)
+    else if (id == 16) d = sdBox(rot(m - vec2(0.03, 0.0), 0.16), vec2(L*1.4, Ly*0.74), 0.15);   // sport: wrapped round, swept out and down
     else d = sdEll(v, vec2(L, Ly));                                                 // round, round shades
     lens = min(lens, d);
     // the temples: a short arm from each lens's outer edge back toward his side
     temples = min(temples, sdCap(f, vec2(sd*(cx + L*1.02), ey - Ly*0.30), vec2(sd*(cx + L*1.02 + 0.16), ey - Ly*0.46), 0.016));
   }
-  float frame = abs(lens) - t;
+  float frame = abs(lens) - (id == 15 ? mix(0.010, 0.036, step(f.y, ey - Ly*0.30)) : t);   // half-rims: a heavy brow, a fine rim
   // the bridge between the lenses, never across them (aviators have a second bar, on top)
   float bridge = sdCap(f, vec2(-cx, ey - Ly*0.18), vec2(cx, ey - Ly*0.18), 0.018);
   if (id == 9) bridge = min(bridge, sdCap(f, vec2(-cx, ey - Ly*0.64), vec2(cx, ey - Ly*0.64), 0.014));
