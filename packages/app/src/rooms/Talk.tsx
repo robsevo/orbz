@@ -132,7 +132,7 @@ export function Talk(o: {
   const shown = messages.filter((m) => m.role === "user" || m.role === "assistant" || m.role === "notice");
   return (
     <div data-stream={open ? "open" : "connecting"} style={{ display: "grid", gridTemplateRows: "1fr auto", minHeight: 0, minWidth: 0 }}>
-      <div role="log" aria-label="The conversation" aria-live="polite" style={{ display: "grid", alignContent: "start", gap: 8, padding: "var(--s4) var(--s5)", overflowY: "auto", minWidth: 0 }}>
+      <div role="log" aria-label="The conversation" aria-live="polite" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", alignContent: "start", gap: 8, padding: "var(--s4) var(--s5)", overflowY: "auto", minWidth: 0 }}>
         {!shown.length && !Object.values(live).some(Boolean) && <span style={{ justifySelf: "center", font: "400 14px/20px var(--font)", color: "var(--text-3)", padding: "var(--s5) 0", textAlign: "center" }}>{o.empty}</span>}
         {shown.map((m) =>
           m.role === "notice" ? (

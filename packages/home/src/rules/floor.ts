@@ -6,13 +6,14 @@
 //   money       paying, buying, charging, transferring     always asks
 //   passwords   keys, credentials, the password stores     always asks
 //   messaging   sending to people (mail, chat webhooks)    always asks
+//   calendar    moving or changing what is on your calendar always asks (PLAN 2.12: never silent)
 //   protected   writing the owner's brain or Orbs' data    never
 //
 // Recognised from the command by code. The patterns lean wide on purpose: a needless card costs a
 // tap, a missed one can cost what the floor exists for. Tools that do these things directly (a
 // sender, a payment page) declare it themselves (ToolDef.floor).
 
-export type FloorCategory = "deleting" | "money" | "passwords" | "messaging" | "protected";
+export type FloorCategory = "deleting" | "money" | "passwords" | "messaging" | "calendar" | "protected";
 export type FloorHit = { category: FloorCategory; why: string };
 
 export const FLOOR_WORDS: Record<FloorCategory, string> = {
@@ -20,6 +21,7 @@ export const FLOOR_WORDS: Record<FloorCategory, string> = {
   money: "anything to do with money always asks",
   passwords: "passwords and keys always ask",
   messaging: "messaging someone always asks",
+  calendar: "changing your calendar always asks",
   protected: "the owner's brain and Orbs' own data are never written",
 };
 

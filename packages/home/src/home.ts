@@ -19,6 +19,7 @@ import { ChatGPT, type ChatGPTOptions } from "./chatgpt/chatgpt.ts";
 import { Brains, type BrainsOptions } from "./brain/brains.ts";
 import { Learned } from "./brain/learned.ts";
 import { About } from "./about.ts";
+import { comesUpAt, Notices } from "./notices.ts";
 import { Team } from "./team.ts";
 import { Spend } from "./brain/spend.ts";
 import { type Card, Conversations } from "./agent/conversation.ts";
@@ -127,6 +128,8 @@ export class Home {
   readonly about: About;
   /** Sessions (PLAN 2.9): a Brainstorm and a Floor, the orbs chosen for each taking their turns. */
   readonly team: Team;
+  /** The notification centre (PLAN 2.11): bills and reminders kept for you, approvals waiting, work finished. */
+  readonly notices: Notices;
   /** Every plan shown to the person (PLAN 1.7). */
   readonly plans: Plans;
   /** Approved plans' rows, ticked only with proof (PLAN 1.8). */
@@ -212,9 +215,20 @@ export class Home {
           orbSpecialty: (orb) => this.inbox.orb(orb)?.specialty ?? "general",
           learned: (orb) => this.learned.list(orb),
           searchKey: () => this.brains.searchKey(),
+          remind: (orb, conversation, r) => {
+            const kept = this.notices.remind({ ...r, orb, conversation });
+            return { id: kept.id, comesUpAt: comesUpAt(kept.due, kept.aheadDays) };
+          },
+          reminders: () => this.notices.reminders(),
+          moveReminder: (id, due) => this.notices.move(id, due),
         });
     this.inbox = new Inboxes(db, this.events, this.clock, opts.runner ?? this.agent!, opts.graceMs);
     this.team = new Team({ db, events: this.events, clock: this.clock, inbox: this.inbox, conversations: this.conversations });
+    this.notices = new Notices(db, this.events, this.clock, {
+      nameOf: (orb) => this.inbox.orb(orb)?.name ?? orb,
+      lastReply: (c) => this.conversations.list(c).findLast((m) => m.role === "assistant" && m.content.trim())?.content ?? null,
+      pendingCards: () => this.conversations.pendingCards(),
+    });
     this.schedules = new Schedules(db, this.events, this.inbox, this.clock);
     this.triggers = new Triggers(db, this.events, this.inbox, this.clock);
     this.loops = new Loops(db, this.events, this.clock, {
@@ -346,6 +360,7 @@ export class Home {
     const woke = slept > WAKE_GAP_MS;
     if (woke) this.events.append("home.woke", { slept_ms: Math.round(slept) });
     this.schedules.due();
+    this.notices.due();
     this.loops.startDue();
     await this.triggers.poll({ all: woke });
   }
@@ -355,7 +370,7 @@ export class Home {
     this.#cancelTimer?.();
     const now = this.clock.now();
     let delay = this.#heartbeatMs;
-    for (const at of [this.schedules.nextDueAt(), this.loops.nextDueAt(), this.triggers.nextPollAt()]) {
+    for (const at of [this.schedules.nextDueAt(), this.notices.nextDueAt(), this.loops.nextDueAt(), this.triggers.nextPollAt()]) {
       if (at !== null) delay = Math.min(delay, at - now);
     }
     this.#cancelTimer = this.clock.timer(Math.max(MIN_DELAY_MS, delay), () => void this.tick());

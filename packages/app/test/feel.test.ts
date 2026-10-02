@@ -106,7 +106,10 @@ test("a press squishes the moment it goes down, sounds then, and springs back wh
 test("the sound fits the press: a tab ticks, a choice picks, dice roll, he bubbles, creating sings, deleting pops", { skip }, async () => {
   const page = await open();
   try {
-    await page.getByRole("button", { name: "New orb" }).first().click();
+    // a plain new orb: his shape the bean, on the first page with eight others (from the dice, it
+    // could be the one alone on the last page, with nothing else there to press)
+    await plainNewOrb(page);
+    await page.getByRole("tab", { name: "Personality" }).click(); // off the Shape tab, so pressing it ticks
     await clear(page);
     await page.getByRole("tab", { name: "Shape" }).click();
     await page.locator('[data-page]:not([hidden]) button[data-pick][aria-pressed="false"]').first().click(); // one he is not already, on the page shown

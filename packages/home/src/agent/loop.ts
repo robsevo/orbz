@@ -15,6 +15,7 @@
 // A stop keeps what the model had written and says it was stopped; an error keeps it too and
 // names the transport's cause (Ash's stop-turn lessons). Every step is a `trace.step` event,
 // complete enough to replay the run (trace.ts).
+import { workspaceOf } from "../workspace.ts";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type { Clock } from "../clock.ts";
@@ -59,6 +60,11 @@ export type AgentOptions = {
   learned?: (orb: string) => string[];
   /** The person's web-search key, when a search needs it (PLAN 3.10). */
   searchKey?: () => Promise<SearchKey | null>;
+  /** Keeps a bill or a reminder for the person (the notification centre, PLAN 2.11). */
+  remind?: (orb: string, conversation: string, r: Parameters<NonNullable<ToolContext["remind"]>>[0]) => { id: number; comesUpAt: number };
+  /** The bills and reminders kept, and moving one (the calendar, PLAN 2.12). */
+  reminders?: ToolContext["reminders"];
+  moveReminder?: ToolContext["moveReminder"];
   tools?: ToolDef[];
   /** What decides each call (PLAN 1.6): the floor, the person's rules, the one-way switch, away. */
   guard: Guard;
@@ -88,7 +94,7 @@ export const PLAN_ANSWERS = {
 const est = (text: string): number => Math.ceil(text.length / 4) + 4;
 
 export class AgentRunner implements Runner {
-  readonly #o: Required<Omit<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned" | "searchKey">> & Pick<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned" | "searchKey">;
+  readonly #o: Required<Omit<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned" | "searchKey" | "remind" | "reminders" | "moveReminder">> & Pick<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned" | "searchKey" | "remind" | "reminders" | "moveReminder">;
   readonly #tools: Map<string, ToolDef>;
 
   constructor(opts: AgentOptions) {
@@ -97,7 +103,7 @@ export class AgentRunner implements Runner {
   }
 
   workspace(orb: string): string {
-    return join(this.#o.dataDir, "orbs", orb, "workspace");
+    return workspaceOf(this.#o.dataDir, orb);
   }
 
   async run(ctx: RunContext): Promise<RunResult> {
@@ -109,6 +115,9 @@ export class AgentRunner implements Runner {
       signal: ctx.signal,
       background: this.#o.background,
       ...(this.#o.searchKey && { searchKey: this.#o.searchKey }),
+      ...(this.#o.remind && { remind: (r) => this.#o.remind!(ctx.orb, ctx.conversation, r) }),
+      ...(this.#o.reminders && { reminders: this.#o.reminders }),
+      ...(this.#o.moveReminder && { moveReminder: this.#o.moveReminder }),
       note: (text, meta) => conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "notice", run: ctx.run, content: text, meta }),
     };
     mkdirSync(tctx.workspace, { recursive: true });
@@ -326,7 +335,8 @@ export class AgentRunner implements Runner {
   /** The person's request this run works on, and whether anyone is watching. */
   #site(ctx: RunContext): CallSite {
     const request = this.#o.conversations.history(ctx.conversation).findLast((m) => m.role === "user");
-    const attended = ctx.items.some((i) => i.source === "chat" || typeof i.data.resume === "number");
+    // a session's turn is the person's own words in a tab (team.ts), as much as a chat message is
+    const attended = ctx.items.some((i) => i.source === "chat" || i.source === "turn" || typeof i.data.resume === "number");
     return { orb: ctx.orb, turn: `${ctx.conversation}#${request?.id ?? 0}`, mode: attended ? "attended" : "away", signal: ctx.signal };
   }
 

@@ -95,6 +95,21 @@ export class Schedules {
     });
   }
 
+  /** A schedule that runs at a time of day runs at another (the calendar's edit, PLAN 2.12): its
+   * minute and hour change, its days do not; it is due from now on at the new time. */
+  setTime(id: string, hour: number, minute: number): Schedule {
+    const s = this.get(id);
+    if (!s) throw new Error(`no schedule ${id}`);
+    if (!Number.isInteger(hour) || hour < 0 || hour > 23 || !Number.isInteger(minute) || minute < 0 || minute > 59) throw new Error("a time is 00:00 to 23:59");
+    const f = s.cron.trim().split(/\s+/);
+    if (f.length !== 5 || !/^\d+$/.test(f[0]!) || !/^\d+$/.test(f[1]!)) throw new Error(`"${s.cron}" does not run at one time of day: change it in its own words`);
+    const cron = [String(minute), String(hour), ...f.slice(2)].join(" ");
+    cronOf(cron, s.timezone);
+    this.#db.prepare("UPDATE schedules SET cron = ?, last_due = ? WHERE id = ?").run(cron, this.#clock.now(), id);
+    this.#events.append("schedule.changed", { schedule: id, from: s.cron, to: cron }, { orb: s.orb });
+    return this.get(id)!;
+  }
+
   remove(id: string): void {
     const s = this.get(id);
     if (!s) return;

@@ -19,6 +19,9 @@ import { findChrome, launch } from "./harness.ts";
 import { Home } from "../../home/src/home.ts";
 import { serve, type HomeDoor } from "../../home/src/api.ts";
 
+// one flow, start to end, on a home and a real browser: in the gate, where every suite draws at
+// once, it can take more than the minute a test gets by default (a hang still fails, later)
+const LONG = { timeout: 150_000 };
 const APP = fileURLToPath(new URL("..", import.meta.url));
 const skip = findChrome() ? false : "no Chromium on this machine";
 let browser: Browser;
@@ -123,7 +126,7 @@ test("a used link, or a browser never paired, is said plainly", { skip }, async 
   }
 });
 
-test("a private chat with an orb: your words, his reply as it streams, a card that waits for your OK", { skip }, async (t) => {
+test("a private chat with an orb: your words, his reply as it streams, a card that waits for your OK", { skip, ...LONG }, async (t) => {
   const { fakeModel } = await import("../../home/test/fakes/model.ts");
   let release!: () => void;
   const held = new Promise<void>((r) => (release = r));

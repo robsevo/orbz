@@ -15,6 +15,9 @@ import { SPECIALTY_FAMILIES, type Specialty } from "./brain/constitution.ts";
 import { cookieOf, SESSION_COOKIE, Sessions } from "./sessions.ts";
 import type { Tab } from "./team.ts";
 import { standingContext } from "./agent/standing.ts";
+import { listWorkspace, MissingError, OutsideError, readWorkspace } from "./workspace.ts";
+import { calendarOf } from "./calendar.ts";
+import { labOf, reopen } from "./lab.ts";
 import { version } from "./version.ts";
 
 export type HomeDoor = {
@@ -301,6 +304,78 @@ async function handle(
       return { me: home.about.setName(text(await body(req), "name")) };
     } catch (e) {
       throw new HttpError(400, e instanceof Error ? e.message : String(e));
+    }
+  }
+  // the notification centre (PLAN 2.11): what is out, putting one (or all) away for every device,
+  // and the bills and reminders kept (the calendar's, 2.12)
+  if (method === "GET" && url.pathname === "/notices") return { notices: home.notices.list() };
+  if (method === "POST" && url.pathname === "/notices/put-away") return { put: home.notices.putAwayAll() };
+  if (method === "POST" && parts[0] === "notices" && parts.length === 3 && parts[2] === "put-away") {
+    try {
+      home.notices.putAway(Number(parts[1]));
+      return { ok: true };
+    } catch (e) {
+      throw new HttpError(404, e instanceof Error ? e.message : String(e));
+    }
+  }
+  if (method === "GET" && url.pathname === "/reminders") return { reminders: home.notices.reminders() };
+  // the lab (PLAN 2.13): every brainstorm and every plan shown, searchable; a brainstorm reopened
+  if (method === "GET" && url.pathname === "/lab") return labOf(home, url.searchParams.get("q") ?? "");
+  if (method === "POST" && parts[0] === "lab" && parts[1] === "sessions" && parts.length === 4 && parts[3] === "reopen") {
+    try {
+      return { session: reopen(home, Number(parts[2])) };
+    } catch (e) {
+      throw new HttpError(404, e instanceof Error ? e.message : String(e));
+    }
+  }
+  // the calendar (PLAN 2.12): the days, and the person's own changes to them (an orb's go through a card)
+  if (method === "GET" && url.pathname === "/calendar") {
+    try {
+      return { entries: calendarOf(home, url.searchParams.get("from") ?? "", url.searchParams.get("to") ?? "") };
+    } catch (e) {
+      throw new HttpError(400, e instanceof Error ? e.message : String(e));
+    }
+  }
+  if (method === "POST" && parts[0] === "reminders" && (parts.length === 2 || (parts.length === 3 && parts[2] === "done"))) {
+    try {
+      if (parts.length === 3) {
+        home.notices.done(Number(parts[1]));
+        return { ok: true };
+      }
+      return { reminder: home.notices.move(Number(parts[1]), text(await body(req), "due")) };
+    } catch (e) {
+      if (e instanceof HttpError) throw e;
+      throw new HttpError(/^no reminder/.test(String((e as Error).message)) ? 404 : 400, e instanceof Error ? e.message : String(e));
+    }
+  }
+  if (method === "POST" && parts[0] === "schedules" && parts.length === 2) {
+    const id = decodeURIComponent(parts[1]!);
+    if (!home.schedules.get(id)) throw new HttpError(404, `no schedule ${id}`);
+    const b = await body(req);
+    try {
+      if (typeof b.enabled === "boolean") home.schedules.setEnabled(id, b.enabled);
+      if (typeof b.time === "string") {
+        const m = /^(\d{2}):(\d{2})$/.exec(b.time);
+        if (!m) throw new Error("a time is HH:MM");
+        home.schedules.setTime(id, Number(m[1]), Number(m[2]));
+      }
+    } catch (e) {
+      throw new HttpError(400, e instanceof Error ? e.message : String(e));
+    }
+    return { schedule: home.schedules.get(id) };
+  }
+  // his computer (PLAN 2.8): what he is making, his workspace's folders and files, to read
+  if (method === "GET" && parts[0] === "orbs" && parts.length >= 3 && parts[2] === "workspace") {
+    const orb = decodeURIComponent(parts[1]!);
+    if (!home.inbox.orb(orb)) throw new HttpError(404, `no orb "${orb}"`);
+    const path = url.searchParams.get("path") ?? "";
+    try {
+      if (parts.length === 3) return { entries: listWorkspace(home.dataDir, orb, path) };
+      if (parts.length === 4 && parts[3] === "file") return { file: readWorkspace(home.dataDir, orb, path) };
+    } catch (e) {
+      if (e instanceof OutsideError) throw new HttpError(400, e.message);
+      if (e instanceof MissingError) throw new HttpError(404, e.message);
+      throw e;
     }
   }
   // Each orb's own constitution (PLAN 3.9): what he loads, to read; what he learned, which only

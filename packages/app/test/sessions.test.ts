@@ -6,8 +6,9 @@
 //   - On the Brainstorm, your words go in once and each orb answers in turn, by name, as he writes;
 //     a load that lands late takes nothing away from words still streaming.
 //   - A decision lands as ✓ Agreed, in the chat and on the stage.
-//   - On the Floor, whoever you bring in (or send out) is the home's; each one's computer shows the
-//     tool he used, on what, that it waits for your OK, and what came back once given.
+//   - On the Floor, whoever you bring in (or send out) is the home's; each one's computer is a
+//     press away and one is big (rooms/Computer.tsx): the command, that it waits for your OK, and
+//     what it printed once given.
 //   - Each tab is an address: Back goes from the Floor to the Brainstorm.
 //   - At phone size nothing spills and nothing scrolls sideways.
 import assert from "node:assert/strict";
@@ -23,6 +24,9 @@ import { Home } from "../../home/src/home.ts";
 import { serve } from "../../home/src/api.ts";
 import { fakeModel } from "../../home/test/fakes/model.ts";
 
+// one flow, start to end, on a home and a real browser: in the gate, where every suite draws at
+// once, it can take more than the minute a test gets by default (a hang still fails, later)
+const LONG = { timeout: 150_000 };
 const APP = fileURLToPath(new URL("..", import.meta.url));
 const skip = findChrome() ? false : "no Chromium on this machine";
 let browser: Browser;
@@ -39,7 +43,7 @@ after(async () => {
   if (dist) rmSync(dist, { recursive: true, force: true });
 });
 
-test("a session: the orbs you bring in, the Brainstorm's turns and what was agreed, the Floor's computers", { skip }, async (t) => {
+test("a session: the orbs you bring in, the Brainstorm's turns and what was agreed, the Floor's computers", { skip, ...LONG }, async (t) => {
   let release!: () => void;
   const held = new Promise<void>((r) => (release = r));
   const model = await fakeModel(t, [
@@ -54,7 +58,7 @@ test("a session: the orbs you bring in, the Brainstorm's turns and what was agre
   const h = Home.open({
     dataDir: data, protect: [], spendCapUsd: null,
     brain: { preset: { id: "t", title: "t", own: null, big: { name: "big", baseUrl: model.url, model: "m", retries: 0 }, teacher: null } },
-    agent: { decide: () => "allow", passWaitMs: 20 },
+    agent: { decide: (def) => (def.name === "shell" ? "ask" : "allow"), passWaitMs: 20 }, // a command asks, as it would by default
   });
   t.after(() => h.close());
   h.start();
@@ -120,25 +124,32 @@ test("a session: the orbs you bring in, the Brainstorm's turns and what was agre
   // the Floor: send Milo out, and Hazel's computer shows what she does
   await page.getByRole("tab", { name: "Floor" }).click();
   await page.waitForFunction(() => location.hash === "#/session/1/floor");
+  // a computer for each of them, a press away; one is shown big
+  await page.locator('[data-show="milo"]').waitFor();
+  assert.equal(await page.locator("[data-show]").count(), 2);
+  await page.locator('[data-show="milo"]').click();
   await page.locator('[data-computer="milo"]').waitFor();
-  assert.equal(await page.locator("[data-computer]").count(), 2);
+  assert.equal(await page.locator("[data-computer]").count(), 1, "one computer big at a time");
   await page.getByRole("button", { name: "Bring someone in" }).click();
   await page.locator("header").getByRole("button", { name: "Milo" }).click();
   for (let i = 0; i < 40 && h.team.get(1)!.floor.length !== 1; i++) await page.waitForTimeout(50);
   assert.deepEqual(h.team.get(1)!.floor, ["hazel"], "who works a tab is the home's");
   assert.deepEqual(h.team.get(1)!.brainstorm, ["hazel", "milo"], "and only that tab's");
   await page.getByRole("button", { name: "Done" }).click();
-  assert.equal(await page.locator("[data-computer]").count(), 1);
+  await page.locator('[data-computer="hazel"]').waitFor();
+  assert.equal(await page.locator("[data-show]").count(), 0, "with only Hazel on the Floor, hers is the only computer");
   const floor = page.getByRole("textbox", { name: "Say something to the Floor" });
   await page.locator('[data-stream="open"]').waitFor({ timeout: 20_000 });
   await floor.fill("Make the invite");
   await floor.press("Enter");
   const computer = page.locator('[data-computer="hazel"]');
-  // acting asks first: his computer says so, and the card waits beside it
-  await computer.getByText("waiting for your OK…").waitFor({ timeout: 20_000 });
+  // acting asks first: her computer says so, and the card waits beside it
+  await computer.locator("[data-doing]", { hasText: "waiting for your OK" }).waitFor({ timeout: 20_000 });
+  await computer.getByRole("tab", { name: "Terminal" }).click();
+  await computer.getByText("waiting for your OK…").waitFor();
   await page.locator("[data-card]").getByRole("button", { name: "Approve" }).click();
-  await computer.locator('[data-act="shell"] [data-result]', { hasText: "invite-made" }).waitFor({ timeout: 20_000 });
-  assert.match(await computer.innerText(), /▸ shell echo invite-made\s+invite-made/, "the tool, on what, and what came back");
+  await computer.getByText("invite-made", { exact: true }).waitFor({ timeout: 20_000 });
+  assert.match(await computer.innerText(), /\$ echo invite-made\s+invite-made/, "the command, and what it printed");
   await page.locator('[data-role="assistant"][data-from="hazel"]', { hasText: "The invite is made." }).waitFor({ timeout: 20_000 });
   assert.equal(await page.locator('[data-role="user"]', { hasText: "Plan a party" }).count(), 0, "the Floor's chat is its own");
   assert.ok(!h.conversations.list("team:1:floor").some((m) => m.content.includes("Plan a party")));

@@ -219,6 +219,36 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY (session, tab, orb)
   );
   `,
+  // v9 (PLAN 2.11): the notification centre: the bills and reminders an orb keeps for you, and the
+  // notices out (each once: its key), put away on one device for all
+  `
+  CREATE TABLE reminders (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    orb          TEXT    NOT NULL,
+    kind         TEXT    NOT NULL CHECK (kind IN ('bill', 'reminder')),
+    title        TEXT    NOT NULL,
+    due          TEXT    NOT NULL,
+    amount       TEXT,
+    ahead_days   INTEGER NOT NULL,
+    conversation TEXT,
+    created_at   INTEGER NOT NULL,
+    done_at      INTEGER
+  );
+  CREATE TABLE notices (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    key          TEXT    NOT NULL UNIQUE,
+    kind         TEXT    NOT NULL,
+    orb          TEXT    NOT NULL,
+    conversation TEXT,
+    card         INTEGER,
+    reminder     INTEGER,
+    title        TEXT    NOT NULL,
+    detail       TEXT    NOT NULL DEFAULT '',
+    due          TEXT,
+    at           INTEGER NOT NULL,
+    put_away_at  INTEGER
+  );
+  `,
 ];
 
 /** The home's data is the person's: the folder is theirs alone (0700) and so is the database

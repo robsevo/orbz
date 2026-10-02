@@ -23,6 +23,9 @@ import { introWanted, loadPerson, savePerson, type Person } from "./onboarding/s
 import { parseRoute, routeHash, type Route } from "./ui/nav.ts";
 import { Settings } from "./rooms/Settings.tsx";
 import { SessionsRoom } from "./rooms/Sessions.tsx";
+import { NoticesRoom, useNotices } from "./rooms/Notices.tsx";
+import { CalendarRoom } from "./rooms/Calendar.tsx";
+import { LabRoom } from "./rooms/Lab.tsx";
 import { Chat } from "./rooms/Chat.tsx";
 import { connect, keepOffice, keptOffice, type Office, type Tab as SessionTab } from "./home/link.ts";
 import { DEMO_CREW } from "./orb/demo.ts";
@@ -556,10 +559,11 @@ function App() {
     if (home) home.setName(p).catch((e: Error) => setSaid(e.message));
     else savePerson(p);
   };
-  const [room, setRoom] = useState<"office" | "settings" | "chat" | "sessions">(() => {
+  const [room, setRoom] = useState<"office" | "settings" | "chat" | "sessions" | "notices" | "calendar" | "lab">(() => {
     const r = parseRoute(location.hash).room;
-    return r === "settings" || r === "chat" || r === "sessions" ? r : "office";
+    return r === "settings" || r === "chat" || r === "sessions" || r === "notices" || r === "calendar" || r === "lab" ? r : "office";
   });
+  const notices = useNotices(home);
   const [inSession, setInSession] = useState<{ id: number | null; tab: SessionTab }>(() => {
     const r = parseRoute(location.hash);
     return r.room === "sessions" ? { id: r.id, tab: r.tab } : { id: null, tab: "brainstorm" };
@@ -635,9 +639,12 @@ function App() {
   // where you are is an address (ui/nav.ts): going somewhere adds it to the history, so the side
   // menu's Back and the browser's Back are the same Back
   const routeOf = (): Route =>
-    room === "settings" ? { room: "settings" } : room === "sessions" ? { room: "sessions", ...inSession } : room === "chat" && talking ? { room: "chat", orb: talking } : view.kind === "new" ? { room: "new" } : { room: "office", orb: view.name };
+    room === "settings" ? { room: "settings" } : room === "notices" ? { room: "notices" } : room === "calendar" ? { room: "calendar" } : room === "lab" ? { room: "lab" } : room === "sessions" ? { room: "sessions", ...inSession } : room === "chat" && talking ? { room: "chat", orb: talking } : view.kind === "new" ? { room: "new" } : { room: "office", orb: view.name };
   const show = (r: Route): void => {
     if (r.room === "settings") setRoom("settings");
+    else if (r.room === "notices") setRoom("notices");
+    else if (r.room === "calendar") setRoom("calendar");
+    else if (r.room === "lab") setRoom("lab");
     else if (r.room === "sessions") {
       setRoom("sessions");
       setInSession({ id: r.id, tab: r.tab });
@@ -685,10 +692,14 @@ function App() {
       <span aria-hidden style={{ font: "800 16px/16px var(--font)" }}>‹</span> Back
     </button>
   );
-  const navItem = (label: string, on: boolean, to: Route, mark: ReactNode): ReactNode => (
-    <button key={label} aria-current={on ? "page" : undefined} onClick={() => go(to)} style={{ ...s.btn, display: "flex", alignItems: "center", gap: 10, textAlign: "left", background: on ? "var(--accent-wash)" : "transparent", boxShadow: on ? "inset 0 0 0 1px var(--accent)" : "none" }} data-orb={me.hue}>
+  const navItem = (label: string, on: boolean, to: Route, mark: ReactNode, count = 0): ReactNode => (
+    <button key={label} aria-current={on ? "page" : undefined} aria-label={count ? `${label}, ${count} waiting` : undefined} onClick={() => go(to)} style={{ ...s.btn, display: "flex", alignItems: "center", gap: 10, textAlign: "left", background: on ? "var(--accent-wash)" : "transparent", boxShadow: on ? "inset 0 0 0 1px var(--accent)" : "none" }} data-orb={me.hue}>
       <span aria-hidden style={{ width: 18, display: "grid", placeItems: "center", color: "var(--accent)", font: "800 15px/16px var(--font)" }}>{mark}</span>
       {label}
+      {count > 0 && (
+        // a count, quiet: no sound, no motion beyond its arrival
+        <span data-badge style={{ marginLeft: "auto", minWidth: 20, height: 20, padding: "0 6px", borderRadius: 10, display: "grid", placeItems: "center", background: "var(--accent)", color: "var(--ground)", font: "800 11px/12px var(--font)", animation: "orbs-arrive 420ms var(--m-spring)" }}>{count}</span>
+      )}
     </button>
   );
 
@@ -742,6 +753,9 @@ function App() {
             {navItem("The office", room === "office" && !making, { room: "office", orb: making ? null : me.name }, "◉")}
             {navItem("New orb", room === "office" && making, { room: "new" }, "+")}
             {navItem("Sessions", room === "sessions", { room: "sessions", id: null, tab: "brainstorm" }, "▦")}
+            {navItem("Notifications", room === "notices", { room: "notices" }, "◔", notices.notices.length)}
+            {navItem("Calendar", room === "calendar", { room: "calendar" }, "▤")}
+            {navItem("The lab", room === "lab", { room: "lab" }, "✦")}
             {navItem("Settings", room === "settings", { room: "settings" }, "⚙")}
           </nav>
           <div style={{ ...s.head, margin: "var(--s3) var(--s2) var(--s1)" }}>The office</div>
@@ -763,7 +777,13 @@ function App() {
           </div>
         </aside>
 
-        {room === "sessions" ? (
+        {room === "lab" ? (
+          <LabRoom home={home} office={office} go={go} />
+        ) : room === "calendar" ? (
+          <CalendarRoom home={home} office={office} />
+        ) : room === "notices" ? (
+          <NoticesRoom home={home} office={office} notices={notices.notices} reload={notices.reload} live={notices.live} go={go} />
+        ) : room === "sessions" ? (
           <SessionsRoom home={home} office={office} open={inSession.id} tab={inSession.tab} go={(id, tab) => go({ room: "sessions", id, tab: tab ?? "brainstorm" })} />
         ) : room === "chat" ? (
           <Chat orb={office.find((c) => c.name === talking) ?? office[0] ?? ASH} home={home} person={person?.name ?? null} />
@@ -903,7 +923,15 @@ style.textContent = `${stylesheet(`${import.meta.env.BASE_URL}fonts/Nunito.ttf`)
   .orbs-side[data-open="true"] { translate: 0 0; visibility: visible; transition: translate var(--m-slow) var(--m-spring), visibility 0s; }
   .orbs-scrim { position: fixed; inset: 0; z-index: 29; background: var(--ground); opacity: .72; }
 }
-@media (min-width: 1100px) { .orbs-pair { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) !important; } }`;
+@media (min-width: 1100px) { .orbs-pair { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) !important; } }
+/* the work and the chat beside it (a session's Floor, a private chat with his computer open), on a wide screen; one above the other on a narrow one */
+/* the calendar on a phone: each day its number, and a dot for each thing on it (the words are under it, for the day you pick) */
+@media (max-width: 760px) {
+  .orbs-calday { display: flex !important; flex-wrap: wrap; align-content: flex-start; gap: 3px !important; min-height: 46px !important; padding: 4px !important; }
+  .orbs-calnum { flex-basis: 100%; }
+  .orbs-calword { display: none; }
+}
+@media (min-width: 1100px) { .orbs-beside { grid-template-columns: minmax(0, 6fr) minmax(320px, 5fr) !important; } }`;
 document.head.append(style);
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

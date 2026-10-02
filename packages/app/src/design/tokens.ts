@@ -251,6 +251,9 @@ export function stylesheet(fontUrl = "fonts/Nunito.ttf"): string {
     // the CEO badge: a glint across its gold, and a slow sway on its ribbon (onboarding/Onboarding.tsx)
     `@keyframes orbs-glint { 0%, 55% { background-position: 160% 0; } 85%, 100% { background-position: -60% 0; } }`,
     `@keyframes orbs-sway { 0%, 100% { rotate: -2deg; } 50% { rotate: 2deg; } }`,
+    // his computer (rooms/Computer.tsx): a ring where his step lands; a bar growing to its number
+    `@keyframes orbs-click { from { scale: .5; opacity: 1; } to { scale: 1.5; opacity: 0; } }`,
+    `@keyframes orbs-grow { from { transform: scaleX(0); } to { transform: none; } }`,
     `@keyframes orbs-twinkle { 0%, 100% { scale: .4; opacity: .2; } 50% { scale: 1; opacity: 1; } }`,
     `@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }`,
   ].join("\n");

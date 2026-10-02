@@ -175,6 +175,8 @@ export class Conversations {
         continue;
       }
       if (m.role === "user") out.push({ role: "user", content: m.content });
+      // what another orb in a session agreed reaches everyone in it (his call stayed his)
+      else if (m.role === "notice" && o.me && m.orb !== o.me && typeof m.meta.agreed === "string") out.push({ role: "user", content: `[Agreed]: ${m.meta.agreed}` });
       else if (m.role === "summary") out.push({ role: "system", content: `Summary of the earlier conversation:\n${m.content}` });
       else if (m.role === "assistant") {
         if (!m.toolCalls?.length) {
@@ -188,7 +190,7 @@ export class Conversations {
         });
         for (const c of m.toolCalls) out.push({ role: "tool", tool_call_id: c.id, content: results.get(c.id)?.content ?? NOT_RUN });
       }
-      // tool messages were placed with their calls; notices and clears are for the person
+      // tool messages were placed with their calls; other notices and clears are for the person
     }
     return out;
   }
@@ -213,6 +215,11 @@ export class Conversations {
   card(id: number): Card | undefined {
     const r = this.#db.prepare("SELECT * FROM cards WHERE id = ?").get(id) as CardRow | undefined;
     return r && toCard(r);
+  }
+
+  /** Every card still waiting for the person, oldest first (the notification centre's approvals). */
+  pendingCards(): Card[] {
+    return (this.#db.prepare("SELECT * FROM cards WHERE status = 'pending' ORDER BY id").all() as CardRow[]).map(toCard);
   }
 
   openCard(conversation: string): Card | undefined {

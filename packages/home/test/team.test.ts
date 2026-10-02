@@ -5,6 +5,7 @@
 //   - Each is told who he is with, and what the tab is for.
 //   - A decision is recorded for everyone as "✓ Agreed".
 //   - A round waits while an orb waits on the person's OK, and goes on once it is given.
+//   - A session's turn is attended (your words in a tab): your rules decide, as in a chat.
 //   - Only orbs in the office can be brought in; a tab with no one in it says so.
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -67,6 +68,23 @@ test("a round waits while an orb waits on your OK, and goes on once you give it"
   }
   assert.deepEqual(said(h, conv).filter((l) => l.startsWith("assistant") && !l.endsWith(": ")), ["assistant(gus): Built it.", "assistant(nico): Tested it."]);
   assert.match(text(h.model.agent[2]!), /\[Gus\]: Built it\./, "Nico hears what Gus did");
+});
+
+test("a session's turn is attended: your words in a tab, so your rules decide, as in a chat", async (t) => {
+  const h = await agentHome(t, [
+    { calls: [{ name: "shell", args: { command: "echo attended" } }] },
+    { chunks: ["Ran it."] },
+  ], { agent: { decide: () => "allow" } });
+  h.home.inbox.addOrb("gus", "Gus", "devops");
+  const s = h.home.team.create("Ship it", { floor: ["gus"] });
+  h.home.team.say(s.id, "floor", "Run it");
+  for (let i = 0; i < 20 && h.model.agent.length < 2; i++) {
+    await h.home.inbox.idle();
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  const conv = `team:${s.id}:floor`;
+  assert.equal(h.home.conversations.openCard(conv), undefined, "no card: your rules allow it, and you are there");
+  assert.ok(h.home.conversations.list(conv).some((m) => m.role === "tool" && m.content.includes("attended")), "it ran");
 });
 
 test("only orbs in the office can be brought in, and a tab with no one in it says so", async (t) => {

@@ -11,6 +11,7 @@
 // 80 s for a `sleep 90`). A tool not yet started does not start; a running command's whole
 // process tree is killed; a fetch is aborted. Background commands are the exception on purpose:
 // the person asked for them to outlive the turn.
+import { FLOOR_WORDS } from "../rules/floor.ts";
 import { type ChildProcess, spawn } from "node:child_process";
 import { lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve, sep } from "node:path";
@@ -27,6 +28,11 @@ export type ToolContext = {
   searchKey?: () => Promise<SearchKey | null>;
   /** Puts a line in the conversation for everyone in it (a session's "✓ Agreed", PLAN 2.9). */
   note?: (text: string, meta: Record<string, unknown>) => void;
+  /** Keeps a bill or a reminder for the person, for the notification centre (PLAN 2.11). */
+  remind?: (r: { kind: "bill" | "reminder"; title: string; due: string; amount?: string | null; aheadDays?: number }) => { id: number; comesUpAt: number };
+  /** The bills and reminders kept, and moving one (only once the person approves: the floor). */
+  reminders?: () => { id: number; kind: string; title: string; due: string; amount: string | null }[];
+  moveReminder?: (id: number, due: string) => { id: number; due: string };
 };
 type Args = Record<string, unknown>;
 
@@ -371,6 +377,72 @@ export const TOOLS: ToolDef[] = [
       if (!d) return { content: "agree needs the decision, in a line.", isError: true };
       ctx.note?.(`✓ Agreed: ${d}`, { agreed: d });
       return { content: `Recorded for everyone: ✓ Agreed: ${d}` };
+    },
+  },
+  {
+    name: "remind",
+    label: "Keeping a reminder",
+    description:
+      "Keep a bill or a reminder for the person: it comes up in their notification centre ahead of time (a bill 3 days before it is due unless you say otherwise; a reminder on its day, or at its time). Use it for a bill you found, a payment to make, a renewal, a deadline, anything they asked you to remember.",
+    parameters: obj(
+      {
+        kind: { type: "string", enum: ["bill", "reminder"] },
+        title: { type: "string", description: "What it is, in a few words (Rent, Car insurance renewal, Call the dentist)." },
+        due: { type: "string", description: "The day it is due, YYYY-MM-DD, or a day and a time, YYYY-MM-DDTHH:MM, in the person's own time." },
+        amount: { type: "string", description: "For a bill: how much, as the bill says it ($1,200, 49.99 EUR)." },
+        ahead_days: { type: "number", description: "How many days ahead it should come up (0 to 60)." },
+      },
+      ["kind", "title", "due"],
+    ),
+    describe: (a) => `keep a ${s(a.kind) === "bill" ? "bill" : "reminder"}: ${s(a.title)}, due ${s(a.due)}`,
+    decision: "allow", // it only tells the person, and they can put it away
+    async run(a, ctx) {
+      if (!ctx.remind) return { content: "Reminders are not kept here.", isError: true };
+      try {
+        const kind = s(a.kind) === "bill" ? "bill" : "reminder";
+        const r = ctx.remind({ kind, title: s(a.title), due: s(a.due), amount: typeof a.amount === "string" ? a.amount : null, ...(typeof a.ahead_days === "number" && { aheadDays: a.ahead_days }) });
+        return { content: `Kept (${kind} ${r.id}). It comes up ${new Date(r.comesUpAt).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}.` };
+      } catch (e) {
+        return { content: e instanceof Error ? e.message : String(e), isError: true };
+      }
+    },
+  },
+  {
+    name: "list_reminders",
+    label: "Looking at the calendar",
+    description: "List the bills and reminders kept for the person (yours and the other orbs'), with their ids and when each is due.",
+    parameters: obj({}, []),
+    describe: () => "look at the bills and reminders kept",
+    decision: "allow",
+    async run(_a, ctx) {
+      const all = ctx.reminders?.() ?? [];
+      return { content: all.length ? all.map((r) => `${r.id}: ${r.kind} "${r.title}", due ${r.due}${r.amount ? `, ${r.amount}` : ""}`).join("\n") : "(none kept)" };
+    },
+  },
+  {
+    name: "move_reminder",
+    label: "Moving something on the calendar",
+    description: "Propose moving a bill or a reminder to another day (or time). The person sees it as a card and nothing moves until they approve: moving what is on their calendar is never silent.",
+    parameters: obj(
+      {
+        id: { type: "number", description: "Its id (list_reminders)." },
+        title: { type: "string", description: "What it is, as the card should say it." },
+        due: { type: "string", description: "The new day, YYYY-MM-DD, or day and time, YYYY-MM-DDTHH:MM." },
+        why: { type: "string", description: "Why, in one line." },
+      },
+      ["id", "title", "due"],
+    ),
+    describe: (a) => `move ${s(a.title)} to ${s(a.due)}${a.why ? ` (${s(a.why)})` : ""}`,
+    decision: "ask",
+    floor: () => [{ category: "calendar", why: FLOOR_WORDS.calendar }],
+    async run(a, ctx) {
+      if (!ctx.moveReminder) return { content: "The calendar is not kept here.", isError: true };
+      try {
+        const r = ctx.moveReminder(Number(a.id), s(a.due));
+        return { content: `Moved ${s(a.title)} to ${r.due}.` };
+      } catch (e) {
+        return { content: e instanceof Error ? e.message : String(e), isError: true };
+      }
     },
   },
   {

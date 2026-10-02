@@ -16,6 +16,24 @@ export type Message = {
 export type Card = { id: number; kind: "approval" | "question" | "connect" | "plan"; tool: string; title: string; detail: string; status: string; meta: Record<string, unknown> };
 export type Choice = "approve" | "deny" | "always" | "answer";
 export type Tab = "brainstorm" | "floor";
+/** His computer (PLAN 2.8): a folder's entries and a file's text in his workspace, as the home reads them. */
+export type Entry = { path: string; dir: boolean; size: number; mtime: number };
+export type WorkFile = { path: string; size: number; mtime: number; text: string | null; truncated: boolean };
+/** The lab (PLAN 2.13): every brainstorm and every plan shown, as the home keeps them. */
+export type LabSession = { id: number; title: string; createdAt: number; members: string[]; agreed: string[]; lastWords: string | null; plans: number[] };
+export type LabPlan = {
+  id: number; title: string; orb: string; conversation: string; session: number | null; status: string; createdAt: number;
+  rows: { id: string; feature: string; description: string; test: boolean; box: "[ ]" | "[~]" | "[x]" }[]; done: number; total: number;
+};
+/** The calendar (PLAN 2.12): what is on a day, as the home works it out. */
+export type CalendarEntry =
+  | { kind: "bill" | "reminder"; id: number; orb: string; title: string; day: string; time: string | null; amount: string | null; conversation: string | null }
+  | { kind: "schedule"; id: string; orb: string; title: string; day: string; time: string; cron: string; enabled: boolean };
+/** The notification centre (PLAN 2.11): what needs you or happened, as the home keeps it. */
+export type Notice = {
+  id: number; kind: "bill" | "reminder" | "approval" | "done"; orb: string; conversation: string | null; card: number | null; reminder: number | null;
+  title: string; detail: string; due: string | null; at: number;
+};
 /** A session (PLAN 2.9): a piece of work, with the orbs (by id) that work each tab, in turn order. */
 export type Session = { id: number; title: string; createdAt: number; brainstorm: string[]; floor: string[] };
 export const tabOf = (id: number, tab: Tab): string => `team:${id}:${tab}`;
@@ -38,6 +56,21 @@ export interface Office {
   bring(session: number, tab: Tab, orbs: string[]): Promise<Session>;
   sayIn(session: number, tab: Tab, text: string): Promise<void>;
   answer(card: number, choice: Choice, text?: string): Promise<void>;
+  /** The notification centre: what is out; putting one away, or all, for every device. */
+  notices(): Promise<Notice[]>;
+  putAway(id: number): Promise<void>;
+  putAwayAll(): Promise<void>;
+  /** The lab: what has `q` in it (everything when empty); a brainstorm reopened as a new session. */
+  labOf(q?: string): Promise<{ sessions: LabSession[]; plans: LabPlan[] }>;
+  reopen(session: number): Promise<Session>;
+  /** The calendar: the days from `from` to `to`; your own changes (an orb's go through a card). */
+  calendar(from: string, to: string): Promise<CalendarEntry[]>;
+  moveReminder(id: number, due: string): Promise<void>;
+  doneReminder(id: number): Promise<void>;
+  setSchedule(id: string, change: { time?: string; enabled?: boolean }): Promise<void>;
+  /** His computer: a folder of his workspace (its top when empty), and a file in it. */
+  files(c: Character, dir?: string): Promise<Entry[]>;
+  file(c: Character, path: string): Promise<WorkFile>;
   /** What happens as it happens: every event, and a reply's words as they stream. Returns a stop. */
   watch(on: { event?: (e: { type: string; orb: string | null; conversation: string | null }) => void; text?: (d: { orb: string; conversation: string; delta: string; run: number }) => void; /** the stream is open: from here on nothing is missed */ open?: () => void }): () => void;
 }
@@ -134,6 +167,39 @@ export function doorOffice(base: Character): Office {
     },
     async answer(card, choice, text) {
       await call(`../cards/${card}`, { method: "POST", body: JSON.stringify({ choice, ...(text !== undefined && { answer: text }) }) });
+    },
+    async notices() {
+      return (await call<{ notices: Notice[] }>("../notices")).notices;
+    },
+    async putAway(id) {
+      await call(`../notices/${id}/put-away`, { method: "POST" });
+    },
+    async putAwayAll() {
+      await call("../notices/put-away", { method: "POST" });
+    },
+    async labOf(q = "") {
+      return call<{ sessions: LabSession[]; plans: LabPlan[] }>(`../lab?q=${encodeURIComponent(q)}`);
+    },
+    async reopen(session) {
+      return (await call<{ session: Session }>(`../lab/sessions/${session}/reopen`, { method: "POST" })).session;
+    },
+    async calendar(from, to) {
+      return (await call<{ entries: CalendarEntry[] }>(`../calendar?from=${from}&to=${to}`)).entries;
+    },
+    async moveReminder(id, due) {
+      await call(`../reminders/${id}`, { method: "POST", body: JSON.stringify({ due }) });
+    },
+    async doneReminder(id) {
+      await call(`../reminders/${id}/done`, { method: "POST" });
+    },
+    async setSchedule(id, change) {
+      await call(`../schedules/${encodeURIComponent(id)}`, { method: "POST", body: JSON.stringify(change) });
+    },
+    async files(c, dir = "") {
+      return (await call<{ entries: Entry[] }>(`../orbs/${encodeURIComponent(idOf(c.name))}/workspace?path=${encodeURIComponent(dir)}`)).entries;
+    },
+    async file(c, path) {
+      return (await call<{ file: WorkFile }>(`../orbs/${encodeURIComponent(idOf(c.name))}/workspace/file?path=${encodeURIComponent(path)}`)).file;
     },
     watch(on) {
       // the live stream, with the session cookie (an EventSource sends it, same-origin)

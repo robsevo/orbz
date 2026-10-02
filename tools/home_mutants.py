@@ -307,6 +307,63 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("agree records nothing", "src/agent/tools.ts", [
         ("      ctx.note?.(`✓ Agreed: ${d}`, { agreed: d });\n", ""),
     ], ["team.test.ts"]),
+    ("a session's turn runs as if no one were there (your rules ignored)", "src/agent/loop.ts", [
+        ('    const attended = ctx.items.some((i) => i.source === "chat" || i.source === "turn" || typeof i.data.resume === "number");', '    const attended = ctx.items.some((i) => i.source === "chat" || typeof i.data.resume === "number");'),
+    ], ["team.test.ts"]),
+    ("his computer reads a file outside his workspace", "src/workspace.ts", [
+        ("  const p = inWorkspace(workspaceOf(dataDir, orb), path);\n  if (!p) throw new OutsideError(path);", "  const p = join(workspaceOf(dataDir, orb), path);"),
+    ], ["workspace.test.ts"]),
+    ("his computer lists a link that leads out", "src/workspace.ts", [
+        ("    const p = inWorkspace(root, rel);\n    if (!p) continue; // a link that leads out of it is not shown", "    const p = join(at, name);"),
+    ], ["workspace.test.ts"]),
+    ("a big file is sent whole", "src/workspace.ts", [
+        ("  const n = Math.min(s.size, READ_CAP);", "  const n = s.size;"),
+    ], ["workspace.test.ts"]),
+    ("a bill comes up every hour", "src/notices.ts", [
+        ("      this.#add(`reminder:${r.id}`, {", "      this.#add(`reminder:${r.id}:${now}`, {"),
+    ], ["notices.test.ts"]),
+    ("a bill comes up on its day, not ahead", "src/notices.ts", [
+        ("  const at = new Date(y, mo - 1, d - aheadDays, h, mi);", "  const at = new Date(y, mo - 1, d, h, mi);"),
+    ], ["notices.test.ts"]),
+    ("an answered card's notice stays out", "src/notices.ts", [
+        ('      this.#settle("card = ?", Number(e.data.card));\n', ""),
+    ], ["notices.test.ts"]),
+    ("finished work piles up", "src/notices.ts", [
+        ("      this.#settle(\"kind = 'done' AND conversation = ?\", e.conversation);\n", ""),
+    ], ["notices.test.ts"]),
+    ("putting a notice away is not told to the other devices", "src/notices.ts", [
+        ('    if (!n.changes) throw new Error(`no notice ${id} out`);\n    this.#events.append("notice.put_away", { notices: [id] });', '    if (!n.changes) throw new Error(`no notice ${id} out`);'),
+    ], ["notices.test.ts"]),
+    ("the remind tool keeps nothing", "src/agent/tools.ts", [
+        ("        const r = ctx.remind({ kind,", "        const r = { id: 0, comesUpAt: 0 } ?? ctx.remind({ kind,"),
+    ], ["notices.test.ts"]),
+    ("an orb moves what is on your calendar silently", "src/agent/tools.ts", [
+        ('    floor: () => [{ category: "calendar", why: FLOOR_WORDS.calendar }],\n', ""),
+    ], ["calendar.test.ts"]),
+    ("a schedule's new time swaps its hour and minute", "src/schedule.ts", [
+        ("    const cron = [String(minute), String(hour), ...f.slice(2)].join(\" \");", "    const cron = [String(hour), String(minute), ...f.slice(2)].join(\" \");"),
+    ], ["calendar.test.ts"]),
+    ("the calendar leaves the schedules out", "src/calendar.ts", [
+        ("  for (const s of o.schedules.list()) {", "  for (const s of o.schedules.list().filter(() => false)) {"),
+    ], ["calendar.test.ts"]),
+    ("a paused schedule leaves the calendar", "src/calendar.ts", [
+        ("  for (const s of o.schedules.list()) {", "  for (const s of o.schedules.list().filter((x) => x.enabled)) {"),
+    ], ["calendar.test.ts"]),
+    ("the lab forgets what was agreed", "src/lab.ts", [
+        ('      agreed: said.filter((m) => m.role === "notice" && typeof m.meta.agreed === "string").map((m) => String(m.meta.agreed)),', "      agreed: [] as string[],"),
+    ], ["lab.test.ts"]),
+    ("a plan in the lab shows its frozen boxes, not the board's", "src/lab.ts", [
+        ("box: live.get(id) ?? r.box };", "box: r.box };"),
+    ], ["lab.test.ts"]),
+    ("the lab's search misses a plan's rows", "src/lab.ts", [
+        ("    plans: plans.filter((p) => has(p.title, ...p.rows.flatMap((r) => [r.feature, r.description]))).sort(", "    plans: plans.filter((p) => has(p.title)).sort("),
+    ], ["lab.test.ts"]),
+    ("a reopened brainstorm forgets what was agreed", "src/lab.ts", [
+        ('  o.conversations.add({ conversation, orb, role: "summary", content: lines.join("\\n\\n") });\n', ""),
+    ], ["lab.test.ts"]),
+    ("what one orb agreed stays his", "src/agent/conversation.ts", [
+        ('      else if (m.role === "notice" && o.me && m.orb !== o.me && typeof m.meta.agreed === "string") out.push({ role: "user", content: `[Agreed]: ${m.meta.agreed}` });\n', ""),
+    ], ["lab.test.ts"]),
     # the researchers' tools (PLAN 3.10)
     ("the web tools may reach loopback", "src/agent/net.ts", [
         ("    a === 0 || a === 10 || a === 127 ||", "    a === 0 || a === 10 ||"),
@@ -498,9 +555,9 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("what was agreed is not on the stage", "src/rooms/Sessions.tsx", [
         ('  const agreed = messages.filter((m) => m.role === "notice" && typeof m.meta.agreed === "string");', "  const agreed: Message[] = [];"),
     ], ["sessions.test.ts"]),
-    ("an orb's computer never shows what came back", "src/rooms/Sessions.tsx", [
-        ("result: results.get(c.id) ?? null });", "result: null });"),
-    ], ["sessions.test.ts"]),
+    ("an orb's computer never shows what came back", "src/rooms/work.ts", [
+        ("args, result: r?.content ?? null, failed:", "args, result: null, failed:"),
+    ], ["work.test.ts"]),
     ("a session's tabs are not addresses", "src/ui/nav.ts", [
         ('  if (r.room === "sessions") return r.id === null ? "#/sessions" : `#/session/${r.id}/${r.tab}`;', '  if (r.room === "sessions") return "#/sessions";'),
     ], ["sessions.test.ts"]),
@@ -546,6 +603,57 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("the shader ignores the fit", "src/orb/glsl.ts", [
         ("    float Rtop = uShapeD.y*Rg*(1.0 - 0.045*uMorph - 0.030*speak + uAccFit.x)*(1.0 - 0.5*uSquash) - 0.03*Rg;", "    float Rtop = uShapeD.y*Rg*(1.0 - 0.045*uMorph - 0.030*speak + shapeR(-1.5707963))*(1.0 - 0.5*uSquash) - 0.03*Rg;"),
     ], ["characters.test.ts"]),
+    ("a quoted comma splits a CSV's field", "src/rooms/work.ts", [
+        ("    } else if (ch === '\"' && field === \"\") quoted = true;", "    } else if (false) quoted = true;"),
+    ], ["work.test.ts"]),
+    ("the bars are drawn from a number written as text", "src/rooms/work.ts", [
+        ('  const value = keys.find((k) => recs.every((r) => typeof r[k] === "number" && Number.isFinite(r[k])));', '  const value = keys.find((k) => recs.every((r) => r[k] !== undefined && Number.isFinite(Number(r[k]))));'),
+    ], ["work.test.ts"]),
+    ("a decision shows as work on his computer", "src/rooms/work.ts", [
+        ('      if (c.name === "agree") continue; // a decision shows as ✓ Agreed, not as work\n', ""),
+    ], ["work.test.ts"]),
+    ("the dataset counts its header as a row", "src/rooms/Computer.tsx", [
+        ("          {body.length} {body.length === 1 ? \"row\" : \"rows\"} · {cols}", "          {rows.length} {rows.length === 1 ? \"row\" : \"rows\"} · {cols}"),
+    ], ["computer.test.ts"]),
+    ("his page runs its scripts beside the app", "src/rooms/Computer.tsx", [
+        ('sandbox="" srcDoc={file.text}', 'sandbox="allow-scripts allow-same-origin" srcDoc={file.text}'),
+    ], ["computer.test.ts"]),
+    ("the cursor points at what he did not touch", "src/rooms/Computer.tsx", [
+        ("    if (!el) {\n      setAt(null);\n      return;\n    }", "    if (!el) return;"),
+    ], ["computer.test.ts"]),
+    ("the cursor never goes where he worked", "src/rooms/Computer.tsx", [
+        ("    const el = root.querySelector<HTMLElement>(`[data-act=\"${CSS.escape(latest.id)}\"]`);", "    const el = root.querySelector<HTMLElement>(\"[data-act]\");"),
+    ], ["computer.test.ts"]),
+    ("finishing is silent", "src/rooms/Computer.tsx", [
+        ('      play("create");\n', ""),
+    ], ["computer.test.ts"]),
+    ("the Floor shows no one's computer", "src/rooms/Sessions.tsx", [
+        ("            {shown && <Computer key={idOf(shown.name)} home={o.home} orb={shown} messages={messages} busy={busy[idOf(shown.name)]} big />}", "            {null}"),
+    ], ["sessions.test.ts"]),
+    ("the side menu does not count what waits", "src/orbs.tsx", [
+        ('{navItem("Notifications", room === "notices", { room: "notices" }, "◔", notices.notices.length)}', '{navItem("Notifications", room === "notices", { room: "notices" }, "◔")}'),
+    ], ["notices.test.ts"]),
+    ("a notice put away on one device stays on another", "src/rooms/Notices.tsx", [
+        ('        if (e.type === "notice.added" || e.type === "notice.put_away") reload();', '        if (e.type === "notice.added") reload();'),
+    ], ["notices.test.ts"]),
+    ("an approval opens nowhere", "src/rooms/Notices.tsx", [
+        ("  const c = n.conversation;\n  if (!c) return null;", "  const c = n.conversation;\n  if (c || !c) return null;"),
+    ], ["notices.test.ts"]),
+    ("the calendar's week starts on Sunday", "src/rooms/Calendar.tsx", [
+        ("  const lead = (first.getDay() + 6) % 7; // days since Monday", "  const lead = first.getDay();"),
+    ], ["calendar.test.ts"]),
+    ("moving a bill in the calendar reaches nowhere", "src/rooms/Calendar.tsx", [
+        ("act(home.moveReminder(e.id, e.time ? `${ev.target.value}T${e.time}` : ev.target.value))", "act(Promise.resolve())"),
+    ], ["calendar.test.ts"]),
+    ("a schedule's time in the calendar reaches nowhere", "src/rooms/Calendar.tsx", [
+        ("set={(time) => act(home.setSchedule(e.id, { time }))}", "set={() => act(Promise.resolve())}"),
+    ], ["calendar.test.ts"]),
+    ("the lab's search looks for nothing", "src/rooms/Lab.tsx", [
+        ("    if (o.home) o.home.labOf(q).then(setLab, (e: Error) => setSaid(e.message));", "    if (o.home) o.home.labOf(\"\").then(setLab, (e: Error) => setSaid(e.message));"),
+    ], ["lab.test.ts"]),
+    ("Reopen opens the old brainstorm", "src/rooms/Lab.tsx", [
+        ('    home.reopen(id).then((s) => o.go({ room: "sessions", id: s.id, tab: "brainstorm" }), (e: Error) => setSaid(e.message));', '    void home; o.go({ room: "sessions", id, tab: "brainstorm" });'),
+    ], ["lab.test.ts"]),
     ("the specimen scrolls sideways on a phone", "src/specimen.tsx", [
         ('gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 420px), 1fr))"', 'gridTemplateColumns: "repeat(auto-fit, minmax(420px, 1fr))"'),
     ], ["render.test.ts"]),
@@ -620,7 +728,10 @@ def run_suites(work: Path, suites: list[str]) -> subprocess.CompletedProcess[str
     """The suites (paths inside `work`, the copied packages/), each test given a minute. A run that
     still hangs past ten is red too: a defect that makes a test hang has been caught as surely as
     one that makes it fail."""
-    cmd = ["node", "--test", "--test-timeout=60000", *[str(work / s) for s in suites]]
+    # as the gate runs them (tools/run-ts-tests.mjs): half the cores at once, two minutes a test;
+    # every core at once starved the picture suites past their limit (10-02)
+    at = max(2, (os.cpu_count() or 4) // 2)
+    cmd = ["node", "--test", "--test-timeout=120000", f"--test-concurrency={at}", *[str(work / s) for s in suites]]
     # its own process group, so a hung run is ended with everything it started (a planted defect
     # that spawns two kits leaves one nobody will stop)
     p = subprocess.Popen(cmd, cwd=work, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, start_new_session=True)
