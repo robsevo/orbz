@@ -39,12 +39,15 @@ test("an orb proposes a lesson: a card whatever the rules say; on your yes he le
   assert.deepEqual(h.home.learned.list("hazel"), ["Charts start at zero."]);
   assert.deepEqual(h.home.learned.list("milo"), [], "he alone");
   assert.equal(h.home.xp.totals().hazel, XP.lessonKept, "a lesson kept is evidence for his XP");
+  const chips = () => h.home.conversations.list("chat:hazel").filter((m) => m.role === "notice" && typeof m.meta.memory === "string").map((m) => m.meta.memory);
+  assert.deepEqual(chips(), ["Charts start at zero."], "the conversation says his memory changed, and how");
 
   h.home.inbox.send("hazel", "chat:hazel", "and the totals");
   await settle(h, () => Boolean(h.home.conversations.openCard("chat:hazel")));
   h.home.answerCard(h.home.conversations.openCard("chat:hazel")!.id, "deny");
   await settle(h, () => h.model.agent.length >= 4);
   assert.deepEqual(h.home.learned.list("hazel"), ["Charts start at zero."], "your no: nothing more");
+  assert.equal(chips().length, 1, "and no chip for what he did not learn");
 });
 
 test("what must never be learned is turned away before you are asked, with what to keep instead", async (t) => {

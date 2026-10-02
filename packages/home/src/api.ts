@@ -1,22 +1,33 @@
 // The home's door: a small HTTP API on 127.0.0.1 for the terminal (PLAN 1.9), the app (2.4) and
 // anything else on this machine that needs to reach a headless home. The database is locked to
 // the home, so this is the only way in. A random port and a random token are written to
-// `<data>/home.json`, readable only by the owner. Every request needs the token, and the Host
-// header must name the loopback address, so a web page can't reach it by DNS rebinding.
+// `<data>/home.json`, readable only by the owner. Every request needs the token (or an app
+// session), and the Host header must name the loopback address, so a web page can't reach it by
+// DNS rebinding.
+//
+// The person's other devices (PLAN 2.7) come in by a second door, only if the home is given one:
+// HTTPS on the box's own names (a domain's certificate, or a private network's), nothing else. It
+// answers only to those names (a rebound hostname is refused), never takes the loopback token
+// (that stays for local tools), and lets in only a session: a pairing link (a QR code on a phone)
+// or a passkey, each a device that can be revoked.
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { existsSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { createServer as createTlsServer } from "node:https";
 import { extname, join, normalize, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Home } from "./home.ts";
 import { UnknownOrbError } from "./inbox.ts";
 import { KeyRefusedError } from "./brain/brains.ts";
 import { SPECIALTY_FAMILIES, type Specialty } from "./brain/constitution.ts";
-import { cookieOf, SESSION_COOKIE, Sessions } from "./sessions.ts";
+import { cookieOf, deviceName, SESSION_COOKIE, SESSION_MS, type Sessions } from "./sessions.ts";
+import { PasskeyError, type Where } from "./passkeys.ts";
 import type { Tab } from "./team.ts";
 import { standingContext } from "./agent/standing.ts";
 import { listWorkspace, MissingError, OutsideError, readWorkspace } from "./workspace.ts";
 import { calendarOf } from "./calendar.ts";
+import { cronFor, preview, RuleError, ruleOf, wordsOf } from "./schedule-rules.ts";
+import { cronOf } from "./schedule.ts";
 import { labOf, reopen } from "./lab.ts";
 import { morningCard } from "./gym/card.ts";
 import { levelOf, nextFor } from "./gym/levels.ts";
@@ -28,7 +39,13 @@ export type HomeDoor = {
   port: number; token: string; file: string; close(): Promise<void>;
   /** A one-time link that opens the app on this machine, paired (PLAN 2.4): good for five minutes. */
   pairLink(): string;
+  /** The door for the person's other devices (PLAN 2.7), when it has one: its port, and a pairing
+   * link through it (for a phone, as a QR code). */
+  remote: { port: number; pairLink(): string } | null;
 };
+
+/** The second door (PLAN 2.7): HTTPS on these names only, with this certificate. */
+export type Remote = { names: string[]; cert: string | Buffer; key: string | Buffer; port?: number; host?: string };
 
 const BODY_LIMIT = 64 * 1024;
 
@@ -43,13 +60,17 @@ class HttpError extends Error {
 /** Where the built app is (`pnpm -C packages/app build`), served at /app/. */
 export const APP_DIR = fileURLToPath(new URL("../../app/dist/", import.meta.url));
 
-export async function serve(home: Home, opts: { port?: number; appDir?: string } = {}): Promise<HomeDoor> {
+export async function serve(home: Home, opts: { port?: number; appDir?: string; remote?: Remote } = {}): Promise<HomeDoor> {
   const token = randomBytes(24).toString("base64url");
   const want = Buffer.from(`Bearer ${token}`);
-  const sessions = new Sessions(home.clock);
+  const sessions = home.sessions;
   const appDir = opts.appDir ?? APP_DIR;
-  const server = createServer((req, res) => {
-    handle(home, req, want, server.address(), res, { sessions, appDir })
+  const names = opts.remote ? opts.remote.names.map((n) => n.toLowerCase()) : null;
+  let remotePort = -1;
+  const remoteLink = (): string => `https://${names![0]}${remotePort === 443 ? "" : `:${remotePort}`}/app/orbs.html#pair=${sessions.code()}`;
+  const handler = (which: () => Server, remote: boolean) => (req: IncomingMessage, res: ServerResponse) => {
+    const door = { sessions, appDir, remote: remote ? names : null, pairLink: () => (names ? remoteLink() : localLink()) };
+    handle(home, req, want, which().address(), res, door)
       .then((body) => {
         if (body !== STREAMING) send(res, 200, body);
       })
@@ -57,7 +78,8 @@ export async function serve(home: Home, opts: { port?: number; appDir?: string }
         const status = e instanceof HttpError ? e.status : e instanceof UnknownOrbError ? 404 : 500;
         send(res, status, { error: e instanceof Error ? e.message : String(e) });
       });
-  });
+  };
+  const server: Server = createServer(handler(() => server, false));
   await new Promise<void>((ok, fail) => {
     server.once("error", fail);
     server.listen(opts.port ?? 0, "127.0.0.1", () => ok());
@@ -65,6 +87,17 @@ export async function serve(home: Home, opts: { port?: number; appDir?: string }
   const port = (server.address() as { port: number }).port;
   const addr = server.address();
   if (!addr || typeof addr === "string") throw new Error("the home's door has no port");
+  const localLink = (): string => `http://127.0.0.1:${port}/app/orbs.html#pair=${sessions.code()}`;
+  let tls: Server | null = null;
+  if (opts.remote && names?.length) {
+    const t: Server = createTlsServer({ cert: opts.remote.cert, key: opts.remote.key }, handler(() => t, true));
+    await new Promise<void>((ok, fail) => {
+      t.once("error", fail);
+      t.listen(opts.remote!.port ?? 0, opts.remote!.host ?? "0.0.0.0", () => ok());
+    });
+    remotePort = (t.address() as { port: number }).port;
+    tls = t;
+  }
   const file = join(home.dataDir, "home.json");
   const tmp = `${file}.${process.pid}.tmp`;
   writeFileSync(tmp, JSON.stringify({ pid: process.pid, port: addr.port, token, version }, null, 1), { mode: 0o600 });
@@ -73,13 +106,16 @@ export async function serve(home: Home, opts: { port?: number; appDir?: string }
     port: addr.port,
     token,
     file,
-    pairLink: () => `http://127.0.0.1:${port}/app/orbs.html#pair=${sessions.code()}`,
-    close: () =>
-      new Promise<void>((ok) => {
-        rmSync(file, { force: true });
-        server.closeAllConnections();
-        server.close(() => ok());
-      }),
+    pairLink: localLink,
+    remote: tls ? { port: remotePort, pairLink: remoteLink } : null,
+    close: async () => {
+      rmSync(file, { force: true });
+      for (const s of [server, tls]) {
+        if (!s) continue;
+        s.closeAllConnections();
+        await new Promise<void>((ok) => s.close(() => ok()));
+      }
+    },
   };
 }
 
@@ -91,12 +127,21 @@ async function handle(
   want: Buffer,
   addr: ReturnType<ReturnType<typeof createServer>["address"]>,
   res?: ServerResponse,
-  door?: { sessions: Sessions; appDir: string },
+  door?: { sessions: Sessions; appDir: string; remote: string[] | null; pairLink: () => string },
 ): Promise<unknown> {
   const port = addr && typeof addr !== "string" ? addr.port : -1;
-  if (req.headers.host !== `127.0.0.1:${port}` && req.headers.host !== `localhost:${port}`) {
+  const host = (req.headers.host ?? "").toLowerCase();
+  const remote = door?.remote ?? null;
+  if (remote) {
+    // the second door answers only to the box's own names: a hostname rebound to it is refused
+    const name = host.replace(/:\d+$/, "");
+    if (!remote.includes(name) || (host !== name && host !== `${name}:${port}`)) throw new HttpError(421, `this home answers only as ${remote.join(", ")}`);
+  } else if (host !== `127.0.0.1:${port}` && host !== `localhost:${port}`) {
     throw new HttpError(403, "the home only answers on the loopback address");
   }
+  // where a passkey is made and used: the name the browser asked (an IP is never one; loopback is "localhost")
+  const where: Where = remote ? { rpId: host.replace(/:\d+$/, ""), origin: `https://${host}` } : { rpId: "localhost", origin: `http://localhost:${port}` };
+  const cookie = (id: string): string => `${SESSION_COOKIE}=${id}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_MS / 1000}${remote ? "; Secure" : ""}`;
   const url = new URL(req.url ?? "/", `http://127.0.0.1:${port}`);
   const parts = url.pathname.split("/").filter(Boolean);
   const method = req.method ?? "GET";
@@ -108,20 +153,62 @@ async function handle(
   }
   // a pairing link's code, for a session
   if (method === "POST" && url.pathname === "/session" && door) {
-    const id = door.sessions.redeem(text(await body(req), "code"));
+    const id = door.sessions.redeem(text(await body(req), "code"), deviceName(req.headers["user-agent"]));
     if (!id) throw new HttpError(401, "that pairing link is used or lapsed: start the home again, or ask it for a new one");
-    res!.setHeader("set-cookie", `${SESSION_COOKIE}=${id}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${30 * 24 * 3600}`);
+    res!.setHeader("set-cookie", cookie(id));
     return { paired: true };
+  }
+  // a passkey's sign-in (PLAN 2.7): what the browser needs, then its signature, for a session
+  if (method === "POST" && url.pathname === "/passkeys/sign-in/options" && door) return home.passkeys.getOptions(where);
+  if (method === "POST" && url.pathname === "/passkeys/sign-in" && door) {
+    try {
+      const id = home.passkeys.signIn(where, (await body(req)).credential, deviceName(req.headers["user-agent"]));
+      res!.setHeader("set-cookie", cookie(id));
+      return { signedIn: true };
+    } catch (e) {
+      throw e instanceof PasskeyError ? new HttpError(401, e.message) : e;
+    }
   }
 
   const got = Buffer.from(req.headers.authorization ?? "");
-  const byToken = got.length === want.length && timingSafeEqual(got, want);
-  const bySession = !byToken && Boolean(door?.sessions.valid(cookieOf(req.headers.cookie, SESSION_COOKIE)));
-  if (!byToken && !bySession) throw new HttpError(401, "missing or wrong token (see home.json), or no session (open the pairing link)");
+  const byToken = !remote && got.length === want.length && timingSafeEqual(got, want); // the token is for this machine's tools only
+  const me = byToken ? null : (door?.sessions.device(cookieOf(req.headers.cookie, SESSION_COOKIE)) ?? null);
+  const bySession = me !== null;
+  if (!byToken && !bySession) throw new HttpError(401, remote ? "no session: open a pairing link, or sign in with your passkey" : "missing or wrong token (see home.json), or no session (open the pairing link)");
   // a change made with a session needs the app's own header: a page on another site cannot add it
   if (bySession && method !== "GET" && req.headers["x-orbs"] !== "1") throw new HttpError(403, "a change through a session needs the x-orbs header");
 
   if (method === "GET" && url.pathname === "/stream") return stream(home, req, res!, Number(url.searchParams.get("since") ?? 0));
+
+  // the devices signed in, and the owner's passkeys (PLAN 2.7)
+  if (method === "GET" && url.pathname === "/devices") return { devices: home.sessions.list().map((d) => ({ ...d, current: d.id === me?.id })) };
+  if (method === "POST" && url.pathname === "/devices/pair" && door) return { link: door.pairLink(), lapsesInMs: 5 * 60_000 };
+  if (method === "POST" && parts[0] === "devices" && parts.length === 3 && parts[2] === "revoke") {
+    try {
+      home.sessions.revoke(Number(parts[1]));
+      return { revoked: true };
+    } catch (e) {
+      throw new HttpError(404, e instanceof Error ? e.message : String(e));
+    }
+  }
+  if (method === "POST" && url.pathname === "/passkeys/new/options") return home.passkeys.createOptions(where, home.about.get().name ?? "the owner");
+  if (method === "POST" && url.pathname === "/passkeys") {
+    const b = await body(req);
+    try {
+      return { passkey: home.passkeys.register(where, b.credential, typeof b.name === "string" ? b.name : deviceName(req.headers["user-agent"])) };
+    } catch (e) {
+      throw e instanceof PasskeyError ? new HttpError(400, e.message) : e;
+    }
+  }
+  if (method === "GET" && url.pathname === "/passkeys") return { passkeys: home.passkeys.list() };
+  if (method === "POST" && parts[0] === "passkeys" && parts.length === 3 && parts[2] === "remove") {
+    try {
+      home.passkeys.remove(Number(parts[1]));
+      return { removed: true };
+    } catch (e) {
+      throw new HttpError(404, e instanceof Error ? e.message : String(e));
+    }
+  }
 
   if (method === "GET" && url.pathname === "/status") {
     return {
@@ -344,7 +431,7 @@ async function handle(
     const orb = decodeURIComponent(parts[1]!);
     const who = home.inbox.orb(orb);
     if (!who) throw new HttpError(404, `no orb "${orb}"`);
-    return { level: levelOf(home.events, orb), next: nextFor(home.events, orb, { specialty: who.specialty, now: home.clock.now() }) };
+    return { level: levelOf(home.events, orb), xp: home.xp.of(orb, home.clock.now()).total, next: nextFor(home.events, orb, { specialty: who.specialty, now: home.clock.now() }) };
   }
   if (method === "POST" && parts[0] === "orbs" && parts.length === 3 && (parts[2] === "promote" || parts[2] === "decline-promotion")) {
     const orb = decodeURIComponent(parts[1]!);
@@ -397,6 +484,31 @@ async function handle(
       if (e instanceof HttpError) throw e;
       throw new HttpError(/^no reminder/.test(String((e as Error).message)) ? 404 : 400, e instanceof Error ? e.message : String(e));
     }
+  }
+  // the schedule editor (PLAN 2.4): a rule, previewed in plain words with its next runs, then kept
+  if (parts[0] === "schedules" && (url.pathname === "/schedules/preview" || url.pathname === "/schedules")) {
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (method === "GET") {
+      const orb = url.searchParams.get("orb") ?? undefined;
+      return { schedules: home.schedules.list(orb).map((x) => ({ ...x, words: wordsOf(x.cron), next: cronOf(x.cron, x.timezone).nextRun(new Date(home.clock.now()))?.getTime() ?? null })) };
+    }
+    const b = await body(req);
+    try {
+      if (url.pathname === "/schedules/preview") return preview(ruleOf(b.rule), zone, new Date(home.clock.now()));
+      const orb = text(b, "orb");
+      if (!home.inbox.orb(orb)) throw new HttpError(404, `no orb "${orb}"`);
+      const cron = cronFor(ruleOf(b.rule));
+      const made = home.schedules.add({ orb, name: text(b, "name").slice(0, 80), instruction: text(b, "instruction").slice(0, 2000), cron, timezone: zone });
+      return { schedule: { ...made, words: wordsOf(made.cron) } };
+    } catch (e) {
+      throw e instanceof RuleError ? new HttpError(400, e.message) : e;
+    }
+  }
+  if (method === "POST" && parts[0] === "schedules" && parts.length === 3 && parts[2] === "remove") {
+    const id = decodeURIComponent(parts[1]!);
+    if (!home.schedules.get(id)) throw new HttpError(404, `no schedule ${id}`);
+    home.schedules.remove(id);
+    return { removed: true };
   }
   if (method === "POST" && parts[0] === "schedules" && parts.length === 2) {
     const id = decodeURIComponent(parts[1]!);

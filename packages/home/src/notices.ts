@@ -190,7 +190,7 @@ export class Notices {
       const x = e.data.evidence as { xp: { has: number }; tasks: { has: string[] } };
       this.#add(`promotion:${e.orb}:${String(e.data.to)}`, {
         kind: "promotion", orb: e.orb, conversation: null, title: `${this.#nameOf(e.orb)} is ready for ${String(e.data.to)}`,
-        detail: `${x.xp.has} XP; ${x.tasks.has.length} task type(s) earned in the specialty; no regression lately`, due: null,
+        detail: `${x.xp.has} XP; ${x.tasks.has.length} ${x.tasks.has.length === 1 ? "task" : "tasks"} learned in the specialty; no regression lately`, due: null,
       });
     } else if ((e.type === "orb.promoted" || e.type === "promotion.declined") && e.orb) {
       this.#settle("kind = 'promotion' AND orb = ?", e.orb);

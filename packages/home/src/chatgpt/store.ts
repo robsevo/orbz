@@ -4,8 +4,10 @@
 // without a keychain (a headless always-on box, Windows for now) keeps them in a file only its
 // owner can read, and the status says so. Tests use the memory store, or a stand-in tool.
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { readFileSync, renameSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
 
 export interface SecretStore {
   readonly kind: "keychain" | "file" | "memory";
@@ -128,12 +130,46 @@ export class MemoryStore implements SecretStore {
   }
 }
 
-/** The keychain when one answers here, else a file in the data directory. Windows uses the file
- * until a store that takes the secret on stdin is wired (cmdkey would put it on the command line). */
+/** One home's entries in a keychain the whole machine shares: each key carries the home's own
+ * prefix, so two homes (a test's, in a temporary folder, and yours) never read each other's
+ * secrets. The default home also reads the entries it wrote before they had a prefix. */
+export class HomeScopedStore implements SecretStore {
+  readonly kind: SecretStore["kind"];
+  readonly #inner: SecretStore;
+  readonly #prefix: string;
+  readonly #legacy: boolean;
+
+  constructor(inner: SecretStore, dataDir: string, o: { legacy: boolean }) {
+    this.#inner = inner;
+    this.kind = inner.kind;
+    this.#prefix = `home-${createHash("sha256").update(resolve(dataDir)).digest("hex").slice(0, 12)}:`;
+    this.#legacy = o.legacy;
+  }
+
+  async get(key: string): Promise<string | null> {
+    return (await this.#inner.get(this.#prefix + key)) ?? (this.#legacy ? this.#inner.get(key) : null);
+  }
+
+  async set(key: string, value: string): Promise<void> {
+    await this.#inner.set(this.#prefix + key, value);
+  }
+
+  async delete(key: string): Promise<void> {
+    await this.#inner.delete(this.#prefix + key);
+    if (this.#legacy) await this.#inner.delete(key);
+  }
+}
+
+/** The home a person runs by default: $ORBS_HOME, else ~/.orbs (as `pnpm start` picks it). */
+export const defaultHome = (): string => resolve(process.env.ORBS_HOME ?? join(homedir(), ".orbs"));
+
+/** The keychain when one answers here (this home's entries only), else a file in the data
+ * directory. Windows uses the file until a store that takes the secret on stdin is wired (cmdkey
+ * would put it on the command line). */
 export async function defaultStore(dataDir: string): Promise<SecretStore> {
   if (process.platform === "linux" || process.platform === "darwin") {
     const k = new KeychainStore();
-    if (await k.available()) return k;
+    if (await k.available()) return new HomeScopedStore(k, dataDir, { legacy: resolve(dataDir) === defaultHome() });
   }
   return new FileStore(join(dataDir, "secrets.json"));
 }

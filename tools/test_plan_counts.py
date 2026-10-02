@@ -62,5 +62,8 @@ check("P.5 control: a feature BELOW its test is fine", not any("outranks" in p f
 out, problems = render(GOOD.replace("6 boxes:", "boxes:"))
 check("P.6 a missing boxes line is a problem, not a silent pass", any("missing" in p for p in problems))
 
+out, problems = render(GOOD.replace("| 0.2 | Spike | x | [~] |", "| 0.2 | Spike | x | *a note* | [~] |"))
+check("P.7 a row with a fifth cell is a problem (the box falls out of the rendered table)", any("has 5 cells" in p for p in problems))
+
 print("ALL PASS" if not FAIL else f"{len(FAIL)} FAILED")
 sys.exit(1 if FAIL else 0)

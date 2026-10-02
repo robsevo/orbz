@@ -391,6 +391,9 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("a niche is measured against an average its own runs make", "src/gym/specialty.ts", [
         ("    const elsewhere = rest.length ? count(rest, w) / rest.length : 0;", "    const elsewhere = count(approved, w) / approved.length;"),
     ], ["specialty.test.ts"]),
+    ("a lesson learned leaves no mark on the conversation", "src/agent/tools.ts", [
+        ("        ctx.note?.(`Memory updated: ${lines.at(-1)}`, { memory: lines.at(-1) }); // the chip on the conversation (PLAN 2.4)\n", ""),
+    ], ["lessons.test.ts"]),
     ("an orb learns a lesson without your yes", "src/agent/tools.ts", [
         ('    decision: "ask",\n    floor: () => [{ category: "lessons", why: FLOOR_WORDS.lessons }],', '    decision: "allow",'),
     ], ["lessons.test.ts"]),
@@ -545,6 +548,72 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("the morning card counts his own brain's run as the big brain's too", "src/gym/card.ts", [
         ('(e.data.tier === "habit" || e.data.tier === "own") && typeof e.data.run', 'e.data.tier === "habit" && typeof e.data.run'),
     ], ["playbook.test.ts"]),
+    # the schedule editor's rules (PLAN 2.4)
+    ("a schedule may run every 5 minutes, or unevenly", "src/schedule-rules.ts", [
+        ("export const EVERY_MINUTES = [15, 20, 30] as const;", "export const EVERY_MINUTES = [5, 15, 20, 30, 45] as const;"),
+    ], ["schedule-rules.test.ts"]),
+    ("Sunday is day 7 to cron", "src/schedule-rules.ts", [
+        ('days.map((d) => d % 7).sort((a, b) => a - b).join(",")', 'days.map((d) => d).sort((a, b) => a - b).join(",")'),
+    ], ["schedule-rules.test.ts"]),
+    ("weekdays are said day by day", "src/schedule-rules.ts", [
+        ('        if (days.join() === "1,2,3,4,5") return `Weekdays at ${at}`;\n', ""),
+    ], ["schedule-rules.test.ts"]),
+    ("the editor keeps another pattern than it previewed", "src/api.ts", [
+        ("      const cron = cronFor(ruleOf(b.rule));", '      const cron = cronFor(ruleOf(b.rule)) && "0 9 * * *";'),
+    ], ["schedule-rules.test.ts"]),
+    ("an orb sets itself a schedule without asking", "src/agent/tools.ts", [
+        ('    decision: "ask", // work that comes back on its own, unwatched: the person says yes to it first', '    decision: "allow",'),
+    ], ["schedule-rules.test.ts"]),
+    ("a schedule that cannot be one reaches you as a card", "src/agent/tools.ts", [
+        ("        cronFor(ruleFromArgs(a));\n        return null;", "        return null;"),
+    ], ["schedule-rules.test.ts"]),
+    # the keychain, one per machine, shared by every home (PLAN 1.10)
+    ("every home reads every home's secrets", "src/chatgpt/store.ts", [
+        ("    return (await this.#inner.get(this.#prefix + key)) ?? (this.#legacy ? this.#inner.get(key) : null);", "    return (await this.#inner.get(this.#prefix + key)) ?? this.#inner.get(key);"),
+    ], ["store-scope.test.ts"]),
+    ("the default home loses its sign-in", "src/chatgpt/store.ts", [
+        ("    return (await this.#inner.get(this.#prefix + key)) ?? (this.#legacy ? this.#inner.get(key) : null);", "    return (await this.#inner.get(this.#prefix + key)) ?? (this.#legacy ? null : null);"),
+    ], ["store-scope.test.ts"]),
+    # the personal web app's home side (PLAN 2.7)
+    ("a revoked device keeps its way in", "src/sessions.ts", [
+        ("    if (!r || r.revoked_at !== null || r.expires_at < now) return null;", "    if (!r || r.expires_at < now) return null;"),
+    ], ["devices.test.ts"]),
+    ("the second door answers to any name", "src/api.ts", [
+        ("    if (!remote.includes(name) || (host !== name && host !== `${name}:${port}`)) throw", "    if (remote.length < 0) throw"),
+    ], ["devices.test.ts"]),
+    ("the second door takes the loopback token", "src/api.ts", [
+        ("  const byToken = !remote && got.length === want.length", "  const byToken = got.length === want.length"),
+    ], ["devices.test.ts"]),
+    ("the second door's cookie is not Secure", "src/api.ts", [
+        ('${remote ? "; Secure" : ""}', '${remote ? "" : ""}'),
+    ], ["devices.test.ts"]),
+    ("a stranger makes a passkey", "src/api.ts", [
+        ('  if (method === "POST" && url.pathname === "/passkeys/sign-in/options" && door) return home.passkeys.getOptions(where);', '  if (method === "POST" && url.pathname === "/passkeys/sign-in/options" && door) return home.passkeys.getOptions(where);\n  if (method === "POST" && url.pathname === "/passkeys/new/options" && door) return home.passkeys.createOptions(where, "a stranger");'),
+    ], ["devices.test.ts"]),
+    ("a sign-in another site asked for is taken", "src/passkeys.ts", [
+        ("    if (data.origin !== where.origin || data.crossOrigin === true) throw", "    if (data.crossOrigin === true) throw"),
+    ], ["devices.test.ts"]),
+    ("a challenge is good twice", "src/passkeys.ts", [
+        ("    if (typeof data.challenge === \"string\") this.#challenges.delete(data.challenge); // used once, right or wrong\n", ""),
+    ], ["devices.test.ts"]),
+    ("a passkey for another name is taken", "src/passkeys.ts", [
+        ("    if (!d.rpIdHash.equals(sha256(where.rpId))) throw", "    if (d.rpIdHash.length < 0) throw"),
+    ], ["devices.test.ts"]),
+    ("a sign-in without the person verified is taken", "src/passkeys.ts", [
+        ("    if (!(d.flags & UP) || !(d.flags & UV)) throw", "    if (!(d.flags & UP)) throw"),
+    ], ["devices.test.ts"]),
+    ("a passkey's signature is never checked", "src/passkeys.ts", [
+        ("    if (!ok) throw new PasskeyError(", "    if (!ok && false) throw new PasskeyError("),
+    ], ["devices.test.ts"]),
+    ("a passkey whose counter went back is taken", "src/passkeys.ts", [
+        ("    if ((d.signCount !== 0 || row.sign_count !== 0) && d.signCount <= row.sign_count) throw", "    if (false) throw"),
+    ], ["devices.test.ts"]),
+    ("a flood of challenges is all kept", "src/passkeys.ts", [
+        ("    while (this.#challenges.size >= CHALLENGES_KEPT) this.#challenges.delete(", "    while (this.#challenges.size >= CHALLENGES_KEPT * 1000) this.#challenges.delete("),
+    ], ["devices.test.ts"]),
+    ("a passkey made is taken as a sign-in", "src/passkeys.ts", [
+        ("    if (data.type !== type) throw", "    if (data.type === undefined) throw"),
+    ], ["devices.test.ts"]),
     # what rank widens (PLAN 3.8, rules/rank.ts)
     ("rank widens a command that is not a reader", "src/rules/rank.ts", [
         ("  if (!READERS.has(program!)) return false;\n", ""),
@@ -557,6 +626,18 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ], ["rank.test.ts"]),
     ("shell syntax passes as reading", "src/rules/rank.ts", [
         ("  if (!c || SYNTAX.test(c)) return false;", "  if (!c) return false;"),
+    ], ["rank.test.ts"]),
+    ("a link out of the workspace is read without asking", "src/rules/rank.ts", [
+        ("      return real === root || real.startsWith(root + sep);", "      return real.length > 0;"),
+    ], ["rank.test.ts"]),
+    ("a glob passes as reading", "src/rules/rank.ts", [
+        ("""'"*?[\\]]/;""", """'"]/;"""),
+    ], ["rank.test.ts"]),
+    ("a flag that follows links passes as reading", "src/rules/rank.ts", [
+        ("!RUNS_SOMETHING.test(t) && !FOLLOWS.test(t) && ", "!RUNS_SOMETHING.test(t) && "),
+    ], ["rank.test.ts"]),
+    ("the guard checks no workspace for rank", "src/rules/guard.ts", [
+        (", workspace: workspaceOf(this.#o.dataDir, at.orb) })", " })"),
     ], ["rank.test.ts"]),
     ("rank widens below Senior", "src/rules/rank.ts", [
         ("  if (LEVELS.indexOf(o.level) < LEVELS.indexOf(WIDENS_AT) || o.family", "  if (o.family"),
@@ -662,6 +743,74 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
 
 # the app (PLAN 2.x): paths are inside packages/app
 APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
+    # the living orb's moods (PLAN 2.3)
+    ("your no makes him hop", "src/orb/mood.ts", [
+        ('        return d.status === "denied" ? "pout"', '        return d.status === "denied" ? "hop"'),
+    ], ["mood.test.ts"]),
+    ("a run outranks a card waiting for you", "src/orb/mood.ts", [
+        ('    if (this.#cards.size) return "waiting";\n    if (this.#runs.size) return this.#tool ? "working" : "thinking";', '    if (this.#runs.size) return this.#tool ? "working" : "thinking";\n    if (this.#cards.size) return "waiting";'),
+    ], ["mood.test.ts"]),
+    ("another orb's news moves his mood", "src/orb/mood.ts", [
+        ("    if (e.orb !== this.#orb) return null;\n", ""),
+    ], ["mood.test.ts"]),
+    ("he sleeps at noon", "src/orb/mood.ts", [
+        ("  return h >= 23 || h < 6;", "  return h >= 0;"),
+    ], ["mood.test.ts"]),
+    # the brains in Settings (PLAN 1.11)
+    ("the brains panel shows no order", "src/rooms/Brains.tsx", [
+        ("        {(now?.order ?? []).map((b, i) => (", "        {(now ? [] : []).map((b: BrainsNow[\"order\"][number], i: number) => ("),
+    ], ["brains.test.ts"]),
+    ("a key stays on the page after it is kept", "src/rooms/Brains.tsx", [
+        ("        if (draft.trim()) save(draft.trim());\n        setDraft(\"\");", "        if (draft.trim()) save(draft.trim());"),
+    ], ["brains.test.ts"]),
+    ("every listener opens its own stream", "src/home/link.ts", [
+        ("      return watch(on);", "      return sharedStream()(on);"),
+    ], ["notices.test.ts"]),
+    ("his card says Junior whatever he is", "src/orbs.tsx", [
+        ('`${standing?.level ?? "Junior"} · ', '`${"Junior"} · '),
+    ], ["morning.test.ts"]),
+    ("the side menu shows no mood", "src/orbs.tsx", [
+        ('                  {moods[idOf(c.name)] && moods[idOf(c.name)] !== "idle" && (', "                  {false && ("),
+    ], ["notices.test.ts"]),
+    ("a card already waiting is not his mood when the page opens", "src/orb/useMood.ts", [
+        ('    for (const n of ns) if (n.kind === "approval" && n.card !== null) machines.get(n.orb)?.hear(', '    for (const n of ns) if (n.kind === "never" && n.card !== null) machines.get(n.orb)?.hear('),
+    ], ["notices.test.ts"]),
+    # the schedule editor (PLAN 2.4)
+    ("the editor's preview is not the home's", "src/rooms/ScheduleEditor.tsx", [
+        ("      o.home.schedulePreview(rule).then(", '      Promise.resolve({ words: "Every day at 09:00", next: [] as number[] }).then('),
+    ], ["schedule-editor.test.ts"]),
+    ("the editor offers every 5 minutes", "src/rooms/ScheduleEditor.tsx", [
+        ("  ...[15, 20, 30].map((n) =>", "  ...[5, 15, 20, 30].map((n) =>"),
+    ], ["schedule-editor.test.ts"]),
+    ("a schedule cannot be removed from its day", "src/rooms/Calendar.tsx", [
+        ("act(home.removeSchedule(e.id))", "act(Promise.resolve())"),
+    ], ["schedule-editor.test.ts"]),
+    # the app's way in from other devices (PLAN 2.7)
+    ("the opening screen offers no passkey sign-in", "src/ui/Splash.tsx", [
+        ("              {signIn && /not signed in/.test(why) && (", "              {signIn && why === \"never\" && ("),
+    ], ["devices.test.ts"]),
+    ("Settings shows no devices", "src/rooms/Settings.tsx", [
+        ("      {o.home && <Devices home={o.home} />}", "      {o.home && null}"),
+    ], ["devices.test.ts"]),
+    ("a passkey is sent without what its authenticator made", "src/home/link.ts", [
+        ("attestationObject: b64u(r.attestationObject) }", "attestationObject: b64u(r.clientDataJSON) }"),
+    ], ["devices.test.ts"]),
+    ("a phone's QR code is of another link", "src/rooms/Devices.tsx", [
+        ("<QrCode text={link} size={200}", "<QrCode text={`${link}x`} size={200}"),
+    ], ["devices.test.ts"]),
+    ("the build writes no manifest", "vite.config.ts", [
+        ('      this.emitFile({ type: "asset", fileName: "manifest.webmanifest", source: `${JSON.stringify(manifest, null, 1)}\\n` });', "      void manifest;"),
+    ], ["install.test.ts"]),
+    # the QR code a phone pairs by (PLAN 2.7)
+    ("a QR code says another mask than it was drawn with", "src/ui/qr.ts", [
+        ("  flip(best);\n  format(best);", "  flip(best);\n  format((best + 1) % 8);"),
+    ], ["qr.test.ts"]),
+    ("a QR code's error correction is the wrong code", "src/ui/qr.ts", [
+        ("    root = mul(root, 0x02);", "    root = mul(root, 0x03);"),
+    ], ["qr.test.ts"]),
+    ("a long QR code's blocks are not interleaved", "src/ui/qr.ts", [
+        ("  for (let i = 0; i < parts[0]!.length; i++) for (const p of parts) if", "  for (const p of parts) for (let i = 0; i < parts[0]!.length; i++) if"),
+    ], ["qr.test.ts"]),
     ("a light-mode hue is too pale to read", "src/design/tokens.ts", [
         ("const LIGHT_TARGET = 4.8;", "const LIGHT_TARGET = 3.0;"),
     ], ["design.test.ts"]),

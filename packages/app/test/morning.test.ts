@@ -90,6 +90,10 @@ test("the morning card: yesterday's split, its cost, what he learned and the nig
   await promotion.getByRole("button", { name: "Promote" }).click();
   await promotion.waitFor({ state: "detached", timeout: 20_000 });
   assert.equal(levelOf(h.events, "dana"), "Mid");
+  await desk.goto(desk.url().replace(/#.*$/, "#/office/Dana"));
+  await desk.getByText(/^Mid · 33\d XP · /).waitFor({ timeout: 20_000 }); // her card says where she stands, from the home
+  await desk.goto(desk.url().replace(/#.*$/, "#/notices"));
+  await card.waitFor({ timeout: 20_000 });
 
   const takeBack = (what: RegExp) => dana.locator("div", { hasText: what }).last().getByRole("button", { name: "Take back" });
   await takeBack(/^A new habit/).click();

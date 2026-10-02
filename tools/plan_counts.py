@@ -37,6 +37,11 @@ def read_rows(text: str) -> tuple[list[tuple[int, str, bool, str]], list[str]]:
         if not m:
             continue
         rid = f"{m.group(1)}.{m.group(2)}"
+        # the house table has four cells (#, Feature, Description, Done): a fifth drops the box from
+        # every rendered view, which shows the header's four columns only
+        cells = len(re.split(r"(?<!\\)\|", line.strip())) - 2
+        if cells != 4:
+            problems.append(f"line {n}: row {rid}{m.group(3) or ''} has {cells} cells; the house table has 4 (#, Feature, Description, Done)")
         if phase is None or int(m.group(1)) != phase:
             problems.append(f"line {n}: row {rid} sits outside its phase table")
             continue

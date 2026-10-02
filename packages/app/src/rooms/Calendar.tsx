@@ -8,6 +8,7 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Orb } from "../orb/Orb.tsx";
 import type { Character } from "../orb/spec.ts";
 import { idOf, type CalendarEntry, type Office } from "../home/link.ts";
+import { ScheduleEditor } from "./ScheduleEditor.tsx";
 
 const pad = (n: number): string => String(n).padStart(2, "0");
 const dayOf = (d: Date): string => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -59,6 +60,7 @@ export function CalendarRoom(o: { home: Office | null; office: Character[] }) {
   const [picked, setPicked] = useState(dayOf(today));
   const [entries, setEntries] = useState<CalendarEntry[]>([]);
   const [said, setSaid] = useState<string | null>(null);
+  const [making, setMaking] = useState(false); // the schedule editor is open (PLAN 2.4)
   const days = gridOf(at.year, at.month);
   const from = dayOf(days[0]!);
   const to = dayOf(days[days.length - 1]!);
@@ -98,6 +100,23 @@ export function CalendarRoom(o: { home: Office | null; office: Character[] }) {
           <button aria-label="The month after" onClick={() => step(1)} style={button}>›</button>
         </span>
       </div>
+      {o.office.length > 0 && !making && (
+        <span>
+          <button onClick={() => setMaking(true)} style={button}>
+            New schedule
+          </button>
+        </span>
+      )}
+      {making && (
+        <ScheduleEditor
+          home={home}
+          office={o.office}
+          done={() => {
+            setMaking(false);
+            load();
+          }}
+        />
+      )}
       <div role="grid" aria-label={title} style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: 4, minWidth: 0 }}>
         {WEEKDAYS.map((w) => (
           <span key={w} role="columnheader" style={{ font: "700 11px/16px var(--font)", letterSpacing: ".06em", textTransform: "uppercase", color: "var(--text-3)", textAlign: "center" }}>
@@ -157,9 +176,14 @@ export function CalendarRoom(o: { home: Office | null; office: Character[] }) {
                   {e.kind === "schedule" ? (
                     <>
                       <TimeField key={`${e.id}-${e.time}`} label={`When ${e.title} runs`} value={e.time} set={(time) => act(home.setSchedule(e.id, { time }))} />
-                      <button onClick={() => act(home.setSchedule(e.id, { enabled: !e.enabled }))} style={button}>
-                        {e.enabled ? "Pause" : "Resume"}
-                      </button>
+                      <span style={{ display: "flex", gap: 6 }}>
+                        <button onClick={() => act(home.setSchedule(e.id, { enabled: !e.enabled }))} style={button}>
+                          {e.enabled ? "Pause" : "Resume"}
+                        </button>
+                        <button onClick={() => act(home.removeSchedule(e.id))} aria-label={`Remove the schedule ${e.title}`} style={button}>
+                          Remove
+                        </button>
+                      </span>
                     </>
                   ) : (
                     <>

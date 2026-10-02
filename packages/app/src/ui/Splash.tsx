@@ -31,7 +31,11 @@ export const splashWanted = (): boolean => {
 
 /** `onLeaving` is told when it starts to fade, so what is under it can begin to draw (drawing it
  * all the while behind the veil would only slow the waking down). */
-export function Splash({ office, facts, ready, onLeaving, onDone }: { office: Character[]; facts: string[]; ready: () => Promise<unknown>; onLeaving?: () => void; onDone: () => void }) {
+export function Splash({ office, facts, ready, onLeaving, onDone, signIn }: {
+  office: Character[]; facts: string[]; ready: () => Promise<unknown>; onLeaving?: () => void; onDone: () => void;
+  /** A browser that is not signed in can sign in with the owner's passkey (PLAN 2.7), then the home opens. */
+  signIn?: () => Promise<void>;
+}) {
   const [phase, setPhase] = useState<"waking" | "waiting" | "leaving" | "failed">("waking");
   const [why, setWhy] = useState("");
   const [tries, setTries] = useState(0);
@@ -68,6 +72,7 @@ export function Splash({ office, facts, ready, onLeaving, onDone }: { office: Ch
     };
   }, [tries]);
 
+  const retry: CSSProperties = { font: "600 14px/20px var(--font)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 10, padding: "8px 16px", cursor: "pointer", boxShadow: "inset 0 0 0 .5px var(--hairline)", minHeight: 36 };
   const veil: CSSProperties = {
     position: "fixed", inset: 0, zIndex: 50, display: "grid", placeItems: "center", alignContent: "center", gap: "var(--s5)",
     padding: "var(--s5) var(--margin)", background: "radial-gradient(60% 50% at 50% 40%, var(--accent-wash), transparent 70%), var(--ground)",
@@ -86,10 +91,21 @@ export function Splash({ office, facts, ready, onLeaving, onDone }: { office: Ch
         <span style={{ font: "800 40px/44px var(--font)", letterSpacing: ".18em", color: "var(--text-1)", animation: calm ? undefined : "orbs-arrive 600ms var(--m-spring) 240ms both" }}>ORBS</span>
         {phase === "failed" ? (
           <div style={{ display: "grid", justifyItems: "center", gap: "var(--s3)" }}>
-            <span style={{ font: "600 15px/21px var(--font)", color: "var(--alert)" }}>Can't reach your home: {why}</span>
-            <button onClick={() => setTries((n) => n + 1)} style={{ font: "600 14px/20px var(--font)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 10, padding: "8px 16px", cursor: "pointer", boxShadow: "inset 0 0 0 .5px var(--hairline)", minHeight: 36 }}>
-              Try again
-            </button>
+            <span style={{ font: "600 15px/21px var(--font)", color: "var(--alert)", maxWidth: 520, textWrap: "balance" }}>Can't reach your home: {why}</span>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
+              {signIn && /not signed in/.test(why) && (
+                <button
+                  data-sound="pick"
+                  onClick={() => signIn().then(() => setTries((n) => n + 1), (e: unknown) => setWhy(e instanceof Error ? e.message : String(e)))}
+                  style={{ ...retry, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)" }}
+                >
+                  Sign in with your passkey
+                </button>
+              )}
+              <button onClick={() => setTries((n) => n + 1)} style={retry}>
+                Try again
+              </button>
+            </div>
           </div>
         ) : (
           <div style={{ display: "grid", justifyItems: "center", gap: 2 }}>

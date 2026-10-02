@@ -79,6 +79,9 @@ test("the notification centre: counted on the side menu, grouped by orb, opening
   assert.match(await ada.innerText(), /Ada[\s\S]*Rent is due tomorrow[\s\S]*Bill · \$1,200 · Due /);
   const hazel = desk.locator('[data-notices="hazel"]');
   assert.match(await hazel.innerText(), /Hazel[\s\S]*Waiting for your OK/);
+  // the side menu: Hazel's dot says he waits for you, from the moment the page opened (PLAN 2.3, 2.4)
+  await desk.locator('[data-mood-dot="waiting"]').waitFor({ timeout: 20_000 });
+  assert.equal(await desk.locator("[data-mood-dot]").count(), 1, "only Hazel waits");
   assert.deepEqual(await measure(desk), [], "nothing spills at desk size");
 
   // a phone, the same office: it hears the rent put away on the desk
@@ -87,6 +90,9 @@ test("the notification centre: counted on the side menu, grouped by orb, opening
   await phone.locator('[data-notices="ada"]').waitFor({ timeout: 20_000 });
   await phone.locator('[data-stream="open"]').waitFor({ timeout: 20_000 }); // listening: what the desk does now shows as it happens
   assert.deepEqual(await measure(phone), [], "nor at phone size");
+  // one live stream a page, however many rooms and orbs listen (a browser keeps ~6 connections to a host)
+  for (let i = 0; i < 100 && h.live.listenerCount("event") !== 2; i++) await new Promise((r) => setTimeout(r, 50)); // a closed one leaves the home a moment later
+  assert.equal(h.live.listenerCount("event"), 2, "the desk's one and the phone's one");
   await ada.getByRole("button", { name: "Put away: Rent is due tomorrow" }).click();
   await phone.locator('[data-notices="ada"]').waitFor({ state: "detached", timeout: 20_000 });
   assert.equal(h.notices.list().length, 1, "away on the home");

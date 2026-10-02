@@ -120,7 +120,7 @@ test("a used link, or a browser never paired, is said plainly", { skip }, async 
     await page.goto(link);
     await page.getByText(/Can't reach your home: that pairing link is used or lapsed/).waitFor({ timeout: 30_000 });
     await page.goto(`http://127.0.0.1:${door.port}/app/orbs.html`);
-    await page.getByText(/Can't reach your home: this browser is not paired/).waitFor({ timeout: 30_000 });
+    await page.getByText(/Can't reach your home: this browser is not signed in to your home yet/).waitFor({ timeout: 30_000 });
   } finally {
     await ctx.close();
   }

@@ -66,7 +66,7 @@ export function nextFor(events: EventLog, orb: string, o: { specialty: Specialty
   const seat = to === "Chief" ? (events.ofType("orb.promoted").filter((e) => e.data.to === "Chief" && e.orb !== orb).map((e) => e.orb).find((o2) => o2 && levelOf(events, o2) === "Chief") ?? null) : null;
   const missing: string[] = [];
   if (xp < need.xp) missing.push(`${need.xp - xp} more XP`);
-  if (tasks.length < need.tasks) missing.push(`${need.tasks - tasks.length} more task type(s) earned in its specialty`);
+  if (tasks.length < need.tasks) missing.push(`${need.tasks - tasks.length} more ${need.tasks - tasks.length === 1 ? "task" : "tasks"} learned in its specialty`);
   if (regressions.length) missing.push(`no regression for ${NO_REGRESSION_DAYS} days`);
   if (seat) missing.push(`the Chief's seat is ${seat}'s`);
   return { orb, from, to, ready: missing.length === 0, missing, evidence: { xp: { has: xp, needs: need.xp }, tasks: { has: tasks, needs: need.tasks }, regressions, seat } };

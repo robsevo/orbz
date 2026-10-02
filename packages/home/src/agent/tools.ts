@@ -12,6 +12,7 @@
 // process tree is killed; a fetch is aborted. Background commands are the exception on purpose:
 // the person asked for them to outlive the turn.
 import { FLOOR_WORDS } from "../rules/floor.ts";
+import { cronFor, type Rule, wordsOf } from "../schedule-rules.ts";
 import { type ChildProcess, spawn } from "node:child_process";
 import { lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve, sep } from "node:path";
@@ -39,6 +40,8 @@ export type ToolContext = {
   learn?: (line: string) => string[];
   /** His plan templates (PLAN 3.2): plans you approved the same way, each passed by the gate. */
   templates?: () => { title: string; body: string }[];
+  /** Sets him a job that comes back on a schedule (PLAN 2.4's rules; asked for first). */
+  schedule?: (s: { name: string; instruction: string; rule: Rule }) => { id: string; words: string; next: number | null };
 };
 type Args = Record<string, unknown>;
 
@@ -81,6 +84,13 @@ export async function runTool(def: ToolDef, args: Args, ctx: ToolContext): Promi
 }
 
 const s = (v: unknown): string => (v === undefined || v === null ? "" : String(v));
+/** A schedule_job call's rule (schedule-rules.ts checks its values). */
+function ruleFromArgs(a: Args): Rule {
+  return a.kind === "every"
+    ? { kind: "every", n: Number(a.every), unit: a.unit === "hours" ? "hours" : "minutes" }
+    : { kind: "daily", time: s(a.time), ...(Array.isArray(a.days) && { days: (a.days as unknown[]).map(Number) }) };
+}
+
 const obj = (properties: Record<string, unknown>, required: string[]): Record<string, unknown> => ({
   type: "object",
   properties,
@@ -445,10 +455,53 @@ export const TOOLS: ToolDef[] = [
       if (!ctx.learn) return { content: "Lessons are not kept here.", isError: true };
       try {
         const lines = ctx.learn(s(a.line));
+        ctx.note?.(`Memory updated: ${lines.at(-1)}`, { memory: lines.at(-1) }); // the chip on the conversation (PLAN 2.4)
         return { content: `Learned. You now keep ${lines.length} ${lines.length === 1 ? "lesson" : "lessons"} from them.` };
       } catch (e) {
         return { content: e instanceof Error ? e.message : String(e), isError: true };
       }
+    },
+  },
+  {
+    name: "schedule_job",
+    label: "Setting a schedule",
+    description:
+      "Set yourself a job that comes back on its own: daily at a time (on chosen days, 1 Monday to 7 Sunday), or every 15, 20 or 30 minutes, or every 1, 2, 3, 4, 6, 8 or 12 hours. Each run starts fresh, in its own conversation, from your instruction, so write it whole. The person approves it first.",
+    parameters: obj(
+      {
+        name: { type: "string", description: "What the job is, in a few words (Inbox sweep, Weekly invoices)." },
+        instruction: { type: "string", description: "What to do each time, complete on its own." },
+        kind: { type: "string", enum: ["daily", "every"] },
+        time: { type: "string", description: "For daily: the time, HH:MM, in the person's own time." },
+        days: { type: "array", items: { type: "number" }, description: "For daily: which days, 1 Monday to 7 Sunday (none: every day)." },
+        every: { type: "number", description: "For every: how many minutes or hours." },
+        unit: { type: "string", enum: ["minutes", "hours"] },
+      },
+      ["name", "instruction", "kind"],
+    ),
+    describe: (a) => {
+      let when = "";
+      try {
+        when = wordsOf(cronFor(ruleFromArgs(a))).toLowerCase();
+      } catch {
+        when = "on a schedule";
+      }
+      return `set a schedule: "${s(a.name)}", ${when}`;
+    },
+    decision: "ask", // work that comes back on its own, unwatched: the person says yes to it first
+    precheck: (a) => {
+      try {
+        cronFor(ruleFromArgs(a));
+        return null;
+      } catch (e) {
+        return e instanceof Error ? e.message : String(e);
+      }
+    },
+    async run(a, ctx) {
+      if (!ctx.schedule) return { content: "Schedules are not kept here.", isError: true };
+      const made = ctx.schedule({ name: s(a.name).slice(0, 80), instruction: s(a.instruction).slice(0, 2000), rule: ruleFromArgs(a) });
+      const next = made.next ? new Date(made.next).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }) : "not yet known";
+      return { content: `Scheduled (${made.id}): ${made.words}. The first run is ${next}.` };
     },
   },
   {

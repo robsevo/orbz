@@ -2,10 +2,13 @@
 // What is the person's to set, in the app: what the office calls you, the sounds, how every orb
 // replies, and the opening story again. Brains (ChatGPT, one Gemini key, a local coder) are the
 // home's (PLAN 1.11), and are chosen here once the app talks to it (2.4); until then it says so.
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { REPLIES, type Replies } from "../orb/spec.ts";
 import { OneLine } from "../ui/Balanced.tsx";
 import { checkName, type Person } from "../onboarding/story.ts";
+import type { Office } from "../home/link.ts";
+import { Devices } from "./Devices.tsx";
+import { Brains } from "./Brains.tsx";
 
 const panel: CSSProperties = { display: "grid", gap: "var(--s3)", padding: "var(--s4)", borderRadius: 18, background: "var(--fill)", boxShadow: "inset 0 0 0 .5px var(--hairline)", minWidth: 0 };
 const head: CSSProperties = { font: "700 11px/16px var(--font)", letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)", margin: 0 };
@@ -34,8 +37,13 @@ export function Settings(o: {
   replayIntro: () => void;
   /** A preview only (no home behind the page): fill the office with a demo crew, to look round. */
   fillDemo?: () => void;
+  /** The home behind the page, for your devices and passkeys (PLAN 2.7). */
+  home?: Office | null;
 }) {
   const [draft, setDraft] = useState(o.person?.name ?? "");
+  useEffect(() => {
+    setDraft(o.person?.name ?? ""); // the home's "about you" can arrive after the room opens
+  }, [o.person?.name]);
   const [said, setSaid] = useState<{ ok: boolean; text: string } | null>(null);
   const save = (): void => {
     const r = checkName(draft);
@@ -91,11 +99,16 @@ export function Settings(o: {
           </button>
         </Panel>
       )}
-      <Panel title="Brains">
-        <span style={{ font: "400 14px/20px var(--font)", color: "var(--text-2)" }}>
-          Your orbs think with ChatGPT first, then a Gemini key, then a local coder. You choose them here once this app is connected to your home.
-        </span>
-      </Panel>
+      {o.home ? (
+        <Brains home={o.home} />
+      ) : (
+        <Panel title="Brains">
+          <span style={{ font: "400 14px/20px var(--font)", color: "var(--text-2)" }}>
+            Your orbs think with ChatGPT first, then a Gemini key, then a local coder. You choose them here once this app is connected to your home.
+          </span>
+        </Panel>
+      )}
+      {o.home && <Devices home={o.home} />}
     </div>
   );
 }

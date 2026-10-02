@@ -21,12 +21,15 @@ import { Learned } from "./brain/learned.ts";
 import { About } from "./about.ts";
 import { Xp } from "./gym/xp.ts";
 import { Gym } from "./gym/night.ts";
+import { Sessions } from "./sessions.ts";
+import { Passkeys } from "./passkeys.ts";
 import type { Undo } from "./gym/card.ts";
 import { type Level, levelOf, nextFor } from "./gym/levels.ts";
 import { SPECIALTY_FAMILIES } from "./brain/constitution.ts";
 import type { Case, CaseStep, StepFn } from "./gym/cases.ts";
 import { earnedFor, promotedFor, type Promoted } from "./gym/steps.ts";
 import { templatesFor } from "./gym/templates.ts";
+import { cronFor, wordsOf } from "./schedule-rules.ts";
 import { comesUpAt, Notices } from "./notices.ts";
 import { Team } from "./team.ts";
 import { Spend } from "./brain/spend.ts";
@@ -41,7 +44,7 @@ import { planTool, Plans } from "./plans/plans.ts";
 import { Board, boardTools } from "./plans/board.ts";
 import { TOOLS } from "./agent/tools.ts";
 import { Loops, type LoopsOptions } from "./loops.ts";
-import { Schedules } from "./schedule.ts";
+import { cronOf, Schedules } from "./schedule.ts";
 import { Triggers } from "./triggers.ts";
 import { version } from "./version.ts";
 
@@ -134,6 +137,9 @@ export class Home {
   readonly rules: Rules;
   /** What every orb knows about the person (PLAN 2.4): the name the office calls you. */
   readonly about: About;
+  /** The devices signed in to the app, and the owner's passkeys (PLAN 2.7). */
+  readonly sessions: Sessions;
+  readonly passkeys: Passkeys;
   /** Sessions (PLAN 2.9): a Brainstorm and a Floor, the orbs chosen for each taking their turns. */
   readonly team: Team;
   /** XP from graded evidence only (PLAN 3.6): the ledger, in the event log. */
@@ -177,6 +183,8 @@ export class Home {
       : null;
     this.rules = new Rules(db, this.events, this.clock);
     this.about = new About(db, this.events, this.clock);
+    this.sessions = new Sessions(db, this.clock);
+    this.passkeys = new Passkeys(db, this.clock, this.sessions, this.dataDir);
     const matcherEp = opts.brain?.preset.own ?? big;
     const matcher: Matcher | null = opts.agent?.matcher !== undefined ? opts.agent.matcher : matcherEp ? new ModelMatcher(matcherEp, this.spend) : null;
     this.guard = new Guard({
@@ -241,6 +249,10 @@ export class Home {
           moveReminder: (id, due) => this.notices.move(id, due),
           learn: (orb, line) => this.learned.add(orb, line),
           templates: (orb) => templatesFor(this.events, orb),
+          schedule: (orb, x) => {
+            const made = this.schedules.add({ orb, name: x.name, instruction: x.instruction, cron: cronFor(x.rule) });
+            return { id: made.id, words: wordsOf(made.cron), next: cronOf(made.cron, made.timezone).nextRun(new Date(this.clock.now()))?.getTime() ?? null };
+          },
           // his own brain (PLAN 3.4): the preset's, for the task types it earned at night
           ...(opts.agent?.own ? { own: opts.agent.own } : opts.brain?.preset.own && {
             own: {
@@ -283,6 +295,7 @@ export class Home {
       events: this.events, clock: this.clock, dataDir: this.dataDir, spend: this.spend, kit: kit && ((tool, args) => kit.call(tool, args)),
       teacher: () => opts.brain?.preset.teacher ?? this.brains.chain.current()?.ep ?? null, // the preset's teacher, else the big brain
       own: () => opts.brain?.preset.own ?? null,
+      tools, // the exam offers the own brain the very tools the loop does
       orbs: () => this.inbox.orbs().filter((o) => o.letGoAt === null).map((o) => ({ id: o.id, specialty: o.specialty })),
       plans: () => this.plans.list(),
     });

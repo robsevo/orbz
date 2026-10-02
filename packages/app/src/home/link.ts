@@ -40,8 +40,18 @@ export type MorningCard = { day: string; orbs: { orb: string; habits: number; ow
 /** Where an orb stands (PLAN 3.8), and what the next level needs. */
 export type Standing = {
   level: string;
+  xp: number;
   next: { from: string; to: string; ready: boolean; missing: string[]; evidence: { xp: { has: number; needs: number }; tasks: { has: string[]; needs: number } } } | null;
 };
+/** The brain order (PLAN 1.11), as the home has it: each brain's state, and ChatGPT's own. */
+export type BrainState = { id: "chatgpt" | "gemini" | "key" | "local"; label: string; state: "ready" | "resting" | "absent"; why: string | null; until: number | null; setup: string };
+export type Brains = { order: BrainState[]; gemini: { model: string } | null; local: { baseUrl: string; model: string } | null; search: boolean };
+export type ChatGPT = { connected: boolean; account: { email: string | null; name: string | null } | null; model: string | null; models: { slug: string; name: string }[]; paused: { until: number } | null; signingIn: boolean; manageUsage: string };
+/** What a schedule is asked for (the home's schedule-rules.ts checks it): daily at a time, or every N. */
+export type ScheduleRule = { kind: "daily"; time: string; days?: number[] } | { kind: "every"; n: number; unit: "minutes" | "hours" };
+/** A device signed in to the app, and a passkey (PLAN 2.7). */
+export type Device = { id: number; name: string; via: "pair" | "passkey"; createdAt: number; seenAt: number; current: boolean };
+export type Passkey = { id: number; name: string; createdAt: number; usedAt: number | null };
 /** A session (PLAN 2.9): a piece of work, with the orbs (by id) that work each tab, in turn order. */
 export type Session = { id: number; title: string; createdAt: number; brainstorm: string[]; floor: string[] };
 export const tabOf = (id: number, tab: Tab): string => `team:${id}:${tab}`;
@@ -66,6 +76,24 @@ export interface Office {
   answer(card: number, choice: Choice, text?: string): Promise<void>;
   /** The notification centre: what is out; putting one away, or all, for every device. */
   notices(): Promise<Notice[]>;
+  /** The brains (PLAN 1.11): the order and ChatGPT's sign-in; one Gemini key, a web-search key and
+   * a local coder, each set or taken away (a key goes to the home's keychain, never back). */
+  brains(): Promise<Brains>;
+  chatgpt(): Promise<ChatGPT>;
+  chatgptSignIn(): Promise<string>;
+  chatgptSignOut(): Promise<void>;
+  chatgptModel(slug: string): Promise<void>;
+  setKey(which: "gemini" | "search", key: string | null): Promise<Brains>;
+  setLocal(local: { baseUrl: string; model: string } | null): Promise<Brains>;
+  /** The devices signed in (PLAN 2.7): sign one out, pair a phone (a link good for five minutes,
+   * shown as a QR code), and the owner's passkeys. */
+  devices(): Promise<Device[]>;
+  signOut(id: number): Promise<void>;
+  pairPhone(): Promise<string>;
+  passkeys(): Promise<Passkey[]>;
+  /** Makes a passkey here and keeps it on the home (named from this browser unless named). */
+  addPasskey(name?: string): Promise<void>;
+  removePasskey(id: number): Promise<void>;
   /** The gym (PLAN 3.5, 3.8): the morning card and its one-tap undo; an orb's level, and your yes. */
   morning(): Promise<MorningCard | null>;
   undo(u: Undo): Promise<MorningCard | null>;
@@ -82,11 +110,15 @@ export interface Office {
   moveReminder(id: number, due: string): Promise<void>;
   doneReminder(id: number): Promise<void>;
   setSchedule(id: string, change: { time?: string; enabled?: boolean }): Promise<void>;
+  /** The schedule editor (PLAN 2.4): a rule in plain words with its next runs, then kept or removed. */
+  schedulePreview(rule: ScheduleRule): Promise<{ cron: string; words: string; next: number[] }>;
+  addSchedule(s: { orb: string; name: string; instruction: string; rule: ScheduleRule }): Promise<void>;
+  removeSchedule(id: string): Promise<void>;
   /** His computer: a folder of his workspace (its top when empty), and a file in it. */
   files(c: Character, dir?: string): Promise<Entry[]>;
   file(c: Character, path: string): Promise<WorkFile>;
   /** What happens as it happens: every event, and a reply's words as they stream. Returns a stop. */
-  watch(on: { event?: (e: { type: string; orb: string | null; conversation: string | null }) => void; text?: (d: { orb: string; conversation: string; delta: string; run: number }) => void; /** the stream is open: from here on nothing is missed */ open?: () => void }): () => void;
+  watch(on: { event?: (e: { type: string; orb: string | null; conversation: string | null; at?: number; data?: Record<string, unknown> }) => void; text?: (d: { orb: string; conversation: string; delta: string; run: number }) => void; /** the stream is open: from here on nothing is missed */ open?: () => void }): () => void;
 }
 
 /** A private chat's conversation with an orb. */
@@ -140,7 +172,47 @@ async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 /** The office on the home, through its door. */
+/** One live stream for the whole page, however many rooms and orbs listen: a browser keeps about
+ * six connections to a host, and a stream each would leave none for the page's own requests. It
+ * opens with its first listener and closes with its last; one that joins an open stream is told
+ * at once. */
+type Watcher = Parameters<Office["watch"]>[0];
+function sharedStream(): (on: Watcher) => () => void {
+  const watchers = new Set<Watcher>();
+  let es: EventSource | null = null;
+  let open = false;
+  return (on) => {
+    watchers.add(on);
+    if (!es) {
+      const s = new EventSource("../stream?since=" + Number.MAX_SAFE_INTEGER);
+      s.addEventListener("event", (m) => {
+        const e = JSON.parse((m as MessageEvent).data as string);
+        for (const w of [...watchers]) w.event?.(e);
+      });
+      s.addEventListener("text", (m) => {
+        const d = JSON.parse((m as MessageEvent).data as string);
+        for (const w of [...watchers]) w.text?.(d);
+      });
+      s.addEventListener("open", () => {
+        open = true;
+        for (const w of [...watchers]) w.open?.();
+      });
+      s.addEventListener("error", () => (open = false)); // it reconnects by itself; "open" comes again
+      es = s;
+    } else if (open) queueMicrotask(() => watchers.has(on) && on.open?.());
+    return () => {
+      watchers.delete(on);
+      if (!watchers.size && es) {
+        es.close();
+        es = null;
+        open = false;
+      }
+    };
+  };
+}
+
 export function doorOffice(base: Character): Office {
+  const watch = sharedStream();
   return {
     kind: "home",
     async orbs() {
@@ -185,6 +257,50 @@ export function doorOffice(base: Character): Office {
     async notices() {
       return (await call<{ notices: Notice[] }>("../notices")).notices;
     },
+    async brains() {
+      return (await call<{ brains: Brains }>("../brains")).brains;
+    },
+    async chatgpt() {
+      return (await call<{ chatgpt: ChatGPT }>("../chatgpt")).chatgpt;
+    },
+    async chatgptSignIn() {
+      return (await call<{ url: string }>("../chatgpt/sign-in", { method: "POST" })).url;
+    },
+    async chatgptSignOut() {
+      await call("../chatgpt/sign-out", { method: "POST" });
+    },
+    async chatgptModel(slug) {
+      await call("../chatgpt/model", { method: "POST", body: JSON.stringify({ slug }) });
+    },
+    async setKey(which, key) {
+      return (await call<{ brains: Brains }>(`../brains/${which}`, key === null ? { method: "DELETE" } : { method: "POST", body: JSON.stringify({ key }) })).brains;
+    },
+    async setLocal(local) {
+      return (await call<{ brains: Brains }>("../brains/local", local === null ? { method: "DELETE" } : { method: "POST", body: JSON.stringify(local) })).brains;
+    },
+    async devices() {
+      return (await call<{ devices: Device[] }>("../devices")).devices;
+    },
+    async signOut(id) {
+      await call(`../devices/${id}/revoke`, { method: "POST" });
+    },
+    async pairPhone() {
+      return (await call<{ link: string }>("../devices/pair", { method: "POST" })).link;
+    },
+    async passkeys() {
+      return (await call<{ passkeys: Passkey[] }>("../passkeys")).passkeys;
+    },
+    async addPasskey(name) {
+      const options = await call<CreateOptions>("../passkeys/new/options", { method: "POST" });
+      const made = (await navigator.credentials.create({ publicKey: creating(options) })) as PublicKeyCredential | null;
+      if (!made) throw new Error("no passkey was made");
+      const r = made.response as AuthenticatorAttestationResponse;
+      const credential = { id: made.id, rawId: b64u(made.rawId), type: made.type, response: { clientDataJSON: b64u(r.clientDataJSON), attestationObject: b64u(r.attestationObject) } };
+      await call("../passkeys", { method: "POST", body: JSON.stringify({ credential, ...(name && { name }) }) });
+    },
+    async removePasskey(id) {
+      await call(`../passkeys/${id}/remove`, { method: "POST" });
+    },
     async morning() {
       return (await call<{ card: MorningCard | null }>("../card")).card;
     },
@@ -224,6 +340,15 @@ export function doorOffice(base: Character): Office {
     async setSchedule(id, change) {
       await call(`../schedules/${encodeURIComponent(id)}`, { method: "POST", body: JSON.stringify(change) });
     },
+    async schedulePreview(rule) {
+      return call<{ cron: string; words: string; next: number[] }>("../schedules/preview", { method: "POST", body: JSON.stringify({ rule }) });
+    },
+    async addSchedule(x) {
+      await call("../schedules", { method: "POST", body: JSON.stringify(x) });
+    },
+    async removeSchedule(id) {
+      await call(`../schedules/${encodeURIComponent(id)}/remove`, { method: "POST" });
+    },
     async files(c, dir = "") {
       return (await call<{ entries: Entry[] }>(`../orbs/${encodeURIComponent(idOf(c.name))}/workspace?path=${encodeURIComponent(dir)}`)).entries;
     },
@@ -231,14 +356,37 @@ export function doorOffice(base: Character): Office {
       return (await call<{ file: WorkFile }>(`../orbs/${encodeURIComponent(idOf(c.name))}/workspace/file?path=${encodeURIComponent(path)}`)).file;
     },
     watch(on) {
-      // the live stream, with the session cookie (an EventSource sends it, same-origin)
-      const es = new EventSource("../stream?since=" + Number.MAX_SAFE_INTEGER);
-      es.addEventListener("event", (m) => on.event?.(JSON.parse((m as MessageEvent).data as string)));
-      es.addEventListener("text", (m) => on.text?.(JSON.parse((m as MessageEvent).data as string)));
-      es.addEventListener("open", () => on.open?.());
-      return () => es.close();
+      // the live stream, with the session cookie (an EventSource sends it, same-origin), shared
+      return watch(on);
     },
   };
+}
+
+// WebAuthn's options travel as JSON, its buffers as base64url (the home's side: packages/home/src/passkeys.ts)
+type CreateOptions = { challenge: string; rp: { id: string; name: string }; user: { id: string; name: string; displayName: string }; pubKeyCredParams: { type: "public-key"; alg: number }[]; timeout: number; attestation: AttestationConveyancePreference; authenticatorSelection: AuthenticatorSelectionCriteria; excludeCredentials: { type: "public-key"; id: string }[] };
+type GetOptions = { challenge: string; rpId: string; timeout: number; userVerification: UserVerificationRequirement };
+const b64u = (b: ArrayBuffer | null): string | null => {
+  if (!b) return null;
+  let s = "";
+  for (const x of new Uint8Array(b)) s += String.fromCharCode(x);
+  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+};
+const unb64u = (s: string): ArrayBuffer => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0)).buffer;
+const creating = (o: CreateOptions): PublicKeyCredentialCreationOptions => ({
+  ...o, challenge: unb64u(o.challenge), user: { ...o.user, id: unb64u(o.user.id) }, excludeCredentials: o.excludeCredentials.map((c) => ({ ...c, id: unb64u(c.id) })),
+});
+
+/** Whether this browser can sign in with a passkey at all. */
+export const passkeysHere = (): boolean => typeof globalThis.PublicKeyCredential === "function" && Boolean(globalThis.navigator?.credentials);
+
+/** Signs this browser in with the owner's passkey (PLAN 2.7): no pairing link needed. */
+export async function signInWithPasskey(): Promise<void> {
+  const o = await call<GetOptions>("../passkeys/sign-in/options", { method: "POST" });
+  const got = (await navigator.credentials.get({ publicKey: { ...o, challenge: unb64u(o.challenge), allowCredentials: [] } })) as PublicKeyCredential | null;
+  if (!got) throw new Error("no passkey was chosen");
+  const r = got.response as AuthenticatorAssertionResponse;
+  const credential = { id: got.id, rawId: b64u(got.rawId), type: got.type, response: { clientDataJSON: b64u(r.clientDataJSON), authenticatorData: b64u(r.authenticatorData), signature: b64u(r.signature), userHandle: b64u(r.userHandle) } };
+  await call("../passkeys/sign-in", { method: "POST", body: JSON.stringify({ credential }) });
 }
 
 /** Finds the home behind this page, pairing first when the address carries a link's code. */
@@ -260,7 +408,7 @@ export async function connect(base: Character): Promise<Link | null> {
   } catch {
     return null; // no home behind this page: a preview
   }
-  if (res.status === 401) return { trouble: "this browser is not paired with your home yet: open the link the home printed when it started (pnpm start)" };
+  if (res.status === 401) return { trouble: "this browser is not signed in to your home yet: open a pairing link (the home prints one when it starts, and a signed-in device can make one for a phone), or sign in with your passkey" };
   if (!res.ok || !(res.headers.get("content-type") ?? "").includes("json")) return null;
   return { office: doorOffice(base) };
 }

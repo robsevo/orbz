@@ -249,6 +249,28 @@ const MIGRATIONS: string[] = [
     put_away_at  INTEGER
   );
   `,
+  // v10: the devices signed in to the app (PLAN 2.7), each revocable, and the owner's passkeys
+  `
+  CREATE TABLE devices (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    token_hash  TEXT    NOT NULL UNIQUE,
+    name        TEXT    NOT NULL,
+    via         TEXT    NOT NULL,
+    created_at  INTEGER NOT NULL,
+    seen_at     INTEGER NOT NULL,
+    expires_at  INTEGER NOT NULL,
+    revoked_at  INTEGER
+  );
+  CREATE TABLE passkeys (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    credential  TEXT    NOT NULL UNIQUE,
+    public_key  TEXT    NOT NULL,
+    sign_count  INTEGER NOT NULL DEFAULT 0,
+    name        TEXT    NOT NULL,
+    created_at  INTEGER NOT NULL,
+    used_at     INTEGER
+  );
+  `,
 ];
 
 /** The home's data is the person's: the folder is theirs alone (0700) and so is the database

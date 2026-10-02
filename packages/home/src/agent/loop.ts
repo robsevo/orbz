@@ -78,6 +78,8 @@ export type AgentOptions = {
   };
   /** His plan templates (PLAN 3.2). */
   templates?: (orb: string) => { title: string; body: string }[];
+  /** Sets him a job on a schedule (PLAN 2.4). */
+  schedule?: (orb: string, s: Parameters<NonNullable<ToolContext["schedule"]>>[0]) => ReturnType<NonNullable<ToolContext["schedule"]>>;
   /** His own brain (PLAN 3.4): the playbook it earned for a schedule's or a trigger's task, and the brain. */
   own?: { find: (orb: string, task: string) => (Earned & { ep: Endpoint }) | null };
   tools?: ToolDef[];
@@ -109,7 +111,7 @@ export const PLAN_ANSWERS = {
 const est = (text: string): number => Math.ceil(text.length / 4) + 4;
 
 export class AgentRunner implements Runner {
-  readonly #o: Required<Omit<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned" | "searchKey" | "remind" | "reminders" | "moveReminder" | "lessonGate" | "learn" | "habits" | "own" | "templates">> & Pick<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned" | "searchKey" | "remind" | "reminders" | "moveReminder" | "lessonGate" | "learn" | "habits" | "own" | "templates">;
+  readonly #o: Required<Omit<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned" | "searchKey" | "remind" | "reminders" | "moveReminder" | "lessonGate" | "learn" | "habits" | "own" | "templates" | "schedule">> & Pick<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned" | "searchKey" | "remind" | "reminders" | "moveReminder" | "lessonGate" | "learn" | "habits" | "own" | "templates" | "schedule">;
   readonly #tools: Map<string, ToolDef>;
 
   constructor(opts: AgentOptions) {
@@ -136,6 +138,7 @@ export class AgentRunner implements Runner {
       ...(this.#o.lessonGate && { lessonGate: this.#o.lessonGate }),
       ...(this.#o.learn && { learn: (line: string) => this.#o.learn!(ctx.orb, line) }),
       ...(this.#o.templates && { templates: () => this.#o.templates!(ctx.orb) }),
+      ...(this.#o.schedule && { schedule: (x) => this.#o.schedule!(ctx.orb, x) }),
       note: (text, meta) => conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "notice", run: ctx.run, content: text, meta }),
     };
     mkdirSync(tctx.workspace, { recursive: true });

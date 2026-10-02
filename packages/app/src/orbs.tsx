@@ -27,10 +27,11 @@ import { NoticesRoom, useNotices } from "./rooms/Notices.tsx";
 import { CalendarRoom } from "./rooms/Calendar.tsx";
 import { LabRoom } from "./rooms/Lab.tsx";
 import { Chat } from "./rooms/Chat.tsx";
-import { connect, keepOffice, keptOffice, type Office, type Tab as SessionTab } from "./home/link.ts";
+import { connect, idOf, keepOffice, keptOffice, type Office, passkeysHere, signInWithPasskey, type Standing, type Tab as SessionTab } from "./home/link.ts";
 import { DEMO_CREW } from "./orb/demo.ts";
 import { NEWBORN } from "./onboarding/story.ts";
 import type { Gesture, OrbState } from "./orb/life.ts";
+import { useMood, useMoods, WORN } from "./orb/useMood.ts";
 import {
   ASH, EYES, FAMILIES, FINISHES, GLASSES, HATS, orbName, PERSONALITIES, REPLIES, SHAPES, sheetOf, speaks, SPECIALTIES, surprise, voice, VOICES, withPersonality,
   type Character, type EyesName, type Family, type FinishName, type GlassesName, type HatName, type PersonalityName, type Replies, type ShapeName, type SpecialtyName,
@@ -150,7 +151,7 @@ function Radar({ items }: { items: { name: string; value: number }[] }) {
   );
 }
 
-function Sheet({ c, onRename, replies }: { c: Character; onRename?: (name: string) => void; replies: Replies }) {
+function Sheet({ c, onRename, replies, standing }: { c: Character; onRename?: (name: string) => void; replies: Replies; standing?: Standing | null }) {
   const sh = sheetOf(c);
   const v = voice(c.voice);
   const name = { font: "800 26px/32px var(--font)", color: "var(--accent)" } satisfies CSSProperties;
@@ -174,7 +175,9 @@ function Sheet({ c, onRename, replies }: { c: Character; onRename?: (name: strin
         )}
         <span style={{ font: "600 15px/20px var(--font)", color: "var(--text-1)" }}>{cap(sh.title)}</span>
         <span style={{ font: "400 13px/18px var(--font)", color: "var(--text-3)" }}>
-          {onRename ? "Not in the office yet · he is fixed once you create him" : "Junior · 0 XP · levels come from finished work you approve"}
+          {onRename
+            ? "Not in the office yet · he is fixed once you create him"
+            : `${standing?.level ?? "Junior"} · ${(standing?.xp ?? 0).toLocaleString("en-GB")} XP · ${standing?.next?.ready ? `ready for ${standing.next.to}` : "levels come from finished work you approve"}`}
         </span>
       </div>
       <p style={{ margin: 0, font: "400 15px/21px var(--font)", color: "var(--text-2)" }}>{sh.bio}</p>
@@ -515,6 +518,7 @@ function App() {
     return kept.length ? { kind: "orb", name: kept[0]!.name } : { kind: "new", draft: { ...NEWBORN, seed: roll() } };
   });
   const [state, setState] = useState<OrbState>("idle");
+  const [picked, setPicked] = useState(false); // a mood you chose by hand stands over his real one
   const [gesture, setGesture] = useState<{ name: Gesture; n: number } | null>(null);
   const [replies, setReplies] = useState<Replies>("speak");
   const [sounds, setSoundsShown] = useState(soundsOn());
@@ -583,6 +587,23 @@ function App() {
   const making = view.kind === "new";
   const at = view.kind === "orb" ? Math.max(0, office.findIndex((c) => c.name === view.name)) : -1;
   const me = view.kind === "new" ? view.draft : office[at] ?? NEWBORN;
+  // his real mood, on a home (PLAN 2.3): what happens to him, worn by the face
+  const moodNow = useMood(home, view.kind === "new" ? null : idOf(me.name));
+  const live = home && view.kind !== "new" ? moodNow : null;
+  const moods = useMoods(home, office.map((c) => idOf(c.name))); // the side menu's dots (PLAN 2.4)
+  // where he stands, on a home (PLAN 3.8): his level and XP, kept up as they change
+  const [standing, setStanding] = useState<Standing | null>(null);
+  useEffect(() => {
+    if (!home || view.kind === "new") return void setStanding(null);
+    const c = me;
+    const load = (): void => void home.standing(c).then(setStanding, () => setStanding(null));
+    load();
+    return home.watch({ event: (e) => void (e.orb === idOf(c.name) && /^(xp\.|orb\.promoted|promotion\.)/.test(e.type) && load()) });
+  }, [home, view.kind === "new" ? "" : me.name]);
+  const worn: OrbState = live && !picked ? WORN[live.mood].state : state; // what his face wears, and the chip that says so
+  useEffect(() => {
+    if (live?.moment && !picked) play(live.moment.name); // his moments play through the face's one gesture line
+  }, [live?.moment?.n]);
   const play = (g: Gesture): void => setGesture((x) => ({ name: g, n: (x?.n ?? 0) + 1 }));
   useEffect(() => play("pop"), [making ? "new" : me.name]);
 
@@ -712,6 +733,7 @@ function App() {
           ready={() => globalThis.__orbsReady ?? Promise.all([document.fonts.ready, link()])}
           onLeaving={() => setDrawn(true)}
           onDone={() => setOpening(false)}
+          {...(passkeysHere() && { signIn: signInWithPasskey })}
         />
       )}
       {!opening && intro && (
@@ -767,10 +789,17 @@ function App() {
                 onClick={() => go({ room: "office", orb: c.name })}
                 style={{ display: "flex", alignItems: "center", gap: 10, padding: "4px 8px", border: 0, borderRadius: 10, cursor: "pointer", textAlign: "left", background: room === "office" && !making && c.name === me.name ? "var(--accent-wash)" : "transparent", color: "var(--text-2)", font: "600 14px/20px var(--font)", minWidth: 0 }}
               >
-                <Orb character={c} size={30} poke={false} every={3} fidget={false} />
+                <span style={{ position: "relative", flex: "0 0 auto", display: "grid" }}>
+                  <Orb character={c} size={30} poke={false} every={3} fidget={false} />
+                  {moods[idOf(c.name)] && moods[idOf(c.name)] !== "idle" && (
+                    <span aria-hidden data-mood-dot={moods[idOf(c.name)]} style={{ position: "absolute", right: -1, bottom: -1, width: 10, height: 10, borderRadius: "50%", boxShadow: "0 0 0 2px var(--side)", background: moods[idOf(c.name)] === "waiting" ? "var(--alert)" : moods[idOf(c.name)] === "thinking" || moods[idOf(c.name)] === "working" || moods[idOf(c.name)] === "gym" ? "var(--accent)" : "var(--text-3)" }} />
+                  )}
+                </span>
                 <span style={{ display: "grid", minWidth: 0 }}>
                   <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
-                  <span style={{ font: "400 11px/14px var(--font)", color: "var(--text-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{SPECIALTIES[c.specialty].label}</span>
+                  <span style={{ font: "400 11px/14px var(--font)", color: moods[idOf(c.name)] === "waiting" ? "var(--alert)" : "var(--text-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {moods[idOf(c.name)] && moods[idOf(c.name)] !== "idle" ? WORN[moods[idOf(c.name)]!].words : SPECIALTIES[c.specialty].label}
+                  </span>
                 </span>
               </button>
             ))}
@@ -798,6 +827,7 @@ function App() {
             replies={replies}
             setReplies={setReplies}
             replayIntro={() => setIntro(true)}
+            home={home}
             {...(!home && {
               fillDemo: () => {
                 const filled = [...office, ...DEMO_CREW.filter((c) => !office.some((x) => x.name.toLowerCase() === c.name.toLowerCase()))];
@@ -823,10 +853,15 @@ function App() {
               <SoundIcon on={sounds} />
             </button>
             <span style={{ ...s.head }}>{making ? "A new orb" : "In the office"}</span>
-            <Orb character={me} size={176} state={state} gesture={gesture} />
+            <Orb character={me} size={176} state={worn} gesture={gesture} />
+            {live && !picked && WORN[live.mood].words && (
+              <span data-mood={live.mood} style={{ font: "600 13px/18px var(--font)", color: "var(--text-2)" }}>
+                {WORN[live.mood].words}
+              </span>
+            )}
             <OneLine>
               {MOODS.map(([m, label]) => (
-                <button key={m} onClick={() => setState(m)} aria-pressed={state === m} style={{ ...s.chip, ...chosen(state === m) }}>
+                <button key={m} onClick={() => (setState(m), setPicked(true))} aria-pressed={worn === m} style={{ ...s.chip, ...chosen(worn === m) }}>
                   {label}
                 </button>
               ))}
@@ -863,7 +898,7 @@ function App() {
           </div>
 
           <div className="orbs-pair" style={{ display: "grid", gap: "var(--s4)", padding: "0 var(--s5)", gridTemplateColumns: "minmax(0, 1fr)", alignItems: "start" }}>
-            <Sheet c={me} onRename={making ? (n) => edit({ name: n }) : undefined} replies={replies} />
+            <Sheet c={me} onRename={making ? (n) => edit({ name: n }) : undefined} replies={replies} standing={making ? null : standing} />
             {making ? <Creator me={me} edit={edit} replies={replies} setReplies={setReplies} /> : <Card c={me} replies={replies} setReplies={setReplies} onDelete={() => remove(me.name)} onChat={() => go({ room: "chat", orb: me.name })} />}
           </div>
 

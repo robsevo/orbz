@@ -32,7 +32,7 @@ test("XP without an exam passed is not proposed; with both the night proposes it
   };
 
   const before = nextFor(home.events, "dana", { specialty: "data", now: clock.now() })!;
-  assert.deepEqual([before.to, before.evidence.xp.has, before.ready, before.missing], ["Mid", 300, false, ["1 more task type(s) earned in its specialty"]]);
+  assert.deepEqual([before.to, before.evidence.xp.has, before.ready, before.missing], ["Mid", 300, false, ["1 more task learned in its specialty"]]);
   assert.deepEqual((await gym.night()).proposed, [], "the XP, but no exam passed: not proposed");
   assert.equal((await call("POST", "/orbs/dana/promote", { to: "Mid" })).status, 409, "nor can you promote it past the evidence");
 
@@ -42,7 +42,7 @@ test("XP without an exam passed is not proposed; with both the night proposes it
   assert.equal(levelOf(home.events, "dana"), "Junior", "proposed is not promoted");
   const notice = home.notices.list().find((n) => n.kind === "promotion")!;
   assert.match(notice.title, /Dana is ready for Mid/);
-  assert.match(notice.detail, /325 XP; 1 task type\(s\) earned/);
+  assert.match(notice.detail, /325 XP; 1 task learned/);
 
   assert.equal((await call("POST", "/orbs/dana/promote", { to: "Senior" })).status, 409, "only the next level");
   assert.deepEqual((await call("POST", "/orbs/dana/promote", { to: "Mid" })).json, { level: "Mid" });
@@ -59,7 +59,7 @@ test("only on the evidence: a regression lately, or work outside its specialty, 
   }
   home.events.append("habit.promoted", { kind: BILLS, task: "dana|trigger:t1|{subject}", version: 1, runs: [100, 101, 102] }, { orb: "dana" });
   assert.equal(nextFor(home.events, "dana", { specialty: "data", now: clock.now() })!.ready, true);
-  assert.deepEqual(nextFor(home.events, "dana", { specialty: "writing", now: clock.now() })!.missing, ["1 more task type(s) earned in its specialty"], "bills are data work, not writing");
+  assert.deepEqual(nextFor(home.events, "dana", { specialty: "writing", now: clock.now() })!.missing, ["1 more task learned in its specialty"], "bills are data work, not writing");
   home.events.append("playbook.refused", { kind: "dana|schedule:s1|web_search {}", version: "p2" }, { orb: "dana" });
   clock.suspend(86_400_000);
   assert.deepEqual(nextFor(home.events, "dana", { specialty: "data", now: clock.now() })!.missing, ["no regression for 14 days"], "a day on, still too recent");

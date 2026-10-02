@@ -17,6 +17,7 @@ import { type FloorHit, shellFloor } from "./floor.ts";
 import { decide, type Mode, type Verdict } from "./policy.ts";
 import type { Matcher, Rules } from "./rules.ts";
 import { rankWidens } from "./rank.ts";
+import { workspaceOf } from "../workspace.ts";
 import type { Family } from "../brain/constitution.ts";
 import type { Level } from "../gym/levels.ts";
 
@@ -115,7 +116,7 @@ export class Guard {
       : await this.#o.rules.decide(at.orb, described, this.#o.matcher?.() ?? null, at.signal);
     const oneway = def.act ? await this.#oneway(at.turn, def.act) : null;
     const r = def.act === "shell" ? this.#o.rankOf?.(at.orb) : null;
-    const rank = r ? rankWidens({ ...r, command, background: Boolean(args.background) }) : null;
+    const rank = r ? rankWidens({ ...r, command, background: Boolean(args.background), workspace: workspaceOf(this.#o.dataDir, at.orb) }) : null;
     return { ...decide({ floor, rule, defaultDecision: def.decision, oneway, mode: at.mode, outward: Boolean(def.act), rank }), described };
   }
 

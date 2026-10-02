@@ -190,8 +190,11 @@ function accentVars(c: RGB, t: Theme): string {
   return `--accent: ${hex(c)}; --accent-wash: rgba(${r}, ${g}, ${b}, ${wash}); --accent-fill: rgba(${r}, ${g}, ${b}, ${fill}); --accent-glow: rgba(${r}, ${g}, ${b}, 0.45);`;
 }
 
+/** A QR code's two colours, the same in both themes: a reader wants dark on light, with its margin (PLAN 2.7). */
+export const QR_COLOURS = { ink: parseHex("#121214"), paper: parseHex("#FFFFFF") } as const;
+
 function staticVars(): string {
-  const v: Record<string, string> = { "--margin": `${MARGIN}px`, "--font": FONT, "--mono": MONO };
+  const v: Record<string, string> = { "--margin": `${MARGIN}px`, "--font": FONT, "--mono": MONO, "--qr-ink": hex(QR_COLOURS.ink), "--qr-paper": hex(QR_COLOURS.paper) };
   for (const [k, px] of Object.entries(SPACE)) v[`--s${k}`] = `${px}px`;
   for (const [k, px] of Object.entries(RADIUS)) v[`--r-${k}`] = `${px}px`;
   for (const [k, [size, line, weight]] of Object.entries(TYPE)) v[`--t-${k}`] = `${weight} ${size}px/${line}px ${FONT}`;

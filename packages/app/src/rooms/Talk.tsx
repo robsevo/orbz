@@ -141,6 +141,11 @@ export function Talk(o: {
                 <span aria-hidden style={{ letterSpacing: ".1em", fontSize: 11, color: "var(--accent)" }}>✓ AGREED</span>
                 {m.meta.agreed}
               </div>
+            ) : typeof m.meta.memory === "string" ? (
+              <div key={m.id} data-memory data-orb={byId.get(m.orb)?.hue} style={{ justifySelf: "center", display: "flex", gap: 8, alignItems: "center", padding: "6px 12px", borderRadius: 999, background: "var(--fill)", boxShadow: "inset 0 0 0 .5px var(--hairline)", font: "600 13px/18px var(--font)", color: "var(--text-1)", maxWidth: 560, animation: "orbs-arrive 520ms var(--m-spring)" }}>
+                <span aria-hidden style={{ letterSpacing: ".1em", fontSize: 10, fontWeight: 800, color: "var(--accent)", flex: "0 0 auto" }}>MEMORY UPDATED</span>
+                <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>{m.meta.memory}</span>
+              </div>
             ) : (
               <span key={m.id} data-notice style={{ justifySelf: "center", font: "500 13px/18px var(--font)", color: m.meta.error ? "var(--alert)" : "var(--text-3)", textAlign: "center", maxWidth: 560 }}>
                 {m.content}
