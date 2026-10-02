@@ -179,19 +179,39 @@ export async function measure(page: Page): Promise<Finding[]> {
 /** Starts a new orb on the app's page and dresses him plainly, the way the picker limits were
  * measured: Ash's bean, his classic eyes and colour, glass, no hat, no glasses, Ash's goo. The rest (his name,
  * his personality) stays as the dice left it. */
+/** Presses a choice in the creator's open tab, turning to the page it is on first (ui/Paged.tsx:
+ * every page is in the document, only the one you are on shows). */
+export async function choose(page: Page, pick: string): Promise<void> {
+  const button = page.locator(`button[data-pick="${pick}"]`);
+  const n = await button.evaluate((b) => b.closest("[data-page]")?.getAttribute("data-page") ?? null);
+  if (n && (await button.isHidden())) await page.getByRole("button", { name: `Page ${n}`, exact: true }).click();
+  await button.click();
+}
+
 export async function plainNewOrb(page: Page): Promise<void> {
   await page.getByRole("button", { name: "New orb" }).first().click();
   await page.getByRole("tab", { name: "Colour" }).click();
   await page.getByRole("button", { name: "azure", exact: true }).click();
-  await page.locator('button[data-pick="glass"]').click();
+  await choose(page, "glass");
   await page.getByRole("button", { name: "No gradient" }).click();
   await page.getByLabel("How gooey").fill("55");
   await page.getByRole("tab", { name: "Hat" }).click();
-  await page.locator('button[data-pick="none"]').click();
+  await choose(page, "none");
   await page.getByRole("tab", { name: "Glasses" }).click();
-  await page.locator('button[data-pick="none"]').click();
+  await choose(page, "none");
   await page.getByRole("tab", { name: "Eyes" }).click();
-  await page.locator('button[data-pick="classic"]').click();
+  await choose(page, "classic");
   await page.getByRole("tab", { name: "Shape" }).click();
-  await page.locator('button[data-pick="bean"]').click();
+  await choose(page, "bean");
+}
+
+/** Seeds a preview's office with the demo crew (src/orb/demo.ts) and a CEO, before the page loads:
+ * an office now starts with only the orb you make (owner, 10-01), so a check that needs a full
+ * office brings its own. */
+export async function seedOffice(page: Page, o: { crew?: unknown[]; name?: string | null } = {}): Promise<void> {
+  const { DEMO_CREW } = await import("../src/orb/demo.ts");
+  await page.addInitScript(({ crew, name }) => {
+    localStorage.setItem("orbs.office", JSON.stringify(crew));
+    if (name) localStorage.setItem("orbs.person", JSON.stringify({ name, since: 0 }));
+  }, { crew: o.crew ?? DEMO_CREW, name: o.name === undefined ? "Robin" : o.name });
 }

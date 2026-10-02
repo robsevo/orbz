@@ -14,6 +14,7 @@ import { createRoot } from "react-dom/client";
 import { HUES, stylesheet, type HueName } from "./design/tokens.ts";
 import { Orb } from "./orb/Orb.tsx";
 import { Balanced, OneLine, useMore } from "./ui/Balanced.tsx";
+import { Paged } from "./ui/Paged.tsx";
 import { installFeel } from "./ui/feel.ts";
 import { setSounds, soundsOn } from "./ui/sound.ts";
 import { Splash, splashWanted } from "./ui/Splash.tsx";
@@ -21,28 +22,18 @@ import { Onboarding } from "./onboarding/Onboarding.tsx";
 import { introWanted, loadPerson, savePerson, type Person } from "./onboarding/story.ts";
 import { parseRoute, routeHash, type Route } from "./ui/nav.ts";
 import { Settings } from "./rooms/Settings.tsx";
+import { SessionsRoom } from "./rooms/Sessions.tsx";
+import { Chat } from "./rooms/Chat.tsx";
+import { connect, keepOffice, keptOffice, type Office, type Tab as SessionTab } from "./home/link.ts";
+import { DEMO_CREW } from "./orb/demo.ts";
+import { NEWBORN } from "./onboarding/story.ts";
 import type { Gesture, OrbState } from "./orb/life.ts";
 import {
   ASH, EYES, FAMILIES, FINISHES, GLASSES, HATS, orbName, PERSONALITIES, REPLIES, SHAPES, sheetOf, speaks, SPECIALTIES, surprise, voice, VOICES, withPersonality,
   type Character, type EyesName, type Family, type FinishName, type GlassesName, type HatName, type PersonalityName, type Replies, type ShapeName, type SpecialtyName,
 } from "./orb/spec.ts";
 
-const OFFICE: Character[] = [
-  ASH,
-  { name: "Oscar", personality: "dapper", specialty: "backend", seed: 11, hue: "iris", hue2: null, finish: "glass", shape: "pebble", eyes: "ovals", hat: "top hat", glasses: "monocle", voice: "bm_fable", goo: 0.3 },
-  { name: "Luna", personality: "dreamy", specialty: "design", seed: 12, hue: "teal", hue2: "lavender", finish: "glass", shape: "ghost", eyes: "huge", hat: "antenna", glasses: "cat-eye", voice: "af_sky", goo: 0.9 },
-  { name: "Daisy", personality: "cheerful", specialty: "frontend", seed: 13, hue: "rose", hue2: null, finish: "pearl", shape: "teddy", eyes: "big", hat: "bow", glasses: "hearts", voice: "af_bella", goo: 0.75 },
-  { name: "Milo", personality: "curious", specialty: "research", seed: 14, hue: "lime", hue2: null, finish: "glass", shape: "drop", eyes: "big", hat: "sprout", glasses: "big round", voice: "am_puck", goo: 0.6 },
-  { name: "Theo", personality: "sleepy", specialty: "data", seed: 15, hue: "violet", hue2: null, finish: "smoke", shape: "kitty", eyes: "droopy", hat: "headphones", glasses: "none", voice: "af_river", goo: 0.65 },
-  { name: "Hazel", personality: "wise", specialty: "planning", seed: 16, hue: "honey", hue2: null, finish: "glass", shape: "moon", eyes: "close", hat: "crown", glasses: "reading", voice: "bm_george", goo: 0.35 },
-  { name: "Rosie", personality: "cozy", specialty: "assistant", seed: 17, hue: "leaf", hue2: null, finish: "glass", shape: "cloud", eyes: "classic", hat: "beanie", glasses: "none", voice: "af_heart", goo: 0.8 },
-  { name: "Benny", personality: "silly", specialty: "fullstack", seed: 18, hue: "coral", hue2: "marigold", finish: "glass", shape: "bean", eyes: "big", hat: "party hat", glasses: "stars", voice: "am_santa", goo: 0.85 },
-  { name: "June", personality: "shy", specialty: "writing", seed: 19, hue: "orchid", hue2: null, finish: "pearl", shape: "drop", eyes: "droopy", hat: "flower", glasses: "round", voice: "af_nicole", goo: 0.6 },
-  { name: "Nico", personality: "techy", specialty: "testing", seed: 20, hue: "amber", hue2: null, finish: "glass", shape: "squircle", eyes: "dots", hat: "none", glasses: "goggles", voice: "am_echo", goo: 0.45 },
-  { name: "Ada", personality: "dapper", specialty: "accountant", seed: 22, hue: "jade", hue2: null, finish: "glass", shape: "egg", eyes: "beans", hat: "eyeshade", glasses: "half-rims", voice: "bf_emma", goo: 0.35 },
-  { name: "Cal", personality: "brave", specialty: "trainer", seed: 23, hue: "apricot", hue2: null, finish: "neon", shape: "blob", eyes: "wide", hat: "sweatband", glasses: "sport", voice: "am_fenrir", goo: 0.7 },
-  { name: "Gus", personality: "grumpy", specialty: "devops", seed: 21, hue: "mint", hue2: null, finish: "black", shape: "cub", eyes: "beans", hat: "hard hat", glasses: "shades", voice: "am_onyx", goo: 0.4 },
-];
+
 
 const MOODS: [OrbState, string][] = [["idle", "Awake"], ["listening", "Listening"], ["thinking", "Thinking"], ["speaking", "Speaking"]];
 const GESTURES: [Gesture, string][] = [["hop", "Hop"], ["wink", "Wink"], ["wiggle", "Wiggle"], ["squish", "Squish"], ["jelly", "Jelly"], ["look", "Look round"], ["pout", "Pout"], ["doze", "Doze"], ["nod", "Nod"]];
@@ -215,19 +206,45 @@ function Sheet({ c, onRename, replies }: { c: Character; onRename?: (name: strin
   );
 }
 
-function Thumbs<T extends string>({ c, options, field, label, onPick, size = 64, face = false }: { c: Character; options: T[]; field: "shape" | "eyes" | "hat" | "glasses" | "finish"; label: (o: T) => string; onPick: (o: T) => void; size?: number; face?: boolean }) {
+/** A picture tab's choices: him in each, three across and nine to a page (ui/Paged.tsx), every tab
+ * the same (owner, 10-01: "same amount of orbs and accessories per tab, with page numbers. 3 per
+ * row"). A thumbnail is drawn at one size and shrinks to fit a narrow cell. */
+const THUMB = 96;
+function Thumbs<T extends string>({ c, options, field, label, onPick, face = false, title }: { c: Character; options: T[]; field: "shape" | "eyes" | "hat" | "glasses" | "finish"; label: (o: T) => string; onPick: (o: T) => void; face?: boolean; title: string }) {
   return (
-    <Balanced min={size + 20}>
-      {options.map((o) => {
+    <Paged
+      label={title}
+      at={options.indexOf(c[field] as T)}
+      items={options.map((o) => {
         const on = c[field] === o;
         return (
-          <button key={o} data-pick={o} onClick={() => onPick(o)} aria-pressed={on} style={{ ...chosen(on), border: 0, borderRadius: 14, padding: "6px 4px 8px", cursor: "pointer", display: "grid", justifyItems: "center", gap: 2, minWidth: 0 }}>
-            <Orb character={{ ...c, [field]: o }} size={size} still poke={false} framing={face ? "portrait" : "window"} />
+          <button key={o} data-pick={o} onClick={() => onPick(o)} aria-pressed={on} style={{ ...chosen(on), border: 0, borderRadius: 14, padding: "6px 4px 8px", cursor: "pointer", display: "grid", justifyItems: "center", alignContent: "center", gap: 2, minWidth: 0 }}>
+            <Orb character={{ ...c, [field]: o }} size={THUMB} still poke={false} framing={face ? "portrait" : "window"} style={{ maxWidth: "100%", height: "auto" }} />
             <span style={{ font: "600 12px/16px var(--font)", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label(o)}</span>
           </button>
         );
       })}
-    </Balanced>
+    />
+  );
+}
+
+/** An accessory's colour: its own, or any of his 24 (owner, 10-01: "just like the orb we should be
+ * able to change the colors of our accessories"). One line, scrolling sideways on a phone. */
+function AccessoryColour({ what, value, onPick }: { what: string; value: HueName | null; onPick: (h: HueName | null) => void }) {
+  return (
+    <div style={{ display: "grid", gap: 8 }}>
+      <Head>{cap(what)} colour</Head>
+      <OneLine style={{ justifyContent: "flex-start", alignItems: "center", padding: "4px 2px" }} gap={8}>
+        <button onClick={() => onPick(null)} aria-pressed={value === null} style={{ ...s.chip, ...chosen(value === null), flex: "0 0 auto" }}>
+          Its own
+        </button>
+        {HUES.map((h) => (
+          <span key={h.name} style={{ flex: "0 0 auto", display: "grid" }}>
+            <Swatch hue={h.name} size={28} on={value === h.name} label={`${what} in ${h.name}`} onPick={() => onPick(h.name)} />
+          </span>
+        ))}
+      </OneLine>
+    </div>
   );
 }
 
@@ -302,8 +319,8 @@ function Creator({ me, edit, replies, setReplies }: { me: Character; edit: (p: P
     Specialty: () => edit({ specialty: pick(Object.keys(SPECIALTIES) as SpecialtyName[]) }),
     Shape: () => edit({ shape: pick(Object.keys(SHAPES) as ShapeName[]) }),
     Eyes: () => edit({ eyes: pick(Object.keys(EYES) as EyesName[]) }),
-    Hat: () => edit({ hat: pick(Object.keys(HATS) as HatName[]) }),
-    Glasses: () => edit({ glasses: pick(Object.keys(GLASSES) as GlassesName[]) }),
+    Hat: () => edit({ hat: pick(Object.keys(HATS) as HatName[]), hatHue: Math.random() < 0.35 ? pick(hues) : null }),
+    Glasses: () => edit({ glasses: pick(Object.keys(GLASSES) as GlassesName[]), glassesHue: Math.random() < 0.35 ? pick(hues) : null }),
     Colour: () => edit({ hue: pick(hues), hue2: Math.random() < 0.25 ? pick(hues) : null, finish: Math.random() < 0.7 ? "glass" : pick(Object.keys(FINISHES) as FinishName[]) }),
     Voice: () => edit({ voice: pick(VOICES.filter((v) => v.english && v.id !== "ash" && v.id !== "silent").map((v) => v.id)) }),
   };
@@ -339,10 +356,20 @@ function Creator({ me, edit, replies, setReplies }: { me: Character; edit: (p: P
           ))}
         </div>
       )}
-      {tab === "Shape" && <Thumbs c={me} options={Object.keys(SHAPES) as ShapeName[]} field="shape" label={cap} onPick={(shape) => edit({ shape })} />}
-      {tab === "Eyes" && <Thumbs c={me} options={Object.keys(EYES) as EyesName[]} field="eyes" label={cap} onPick={(eyes) => edit({ eyes })} size={88} face />}
-      {tab === "Hat" && <Thumbs c={me} options={Object.keys(HATS) as HatName[]} field="hat" label={cap} onPick={(hat) => edit({ hat })} />}
-      {tab === "Glasses" && <Thumbs c={me} options={Object.keys(GLASSES) as GlassesName[]} field="glasses" label={cap} onPick={(glasses) => edit({ glasses })} size={88} face />}
+      {tab === "Shape" && <Thumbs title="Shapes" c={me} options={Object.keys(SHAPES) as ShapeName[]} field="shape" label={cap} onPick={(shape) => edit({ shape })} />}
+      {tab === "Eyes" && <Thumbs title="Eyes" c={me} options={Object.keys(EYES) as EyesName[]} field="eyes" label={cap} onPick={(eyes) => edit({ eyes })} face />}
+      {tab === "Hat" && (
+        <div style={{ display: "grid", gap: "var(--s4)" }}>
+          <Thumbs title="Hats" c={me} options={Object.keys(HATS) as HatName[]} field="hat" label={cap} onPick={(hat) => edit({ hat })} />
+          {me.hat !== "none" && <AccessoryColour what="hat" value={me.hatHue ?? null} onPick={(hatHue) => edit({ hatHue })} />}
+        </div>
+      )}
+      {tab === "Glasses" && (
+        <div style={{ display: "grid", gap: "var(--s4)" }}>
+          <Thumbs title="Glasses" c={me} options={Object.keys(GLASSES) as GlassesName[]} field="glasses" label={cap} onPick={(glasses) => edit({ glasses })} face />
+          {me.glasses !== "none" && <AccessoryColour what="frame" value={me.glassesHue ?? null} onPick={(glassesHue) => edit({ glassesHue })} />}
+        </div>
+      )}
       {tab === "Colour" && (
         <div style={{ display: "grid", gap: "var(--s4)" }}>
           <Balanced min={32} style={{ justifyItems: "center" }}>
@@ -352,7 +379,7 @@ function Creator({ me, edit, replies, setReplies }: { me: Character; edit: (p: P
           </Balanced>
           <div style={{ display: "grid", gap: 8 }}>
             <Head>Finish</Head>
-            <Thumbs c={me} options={Object.keys(FINISHES) as FinishName[]} field="finish" label={(f) => FINISHES[f].label} onPick={(finish) => edit({ finish })} size={60} face />
+            <Thumbs title="Finishes" c={me} options={Object.keys(FINISHES) as FinishName[]} field="finish" label={(f) => FINISHES[f].label} onPick={(finish) => edit({ finish })} face />
           </div>
           <div style={{ display: "grid", gap: 8 }}>
             <Head>Gradient: a second colour, top to bottom</Head>
@@ -409,7 +436,7 @@ function RepliesRow({ replies, setReplies }: { replies: Replies; setReplies: (r:
 }
 
 /** An orb in the office: what he is made of, fixed, and the one thing you can still do (let him go). */
-function Card({ c, replies, setReplies, onDelete }: { c: Character; replies: Replies; setReplies: (r: Replies) => void; onDelete: () => void }) {
+function Card({ c, replies, setReplies, onDelete, onChat }: { c: Character; replies: Replies; setReplies: (r: Replies) => void; onDelete: () => void; onChat: () => void }) {
   const [asking, setAsking] = useState(false);
   useEffect(() => setAsking(false), [c.name]);
   const facts: [string, string][] = [
@@ -417,14 +444,17 @@ function Card({ c, replies, setReplies, onDelete }: { c: Character; replies: Rep
     ["Specialty", SPECIALTIES[c.specialty].label],
     ["Shape", cap(c.shape)],
     ["Eyes", cap(c.eyes)],
-    ["Hat", c.hat === "none" ? "None" : cap(c.hat)],
-    ["Glasses", c.glasses === "none" ? "None" : cap(c.glasses)],
+    ["Hat", c.hat === "none" ? "None" : `${cap(c.hat)}${c.hatHue ? `, ${c.hatHue}` : ""}`],
+    ["Glasses", c.glasses === "none" ? "None" : `${cap(c.glasses)}${c.glassesHue ? `, ${c.glassesHue} frames` : ""}`],
     ["Colour", c.hue2 ? `${cap(c.hue)} to ${c.hue2}` : cap(c.hue)],
     ["Finish", FINISHES[c.finish].label],
     ["Voice", c.voice === "silent" ? "Silent" : voice(c.voice).label],
   ];
   return (
     <div data-orb={c.hue} style={{ ...s.panel, display: "grid", gap: "var(--s4)", alignContent: "start" }}>
+      <button data-sound="pick" onClick={onChat} style={{ ...s.btn, justifySelf: "stretch", background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)", fontWeight: 800 }}>
+        Chat with {c.name}
+      </button>
       <span style={{ font: "700 17px/22px var(--font)", color: "var(--text-1)" }}>Made of</span>
       <Balanced min={100}>
         {facts.map(([k, v]) => (
@@ -474,8 +504,13 @@ const REACT: [keyof Character, Gesture][] = [["hat", "hop"], ["glasses", "nod"],
 type View = { kind: "orb"; name: string } | { kind: "new"; draft: Character };
 
 function App() {
-  const [office, setOffice] = useState(OFFICE);
-  const [view, setView] = useState<View>({ kind: "orb", name: OFFICE[0]!.name });
+  // an office starts with the one orb you make (owner, 10-01: "we should start with only 1 orb,
+  // the one we make at the beginning"); until then, the creator, on a newborn
+  const [office, setOffice] = useState<Character[]>(() => keptOffice(NEWBORN));
+  const [view, setView] = useState<View>(() => {
+    const kept = keptOffice(NEWBORN);
+    return kept.length ? { kind: "orb", name: kept[0]!.name } : { kind: "new", draft: { ...NEWBORN, seed: roll() } };
+  });
   const [state, setState] = useState<OrbState>("idle");
   const [gesture, setGesture] = useState<{ name: Gesture; n: number } | null>(null);
   const [replies, setReplies] = useState<Replies>("speak");
@@ -489,14 +524,61 @@ function App() {
   const [person, setPerson] = useState<Person | null>(loadPerson);
   // the first open is a story (PLAN 2.5): until it is played, it is what the person sees
   const [intro, setIntro] = useState(() => !loadPerson() && introWanted());
-  const [room, setRoom] = useState<"office" | "settings">(() => (parseRoute(location.hash).room === "settings" ? "settings" : "office"));
+  // the home behind this page, when there is one (PLAN 2.4): its office, and what it calls you
+  const [home, setHome] = useState<Office | null>(null);
+  const [said, setSaid] = useState<string | null>(null); // what the home said when it refused something
+  const linked = useRef<Promise<void> | null>(null);
+  /** Finds the home and loads its office, once; after a failure, the next ask tries again (Try again). */
+  const link = (): Promise<void> => (linked.current ??= connect(ASH).then(async (l) => {
+    if (!l) return; // a preview: the office lives in this browser
+    if ("trouble" in l) throw new Error(l.trouble);
+    const orbs = (await l.office.orbs()) ?? [];
+    const me = await l.office.me();
+    setHome(l.office);
+    setOffice(orbs);
+    setPerson(me);
+    setIntro(!me && introWanted());
+    setView((v) => {
+      if (!orbs.length) return v.kind === "new" ? v : { kind: "new", draft: { ...NEWBORN, seed: roll() } }; // an empty office: make the first
+      const r = parseRoute(location.hash);
+      if (r.room === "new" && v.kind === "new") return v; // the creator, because you asked for it
+      return { kind: "orb", name: r.room === "office" && r.orb && orbs.some((c) => c.name === r.orb) ? r.orb : orbs[0]!.name };
+    });
+  }).catch((e: unknown) => {
+    linked.current = null;
+    throw e;
+  }));
+  useEffect(() => {
+    link().catch(() => {}); // the splash says what went wrong
+  }, []);
+  const keep = (p: Person): void => {
+    setPerson(p);
+    if (home) home.setName(p).catch((e: Error) => setSaid(e.message));
+    else savePerson(p);
+  };
+  const [room, setRoom] = useState<"office" | "settings" | "chat" | "sessions">(() => {
+    const r = parseRoute(location.hash).room;
+    return r === "settings" || r === "chat" || r === "sessions" ? r : "office";
+  });
+  const [inSession, setInSession] = useState<{ id: number | null; tab: SessionTab }>(() => {
+    const r = parseRoute(location.hash);
+    return r.room === "sessions" ? { id: r.id, tab: r.tab } : { id: null, tab: "brainstorm" };
+  });
+  const [talking, setTalking] = useState<string | null>(() => {
+    const r = parseRoute(location.hash);
+    return r.room === "chat" ? r.orb : null;
+  });
   const [depth, setDepth] = useState(0); // how far in this visit has gone: Back is there when it is more than none
   const [menu, setMenu] = useState(false); // the side menu, slid in on a phone
   useEffect(installFeel, []);
+  // a preview's office is kept in this browser; a home's is the home's
+  useEffect(() => {
+    if (!home) keepOffice(office);
+  }, [office, home]);
 
   const making = view.kind === "new";
   const at = view.kind === "orb" ? Math.max(0, office.findIndex((c) => c.name === view.name)) : -1;
-  const me = view.kind === "new" ? view.draft : office[at]!;
+  const me = view.kind === "new" ? view.draft : office[at] ?? NEWBORN;
   const play = (g: Gesture): void => setGesture((x) => ({ name: g, n: (x?.n ?? 0) + 1 }));
   useEffect(() => play("pop"), [making ? "new" : me.name]);
 
@@ -524,18 +606,25 @@ function App() {
     if (view.kind !== "new" || blocked) return;
     const made = { ...view.draft, name };
     setOffice((o) => [...o, made]);
+    home?.add(made).catch((e: Error) => setSaid(`${made.name} was not hired: ${e.message}`));
     setArrived(made.name);
     setView({ kind: "orb", name: made.name });
+    // the creator's address becomes his: a reload shows him, and Back does not reopen a creator for him
+    history.replaceState(history.state, "", routeHash({ room: "office", orb: made.name }));
     window.setTimeout(() => play("hop"), 120);
   };
   const remove = (who: string): void => {
     const i = office.findIndex((c) => c.name === who);
     const rest = office.filter((c) => c.name !== who);
+    const gone = office[i];
+    if (home && gone) home.letGo(gone).catch((e: Error) => setSaid(`${who} was not let go: ${e.message}`));
     setLeaving(who);
     window.setTimeout(() => {
       setLeaving(null);
       setOffice(rest);
-      setView(rest.length ? { kind: "orb", name: rest[Math.max(0, i - 1)]!.name } : { kind: "new", draft: surprise(roll()) });
+      const next = rest[Math.max(0, i - 1)];
+      setView(next ? { kind: "orb", name: next.name } : { kind: "new", draft: surprise(roll()) });
+      history.replaceState(history.state, "", routeHash(next ? { room: "office", orb: next.name } : { room: "new" }));
     }, 260);
   };
   const flipSounds = (): void => {
@@ -545,13 +634,21 @@ function App() {
 
   // where you are is an address (ui/nav.ts): going somewhere adds it to the history, so the side
   // menu's Back and the browser's Back are the same Back
-  const routeOf = (): Route => (room === "settings" ? { room: "settings" } : view.kind === "new" ? { room: "new" } : { room: "office", orb: view.name });
+  const routeOf = (): Route =>
+    room === "settings" ? { room: "settings" } : room === "sessions" ? { room: "sessions", ...inSession } : room === "chat" && talking ? { room: "chat", orb: talking } : view.kind === "new" ? { room: "new" } : { room: "office", orb: view.name };
   const show = (r: Route): void => {
     if (r.room === "settings") setRoom("settings");
-    else {
+    else if (r.room === "sessions") {
+      setRoom("sessions");
+      setInSession({ id: r.id, tab: r.tab });
+    } else if (r.room === "chat") {
+      setRoom("chat");
+      setTalking(r.orb);
+    } else {
       setRoom("office");
       if (r.room === "new") setView((v) => (v.kind === "new" ? v : { kind: "new", draft: fresh() }));
-      else setView({ kind: "orb", name: r.orb && office.some((c) => c.name === r.orb) ? r.orb : office[0]?.name ?? ASH.name });
+      else if (!office.length) setView((v) => (v.kind === "new" ? v : { kind: "new", draft: { ...NEWBORN, seed: roll() } })); // an empty office: make the first
+      else setView({ kind: "orb", name: r.orb && office.some((c) => c.name === r.orb) ? r.orb : office[0]!.name });
     }
   };
   const go = (r: Route): void => {
@@ -572,7 +669,7 @@ function App() {
   });
   useEffect(() => {
     const r = parseRoute(location.hash);
-    if (r.room !== "settings") show(r); // a link straight to an orb, or to a new one
+    if (r.room === "office" || r.room === "new") show(r); // a link straight to an orb, or to a new one
     history.replaceState({ orbs: 0 }, "", location.hash || routeHash(routeOf()));
   }, []);
   useEffect(() => {
@@ -599,9 +696,9 @@ function App() {
     <main style={{ padding: "var(--s5) var(--margin)" }}>
       {opening && (
         <Splash
-          office={office}
-          facts={[`${office.length} orbs in the office`, sounds ? "Sounds on" : "Sounds off"]}
-          ready={() => globalThis.__orbsReady ?? document.fonts.ready}
+          office={office.length ? office : [NEWBORN]}
+          facts={[office.length ? `${office.length} ${office.length === 1 ? "orb" : "orbs"} in the office` : "A new office", sounds ? "Sounds on" : "Sounds off"]}
+          ready={() => globalThis.__orbsReady ?? Promise.all([document.fonts.ready, link()])}
           onLeaving={() => setDrawn(true)}
           onDone={() => setOpening(false)}
         />
@@ -611,10 +708,11 @@ function App() {
           office={office}
           person={person}
           onDone={(p, then) => {
-            savePerson(p);
-            setPerson(p);
+            keep(p);
             setIntro(false);
-            if (then === "hire") go({ room: "new" });
+            // "Make me": the creator, on him as he told the story; "Surprise me": the dice
+            if (then === "surprise") setView({ kind: "new", draft: fresh() });
+            go({ room: "new" });
           }}
         />
       )}
@@ -643,6 +741,7 @@ function App() {
             {backButton({ justifySelf: "start", marginBottom: "var(--s1)" })}
             {navItem("The office", room === "office" && !making, { room: "office", orb: making ? null : me.name }, "◉")}
             {navItem("New orb", room === "office" && making, { room: "new" }, "+")}
+            {navItem("Sessions", room === "sessions", { room: "sessions", id: null, tab: "brainstorm" }, "▦")}
             {navItem("Settings", room === "settings", { room: "settings" }, "⚙")}
           </nav>
           <div style={{ ...s.head, margin: "var(--s3) var(--s2) var(--s1)" }}>The office</div>
@@ -664,13 +763,14 @@ function App() {
           </div>
         </aside>
 
-        {room === "settings" ? (
+        {room === "sessions" ? (
+          <SessionsRoom home={home} office={office} open={inSession.id} tab={inSession.tab} go={(id, tab) => go({ room: "sessions", id, tab: tab ?? "brainstorm" })} />
+        ) : room === "chat" ? (
+          <Chat orb={office.find((c) => c.name === talking) ?? office[0] ?? ASH} home={home} person={person?.name ?? null} />
+        ) : room === "settings" ? (
           <Settings
             person={person}
-            rename={(p) => {
-              savePerson(p);
-              setPerson(p);
-            }}
+            rename={keep}
             sounds={sounds}
             setSounds={(on) => {
               if (on !== sounds) flipSounds();
@@ -678,9 +778,26 @@ function App() {
             replies={replies}
             setReplies={setReplies}
             replayIntro={() => setIntro(true)}
+            {...(!home && {
+              fillDemo: () => {
+                const filled = [...office, ...DEMO_CREW.filter((c) => !office.some((x) => x.name.toLowerCase() === c.name.toLowerCase()))];
+                setOffice(filled);
+                // straight to the office, by its address, with the crew in it (go would read the office before the fill)
+                history.pushState({ orbs: depth + 1 }, "", routeHash({ room: "office", orb: filled[0]!.name }));
+                setDepth((d) => d + 1);
+                setRoom("office");
+                setView({ kind: "orb", name: filled[0]!.name });
+              },
+            })}
           />
         ) : (
         <section style={{ minWidth: 0, display: "grid", alignContent: "start", gap: "var(--s5)", padding: "0 0 var(--s6)" }}>
+          {said && (
+            <div role="alert" style={{ margin: "var(--s4) var(--s5) 0", padding: "var(--s3) var(--s4)", borderRadius: 14, background: "var(--fill)", boxShadow: "inset 0 0 0 1px var(--alert)", font: "500 14px/20px var(--font)", color: "var(--text-1)", display: "flex", gap: 8, alignItems: "center", justifyContent: "space-between" }}>
+              <span>Your home said: {said}</span>
+              <button onClick={() => setSaid(null)} style={{ ...s.chip, padding: "4px 10px" }}>OK</button>
+            </div>
+          )}
           <div data-orb={me.hue} data-cradle data-gesture={gesture?.name} style={{ position: "relative", display: "grid", justifyItems: "center", gap: "var(--s2)", padding: "var(--s5) var(--s4) 0", background: "radial-gradient(50% 80% at 50% 30%, var(--accent-wash), transparent 70%)" }}>
             <button aria-label={sounds ? "Sounds on" : "Sounds off"} aria-pressed={sounds} title={sounds ? "Sounds on" : "Sounds off"} data-sound="none" onClick={flipSounds} style={{ ...s.chip, position: "absolute", top: "var(--s4)", right: "var(--s4)", padding: 8, display: "grid", placeItems: "center", color: sounds ? "var(--text-1)" : "var(--text-3)" }}>
               <SoundIcon on={sounds} />
@@ -727,7 +844,7 @@ function App() {
 
           <div className="orbs-pair" style={{ display: "grid", gap: "var(--s4)", padding: "0 var(--s5)", gridTemplateColumns: "minmax(0, 1fr)", alignItems: "start" }}>
             <Sheet c={me} onRename={making ? (n) => edit({ name: n }) : undefined} replies={replies} />
-            {making ? <Creator me={me} edit={edit} replies={replies} setReplies={setReplies} /> : <Card c={me} replies={replies} setReplies={setReplies} onDelete={() => remove(me.name)} />}
+            {making ? <Creator me={me} edit={edit} replies={replies} setReplies={setReplies} /> : <Card c={me} replies={replies} setReplies={setReplies} onDelete={() => remove(me.name)} onChat={() => go({ room: "chat", orb: me.name })} />}
           </div>
 
           <div style={{ padding: "0 var(--s5)" }}>

@@ -14,9 +14,9 @@ import { fileURLToPath } from "node:url";
 import { after, before, test } from "node:test";
 import { build } from "vite";
 import type { Browser, Page } from "playwright-core";
-import { findChrome, launch, plainNewOrb, serveDir } from "./harness.ts";
-import { PORTRAIT } from "../src/orb/renderer.ts";
-import { ASH, EYES, GLASSES, isShades, lookOf, type GlassesName } from "../src/orb/spec.ts";
+import { choose, findChrome, launch, plainNewOrb, serveDir } from "./harness.ts";
+import { DESIGN, PORTRAIT } from "../src/orb/renderer.ts";
+import { ASH, EYES, GLASSES, HATS, isShades, lookOf, outline, SHAPES, type GlassesName, type HatName, type ShapeName } from "../src/orb/spec.ts";
 
 const APP = fileURLToPath(new URL("..", import.meta.url));
 const skip = findChrome() ? false : "no Chromium on this machine";
@@ -212,11 +212,13 @@ test("every pair of glasses is drawn over his eyes, and sunglasses darken them",
   assert.ok(none.diff < 0.001, `control: none against itself differs by nothing (${none.diff})`);
   for (const r of rows) {
     if (r.pick === "none") continue;
-    // measured 10-01: a monocle (one eye) changes the least, 0.024; sunglasses darken the band by
-    // 0.115 to 0.214, clear frames by at most 0.061
+    // measured 10-01 at the 96 px thumbnails (the band's edges fall on other pixels at another size:
+    // at 88 the same pairs read a little darker): a monocle (one eye) changes the least, 0.024;
+    // sunglasses darken the band by 0.082 (round shades) to 0.177, clear frames by at most 0.061
+    // (cat-eye). The line is halfway between.
     assert.ok(r.diff > 0.015, `${r.pick}: hardly anything drawn over his eyes (${r.diff.toFixed(3)})`);
-    if (isShades(r.pick as GlassesName)) assert.ok(r.darker > 0.085, `${r.pick}: sunglasses that do not darken his eyes (${r.darker.toFixed(3)})`);
-    else assert.ok(r.darker < 0.085, `${r.pick}: clear glasses that hide his eyes (${r.darker.toFixed(3)})`);
+    if (isShades(r.pick as GlassesName)) assert.ok(r.darker > 0.072, `${r.pick}: sunglasses that do not darken his eyes (${r.darker.toFixed(3)})`);
+    else assert.ok(r.darker < 0.072, `${r.pick}: clear glasses that hide his eyes (${r.darker.toFixed(3)})`);
   }
   assert.ok(names.filter(isShades).length >= 3, "there are sunglasses to choose from");
 });
@@ -250,3 +252,119 @@ test("every finish can be told from every other, by the colour of his glass", { 
   // measured 10-01: the nearest pair, frost and pearl, 0.032 apart in mean colour
   assert.ok(closest.d > 0.025, `${closest.a} and ${closest.b} look alike (${closest.d.toFixed(3)} apart)`);
 });
+
+// Hats that go on over his head, with an opening (the rest sit on it, clip to it, or float).
+const COVERS = new Set<HatName>(["top hat", "beanie", "party hat", "cap", "wizard hat", "chef hat", "grad cap", "cowboy hat", "beret", "hard hat", "bucket hat", "straw hat", "fedora", "deerstalker", "viking helmet"]);
+const EARED = new Set<ShapeName>(["teddy", "cub", "kitty", "bunny"]);
+
+// owner, 10-01: "some accessories arent fitting the heads of the orbs right. please fix per shape".
+// At twice the pixels (a hat's fit is a few pixels at the thumbnails' size), on one page
+// for every shape, each shape its own test (a whole sheet runs past a test's minute).
+let sharp: Promise<Page> | null = null;
+const sharpPage = (): Promise<Page> =>
+  (sharp ??= (async () => {
+    const p = await browser.newPage({ viewport: { width: 1280, height: 1100 }, deviceScaleFactor: 2, colorScheme: "dark" }); // an orb draws at 2 at most
+    await p.addInitScript(() => {
+      (globalThis as { __orbsTime?: number }).__orbsTime = 3.4;
+    });
+    await p.goto(`${site.url}/orbs.html?splash=0&intro=0`);
+    await p.waitForSelector("canvas", { state: "attached" });
+    await plainNewOrb(p);
+    return p;
+  })());
+after(async () => {
+  if (sharp) await (await sharp).close().catch(() => {}); // the browser may be gone first
+});
+
+for (const shape of Object.keys(SHAPES) as ShapeName[]) {
+  test(`every hat sits on a ${shape}'s head (over a point, on a heart's lobes, between ears), and his close-up holds all of him`, { skip }, async () => {
+    const p = await sharpPage();
+    const bad: string[] = [];
+    await p.getByRole("tab", { name: "Shape" }).click();
+    await choose(p, shape);
+    await p.getByRole("tab", { name: "Hat" }).click();
+    await p.waitForTimeout(150);
+    // where his head would end without his ears, at every degree (spec.ts outline): what lies beyond is ear
+    const S = SHAPES[shape];
+    const skull = Array.from({ length: 360 }, (_, i) => S.d[1] * (1 + outline({ ...S, c: [S.c[0], S.c[1], 0, S.c[3]] }, ((i - 180) * Math.PI) / 180)));
+    const rows = await p.evaluate(({ hats, Rfrac, cy, skull, eared }) => {
+      const px = (pick: string) => {
+        const c = document.querySelector<HTMLButtonElement>(`button[data-pick="${pick}"]`)!.querySelector("canvas")!;
+        return { W: c.width, H: c.height, d: c.getContext("2d")!.getImageData(0, 0, c.width, c.height).data };
+      };
+      const none = px("none");
+      const { W, H } = none;
+      const R = W * Rfrac;
+      const head = (i: number): boolean => none.d[i * 4 + 3]! >= 128;
+      let headTop = H;
+      for (let i = 0; i < W * H && headTop === H; i++) if (head(i)) headTop = Math.floor(i / W);
+      // his ears: where he is drawn beyond his skull (3 pixels beyond, for the edge). His size on
+      // the canvas is his frame's radius grown by being awake and his breath, so it is read off
+      // him: the top of his head straight up, against his skull's outline there.
+      const ears: number[] = [];
+      if (eared) {
+        let topC = 0;
+        while (topC < H && none.d[(topC * W + Math.floor(W / 2)) * 4 + 3]! < 128) topC++;
+        const k = (H * cy - topC) / (skull[90]! * R);
+        for (let i = 0; i < W * H; i++) {
+          if (!head(i)) continue; // his glass is drawn at 80 to 100 percent: he is there from half
+          const dx = (i % W) - W / 2, dy = Math.floor(i / W) - H * cy;
+          const a = Math.round((Math.atan2(dy, dx) * 180) / Math.PI) + 180;
+          if (Math.hypot(dx, dy) > skull[a % 360]! * R * k + 3) ears.push(i);
+        }
+      }
+      return hats.map((hat) => {
+        const h = px(hat).d;
+        const isHat = (i: number): boolean => h[i * 4 + 3]! >= 128 && (!head(i) || Math.abs(h[i * 4]! - none.d[i * 4]!) + Math.abs(h[i * 4 + 1]! - none.d[i * 4 + 1]!) + Math.abs(h[i * 4 + 2]! - none.d[i * 4 + 2]!) > 60);
+        // the hat's lowest edge over his middle, and how wide his head is just under it
+        let bottom = -1;
+        for (let y = 0; y < H; y++) for (let x = Math.round(W / 2 - 0.12 * R); x <= W / 2 + 0.12 * R; x++) if (isHat(y * W + x)) bottom = Math.max(bottom, y);
+        let width = 0;
+        const row = Math.min(H - 1, bottom + 2);
+        for (let x = 0; x < W; x++) if (head(row * W + x)) width++;
+        // pieces of what is drawn, 4-connected (a hat floating off him is a second piece)
+        const m = new Uint8Array(W * H);
+        for (let i = 0; i < W * H; i++) m[i] = h[i * 4 + 3]! >= 128 ? 1 : 0;
+        const seen = new Uint8Array(W * H);
+        let pieces = 0;
+        for (let i = 0; i < W * H; i++) {
+          if (!m[i] || seen[i]) continue;
+          let n = 0;
+          const st = [i];
+          seen[i] = 1;
+          while (st.length) {
+            const j = st.pop()!;
+            n++;
+            const x = j % W;
+            for (const k of [x > 0 ? j - 1 : -1, x < W - 1 ? j + 1 : -1, j - W, j + W]) if (k >= 0 && k < W * H && m[k] && !seen[k]) { seen[k] = 1; st.push(k); }
+          }
+          if (n >= 20) pieces++;
+        }
+        // an ear the hat is drawn over takes the hat's own colour (measured 10-01: 150 to 430 apart
+        // from him without it); one in front of the hat is his glass, tinted by what is behind it
+        // (at most about 80)
+        const repainted = (i: number): boolean => Math.abs(h[i * 4]! - none.d[i * 4]!) + Math.abs(h[i * 4 + 1]! - none.d[i * 4 + 1]!) + Math.abs(h[i * 4 + 2]! - none.d[i * 4 + 2]!) > 120;
+        return { hat, width: width / R, below: (bottom - headTop) / R, pieces, ears: ears.length, earCovered: ears.length ? ears.filter(repainted).length / ears.length : 0 };
+      });
+    }, { hats: (Object.keys(HATS) as HatName[]).filter((h) => h !== "none"), Rfrac: DESIGN.radius / DESIGN.w, cy: DESIGN.cy, skull, eared: EARED.has(shape) });
+    if (process.env.ORBS_PRINT) console.log(shape, rows.filter((r) => COVERS.has(r.hat as HatName)).map((r) => `${r.hat} ${r.width.toFixed(2)}`).join(", "));
+    for (const r of rows) {
+      if (r.pieces !== (r.hat === "halo" ? 2 : 1)) bad.push(`${shape} in a ${r.hat}: ${r.pieces} pieces (it floats off him, or sinks through)`);
+      if (COVERS.has(r.hat as HatName) && r.width < 0.45) bad.push(`${shape} in a ${r.hat}: perched (his head is ${r.width.toFixed(2)} of his radius wide under it)`);
+      if (EARED.has(shape) && r.ears < 40) bad.push(`control: ${shape}'s ears are not found (${r.ears} pixels)`);
+      if (EARED.has(shape) && COVERS.has(r.hat as HatName) && r.earCovered > 0.15) bad.push(`${shape} in a ${r.hat}: it covers ${Math.round(r.earCovered * 100)}% of his ears`);
+    }
+    // and his close-up (eyes, glasses) holds all of him, a wide shape too
+    await p.getByRole("tab", { name: "Glasses" }).click();
+    await p.waitForTimeout(150);
+    const closeUps = await probeThumbs(p);
+    if (process.env.ORBS_PRINT) console.log(shape, "close-up side", Math.min(...closeUps.map((g) => Math.min(g.margins[1], g.margins[3]))).toFixed(3));
+    for (const g of closeUps) {
+      const side = Math.min(g.margins[1], g.margins[3]);
+      // measured 10-01: framed to fit, the least room is a squish's, 0.083; cut off by the frame's
+      // edge (its fade hides the cut), 0.03
+      if (side < 0.06) bad.push(`${shape} in ${g.pick}: cut at the side of his close-up (${side.toFixed(3)})`);
+    }
+    assert.deepEqual(bad, []);
+  });
+}

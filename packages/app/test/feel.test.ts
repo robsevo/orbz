@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 import { after, before, test } from "node:test";
 import { build } from "vite";
 import type { Browser, Page } from "playwright-core";
-import { findChrome, launch, plainNewOrb, serveDir } from "./harness.ts";
+import { choose, findChrome, launch, plainNewOrb, seedOffice, serveDir } from "./harness.ts";
 
 const APP = fileURLToPath(new URL("..", import.meta.url));
 const skip = findChrome() ? false : "no Chromium on this machine";
@@ -53,6 +53,7 @@ type Played = { sound: string; lift: number };
 
 async function open(): Promise<Page> {
   const page = await browser.newPage({ viewport: { width: 1280, height: 1000 }, colorScheme: "dark" });
+  await seedOffice(page);
   await page.addInitScript(() => {
     (globalThis as { __orbsTime?: number }).__orbsTime = 3.4;
     (globalThis as { __orbsSounds?: Played[] }).__orbsSounds = [];
@@ -108,7 +109,7 @@ test("the sound fits the press: a tab ticks, a choice picks, dice roll, he bubbl
     await page.getByRole("button", { name: "New orb" }).first().click();
     await clear(page);
     await page.getByRole("tab", { name: "Shape" }).click();
-    await page.locator('button[data-pick][aria-pressed="false"]').first().click(); // one he is not already
+    await page.locator('[data-page]:not([hidden]) button[data-pick][aria-pressed="false"]').first().click(); // one he is not already, on the page shown
     await page.waitForTimeout(700); // past the combo
     await page.getByRole("button", { name: "Roll everything" }).click();
     await page.locator("[data-cradle] canvas").click();
@@ -146,11 +147,11 @@ test("he reacts to what you choose for him: a hat, a hop; glasses, a nod; a colo
   try {
     await plainNewOrb(page);
     const gesture = (): Promise<string | null> => page.locator("[data-cradle]").getAttribute("data-gesture");
-    const cases: [string, string, string][] = [["Hat", 'button[data-pick="beret"]', "hop"], ["Glasses", 'button[data-pick="aviators"]', "nod"], ["Shape", 'button[data-pick="pebble"]', "jelly"]];
+    const cases: [string, string, string][] = [["Hat", "beret", "hop"], ["Glasses", "aviators", "nod"], ["Shape", "pebble", "jelly"]];
     for (const [tab, pick, want] of cases) {
       await page.getByRole("tab", { name: tab }).click();
       await page.waitForTimeout(350); // past the slider's 300 ms
-      await page.locator(pick).click();
+      await choose(page, pick);
       assert.equal(await gesture(), want, `${tab}: ${pick}`);
     }
     await page.getByRole("tab", { name: "Colour" }).click();

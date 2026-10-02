@@ -25,6 +25,8 @@ export type ToolContext = {
   orb: string; conversation: string; workspace: string; signal?: AbortSignal; background: Background;
   /** The person's web-search key (Tavily), read from the keychain when a search needs it (PLAN 3.10). */
   searchKey?: () => Promise<SearchKey | null>;
+  /** Puts a line in the conversation for everyone in it (a session's "✓ Agreed", PLAN 2.9). */
+  note?: (text: string, meta: Record<string, unknown>) => void;
 };
 type Args = Record<string, unknown>;
 
@@ -355,6 +357,20 @@ export const TOOLS: ToolDef[] = [
     async run(a, ctx) {
       if (ctx.signal?.aborted) return STOPPED;
       return webFetch(a, ctx.signal);
+    },
+  },
+  {
+    name: "agree",
+    label: "Agreeing",
+    description: "In a session: record a decision the orbs and the person have agreed on, in one short line. It shows to everyone as ✓ Agreed. Use it once per decision, when it is settled.",
+    parameters: obj({ decision: { type: "string", description: "What was agreed, in one line." } }, ["decision"]),
+    describe: (a) => `agree: ${s(a.decision)}`,
+    decision: "allow",
+    async run(a, ctx) {
+      const d = s(a.decision).replace(/\s+/g, " ").trim().slice(0, 240);
+      if (!d) return { content: "agree needs the decision, in a line.", isError: true };
+      ctx.note?.(`✓ Agreed: ${d}`, { agreed: d });
+      return { content: `Recorded for everyone: ✓ Agreed: ${d}` };
     },
   },
   {

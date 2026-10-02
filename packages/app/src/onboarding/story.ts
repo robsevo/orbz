@@ -1,53 +1,62 @@
 // The first open (PLAN 2.5; owner, 2026-10-01: "when a user opens the app for the first time we
 // want an onboarding process. a fun one, like what should we call you? backstory for the orbs,
-// your their new CEO etc"). It plays like the opening of a game: Ash wakes up at his desk, asks
-// what to call you, tells you about the office, and makes you its CEO; the crew says hello; you
-// make your first hire, or look around first. The story is data, here, so a check can read every
-// line; `Onboarding.tsx` plays it.
+// your their new CEO etc", and "we should start with only 1 orb, the one we make at the
+// beginning"). It plays like the opening of a game. Your first orb wakes up on an empty office
+// floor, still a plain glass bean with no name; he asks what to call you, makes you the office's
+// CEO, and asks you to make him: his name, his look, what he is good at. The story is data, here,
+// so a check can read every line; `Onboarding.tsx` plays it.
+import type { Character } from "../orb/spec.ts";
 
 export type Person = { name: string; since: number };
 
-/** One beat. A line is said by an orb in the office ("Ash", "Benny"…); `{name}` is the person. */
+/** Who tells it: your first orb, before you have made him (a plain bean, no name yet). */
+export const NEWBORN: Character = {
+  name: "", personality: "steady", specialty: "general", seed: 7, hue: "azure", hue2: null, finish: "glass",
+  shape: "bean", eyes: "classic", hat: "none", glasses: "none", voice: "am_michael", goo: 0.6,
+};
+/** What his nameplate says until he has a name. */
+export const NEWBORN_PLATE = "Your first orb";
+
+/** One beat. A line is said by an orb ("new" is the one you are about to make); `{name}` is you. */
 export type Beat =
   | { kind: "say"; who: string; text: string }
   | { kind: "ask-name" }
   | { kind: "ceo" }
-  | { kind: "crew" }
   | { kind: "hire" };
 
 export const STORY: readonly Beat[] = [
-  { kind: "say", who: "Ash", text: "Oh! Hello. Sorry, I was asleep at my desk." },
-  { kind: "say", who: "Ash", text: "I'm Ash. I'm an orb: a little glass someone who lives on your computer and gets things done." },
-  { kind: "say", who: "Ash", text: "Before anything else, what should we call you?" },
+  { kind: "say", who: "new", text: "Oh! Hello. I think I just woke up." },
+  { kind: "say", who: "new", text: "I'm an orb: a little glass someone who lives on your computer and gets things done." },
+  { kind: "say", who: "new", text: "Before anything else, what should I call you?" },
   { kind: "ask-name" },
-  { kind: "say", who: "Ash", text: "{name}. Nice. That has a ring to it." },
-  { kind: "say", who: "Ash", text: "Here's the thing. There's a whole office of us in here. We plan, we build, we keep the books, we even plan dinner." },
-  { kind: "say", who: "Ash", text: "We've been tidying our desks for weeks, waiting for someone to lead us." },
-  { kind: "say", who: "Ash", text: "So, {name}, if you'll take the job..." },
+  { kind: "say", who: "new", text: "{name}. Nice. That has a ring to it." },
+  { kind: "say", who: "new", text: "So, here's the thing. This is an office. Right now it's an empty floor, a desk, and me." },
+  { kind: "say", who: "new", text: "Every office needs someone at the top. So, {name}, if you'll take the job..." },
   { kind: "ceo" },
-  { kind: "say", who: "Ash", text: "Congratulations, boss. You're our new CEO." },
-  { kind: "crew" },
-  { kind: "say", who: "Ash", text: "Everyone, this is {name}. Be nice." },
-  { kind: "say", who: "Benny", text: "Can we have a party?" },
-  { kind: "say", who: "Hazel", text: "After the work, Benny." },
-  { kind: "say", who: "Ash", text: "Here's how it works. You hand us work, we do it, and anything that matters waits for your OK." },
-  { kind: "say", who: "Ash", text: "And every night we practise, so we get quicker at the things you ask for most." },
-  { kind: "say", who: "Ash", text: "Every orb you hire is yours. Name them, dress them, choose what they're good at." },
+  { kind: "say", who: "new", text: "Congratulations, boss. You're the CEO. And I'm your first hire." },
+  { kind: "say", who: "new", text: "Here's how it works. You hand me work, I do it, and anything that matters waits for your OK." },
+  { kind: "say", who: "new", text: "And every night I practise, so I get quicker at the things you ask for most. You can hire more of us whenever you like." },
+  { kind: "say", who: "new", text: "One problem: I don't have a name yet. Or a look. Or a thing I'm good at. Will you make me?" },
   { kind: "hire" },
 ];
+
+/** The story for this office: a line is said only by one who is there (your first orb always is). */
+export function storyFor(names: readonly string[]): Beat[] {
+  return STORY.filter((b) => b.kind !== "say" || b.who === "new" || names.includes(b.who));
+}
 
 /** A line with the person in it. */
 export const line = (text: string, p: Pick<Person, "name"> | null): string => text.replaceAll("{name}", p?.name ?? "boss");
 
 /** The first beat a skip lands on: the name, if we have none yet, else the hire. */
-export function skipTo(person: Pick<Person, "name"> | null): number {
-  return person ? STORY.findIndex((b) => b.kind === "hire") : STORY.findIndex((b) => b.kind === "ask-name");
+export function skipTo(person: Pick<Person, "name"> | null, story: readonly Beat[] = STORY): number {
+  return person ? story.findIndex((b) => b.kind === "hire") : story.findIndex((b) => b.kind === "ask-name");
 }
 
 /** What a name has to be: something to call you, short enough for a nameplate. */
 export function checkName(raw: string): { ok: true; name: string } | { ok: false; why: string } {
   const name = raw.replace(/\s+/g, " ").trim();
-  if (!name) return { ok: false, why: "Ash needs something to call you." };
+  if (!name) return { ok: false, why: "I need something to call you." };
   if (name.length > 24) return { ok: false, why: "A little shorter, for the nameplate (24 letters at most)." };
   return { ok: true, name };
 }

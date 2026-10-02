@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 import { after, before, test } from "node:test";
 import { build } from "vite";
 import type { Browser, Page } from "playwright-core";
-import { findChrome, launch, measure, serveDir, SIZES } from "./harness.ts";
+import { findChrome, launch, measure, seedOffice, serveDir, SIZES } from "./harness.ts";
 import { parseRoute, routeHash, type Route } from "../src/ui/nav.ts";
 
 const APP = fileURLToPath(new URL("..", import.meta.url));
@@ -39,7 +39,7 @@ after(async () => {
 async function open(hash = "", size: keyof typeof SIZES = "desk"): Promise<Page> {
   const ctx = await browser.newContext({ viewport: SIZES[size], colorScheme: "dark" });
   const page = await ctx.newPage();
-  await page.addInitScript(() => localStorage.setItem("orbs.person", JSON.stringify({ name: "Robin", since: 0 })));
+  await seedOffice(page);
   await page.goto(`${site.url}/orbs.html?splash=0${hash}`);
   await page.waitForSelector("canvas", { state: "attached" });
   return page;

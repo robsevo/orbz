@@ -48,6 +48,8 @@ export type OrbLook = {
   eyeA: [number, number, number, number];
   eyeB: [number, number, number, number];
   acc: number;
+  /** Where his hat sits and how big it is, for his shape (spec.ts hatFit). */
+  accFit: [number, number];
   accCol: [number, number, number];
   accCol2: [number, number, number];
   accTilt: number;
@@ -76,7 +78,7 @@ const SUPERSAMPLE = 1.5;
 const UNIFORMS = [
   "uRes", "uTime", "uLevel", "uState", "uWake", "uR", "uCy", "uEdge", "uBreath", "uBlink", "uMorph", "uGaze", "uSway",
   "uHappy", "uSleepy", "uYawn", "uSurprise", "uTilt", "uMad", "uJiggle", "uHue", "uSat", "uVal", "uHue2", "uGrad", "uTint",
-  "uShapeA", "uShapeB", "uShapeC", "uShapeD", "uShapeE", "uShapeF", "uGoo", "uSquash", "uEyeA", "uEyeB", "uAcc", "uAccCol", "uAccCol2", "uAccTilt", "uSpecs", "uSpecsCol", "uSpecsCol2", "uLensCol", "uLensDark",
+  "uShapeA", "uShapeB", "uShapeC", "uShapeD", "uShapeE", "uShapeF", "uGoo", "uSquash", "uEyeA", "uEyeB", "uAcc", "uAccFit", "uAccCol", "uAccCol2", "uAccTilt", "uSpecs", "uSpecsCol", "uSpecsCol2", "uLensCol", "uLensDark",
 ] as const;
 
 type Uniforms = Record<(typeof UNIFORMS)[number], WebGLUniformLocation | null>;
@@ -162,6 +164,7 @@ export class OrbRenderer {
     // a wink is something he does (a gesture), so the frame can shut one eye on any eyes
     gl.uniform4f(u.uEyeB, look.eyeB[0], look.eyeB[1], look.eyeB[2], Math.max(look.eyeB[3], f.wink > 0.5 ? 1 : 0));
     gl.uniform1f(u.uAcc, look.acc);
+    gl.uniform2f(u.uAccFit, ...look.accFit);
     gl.uniform3f(u.uAccCol, ...look.accCol);
     gl.uniform3f(u.uAccCol2, ...look.accCol2);
     gl.uniform1f(u.uAccTilt, look.accTilt);

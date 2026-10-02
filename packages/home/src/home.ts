@@ -18,6 +18,8 @@ import type { Preset } from "./brain/presets.ts";
 import { ChatGPT, type ChatGPTOptions } from "./chatgpt/chatgpt.ts";
 import { Brains, type BrainsOptions } from "./brain/brains.ts";
 import { Learned } from "./brain/learned.ts";
+import { About } from "./about.ts";
+import { Team } from "./team.ts";
 import { Spend } from "./brain/spend.ts";
 import { type Card, Conversations } from "./agent/conversation.ts";
 import { AgentRunner, type AgentOptions } from "./agent/loop.ts";
@@ -121,6 +123,10 @@ export class Home {
   readonly live = new EventEmitter();
   /** The person's rules (PLAN 1.6). */
   readonly rules: Rules;
+  /** What every orb knows about the person (PLAN 2.4): the name the office calls you. */
+  readonly about: About;
+  /** Sessions (PLAN 2.9): a Brainstorm and a Floor, the orbs chosen for each taking their turns. */
+  readonly team: Team;
   /** Every plan shown to the person (PLAN 1.7). */
   readonly plans: Plans;
   /** Approved plans' rows, ticked only with proof (PLAN 1.8). */
@@ -154,6 +160,7 @@ export class Home {
       ? new Kit({ ...(opts.kit === true ? {} : opts.kit), events: this.events, clock: this.clock, dataDir: this.dataDir })
       : null;
     this.rules = new Rules(db, this.events, this.clock);
+    this.about = new About(db, this.events, this.clock);
     const matcherEp = opts.brain?.preset.own ?? big;
     const matcher: Matcher | null = opts.agent?.matcher !== undefined ? opts.agent.matcher : matcherEp ? new ModelMatcher(matcherEp, this.spend) : null;
     this.guard = new Guard({
@@ -207,6 +214,7 @@ export class Home {
           searchKey: () => this.brains.searchKey(),
         });
     this.inbox = new Inboxes(db, this.events, this.clock, opts.runner ?? this.agent!, opts.graceMs);
+    this.team = new Team({ db, events: this.events, clock: this.clock, inbox: this.inbox, conversations: this.conversations });
     this.schedules = new Schedules(db, this.events, this.inbox, this.clock);
     this.triggers = new Triggers(db, this.events, this.inbox, this.clock);
     this.loops = new Loops(db, this.events, this.clock, {
@@ -324,6 +332,7 @@ export class Home {
     await this.loops.close();
     await this.kit?.close();
     this.chatgpt.close();
+    this.team.close();
     this.#background.close();
     this.events.append("home.stopped", {});
     this.#db.close();

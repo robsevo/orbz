@@ -24,6 +24,7 @@ import { BrainCallError, chat, type Endpoint, type Limited } from "../brain/open
 import { type BrainChain, explain, type LinkId, restFor } from "../brain/chain.ts";
 import type { Specialty } from "../brain/constitution.ts";
 import type { SearchKey } from "./web.ts";
+import type { TeamTurn } from "./standing.ts";
 import { MANAGE_USAGE } from "../chatgpt/chatgpt.ts";
 import type { Spend } from "../brain/spend.ts";
 import type { Card, Conversations, Message, ToolCall } from "./conversation.ts";
@@ -108,6 +109,7 @@ export class AgentRunner implements Runner {
       signal: ctx.signal,
       background: this.#o.background,
       ...(this.#o.searchKey && { searchKey: this.#o.searchKey }),
+      note: (text, meta) => conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "notice", run: ctx.run, content: text, meta }),
     };
     mkdirSync(tctx.workspace, { recursive: true });
     const step = this.#stepper(ctx);
@@ -130,6 +132,7 @@ export class AgentRunner implements Runner {
         conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "notice", run: ctx.run, content: "Cleared. Starting fresh from here." });
         continue;
       }
+      if (item.source === "turn") continue; // his turn in a session: what to answer is already there
       if (ctx.fresh && !freshened && conv.history(ctx.conversation).length > 0) {
         // a schedule or trigger firing starts from a fresh context, in its own conversation
         conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "clear", run: ctx.run, meta: { fresh: true } });
@@ -143,7 +146,8 @@ export class AgentRunner implements Runner {
     // A reply a pause or a shutdown cut off is not an answer when its run comes round again.
     const rerun = ctx.items.some((i) => i.data.interrupted);
     const tail = conv.history(ctx.conversation).filter((m) => m.role !== "notice").at(-1);
-    const answered = tail?.role === "assistant" && !tail.toolCalls?.length && !(rerun && tail.meta.stopped);
+    // answered when the last word is HIS (in a session, another orb's last word is his to answer)
+    const answered = tail?.role === "assistant" && tail.orb === ctx.orb && !tail.toolCalls?.length && !(rerun && tail.meta.stopped);
     if (!tail || tail.role === "summary" || answered) {
       return { outcome: "ok", summary: "nothing to answer" };
     }
@@ -174,14 +178,15 @@ export class AgentRunner implements Runner {
         step("no-brain", { brains: chain.states().map((s) => ({ id: s.id, state: s.state, why: s.why })) });
         return { outcome: "ok", summary: "no brain answered" };
       }
+      const team = ctx.items.map((i) => i.data.team as TeamTurn | undefined).find(Boolean);
       const standing = standingContext({
         orbName: this.#o.orbName(ctx.orb), brainDir: join(this.#o.dataDir, "brain"), workspace: tctx.workspace,
-        specialty: this.#o.orbSpecialty?.(ctx.orb), learned: this.#o.learned?.(ctx.orb),
+        specialty: this.#o.orbSpecialty?.(ctx.orb), learned: this.#o.learned?.(ctx.orb), ...(team && { team }),
       });
       await this.#compact(ctx, ep, est(standing));
       ep = this.#o.endpoint() ?? ep; // compaction may have met the plan's limit and moved on
       this.#o.spend.check(); // SpendCapError: the inbox stops the run cleanly ("capped")
-      const messages = [{ role: "system" as const, content: standing }, ...conv.toModel(conv.history(ctx.conversation))];
+      const messages = [{ role: "system" as const, content: standing }, ...conv.toModel(conv.history(ctx.conversation), { me: ctx.orb, nameOf: this.#o.orbName })];
       ctx.activity("Thinking");
       const r = await streamChat(
         ep,

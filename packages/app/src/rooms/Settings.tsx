@@ -32,6 +32,8 @@ export function Settings(o: {
   replies: Replies;
   setReplies: (r: Replies) => void;
   replayIntro: () => void;
+  /** A preview only (no home behind the page): fill the office with a demo crew, to look round. */
+  fillDemo?: () => void;
 }) {
   const [draft, setDraft] = useState(o.person?.name ?? "");
   const [said, setSaid] = useState<{ ok: boolean; text: string } | null>(null);
@@ -81,6 +83,14 @@ export function Settings(o: {
           ))}
         </OneLine>
       </Panel>
+      {o.fillDemo && (
+        <Panel title="A preview">
+          <span style={{ font: "400 14px/20px var(--font)", color: "var(--text-2)" }}>This page has no home behind it, so it keeps your office in this browser. Want company to look round with?</span>
+          <button onClick={o.fillDemo} style={{ ...button, justifySelf: "start" }}>
+            Fill the office with a demo crew
+          </button>
+        </Panel>
+      )}
       <Panel title="Brains">
         <span style={{ font: "400 14px/20px var(--font)", color: "var(--text-2)" }}>
           Your orbs think with ChatGPT first, then a Gemini key, then a local coder. You choose them here once this app is connected to your home.

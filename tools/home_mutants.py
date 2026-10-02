@@ -275,6 +275,38 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("the orb's specialty is ignored", "src/agent/standing.ts", [
         ('specialty: o.specialty ?? "general", orbName', 'specialty: "general", orbName'),
     ], ["constitution.test.ts"]),
+    # the app's way in (PLAN 2.4)
+    ("a pairing link works twice", "src/sessions.ts", [
+        ("    this.#codes.delete(h); // good once, right or wrong\n", ""),
+    ], ["app-door.test.ts"]),
+    ("a change through a session needs no header of the app's", "src/api.ts", [
+        ('  if (bySession && method !== "GET" && req.headers["x-orbs"] !== "1") throw', '  if (false) throw'),
+    ], ["app-door.test.ts"]),
+    ("the door serves files outside the app", "src/api.ts", [
+        ('  if (!file.startsWith(dir.endsWith(sep) ? dir : dir + sep) || rel.startsWith("..")) throw new HttpError(404, "not part of the app");\n', ""),
+    ], ["app-door.test.ts"]),
+    ("letting an orb go leaves him in the office", "src/inbox.ts", [
+        ('      this.#db.prepare("UPDATE orbs SET let_go_at = ? WHERE id = ?").run(this.#clock.now(), id);\n', ""),
+    ], ["app-door.test.ts"]),
+    ("an orb let go still takes work", "src/inbox.ts", [
+        ("    if (who.letGoAt !== null) throw new Error(", "    if (false) throw new Error("),
+    ], ["app-door.test.ts"]),
+    # sessions (PLAN 2.9)
+    ("a session's orbs all speak at once", "src/team.ts", [
+        ('    this.#inbox.enqueue(left[0]!, conversation, "turn", "", { data: { team } });', '    for (const o of left.splice(0)) this.#inbox.enqueue(o, conversation, "turn", "", { data: { team } });'),
+    ], ["team.test.ts"]),
+    ("another orb's words reach him as his own", "src/agent/conversation.ts", [
+        ("      if (o.me && m.orb !== o.me && (m.role === \"assistant\" || m.role === \"tool\")) {", "      if (false) {"),
+    ], ["team.test.ts"]),
+    ("a round goes on while an orb waits on a card", "src/team.ts", [
+        ('      if (e.data.outcome === "waiting") return;\n', ""),
+    ], ["team.test.ts"]),
+    ("an orb never answers another orb", "src/agent/loop.ts", [
+        ('    const answered = tail?.role === "assistant" && tail.orb === ctx.orb && !tail.toolCalls?.length', '    const answered = tail?.role === "assistant" && !tail.toolCalls?.length'),
+    ], ["team.test.ts"]),
+    ("agree records nothing", "src/agent/tools.ts", [
+        ("      ctx.note?.(`✓ Agreed: ${d}`, { agreed: d });\n", ""),
+    ], ["team.test.ts"]),
     # the researchers' tools (PLAN 3.10)
     ("the web tools may reach loopback", "src/agent/net.ts", [
         ("    a === 0 || a === 10 || a === 127 ||", "    a === 0 || a === 10 ||"),
@@ -404,7 +436,7 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ], ["splash.test.ts"]),
     # the first open (PLAN 2.5), the side menu, the eyes
     ("the story goes on without a name", "src/onboarding/story.ts", [
-        ('  if (!name) return { ok: false, why: "Ash needs something to call you." };', "  if (false) return { ok: false, why: \"\" };"),
+        ('  if (!name) return { ok: false, why: "I need something to call you." };', "  if (false) return { ok: false, why: \"\" };"),
     ], ["onboarding.test.ts"]),
     ("the story forgets the name it was told", "src/onboarding/story.ts", [
         ('export const line = (text: string, p: Pick<Person, "name"> | null): string => text.replaceAll("{name}", p?.name ?? "boss");', 'export const line = (text: string, p: Pick<Person, "name"> | null): string => text.replaceAll("{name}", "boss");'),
@@ -413,7 +445,7 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ('    return v && typeof v.name === "string" && v.name ? v : null;', "    return v && false ? v : null;"),
     ], ["onboarding.test.ts", "nav.test.ts"]),
     ("skipping the story skips the name", "src/onboarding/story.ts", [
-        ('  return person ? STORY.findIndex((b) => b.kind === "hire") : STORY.findIndex((b) => b.kind === "ask-name");', '  return STORY.findIndex((b) => b.kind === "hire");'),
+        ('  return person ? story.findIndex((b) => b.kind === "hire") : story.findIndex((b) => b.kind === "ask-name");', '  return story.findIndex((b) => b.kind === "hire");'),
     ], ["onboarding.test.ts"]),
     ("a press does not finish the line", "src/onboarding/Onboarding.tsx", [
         ("      if (typer.current) clearInterval(typer.current);\n", ""),
@@ -433,6 +465,87 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("the wink gesture shuts no eye", "src/orb/life.ts", [
         ("      if (x > 0.12 && x < 0.72) f.wink = 1;\n", ""),
     ], ["feel.units.test.ts"]),
+    ("the app never finds its home", "src/home/link.ts", [
+        ("  if (!res.ok || !(res.headers.get(\"content-type\") ?? \"\").includes(\"json\")) return null;\n  return { office: doorOffice(base) };", "  return null;"),
+    ], ["link.test.ts"]),
+    ("a spent pairing code stays on the address", "src/home/link.ts", [
+        ('      if (location.hash.includes("pair=")) history.replaceState(null, "", "#/office"); // the code is spent: off the address\n', ""),
+    ], ["link.test.ts"]),
+    ("a reply never shows as it streams", "src/rooms/Talk.tsx", [
+        ('        setLive((l) => ({ ...l, [d.orb]: (l[d.orb] ?? "") + d.delta }));', "        void d;"),
+    ], ["link.test.ts", "sessions.test.ts"]),
+    ("approving a card in a conversation does nothing", "src/rooms/Talk.tsx", [
+        ("    o.home.answer(card.id, choice).then(load, (e: Error) => setSaid(e.message));", "    void choice;"),
+    ], ["link.test.ts", "sessions.test.ts"]),
+    ("an effect hands React scrollIntoView's Promise (as written first: the page tears down)", "src/rooms/Talk.tsx", [
+        ("  useEffect(() => {\n    end.current?.scrollIntoView({ block: \"end\" });\n  }, [messages.length, live, card?.id]);", "  useEffect(() => end.current?.scrollIntoView({ block: \"end\" }) as unknown as void, [messages.length, live, card?.id]);"),
+    ], ["link.test.ts", "sessions.test.ts"]),
+    ("any new message wipes every orb's streamed words (as first written)", "src/rooms/Talk.tsx", [
+        ("    setMessages(r.messages);\n    o.onMessages?.(r.messages);", "    if (r.messages.length !== messages.length) setLive({});\n    setMessages(r.messages);\n    o.onMessages?.(r.messages);"),
+    ], ["sessions.test.ts"]),
+    ("a made orb's address stays the creator's", "src/orbs.tsx", [
+        ('    history.replaceState(history.state, "", routeHash({ room: "office", orb: made.name }));\n', ""),
+    ], ["onboarding.test.ts", "link.test.ts"]),
+    ("the home's orbs arrive and the office stays on the creator", "src/orbs.tsx", [
+        ('      if (r.room === "new" && v.kind === "new") return v; // the creator, because you asked for it', '      if (v.kind === "new") return v;'),
+    ], ["link.test.ts"]),
+    ("a session starts with no title", "src/rooms/Sessions.tsx", [
+        ('    if (!t) return setWhy("A session needs a title: what is it for?");\n', ""),
+    ], ["sessions.test.ts"]),
+    ("bringing someone in, or sending him out, never reaches the home", "src/rooms/Sessions.tsx", [
+        ("set={(next) => o.home.bring(o.session.id, o.tab, next).then(o.changed, () => {})}", "set={() => undefined}"),
+    ], ["sessions.test.ts"]),
+    ("what was agreed is not on the stage", "src/rooms/Sessions.tsx", [
+        ('  const agreed = messages.filter((m) => m.role === "notice" && typeof m.meta.agreed === "string");', "  const agreed: Message[] = [];"),
+    ], ["sessions.test.ts"]),
+    ("an orb's computer never shows what came back", "src/rooms/Sessions.tsx", [
+        ("result: results.get(c.id) ?? null });", "result: null });"),
+    ], ["sessions.test.ts"]),
+    ("a session's tabs are not addresses", "src/ui/nav.ts", [
+        ('  if (r.room === "sessions") return r.id === null ? "#/sessions" : `#/session/${r.id}/${r.tab}`;', '  if (r.room === "sessions") return "#/sessions";'),
+    ], ["sessions.test.ts"]),
+    ("a private chat is filed with every other chat", "src/home/link.ts", [
+        ("export const chatOf = (c: Pick<Character, \"name\">): string => `chat:${idOf(c.name)}`;", "export const chatOf = (c: Pick<Character, \"name\">): string => \"chat:main\";"),
+    ], ["link.test.ts"]),
+    ("a short page is left short (no empty slots)", "src/ui/Paged.tsx", [
+        ("            {Array.from({ length: PER_PAGE - slice.length }, (_, k) => (", "            {Array.from({ length: 0 }, (_, k) => ("),
+    ], ["creator.test.ts"]),
+    ("the pages are two across", "src/ui/pages.ts", [
+        ("export const ACROSS = 3;", "export const ACROSS = 2;"),
+    ], ["creator.test.ts"]),
+    ("a picture tab has no page numbers", "src/ui/Paged.tsx", [
+        ("      {pages > 1 && (\n        <nav", "      {false && (\n        <nav"),
+    ], ["creator.test.ts"]),
+    ("a roll that lands on another page stays where it was", "src/ui/Paged.tsx", [
+        ("    if (at >= 0 && pageOf(at) !== page) {\n      setWent(pageOf(at) > page ? \"on\" : \"back\");\n      setPage(pageOf(at));\n    }\n", ""),
+    ], ["creator.test.ts"]),
+    ("a hat's colour paints nothing", "src/orb/spec.ts", [
+        ('accCol: c.hatHue ? paint("accent", c.hatHue) : paint(w.main, c.hue),', "accCol: paint(w.main, c.hue),"),
+    ], ["spec.test.ts", "creator.test.ts"]),
+    ("the frames' colour paints nothing", "src/orb/spec.ts", [
+        ('    specsCol: c.glassesHue ? paint("accent", c.glassesHue) : paint(g.frame, c.hue),', "    specsCol: paint(g.frame, c.hue),"),
+    ], ["spec.test.ts"]),
+    ("choosing an accessory's colour does nothing", "src/orbs.tsx", [
+        ("            <Swatch hue={h.name} size={28} on={value === h.name} label={`${what} in ${h.name}`} onPick={() => onPick(h.name)} />", "            <Swatch hue={h.name} size={28} on={value === h.name} label={`${what} in ${h.name}`} onPick={() => undefined} />"),
+    ], ["creator.test.ts"]),
+    ("an accessory's colour is lost when he is kept", "src/orb/spec.ts", [
+        ('    hatHue: typeof c.hatHue === "string" && hues.includes(c.hatHue) ? c.hatHue : c.hatHue === null ? null : base.hatHue ?? null,', "    hatHue: null,"),
+    ], ["spec.test.ts", "creator.test.ts"]),
+    ("hats sit where they did on every shape (no fit)", "src/orb/spec.ts", [
+        ("  const Y = Math.max(Math.min(head(-FIT_AT), head(FIT_AT)) - beanDrop, peak);", "  const Y = -S0.d[1] * (1 + outline(S0, -Math.PI / 2));"),
+    ], ["spec.test.ts"]),
+    ("a hat hides his ears", "src/orb/glsl.ts", [
+        ("      col = mix(col, c, aa*(1.0 - earFront));                       // his ears in front of it, the hat behind them", "      col = mix(col, c, aa);"),
+    ], ["characters.test.ts"]),
+    ("a bunny's hat sits on his ears' tips", "src/orb/spec.ts", [
+        ("  const S: ShapeNumbers = ears ? { ...S0, c: [S0.c[0], S0.c[1], 0, S0.c[3]] } : S0;", "  const S: ShapeNumbers = S0;"),
+    ], ["spec.test.ts"]),
+    ("a wide shape's close-up is cut at the sides", "src/orb/Orb.tsx", [
+        ('    () => (framing === "portrait" ? { ...PORTRAIT, radius: Math.min(PORTRAIT.radius, PORTRAIT.w / 2 / (halfWidth(character.shape) + PORTRAIT.edge + 0.04)) } : DESIGN),', '    () => (framing === "portrait" ? PORTRAIT : DESIGN),'),
+    ], ["characters.test.ts"]),
+    ("the shader ignores the fit", "src/orb/glsl.ts", [
+        ("    float Rtop = uShapeD.y*Rg*(1.0 - 0.045*uMorph - 0.030*speak + uAccFit.x)*(1.0 - 0.5*uSquash) - 0.03*Rg;", "    float Rtop = uShapeD.y*Rg*(1.0 - 0.045*uMorph - 0.030*speak + shapeR(-1.5707963))*(1.0 - 0.5*uSquash) - 0.03*Rg;"),
+    ], ["characters.test.ts"]),
     ("the specimen scrolls sideways on a phone", "src/specimen.tsx", [
         ('gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 420px), 1fr))"', 'gridTemplateColumns: "repeat(auto-fit, minmax(420px, 1fr))"'),
     ], ["render.test.ts"]),

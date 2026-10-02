@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import { after, before, test } from "node:test";
 import { build } from "vite";
 import type { Browser, Page } from "playwright-core";
-import { findChrome, launch, measure, serveDir, SIZES } from "./harness.ts";
+import { findChrome, launch, measure, seedOffice, serveDir, SIZES } from "./harness.ts";
 import { WAKE_MS } from "../src/ui/splash.ts";
 
 const APP = fileURLToPath(new URL("..", import.meta.url));
@@ -37,6 +37,7 @@ after(async () => {
  * test calls `__release()` (so no test races the machine's speed); or one that refuses. */
 async function open(o: { home?: "fast" | "held" | "refused"; size?: keyof typeof SIZES; query?: string } = {}): Promise<Page> {
   const page = await browser.newPage({ viewport: SIZES[o.size ?? "desk"], colorScheme: "dark" });
+  await seedOffice(page);
   await page.addInitScript((home) => {
     const g = globalThis as { __orbsReady?: Promise<unknown>; __splash?: { shown?: number; leaving?: number; gone?: number; phases: string[]; text: string; orbs: number } };
     // when the splash really appeared and left, by the page's own clock, and every phase it went through

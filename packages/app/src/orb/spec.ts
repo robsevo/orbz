@@ -51,6 +51,110 @@ export const SHAPES = {
   blob: shape({ tall: 0.1, taper: 0.04, grow: 0.03, belly: 0.9, blob: 0.08, scale: 0.88 }),
 };
 export type ShapeName = keyof typeof SHAPES;
+type ShapeNumbers = ReturnType<typeof shape>;
+
+/** glsl.ts `shapeR`, here too: how far in or out of his circle his outline is at angle `a`
+ * (radians; the top is -PI/2, +y down the screen). characters.test.ts holds it to the shader by
+ * measuring every rendered shape's top. */
+export function outline(S: ShapeNumbers, a: number): number {
+  const [A, B, C, D, E, F] = [S.a, S.b, S.c, S.d, S.e, S.f];
+  const s = Math.sin(a), c = Math.cos(a), top = -Math.PI / 2;
+  const upward = -s, belly = 0.5 - 0.5 * upward;
+  let r = A[2] + A[0] * (1 - A[3] * belly) * (s * s - 1) - A[1] * (0.5 + 0.5 * upward);
+  r -= B[0] * Math.exp(-(((a - 0.35) / 0.55) ** 2));
+  r += B[1] * (c * c - 0.5);
+  r += B[2] * Math.max(0, upward) ** 9;
+  r += B[3] * Math.sin(D[2] * a) * Math.max(0, s) ** 2;
+  r += D[3] * Math.max(0, s) ** 9;
+  r += E[0] * 0.5 * (1 - Math.cos(4 * a));
+  r -= E[1] * Math.exp(-(((a - top) / 0.2) ** 2));
+  r += E[2] * (0.6 * Math.sin(a + 0.8) + 0.4 * Math.sin(3 * a + 2.1));
+  if (F[0] > 0.5) r += F[1] * Math.max(0, Math.cos(F[0] * (a - top))) ** F[2];
+  r += C[1] * (Math.abs(Math.sin(0.5 * C[0] * a + 0.3)) - 0.64);
+  r += C[2] * (Math.exp(-(((a - top - C[3]) / D[0]) ** 2)) + Math.exp(-(((a - top + C[3]) / D[0]) ** 2)));
+  return r;
+}
+
+/** How far out his outline reaches to either side, in his radius: the close-up of his face is cut
+ * to fit it (a squish is wider than his frame was). */
+const halfWidths = new Map<ShapeName, number>();
+export function halfWidth(name: ShapeName): number {
+  let w = halfWidths.get(name);
+  if (w === undefined) {
+    w = 0;
+    const S = SHAPES[name];
+    for (let i = 0; i < 720; i++) {
+      const a = (i / 720) * 2 * Math.PI;
+      w = Math.max(w, S.d[1] * (1 + outline(S, a)) * Math.abs(Math.cos(a)));
+    }
+    halfWidths.set(name, w);
+  }
+  return w;
+}
+
+/** The top edge of his outline at x (in his radius, +y down): the highest of it above x. */
+function topEdge(S: ShapeNumbers): (x: number) => number {
+  const pts: [number, number][] = [];
+  for (let i = 0; i < 1440; i++) {
+    const a = -Math.PI + (2 * Math.PI * i) / 1440;
+    const R = S.d[1] * (1 + outline(S, a));
+    pts.push([R * Math.cos(a), R * Math.sin(a)]);
+  }
+  return (x) => {
+    let y = Infinity;
+    for (let i = 0; i < pts.length; i++) {
+      const [x0, y0] = pts[i]!, [x1, y1] = pts[(i + 1) % pts.length]!;
+      if (x0 === x1 || (x0 - x) * (x1 - x) > 0) continue;
+      y = Math.min(y, y0 + ((x - x0) / (x1 - x0)) * (y1 - y0));
+    }
+    return y;
+  };
+}
+
+/** How a hat fits each shape (owner, 10-01: "some accessories arent fitting the heads of the orbs
+ * right. please fix per shape"). The hats were drawn on Ash's bean, so each one sits on another
+ * head the way it sits on his:
+ *   - it comes down until the head is as wide under it as the bean's is (a star's point or a drop's
+ *     tip goes up inside it, where before the hat was perched on the tip), and never floats above
+ *     the head's highest point (a heart's lobes hold it, where before it sank into the notch);
+ *   - narrow ears are not his head: the hat sits on the head between them, and the shader keeps
+ *     them in front of it, as if through it (a bunny's, a teddy's, a kitty's);
+ *   - a narrower head takes a slightly smaller hat (never a bigger one: wide, a hat's own ears or
+ *     horns stood off his head).
+ * `seat` is the outline value his head's top is taken at (the shader's `shapeR` straight up, for
+ * the bean), `size` multiplies the hat; `float` is the seat for what does not touch him (a halo),
+ * which stays over the top of everything. */
+export type HatFit = { seat: number; size: number; float: number };
+const FIT_AT = 0.4; // a crown's half-width, in his radius (0.30 of a hat's units, at 1.35 his radius)
+const fits = new Map<ShapeName, HatFit>();
+export function hatFit(name: ShapeName): HatFit {
+  const known = fits.get(name);
+  if (known) return known;
+  const S0 = SHAPES[name];
+  const ears = S0.c[2] > 0 && S0.d[0] < 0.3; // narrow bumps at the top are ears; wide ones (a heart's lobes) are his head
+  const S: ShapeNumbers = ears ? { ...S0, c: [S0.c[0], S0.c[1], 0, S0.c[3]] } : S0;
+  const peakOf = (y: (x: number) => number): number => {
+    let p = Infinity;
+    for (let x = -0.9; x <= 0.9; x += 0.01) p = Math.min(p, y(x));
+    return p;
+  };
+  const widthAt = (y: (x: number) => number, Y: number): number => {
+    let w = 0;
+    for (let x = 0; x <= 1.2; x += 0.004) if (y(x) <= Y && y(-x) <= Y) w = x;
+    return w;
+  };
+  const bean = topEdge(SHAPES.bean);
+  const beanPeak = peakOf(bean);
+  const beanDrop = Math.min(bean(-FIT_AT), bean(FIT_AT)) - beanPeak; // how far his head falls away under a crown
+  const head = topEdge(S);
+  const peak = peakOf(head);
+  const Y = Math.max(Math.min(head(-FIT_AT), head(FIT_AT)) - beanDrop, peak);
+  const size = Math.min(1, Math.max(0.9, Math.sqrt(widthAt(head, Y + 0.15) / widthAt(bean, beanPeak + 0.15))));
+  const allPeak = peakOf(topEdge(S0));
+  const fit = { seat: -Y / S0.d[1] - 1, size, float: -allPeak / S0.d[1] - 1 };
+  fits.set(name, fit);
+  return fit;
+}
 
 // ── eyes ───────────────────────────────────────────────────────────────────────────────────────
 // Shapes of eyes, never expressions (owner, 2026-10-01: "the orbs have to look alive and
@@ -412,6 +516,11 @@ export type Character = {
   eyes: EyesName;
   hat: HatName;
   glasses: GlassesName;
+  /** The hat's colour, chosen like his own (owner, 10-01: "change the colors of our accessories"),
+   * or none for the hat's own colours. It paints the hat's main part; a trim keeps its colour. */
+  hatHue?: HueName | null;
+  /** The frames' colour (and a strap's), or none for their own. The lenses keep theirs. */
+  glassesHue?: HueName | null;
   voice: string;
   goo: number;
 };
@@ -442,8 +551,11 @@ export function lookOf(c: Character): OrbLook {
   return {
     shapeA: [...s.a], shapeB: [...s.b], shapeC: [...s.c], shapeD: [...s.d], shapeE: [...s.e], shapeF: [...s.f],
     eyeA: [...e.a] as V4, eyeB: [...e.b] as V4,
-    acc: w.id, accCol: paint(w.main, c.hue), accCol2: paint(w.second, c.hue), accTilt: w.tilt,
-    specs: g.id, specsCol: paint(g.frame, c.hue), specsCol2: paint(g.second, c.hue), lensCol: paint(g.lens, c.hue), lensDark: g.dark,
+    acc: w.id, accFit: (({ seat, size, float }) => [c.hat === "halo" ? float : seat, size] as [number, number])(hatFit(c.shape)), accCol: c.hatHue ? paint("accent", c.hatHue) : paint(w.main, c.hue), accCol2: paint(w.second, c.hue), accTilt: w.tilt,
+    specs: g.id,
+    specsCol: c.glassesHue ? paint("accent", c.glassesHue) : paint(g.frame, c.hue),
+    specsCol2: c.glassesHue ? paint("accent", c.glassesHue) : paint(g.second, c.hue),
+    lensCol: paint(g.lens, c.hue), lensDark: g.dark,
   };
 }
 
@@ -477,6 +589,31 @@ const pickOne = <T,>(xs: readonly T[], r: () => number): T => xs[Math.floor(r() 
 
 /** "Surprise me": a whole character from a seed (the same seed, the same orb): a personality first,
  * then a body, eyes, a voice and a softness that go with it. */
+/** A character read back from storage (the browser's, the home's), every part one there is: a part
+ * renamed or retired since he was kept (the eyes "wink" or "ash", 10-01) falls back to `base`'s. */
+export function sane(c: Partial<Character> & { name: string }, base: Character): Character {
+  const pick = <K extends keyof Character>(k: K, ok: (v: unknown) => boolean): Character[K] => (ok(c[k]) ? (c[k] as Character[K]) : base[k]);
+  const inside = (o: object) => (v: unknown): boolean => typeof v === "string" && v in o;
+  const hues = HUES.map((h) => h.name) as readonly string[];
+  return {
+    name: c.name,
+    personality: pick("personality", inside(PERSONALITIES)),
+    specialty: pick("specialty", inside(SPECIALTIES)),
+    seed: pick("seed", (v) => typeof v === "number" && Number.isFinite(v)),
+    hue: pick("hue", (v) => typeof v === "string" && hues.includes(v)),
+    hue2: c.hue2 === null || (typeof c.hue2 === "string" && hues.includes(c.hue2)) ? (c.hue2 as HueName | null) : base.hue2,
+    finish: pick("finish", inside(FINISHES)),
+    shape: pick("shape", inside(SHAPES)),
+    eyes: pick("eyes", inside(EYES)),
+    hat: pick("hat", inside(HATS)),
+    glasses: pick("glasses", inside(GLASSES)),
+    hatHue: typeof c.hatHue === "string" && hues.includes(c.hatHue) ? c.hatHue : c.hatHue === null ? null : base.hatHue ?? null,
+    glassesHue: typeof c.glassesHue === "string" && hues.includes(c.glassesHue) ? c.glassesHue : c.glassesHue === null ? null : base.glassesHue ?? null,
+    voice: pick("voice", (v) => typeof v === "string" && VOICES.some((x) => x.id === v)),
+    goo: pick("goo", (v) => typeof v === "number" && v >= 0 && v <= 1),
+  };
+}
+
 export function surprise(seed: number): Character {
   let x = Math.abs(Math.floor(seed)) % 233280;
   const r = (): number => (x = (x * 9301 + 49297) % 233280) / 233280;

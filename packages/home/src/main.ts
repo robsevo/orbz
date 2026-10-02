@@ -41,6 +41,8 @@ try {
 home.start();
 const door = await serve(home);
 console.log(`orbs home ${version} ready on http://127.0.0.1:${door.port} (data ${home.dataDir}, pid ${process.pid})`);
+// the app, on this machine: a link good once, for five minutes (PLAN 2.4)
+console.log(`open the app: ${door.pairLink()}`);
 
 let stopping = false;
 async function stop(signal: string): Promise<void> {

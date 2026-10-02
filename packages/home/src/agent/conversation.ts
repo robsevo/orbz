@@ -162,11 +162,18 @@ export class Conversations {
   }
 
   /** The history in the model's shapes, every tool result straight after its call. */
-  toModel(history: Message[]): ModelMessage[] {
+  /** The history as the model reads it. In a session (several orbs in one conversation), what
+   * another orb said reaches `me` as said by him, by name, and never as `me`'s own words; his
+   * calls and their results are his, and stay out. */
+  toModel(history: Message[], o: { me?: string; nameOf?: (orb: string) => string } = {}): ModelMessage[] {
     const results = new Map<string, Message>();
     for (const m of history) if (m.role === "tool" && m.toolCallId) results.set(m.toolCallId, m);
     const out: ModelMessage[] = [];
     for (const m of history) {
+      if (o.me && m.orb !== o.me && (m.role === "assistant" || m.role === "tool")) {
+        if (m.role === "assistant" && m.content.trim()) out.push({ role: "user", content: `[${o.nameOf?.(m.orb) ?? m.orb}]: ${m.content}` });
+        continue;
+      }
       if (m.role === "user") out.push({ role: "user", content: m.content });
       else if (m.role === "summary") out.push({ role: "system", content: `Summary of the earlier conversation:\n${m.content}` });
       else if (m.role === "assistant") {

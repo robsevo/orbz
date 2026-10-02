@@ -1,0 +1,176 @@
+// PLAN 2.4_t, the app on its home, end to end: a real home (in this process, on a scratch data
+// directory) serves the built app, and Chromium opens the pairing link it prints.
+//   - The link pairs the browser, and its code leaves the address.
+//   - The first open's story asks your name and the home keeps it.
+//   - A fresh home's office starts empty: the first orb is the one you make (owner, 10-01).
+//   - An orb hired in the creator is the home's, look and all.
+//   - One let go is archived there: out of the office, kept.
+//   - A reload is still paired, and does not play the story again.
+//   - A used link, or a browser never paired, is said plainly, not shown as an empty office.
+import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { after, before, test } from "node:test";
+import { build } from "vite";
+import type { Browser, BrowserContext, Page } from "playwright-core";
+import { findChrome, launch } from "./harness.ts";
+import { Home } from "../../home/src/home.ts";
+import { serve, type HomeDoor } from "../../home/src/api.ts";
+
+const APP = fileURLToPath(new URL("..", import.meta.url));
+const skip = findChrome() ? false : "no Chromium on this machine";
+let browser: Browser;
+let dist: string;
+let dataDir: string;
+let home: Home;
+let door: HomeDoor;
+
+before(async () => {
+  if (skip) return;
+  dist = mkdtempSync(join(tmpdir(), "orbs-link-dist-"));
+  await build({ root: APP, logLevel: "silent", build: { outDir: dist, emptyOutDir: true } });
+  dataDir = mkdtempSync(join(tmpdir(), "orbs-link-home-"));
+  home = Home.open({ dataDir, protect: [], spendCapUsd: null });
+  home.start();
+  door = await serve(home, { port: 0, appDir: dist });
+  browser = await launch();
+});
+after(async () => {
+  await browser?.close();
+  await door?.close();
+  await home?.close();
+  for (const d of [dist, dataDir]) if (d) rmSync(d, { recursive: true, force: true });
+});
+
+// one visit, in three steps (as one test it ran past a test's minute in the gate, where every
+// suite draws at once): each step goes on from where the last one left the page
+let visit: { ctx: BrowserContext; page: Page } | null = null;
+after(async () => {
+  await visit?.ctx.close().catch(() => {});
+});
+
+test("the pairing link opens the app on the home: your name and your first orb are the home's", { skip }, async () => {
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: "dark" });
+  const page = await ctx.newPage();
+  visit = { ctx, page };
+  await page.goto(door.pairLink());
+  await page.locator("[data-onboarding]").waitFor({ timeout: 30_000 });
+  assert.doesNotMatch(await page.evaluate(() => location.hash), /pair=/, "the code is spent, and off the address");
+  await page.getByRole("button", { name: "Skip the story" }).click();
+  await page.getByRole("textbox", { name: "Your name" }).fill("Robin");
+  await page.keyboard.press("Enter");
+  await page.getByRole("button", { name: "Skip the story" }).click();
+  assert.deepEqual(home.inbox.orbs(), [], "a fresh home's office is empty: the first orb is the one you make");
+  await page.getByRole("button", { name: "Make me" }).click();
+  await page.getByText("CEO Robin").waitFor();
+  assert.equal(home.about.get().name, "Robin", "the home keeps what the office calls you");
+
+  // your first orb
+  await page.getByRole("textbox", { name: "Name" }).fill("Pip");
+  await page.getByRole("button", { name: "Create Pip" }).click();
+  await page.waitForFunction(() => document.querySelector("h2")?.textContent === "Pip");
+  await new Promise((r) => setTimeout(r, 300));
+  assert.deepEqual(home.inbox.orbs().map((o) => o.name), ["Pip"], "the home has him, and only him");
+  assert.equal((home.inbox.orbs()[0]!.look as { shape?: string }).shape, "bean", "and his look, as the story showed him");
+
+});
+
+test("a hire, and a let-go, are the home's: one let go is archived there, out of the office and kept", { skip }, async () => {
+  assert.ok(visit, "after the first step");
+  const { page } = visit;
+  await page.getByRole("button", { name: "New orb" }).first().click();
+  await page.getByRole("textbox", { name: "Name" }).fill("Wren");
+  await page.getByRole("button", { name: "Create Wren" }).click();
+  await page.waitForFunction(() => document.querySelector("h2")?.textContent === "Wren");
+  await new Promise((r) => setTimeout(r, 300));
+  assert.deepEqual(home.inbox.orbs().map((o) => o.name), ["Pip", "Wren"]);
+  await page.getByRole("button", { name: "Delete Wren…" }).click();
+  await page.getByRole("group", { name: "Delete Wren?" }).getByRole("button", { name: "Delete Wren" }).click();
+  await page.waitForTimeout(600);
+  assert.ok(!home.inbox.orbs().some((o) => o.name === "Wren"), "out of the office");
+  assert.ok(home.inbox.orbs({ all: true }).find((o) => o.name === "Wren")?.letGoAt, "archived, kept");
+
+});
+
+test("a reload is still paired, does not play the story again, and keeps the office", { skip }, async () => {
+  assert.ok(visit, "after the first steps");
+  const { page } = visit;
+  await page.reload();
+  await page.getByText("CEO Robin").waitFor({ timeout: 30_000 });
+  assert.equal(await page.locator("[data-onboarding]").count(), 0);
+  assert.equal(await page.getByRole("heading", { name: "Pip" }).count(), 1);
+});
+
+test("a used link, or a browser never paired, is said plainly", { skip }, async () => {
+  const link = door.pairLink();
+  const first = await browser.newContext();
+  const spending = await first.newPage();
+  await spending.goto(link);
+  // spent once it has paired: the code leaves the address (a fixed wait lost the race in the gate)
+  await spending.waitForFunction(() => !location.hash.includes("pair="), undefined, { timeout: 30_000 });
+  await first.close();
+  const ctx = await browser.newContext();
+  const page = await ctx.newPage();
+  try {
+    await page.goto(link);
+    await page.getByText(/Can't reach your home: that pairing link is used or lapsed/).waitFor({ timeout: 30_000 });
+    await page.goto(`http://127.0.0.1:${door.port}/app/orbs.html`);
+    await page.getByText(/Can't reach your home: this browser is not paired/).waitFor({ timeout: 30_000 });
+  } finally {
+    await ctx.close();
+  }
+});
+
+test("a private chat with an orb: your words, his reply as it streams, a card that waits for your OK", { skip }, async (t) => {
+  const { fakeModel } = await import("../../home/test/fakes/model.ts");
+  let release!: () => void;
+  const held = new Promise<void>((r) => (release = r));
+  const model = await fakeModel(t, [
+    { chunks: ["Hello ", "Robin, ", "what are we doing today?"], hold: held },
+    { calls: [{ name: "shell", args: { command: "echo planted-from-chat" } }] },
+    { chunks: ["Done: it said hello."] },
+  ]);
+  const data = mkdtempSync(join(tmpdir(), "orbs-chat-home-"));
+  t.after(() => rmSync(data, { recursive: true, force: true }));
+  const h = Home.open({
+    dataDir: data, protect: [], spendCapUsd: null,
+    brain: { preset: { id: "t", title: "t", own: null, big: { name: "big", baseUrl: model.url, model: "m", retries: 0 }, teacher: null } },
+    agent: { decide: (def) => (def.name === "shell" ? "ask" : "allow"), passWaitMs: 20 },
+  });
+  t.after(() => h.close());
+  h.start();
+  h.about.setName("Robin");
+  h.inbox.addOrb("ash", "Ash", "general", { shape: "bean", eyes: "classic", hue: "azure" });
+  const d = await serve(h, { port: 0, appDir: dist });
+  t.after(() => d.close());
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: "dark" });
+  t.after(() => ctx.close());
+  const page = await ctx.newPage();
+  await page.goto(d.pairLink());
+  await page.getByText("CEO Robin").waitFor({ timeout: 30_000 });
+  await page.getByRole("button", { name: "Chat with Ash" }).click();
+  assert.equal(await page.evaluate(() => location.hash), "#/chat/Ash");
+  const box = page.getByRole("textbox", { name: "Message Ash" });
+  await page.locator('[data-stream="open"]').waitFor({ timeout: 20_000 });
+  await box.fill("hi");
+  await box.press("Enter");
+  // his words show as he writes them: the model holds the reply open until they have been seen
+  await page.locator('[data-role="live"]', { hasText: "what are we doing today?" }).waitFor({ timeout: 20_000 });
+  assert.equal(await page.locator('[data-role="assistant"]').count(), 0, "before the reply is kept");
+  release();
+  await page.locator('[data-role="assistant"]', { hasText: "what are we doing today?" }).waitFor({ timeout: 20_000 });
+  assert.equal(await page.locator('[data-role="user"]', { hasText: "hi" }).count(), 1, "your words, yours");
+  // a command waits on a card until you answer it
+  await box.fill("say hello in the shell");
+  await box.press("Enter");
+  const card = page.locator("[data-card]");
+  await card.waitFor({ timeout: 20_000 });
+  assert.match(await card.innerText(), /echo planted-from-chat/);
+  await card.getByRole("button", { name: "Approve" }).click();
+  await page.locator('[data-role="assistant"]', { hasText: "Done: it said hello." }).waitFor({ timeout: 20_000 });
+  assert.equal(await page.locator("[data-card]").count(), 0, "answered, the card is gone");
+  // and it is a private chat: no other conversation holds it
+  assert.ok(h.conversations.list("chat:ash").some((m) => m.content === "hi"));
+});

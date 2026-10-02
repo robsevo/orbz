@@ -12,11 +12,25 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { composeConstitution, sectioned, type Specialty } from "../brain/constitution.ts";
 
-export function standingContext(o: { orbName: string; brainDir: string; workspace: string; specialty?: Specialty; learned?: string[] }): string {
+/** His turn in a session (team.ts): which tab, and who else is in it. */
+export type TeamTurn = { session: number; title: string; tab: "brainstorm" | "floor"; with: string[] };
+
+const TAB_RULE: Record<TeamTurn["tab"], string> = {
+  brainstorm: "This is the Brainstorm: ideas, questions, trade-offs, out loud and brief. Build on what the others said instead of repeating it, disagree when you do, and when you all agree on something, record it with the agree tool. Do not do the work here.",
+  floor: "This is the Floor: do the agreed work, your part of it, with your tools, and say in a line or two what you did. Ask the person before anything that matters.",
+};
+
+export function standingContext(o: { orbName: string; brainDir: string; workspace: string; specialty?: Specialty; learned?: string[]; team?: TeamTurn }): string {
   const parts = [
     `You are ${o.orbName}, one of the person's orbs: an AI character and assistant that works on its own computer and asks before anything that matters.`,
     `Working directory: ${o.workspace}`,
   ];
+  if (o.team) {
+    const others = o.team.with.filter((n) => n !== o.orbName);
+    parts.push(
+      `You are in a session, "${o.team.title}", with ${others.length ? others.join(", ") : "no other orb"} and the person. Messages from another orb come as "[Name]: ...". It is your turn: speak as yourself, ${o.orbName}, once. ${TAB_RULE[o.team.tab]}`,
+    );
+  }
   const owner = read(join(o.brainDir, "CONSTITUTION.md"));
   // a file not in sections (no ## or ### heading) is read whole, as before
   const cut = Boolean(owner) && sectioned(owner);

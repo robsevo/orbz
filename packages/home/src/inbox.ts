@@ -9,9 +9,17 @@ import type { Clock } from "./clock.ts";
 import { parseJson, tx } from "./db.ts";
 import type { EventLog } from "./events.ts";
 
-export type Source = "chat" | "schedule" | "trigger" | "system";
+/** Where work comes from. A "turn" is an orb's turn in a session (team.ts): it brings no words of
+ * its own, it asks him to answer what was said. */
+export type Source = "chat" | "schedule" | "trigger" | "system" | "turn";
 export type OrbStatus = "idle" | "working" | "waiting" | "paused";
-export type Orb = { id: string; name: string; status: OrbStatus; activity: string | null; createdAt: number; specialty: Specialty };
+export type Orb = {
+  id: string; name: string; status: OrbStatus; activity: string | null; createdAt: number; specialty: Specialty;
+  /** What he looks like, as the app made him (its business: the home keeps it, never reads it). */
+  look: Record<string, unknown>;
+  /** When he was let go: archived, his work kept, out of the office (decision 12). */
+  letGoAt: number | null;
+};
 
 export type Item = {
   id: number;
@@ -55,7 +63,7 @@ type ItemRow = {
   fresh: number;
   queued_at: number;
 };
-type OrbRow = { id: string; name: string; status: OrbStatus; activity: string | null; created_at: number; specialty: string };
+type OrbRow = { id: string; name: string; status: OrbStatus; activity: string | null; created_at: number; specialty: string; look: string; let_go_at: number | null };
 
 export class UnknownOrbError extends Error {
   constructor(orb: string) {
@@ -82,13 +90,15 @@ export class Inboxes {
     this.#graceMs = graceMs;
   }
 
-  addOrb(id: string, name: string, specialty: Specialty = "general"): Orb {
+  addOrb(id: string, name: string, specialty: Specialty = "general", look: Record<string, unknown> = {}): Orb {
     if (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(id)) throw new Error(`orb id "${id}": use 1-40 of a-z, 0-9 and -`);
     if (this.orb(id)) throw new Error(`orb "${id}" already exists`);
     if (!(specialty in SPECIALTY_FAMILIES)) throw new Error(`"${specialty}" is not a specialty`);
     const at = this.#clock.now();
     tx(this.#db, () => {
-      this.#db.prepare("INSERT INTO orbs (id, name, created_at, specialty) VALUES (?, ?, ?, ?)").run(id, name, at, specialty);
+      const json = JSON.stringify(look);
+      if (json.length > 8000) throw new Error("an orb's look is a few choices, not a document");
+      this.#db.prepare("INSERT INTO orbs (id, name, created_at, specialty, look) VALUES (?, ?, ?, ?, ?)").run(id, name, at, specialty, json);
       this.#events.append("orb.added", { name, specialty }, { orb: id });
     });
     return this.orb(id)!;
@@ -99,8 +109,34 @@ export class Inboxes {
     return r && toOrb(r);
   }
 
-  orbs(): Orb[] {
-    return (this.#db.prepare("SELECT * FROM orbs ORDER BY created_at, id").all() as OrbRow[]).map(toOrb);
+  /** The office: every orb not let go (`all` adds those who were, archived). */
+  orbs(o: { all?: boolean } = {}): Orb[] {
+    const rows = this.#db.prepare(`SELECT * FROM orbs ${o.all ? "" : "WHERE let_go_at IS NULL"} ORDER BY created_at, id`).all() as OrbRow[];
+    return rows.map(toOrb);
+  }
+
+  /** Lets an orb go (owner, 10-01: "once an orb is created, he can be deleted, but not edited"):
+   * he leaves the office and takes no more work, and everything he did is kept, archived, never
+   * deleted (decision 12); `rehire` brings him back as he was. */
+  letGo(id: string): Orb {
+    const o = this.orb(id);
+    if (!o) throw new UnknownOrbError(id);
+    if (o.letGoAt !== null) return o;
+    tx(this.#db, () => {
+      this.#db.prepare("UPDATE orbs SET let_go_at = ? WHERE id = ?").run(this.#clock.now(), id);
+      this.#events.append("orb.let_go", { name: o.name }, { orb: id });
+    });
+    return this.orb(id)!;
+  }
+
+  rehire(id: string): Orb {
+    const o = this.orb(id);
+    if (!o) throw new UnknownOrbError(id);
+    tx(this.#db, () => {
+      this.#db.prepare("UPDATE orbs SET let_go_at = NULL WHERE id = ?").run(id);
+      this.#events.append("orb.rehired", { name: o.name }, { orb: id });
+    });
+    return this.orb(id)!;
   }
 
   /** Queues work for an orb. It starts as soon as the orb is free (after the current call stack). */
@@ -111,7 +147,9 @@ export class Inboxes {
     text: string,
     opts: { data?: Record<string, unknown>; fresh?: boolean } = {},
   ): Item {
-    if (!this.orb(orb)) throw new UnknownOrbError(orb);
+    const who = this.orb(orb);
+    if (!who) throw new UnknownOrbError(orb);
+    if (who.letGoAt !== null) throw new Error(`${who.name} was let go: rehire him to give him work`);
     const at = this.#clock.now();
     const data = opts.data ?? {};
     const fresh = opts.fresh ? 1 : 0;
@@ -347,7 +385,15 @@ export class Inboxes {
 type Settled<T> = { value: T } | { error: unknown } | { abandoned: true };
 
 function toOrb(r: OrbRow): Orb {
-  return { id: r.id, name: r.name, status: r.status, activity: r.activity, createdAt: r.created_at, specialty: (r.specialty in SPECIALTY_FAMILIES ? r.specialty : "general") as Specialty };
+  let look: Record<string, unknown> = {};
+  try {
+    const v: unknown = JSON.parse(r.look ?? "{}");
+    if (v && typeof v === "object" && !Array.isArray(v)) look = v as Record<string, unknown>;
+  } catch { /* a look that does not parse is no look */ }
+  return {
+    id: r.id, name: r.name, status: r.status, activity: r.activity, createdAt: r.created_at,
+    specialty: (r.specialty in SPECIALTY_FAMILIES ? r.specialty : "general") as Specialty, look, letGoAt: r.let_go_at ?? null,
+  };
 }
 
 function toItem(r: ItemRow): Item {

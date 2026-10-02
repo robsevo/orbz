@@ -4,17 +4,24 @@
 // `<data>/home.json`, readable only by the owner. Every request needs the token, and the Host
 // header must name the loopback address, so a web page can't reach it by DNS rebinding.
 import { randomBytes, timingSafeEqual } from "node:crypto";
-import { renameSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { join } from "node:path";
+import { extname, join, normalize, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Home } from "./home.ts";
 import { UnknownOrbError } from "./inbox.ts";
 import { KeyRefusedError } from "./brain/brains.ts";
 import { SPECIALTY_FAMILIES, type Specialty } from "./brain/constitution.ts";
+import { cookieOf, SESSION_COOKIE, Sessions } from "./sessions.ts";
+import type { Tab } from "./team.ts";
 import { standingContext } from "./agent/standing.ts";
 import { version } from "./version.ts";
 
-export type HomeDoor = { port: number; token: string; file: string; close(): Promise<void> };
+export type HomeDoor = {
+  port: number; token: string; file: string; close(): Promise<void>;
+  /** A one-time link that opens the app on this machine, paired (PLAN 2.4): good for five minutes. */
+  pairLink(): string;
+};
 
 const BODY_LIMIT = 64 * 1024;
 
@@ -26,11 +33,16 @@ class HttpError extends Error {
   }
 }
 
-export async function serve(home: Home, opts: { port?: number } = {}): Promise<HomeDoor> {
+/** Where the built app is (`pnpm -C packages/app build`), served at /app/. */
+export const APP_DIR = fileURLToPath(new URL("../../app/dist/", import.meta.url));
+
+export async function serve(home: Home, opts: { port?: number; appDir?: string } = {}): Promise<HomeDoor> {
   const token = randomBytes(24).toString("base64url");
   const want = Buffer.from(`Bearer ${token}`);
+  const sessions = new Sessions(home.clock);
+  const appDir = opts.appDir ?? APP_DIR;
   const server = createServer((req, res) => {
-    handle(home, req, want, server.address(), res)
+    handle(home, req, want, server.address(), res, { sessions, appDir })
       .then((body) => {
         if (body !== STREAMING) send(res, 200, body);
       })
@@ -43,6 +55,7 @@ export async function serve(home: Home, opts: { port?: number } = {}): Promise<H
     server.once("error", fail);
     server.listen(opts.port ?? 0, "127.0.0.1", () => ok());
   });
+  const port = (server.address() as { port: number }).port;
   const addr = server.address();
   if (!addr || typeof addr === "string") throw new Error("the home's door has no port");
   const file = join(home.dataDir, "home.json");
@@ -53,6 +66,7 @@ export async function serve(home: Home, opts: { port?: number } = {}): Promise<H
     port: addr.port,
     token,
     file,
+    pairLink: () => `http://127.0.0.1:${port}/app/orbs.html#pair=${sessions.code()}`,
     close: () =>
       new Promise<void>((ok) => {
         rmSync(file, { force: true });
@@ -70,17 +84,35 @@ async function handle(
   want: Buffer,
   addr: ReturnType<ReturnType<typeof createServer>["address"]>,
   res?: ServerResponse,
+  door?: { sessions: Sessions; appDir: string },
 ): Promise<unknown> {
   const port = addr && typeof addr !== "string" ? addr.port : -1;
   if (req.headers.host !== `127.0.0.1:${port}` && req.headers.host !== `localhost:${port}`) {
     throw new HttpError(403, "the home only answers on the loopback address");
   }
-  const got = Buffer.from(req.headers.authorization ?? "");
-  if (got.length !== want.length || !timingSafeEqual(got, want)) throw new HttpError(401, "missing or wrong token (see home.json)");
-
   const url = new URL(req.url ?? "/", `http://127.0.0.1:${port}`);
   const parts = url.pathname.split("/").filter(Boolean);
   const method = req.method ?? "GET";
+
+  // the app's own files: nothing secret in them, so no pass is needed (the loopback check holds)
+  if (method === "GET" && door && (parts[0] === "app" || url.pathname === "/")) {
+    if (url.pathname === "/" || url.pathname === "/app" || url.pathname === "/app/") return redirect(res!, "/app/orbs.html");
+    return serveApp(res!, door.appDir, parts.slice(1));
+  }
+  // a pairing link's code, for a session
+  if (method === "POST" && url.pathname === "/session" && door) {
+    const id = door.sessions.redeem(text(await body(req), "code"));
+    if (!id) throw new HttpError(401, "that pairing link is used or lapsed: start the home again, or ask it for a new one");
+    res!.setHeader("set-cookie", `${SESSION_COOKIE}=${id}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${30 * 24 * 3600}`);
+    return { paired: true };
+  }
+
+  const got = Buffer.from(req.headers.authorization ?? "");
+  const byToken = got.length === want.length && timingSafeEqual(got, want);
+  const bySession = !byToken && Boolean(door?.sessions.valid(cookieOf(req.headers.cookie, SESSION_COOKIE)));
+  if (!byToken && !bySession) throw new HttpError(401, "missing or wrong token (see home.json), or no session (open the pairing link)");
+  // a change made with a session needs the app's own header: a page on another site cannot add it
+  if (bySession && method !== "GET" && req.headers["x-orbs"] !== "1") throw new HttpError(403, "a change through a session needs the x-orbs header");
 
   if (method === "GET" && url.pathname === "/stream") return stream(home, req, res!, Number(url.searchParams.get("since") ?? 0));
 
@@ -216,11 +248,60 @@ async function handle(
       return { brains: home.brains.status() };
     }
   }
+  if (method === "GET" && url.pathname === "/orbs") return { orbs: home.inbox.orbs({ all: url.searchParams.get("all") === "1" }) };
   if (method === "POST" && url.pathname === "/orbs") {
     const b = await body(req);
     const specialty = typeof b.specialty === "string" ? b.specialty : "general";
     if (!(specialty in SPECIALTY_FAMILIES)) throw new HttpError(400, `"${specialty}" is not a specialty`);
-    return { orb: home.inbox.addOrb(text(b, "id"), text(b, "name"), specialty as Specialty) };
+    const look = b.look && typeof b.look === "object" && !Array.isArray(b.look) ? (b.look as Record<string, unknown>) : {};
+    try {
+      return { orb: home.inbox.addOrb(text(b, "id"), text(b, "name"), specialty as Specialty, look) };
+    } catch (e) {
+      throw new HttpError(409, e instanceof Error ? e.message : String(e));
+    }
+  }
+  // letting an orb go: archived, his work kept (decision 12); rehiring brings him back
+  if (method === "DELETE" && parts[0] === "orbs" && parts.length === 2) return { orb: home.inbox.letGo(decodeURIComponent(parts[1]!)) };
+  if (method === "POST" && parts[0] === "orbs" && parts.length === 3 && parts[2] === "rehire") return { orb: home.inbox.rehire(decodeURIComponent(parts[1]!)) };
+  // sessions (PLAN 2.9): a Brainstorm and a Floor, and the orbs that work each
+  if (method === "GET" && url.pathname === "/sessions") return { sessions: home.team.list() };
+  if (parts[0] === "sessions") {
+    const asked = async (fn: () => unknown): Promise<unknown> => {
+      try {
+        return await fn();
+      } catch (e) {
+        throw new HttpError(400, e instanceof Error ? e.message : String(e));
+      }
+    };
+    if (method === "POST" && parts.length === 1) {
+      const b = await body(req);
+      const list = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : []);
+      return asked(() => ({ session: home.team.create(text(b, "title"), { brainstorm: list(b.brainstorm), floor: list(b.floor) }) }));
+    }
+    const id = Number(parts[1]);
+    if (method === "GET" && parts.length === 2) {
+      const s = home.team.get(id);
+      if (!s) throw new HttpError(404, `no session ${parts[1]}`);
+      return { session: s };
+    }
+    const tab = parts[2] as Tab;
+    if (method === "PUT" && parts.length === 3) {
+      const b = await body(req);
+      return asked(() => ({ session: home.team.setMembers(id, tab, Array.isArray(b.orbs) ? b.orbs.map(String) : []) }));
+    }
+    if (method === "POST" && parts.length === 4 && parts[3] === "messages") {
+      const b = await body(req);
+      return asked(() => home.team.say(id, tab, text(b, "text")));
+    }
+  }
+  // about you: what the office calls you
+  if (method === "GET" && url.pathname === "/me") return { me: home.about.get() };
+  if (method === "PUT" && url.pathname === "/me") {
+    try {
+      return { me: home.about.setName(text(await body(req), "name")) };
+    } catch (e) {
+      throw new HttpError(400, e instanceof Error ? e.message : String(e));
+    }
   }
   // Each orb's own constitution (PLAN 3.9): what he loads, to read; what he learned, which only
   // the person adds (here, through the door) and can take back.
@@ -312,4 +393,33 @@ function send(res: ServerResponse, status: number, body: unknown): void {
   const json = JSON.stringify(body);
   res.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
   res.end(json);
+}
+
+function redirect(res: ServerResponse, to: string): typeof STREAMING {
+  res.writeHead(302, { location: to });
+  res.end();
+  return STREAMING;
+}
+
+const APP_TYPES: Record<string, string> = {
+  ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".ttf": "font/ttf", ".woff2": "font/woff2",
+  ".svg": "image/svg+xml", ".png": "image/png", ".json": "application/json", ".webmanifest": "application/manifest+json", ".txt": "text/plain; charset=utf-8",
+};
+
+/** A file of the built app, never a path outside it; the page told what it may load (CSP). */
+function serveApp(res: ServerResponse, dir: string, parts: string[]): typeof STREAMING {
+  const rel = normalize(parts.map((p) => decodeURIComponent(p)).join("/"));
+  const file = join(dir, rel);
+  if (!file.startsWith(dir.endsWith(sep) ? dir : dir + sep) || rel.startsWith("..")) throw new HttpError(404, "not part of the app");
+  if (!existsSync(dir)) throw new HttpError(404, "the app is not built: pnpm -C packages/app build");
+  if (!existsSync(file) || !statSync(file).isFile()) throw new HttpError(404, `no ${rel} in the app`);
+  res.writeHead(200, {
+    "content-type": APP_TYPES[extname(file)] ?? "application/octet-stream",
+    "cache-control": extname(file) === ".html" ? "no-store" : "public, max-age=31536000, immutable",
+    "content-security-policy": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+    "x-content-type-options": "nosniff",
+    "referrer-policy": "no-referrer",
+  });
+  res.end(readFileSync(file));
+  return STREAMING;
 }

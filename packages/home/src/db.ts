@@ -190,6 +190,35 @@ const MIGRATIONS: string[] = [
   `
   ALTER TABLE orbs ADD COLUMN specialty TEXT NOT NULL DEFAULT 'general';
   `,
+  // v7 (PLAN 2.4): what each orb looks like (the app's character: shape, eyes, hat, colour...),
+  // when he was let go (archived, never deleted: decision 12), and what the orbs know about the
+  // person ("about you", shared by every orb)
+  `
+  ALTER TABLE orbs ADD COLUMN look TEXT NOT NULL DEFAULT '{}';
+  ALTER TABLE orbs ADD COLUMN let_go_at INTEGER;
+  CREATE TABLE about (
+    key        TEXT PRIMARY KEY,
+    value      TEXT    NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+  `,
+  // v8 (PLAN 2.9): sessions, a piece of work with a Brainstorm and a Floor, and which orbs work
+  // each, in the order they take their turns
+  `
+  CREATE TABLE work_sessions (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    title       TEXT    NOT NULL,
+    created_at  INTEGER NOT NULL,
+    archived_at INTEGER
+  );
+  CREATE TABLE work_members (
+    session INTEGER NOT NULL,
+    tab     TEXT    NOT NULL,
+    orb     TEXT    NOT NULL,
+    turn    INTEGER NOT NULL,
+    PRIMARY KEY (session, tab, orb)
+  );
+  `,
 ];
 
 /** The home's data is the person's: the folder is theirs alone (0700) and so is the database

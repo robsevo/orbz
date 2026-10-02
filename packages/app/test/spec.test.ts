@@ -3,10 +3,11 @@
 // the sheet stays in range, Ash's bean keeps his numbers, and there is no mouth anywhere.
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { HUES } from "../src/design/tokens.ts";
 import { ORB_FS } from "../src/orb/glsl.ts";
 import {
-  ASH, EYES, FAMILIES, FINISHES, GLASSES, HATS, isShades, lookOf, NOT_OURS, PEOPLE_NAMES, PERSONALITIES, SHAPES, sheetOf, SPECIALTIES, surprise, VOICES, wearing, withPersonality,
-  type Family, type GlassesName, type HatName, type PersonalityName, type SpecialtyName,
+  ASH, EYES, FAMILIES, FINISHES, GLASSES, hatFit, HATS, isShades, lookOf, NOT_OURS, outline, PEOPLE_NAMES, PERSONALITIES, sane, SHAPES, sheetOf, SPECIALTIES, surprise, VOICES, wearing, withPersonality,
+  type Family, type GlassesName, type HatName, type PersonalityName, type ShapeName, type SpecialtyName,
 } from "../src/orb/spec.ts";
 
 test("names: people's names from our list, never the Dots film's own or an assistant's", () => {
@@ -97,6 +98,43 @@ test("a hat and glasses are two choices: both can be worn at once, and each reac
   const rolled = Array.from({ length: 400 }, (_, i) => surprise(i * 31));
   assert.ok(rolled.some((c) => c.hat !== "none" && c.glasses !== "none"), "the dice put both on sometimes");
   assert.ok(rolled.some((c) => c.glasses === "none"), "and leave his eyes bare sometimes");
+});
+
+test("a hat's colour and the frames' colour, like his own: each paints its own part, and only that", () => {
+  const plain = lookOf({ ...ASH, hat: "top hat", glasses: "aviators" });
+  const coral = HUES.find((h) => h.name === "coral")!.dark.map((v) => v / 255);
+  const hat = lookOf({ ...ASH, hat: "top hat", glasses: "aviators", hatHue: "coral" });
+  assert.deepEqual(hat.accCol, coral, "the hat's main part is coral");
+  assert.deepEqual(hat.accCol2, plain.accCol2, "its trim keeps its colour");
+  assert.deepEqual([hat.specsCol, hat.specsCol2, hat.lensCol], [plain.specsCol, plain.specsCol2, plain.lensCol], "the glasses are not touched");
+  const frames = lookOf({ ...ASH, hat: "top hat", glasses: "aviators", glassesHue: "coral" });
+  assert.deepEqual([frames.specsCol, frames.specsCol2], [coral, coral], "the frames (and a strap) are coral");
+  assert.deepEqual(frames.lensCol, plain.lensCol, "the lenses keep their tint");
+  assert.deepEqual(frames.accCol, plain.accCol, "the hat is not touched");
+  assert.notDeepEqual(plain.accCol, coral, "control: a top hat is not coral on its own");
+  // kept and read back: a colour there is stays, one there is not falls back, none is none
+  assert.equal(sane({ ...ASH, hatHue: "coral" }, ASH).hatHue, "coral");
+  assert.equal(sane({ ...ASH, hatHue: "chartreuse-ish" as never }, ASH).hatHue, null);
+  assert.equal(sane({ ...ASH, glassesHue: null }, { ...ASH, glassesHue: "coral" }).glassesHue, null, "none, chosen, stays none");
+  assert.equal(sane({ name: "Old" }, ASH).hatHue, null, "an orb kept before colours had them: their own");
+});
+
+test("a hat fits each shape the way it fits the bean it was drawn on", () => {
+  const top = (n: ShapeName): number => outline(SHAPES[n], -Math.PI / 2);
+  const bean = hatFit("bean");
+  assert.ok(Math.abs(bean.seat - top("bean")) < 1e-9 && bean.size === 1, "control: on the bean every hat is where it was drawn");
+  for (const n of ["star", "trio", "drop", "chick"] as const) {
+    assert.ok(top(n) - hatFit(n).seat > 0.05, `${n}: the hat comes down over its point, not perched on the tip (${top(n).toFixed(3)} → ${hatFit(n).seat.toFixed(3)})`);
+  }
+  assert.ok(hatFit("heart").seat > top("heart") + 0.05, "a heart's hat sits on its lobes, not sunk in the notch");
+  // a bunny's ears stand far above his head: the hat sits on his head, between them, not on their tips
+  assert.ok(hatFit("bunny").seat < top("bunny") + 0.01 && hatFit("bunny").float > hatFit("bunny").seat + 0.2, "on his head between the ears; a halo over them");
+  for (const n of Object.keys(SHAPES) as ShapeName[]) {
+    const f = hatFit(n);
+    assert.ok(f.size >= 0.9 && f.size <= 1, `${n}: a hat stays a hat's size (${f.size})`);
+    assert.deepEqual(lookOf({ ...ASH, shape: n, hat: "beanie" }).accFit, [f.seat, f.size], `${n}: the fit reaches the shader`);
+    assert.deepEqual(lookOf({ ...ASH, shape: n, hat: "halo" }).accFit, [f.float, f.size], `${n}: and a halo's`);
+  }
 });
 
 test("the roster: five families, wide enough to staff an office, the real-life roles the owner named among them", () => {

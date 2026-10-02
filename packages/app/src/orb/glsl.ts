@@ -47,6 +47,7 @@ uniform vec4 uEyeB;     // sparkle (0..1), lids at rest (0 open .. 1 shut), happ
 uniform float uAcc;     // his hat (spec.ts HATS): 0 none
 uniform vec3 uAccCol, uAccCol2;   // its colour, and its second colour (a band, a pompom, a bead)
 uniform float uAccTilt; // worn at a slant, radians
+uniform vec2 uAccFit;   // how it fits his shape (spec.ts hatFit): the outline his head's top is taken at, and the hat's size
 uniform float uSpecs;   // his glasses (spec.ts GLASSES): 0 none
 uniform vec3 uSpecsCol, uSpecsCol2, uLensCol;   // the frame, a strap (goggles), the lens's tint
 uniform float uLensDark;                        // how much of his eyes the lens hides: 0 clear, ~0.9 sunglasses
@@ -236,11 +237,11 @@ vec2 accSDF(vec2 q){
     float h2 = sdTri(vec2(q.x - 0.26 - 0.20*q.y, q.y), vec2(-0.10, 0.06), vec2(0.10, 0.06), vec2(0.02, -0.30)) - 0.03;
     return vec2(min(h1, h2), 0.0);
   }
-  if (id == 14) {       // bunny ears on a band
-    float e1 = sdEll(rot(q - vec2(-0.20, -0.42), -0.20), vec2(0.11, 0.42));
-    float e2 = sdEll(rot(q - vec2(0.20, -0.42), 0.20), vec2(0.11, 0.42));
-    float i1 = sdEll(rot(q - vec2(-0.20, -0.40), -0.20), vec2(0.05, 0.30));
-    float i2 = sdEll(rot(q - vec2(0.20, -0.40), 0.20), vec2(0.05, 0.30));
+  if (id == 14) {       // bunny ears on a band: each ear's foot set into the band (their points only touched it, so they hovered)
+    float e1 = sdEll(rot(q - vec2(-0.20, -0.38), -0.20), vec2(0.11, 0.42));
+    float e2 = sdEll(rot(q - vec2(0.20, -0.38), 0.20), vec2(0.11, 0.42));
+    float i1 = sdEll(rot(q - vec2(-0.20, -0.36), -0.20), vec2(0.05, 0.30));
+    float i2 = sdEll(rot(q - vec2(0.20, -0.36), 0.20), vec2(0.05, 0.30));
     float band = max(abs(length(q - vec2(0.0, 0.70)) - 0.72) - 0.03, q.y - 0.05);
     vec2 h = pick(vec2(min(e1, e2), 0.0), vec2(band, 0.0));
     return min(i1, i2) < 0.0 ? vec2(min(i1, i2), 1.0) : h;
@@ -543,6 +544,13 @@ void main(){
   vec2  pb = p*(Rg/Rs);
   float db = length(pb);
   float nd = db/Rg;
+  // his ears, if they are narrow ones (a teddy's, a kitty's, a bunny's: spec.ts hatFit): a hat goes
+  // on his head between them, and they stay in front of it, as if through it. Where his outline
+  // would be without them, and how much of this pixel is ear.
+  float earT = uShapeD.x < 0.3 ? uShapeC.z*(exp(-pow((ang0 + 1.5707963 - uShapeC.w)/uShapeD.x, 2.0)) + exp(-pow((ang0 + 1.5707963 + uShapeC.w)/uShapeD.x, 2.0))) : 0.0;
+  float Rskull = Rs - uShapeD.y*Rg*earT*(1.0 + 0.5*uSquash*cos(2.0*ang0));
+  // (how much of him is there: his ear's soft edge lets the hat behind it show through)
+  float earFront = earT > 0.005 ? smoothstep(Rskull - 1.5, Rskull + 1.5, length(p))*smoothstep(1.0, 1.0 - 2.6/Rg, nd) : 0.0;
 
   if (nd < 1.04) {
     float z = sqrt(max(0.0, 1.0 - min(nd,1.0)*min(nd,1.0)));
@@ -895,10 +903,12 @@ void main(){
   // The same light as his glass: lit from up-left, a rim where it turns away, one hard highlight.
   if (uAcc > 0.5) {
     // the top of his head, as his outline has it now (his shape, his drift, a squash), the hat sunk onto it
-    float Rtop = uShapeD.y*Rg*(1.0 - 0.045*uMorph - 0.030*speak + shapeR(-1.5707963))*(1.0 - 0.5*uSquash) - 0.03*Rg;
-    vec2 q = rot((p - vec2(0.0, -Rtop))/(Rg*1.35), uAccTilt);   // hats sized to his head, not to his glow
+    // (where on his head it sits and how big it is are measured per shape: uAccFit)
+    float Rtop = uShapeD.y*Rg*(1.0 - 0.045*uMorph - 0.030*speak + uAccFit.x)*(1.0 - 0.5*uSquash) - 0.03*Rg;
+    float Rhat = Rg*1.35*uAccFit.y;
+    vec2 q = rot((p - vec2(0.0, -Rtop))/Rhat, uAccTilt);         // hats sized to his head, not to his glow
     vec2 h = accSDF(q);
-    float e = 1.4/(Rg*1.35);                                     // a pixel and a half, in the hat's units
+    float e = 1.4/Rhat;                                          // a pixel and a half, in the hat's units
     float aa = smoothstep(e, -e, h.x);
     if (aa > 0.001) {
       float bevel = 0.07;
@@ -912,8 +922,8 @@ void main(){
       c += PALE*pow(1.0 - N.z, 2.2)*0.35;                          // the rim
       c += vec3(1.0)*pow(max(0.0, dot(N, normalize(Ld + vec3(0.0, 0.0, 1.0)))), 60.0)*0.75;   // the highlight
       if (h.y > 1.5) c += uAccCol2*(0.55 + 0.25*sin(t*2.2));        // a light of his own: it glows, gently
-      col = mix(col, c, aa);
-      A = max(A, aa);
+      col = mix(col, c, aa*(1.0 - earFront));                       // his ears in front of it, the hat behind them
+      A = max(A, aa);                                               // (so where an ear is soft, the hat shows, never a hole)
     }
     if (h.y > 1.5) {                                               // and the bead's glow reaches past it
       float gl = exp(-max(0.0, h.x)/0.10)*0.55;

@@ -4,7 +4,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { build } from "vite";
-import { launch, measure, plainNewOrb, serveDir } from "../test/harness.ts";
+import { launch, measure, plainNewOrb, seedOffice, serveDir } from "../test/harness.ts";
 const APP = new URL("..", import.meta.url).pathname;
 const out = mkdtempSync(join(tmpdir(), "orbs-shoot-"));
 await build({ root: APP, logLevel: "silent", build: { outDir: out, emptyOutDir: true } });
@@ -13,6 +13,7 @@ const browser = await launch();
 const dir = process.argv[2]!;
 for (const [name, vp] of [["desk", { width: 1280, height: 1100 }], ["phone", { width: 390, height: 844 }]] as const) {
   const page = await browser.newPage({ viewport: vp, deviceScaleFactor: 2, colorScheme: "dark" });
+await seedOffice(page);
   const errs: string[] = [];
   page.on("console", (m) => { if (m.type() === "error") errs.push(m.text()); });
   page.on("pageerror", (e) => errs.push(String(e)));

@@ -12,6 +12,9 @@ export type Turn = {
   gapMs?: number;
   /** After the chunks, keep the stream open until the client goes away. */
   hang?: boolean;
+  /** After the chunks, finish only once this settles: a test sees the words while they stream,
+   * however slow the machine, instead of racing a window a few hundred milliseconds wide. */
+  hold?: Promise<unknown>;
   /** After the chunks, cut the connection. */
   drop?: boolean;
   status?: number;
@@ -71,6 +74,7 @@ export async function fakeModel(t: TestContext, script: Turn[] = []): Promise<Fa
         res.socket?.destroy();
         return;
       }
+      if (turn.hold) await turn.hold;
       if (turn.hang) {
         await new Promise((r) => req.socket.once("close", r));
         return;

@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 import { after, before, test } from "node:test";
 import { build } from "vite";
 import type { Browser, Page } from "playwright-core";
-import { findChrome, launch, measure, serveDir, SIZES } from "./harness.ts";
+import { findChrome, launch, measure, seedOffice, serveDir, SIZES } from "./harness.ts";
 
 const APP = fileURLToPath(new URL("..", import.meta.url));
 const skip = findChrome() ? false : "no Chromium on this machine";
@@ -36,6 +36,7 @@ after(async () => {
 
 async function open(size: keyof typeof SIZES = "desk", theme: "dark" | "light" = "dark"): Promise<Page> {
   const page = await browser.newPage({ viewport: SIZES[size], deviceScaleFactor: 1, colorScheme: theme });
+  await seedOffice(page); // a full office to look round (an office starts with one orb now)
   await page.addInitScript(() => {
     (globalThis as { __orbsTime?: number }).__orbsTime = 3.4;
   });

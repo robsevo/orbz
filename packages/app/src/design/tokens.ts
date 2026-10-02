@@ -245,6 +245,13 @@ export function stylesheet(fontUrl = "fonts/Nunito.ttf"): string {
     `@keyframes orbs-fact { from { opacity: 0; translate: 0 4px; } to { opacity: 1; translate: none; } }`,
     `@keyframes orbs-stamp { 0% { transform: scale(1.8) rotate(-8deg); opacity: 0; } 55% { transform: scale(.94) rotate(1deg); opacity: 1; } 100% { transform: none; } }`,
     `@keyframes orbs-nudge { 0%, 100% { translate: 0 0; } 50% { translate: 0 3px; } }`,
+    // a page of choices slides in from the side you went (ui/Paged.tsx)
+    `@keyframes orbs-page-on { from { translate: 28px 0; opacity: 0; } to { translate: none; opacity: 1; } }`,
+    `@keyframes orbs-page-back { from { translate: -28px 0; opacity: 0; } to { translate: none; opacity: 1; } }`,
+    // the CEO badge: a glint across its gold, and a slow sway on its ribbon (onboarding/Onboarding.tsx)
+    `@keyframes orbs-glint { 0%, 55% { background-position: 160% 0; } 85%, 100% { background-position: -60% 0; } }`,
+    `@keyframes orbs-sway { 0%, 100% { rotate: -2deg; } 50% { rotate: 2deg; } }`,
+    `@keyframes orbs-twinkle { 0%, 100% { scale: .4; opacity: .2; } 50% { scale: 1; opacity: 1; } }`,
     `@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }`,
   ].join("\n");
 }
