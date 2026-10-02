@@ -50,7 +50,11 @@ def check() -> subprocess.CompletedProcess[str]:
 
 
 def tail(r: subprocess.CompletedProcess[str], n: int = 25) -> str:
-    return "\n".join("    " + line for line in (r.stdout + r.stderr).strip().splitlines()[-n:])
+    # what failed first (a kit file's FAIL line, a node test's ✖), then the last lines: a tail
+    # alone hid which kit file went red once, under load
+    lines = (r.stdout + r.stderr).strip().splitlines()
+    failed = [line for line in lines if line.startswith("FAIL") or line.lstrip().startswith("✖")][:12]
+    return "\n".join("    " + line for line in [*failed, *(["    ..."] if failed else []), *lines[-n:]])
 
 
 def other_python() -> str | None:

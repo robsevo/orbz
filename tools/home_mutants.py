@@ -248,7 +248,7 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ("      if (r && r.until > now) continue;", "      if (r) continue;"),
     ], ["brains.test.ts", "chain.test.ts"]),
     ("a refused Gemini key is kept", "src/brain/brains.ts", [
-        ('    if (res.status === 400 || res.status === 401 || res.status === 403) throw new GeminiKeyError("Gemini refused that key.");\n', ""),
+        ('    if (res.status === 400 || res.status === 401 || res.status === 403) throw new KeyRefusedError("Gemini refused that key.");\n', ""),
     ], ["brains.test.ts"]),
     ("the Gemini key is written into brains.json", "src/brain/brains.ts", [
         ("    this.#saved = { ...this.#saved, gemini: { model } };", "    this.#saved = { ...this.#saved, gemini: { model, key: k } as { model: string } };"),
@@ -390,6 +390,49 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("two across, the odd one out is left alone", "src/ui/balance.ts", [
         ("  if (max === 2) return { cols: 2, spans: [...Array(n - 1).fill(1), 2] };", "  if (max === 2) return { cols: 2, spans: Array(n).fill(1) };"),
     ], ["feel.units.test.ts", "office.test.ts"]),
+    ("the splash flashes by without its waking", "src/ui/Splash.tsx", [
+        ("new Promise((r) => setTimeout(r, calm ? 300 : WAKE_MS))", "Promise.resolve()"),
+    ], ["splash.test.ts"]),
+    ("the splash does not wait for a slow home", "src/ui/Splash.tsx", [
+        ("const waited = Promise.all([ready(), ", "const waited = Promise.all([Promise.resolve(), "),
+    ], ["splash.test.ts"]),
+    ("a home that cannot be reached is not said", "src/ui/Splash.tsx", [
+        ("const waited = Promise.all([ready(), ", "const waited = Promise.all([ready().catch(() => undefined), "),
+    ], ["splash.test.ts"]),
+    ("?splash=0 is ignored", "src/ui/Splash.tsx", [
+        ('    return new URLSearchParams(location.search).get("splash") !== "0";', "    return true;"),
+    ], ["splash.test.ts"]),
+    # the first open (PLAN 2.5), the side menu, the eyes
+    ("the story goes on without a name", "src/onboarding/story.ts", [
+        ('  if (!name) return { ok: false, why: "Ash needs something to call you." };', "  if (false) return { ok: false, why: \"\" };"),
+    ], ["onboarding.test.ts"]),
+    ("the story forgets the name it was told", "src/onboarding/story.ts", [
+        ('export const line = (text: string, p: Pick<Person, "name"> | null): string => text.replaceAll("{name}", p?.name ?? "boss");', 'export const line = (text: string, p: Pick<Person, "name"> | null): string => text.replaceAll("{name}", "boss");'),
+    ], ["onboarding.test.ts"]),
+    ("the story plays again at every open", "src/onboarding/story.ts", [
+        ('    return v && typeof v.name === "string" && v.name ? v : null;', "    return v && false ? v : null;"),
+    ], ["onboarding.test.ts", "nav.test.ts"]),
+    ("skipping the story skips the name", "src/onboarding/story.ts", [
+        ('  return person ? STORY.findIndex((b) => b.kind === "hire") : STORY.findIndex((b) => b.kind === "ask-name");', '  return STORY.findIndex((b) => b.kind === "hire");'),
+    ], ["onboarding.test.ts"]),
+    ("a press does not finish the line", "src/onboarding/Onboarding.tsx", [
+        ("      if (typer.current) clearInterval(typer.current);\n", ""),
+    ], ["onboarding.test.ts"]),
+    ("the side menu's Back goes nowhere", "src/orbs.tsx", [
+        ('    <button onClick={() => history.back()} disabled={depth === 0} aria-label="Back"', '    <button onClick={() => undefined} disabled={depth === 0} aria-label="Back"'),
+    ], ["nav.test.ts"]),
+    ("going somewhere is not an address", "src/orbs.tsx", [
+        ('    history.pushState({ orbs: depth + 1 }, "", routeHash(r));\n', ""),
+    ], ["nav.test.ts"]),
+    ("the phone menu stays open after a choice", "src/orbs.tsx", [
+        ("  const go = (r: Route): void => {\n    setMenu(false);\n", "  const go = (r: Route): void => {\n"),
+    ], ["nav.test.ts"]),
+    ("a wink is an eye style again", "src/orb/spec.ts", [
+        ("  close: { a: [0.13, 1, 0.18, 0.08], b: [1, 0, 0, 0] },", "  close: { a: [0.13, 1, 0.18, 0.08], b: [1, 0, 0, 0] },\n  wink: { a: [0.138, 1, 0.26, 0.1], b: [1, 0, 0, 1] },"),
+    ], ["spec.test.ts"]),
+    ("the wink gesture shuts no eye", "src/orb/life.ts", [
+        ("      if (x > 0.12 && x < 0.72) f.wink = 1;\n", ""),
+    ], ["feel.units.test.ts"]),
     ("the specimen scrolls sideways on a phone", "src/specimen.tsx", [
         ('gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 420px), 1fr))"', 'gridTemplateColumns: "repeat(auto-fit, minmax(420px, 1fr))"'),
     ], ["render.test.ts"]),

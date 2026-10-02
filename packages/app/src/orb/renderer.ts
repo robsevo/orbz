@@ -33,6 +33,8 @@ export type OrbFrame = {
   /** How soft he is (0 glass .. 1 jelly), and a squash (+) or stretch (-) for hops and pokes. */
   goo: number;
   squash: number;
+  /** One eye shut (a wink, life.ts): 1 while it is. */
+  wink: number;
 };
 
 /** Who he is: the parts of a character the shader draws (spec.ts makes these from a spec). */
@@ -157,7 +159,8 @@ export class OrbRenderer {
     gl.uniform4f(u.uShapeE, ...look.shapeE);
     gl.uniform4f(u.uShapeF, ...look.shapeF);
     gl.uniform4f(u.uEyeA, ...look.eyeA);
-    gl.uniform4f(u.uEyeB, ...look.eyeB);
+    // a wink is something he does (a gesture), so the frame can shut one eye on any eyes
+    gl.uniform4f(u.uEyeB, look.eyeB[0], look.eyeB[1], look.eyeB[2], Math.max(look.eyeB[3], f.wink > 0.5 ? 1 : 0));
     gl.uniform1f(u.uAcc, look.acc);
     gl.uniform3f(u.uAccCol, ...look.accCol);
     gl.uniform3f(u.uAccCol2, ...look.accCol2);

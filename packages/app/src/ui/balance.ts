@@ -10,6 +10,9 @@ export type GridPlan = { cols: number; spans: number[] };
  * three and two; 24 in twelves, not sixteen and eight. */
 export function balanceColumns(n: number, max: number): number | null {
   if (n <= max) return Math.max(1, n);
+  // the fewest rows there can be, when they come out all the same length (ten in fives, not 8 + 2)
+  const fewest = Math.ceil(n / max);
+  if (n % fewest === 0) return n / fewest;
   // rows that are all the same length, when a few columns fewer gives them (24 in twelves, not 16 + 8)
   for (let c = max; c >= Math.max(2, Math.ceil(max * 0.7)); c--) if (n % c === 0) return c;
   if (max - 1 >= 2 && n % (max - 1) === 0) return max - 1;

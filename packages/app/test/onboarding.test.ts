@@ -1,0 +1,174 @@
+// PLAN 2.5_t, the first open, played in Chromium:
+//   - It shows on a first open only, after the splash.
+//   - Ash's words type out (with soft blips, when sounds are on) and a press finishes or moves on.
+//   - He will not go on without a name; the name is used from then on.
+//   - The CEO card carries it, the crew says hello, and the choice at the end leads to the
+//     creator or the office.
+//   - The sidebar calls you CEO; a reload does not play it again.
+//   - "Skip the story" still asks for the name. The layout rule holds on every beat.
+//   - `?intro=0` skips it (the control the other render checks rely on).
+import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { after, before, test } from "node:test";
+import { build } from "vite";
+import type { Browser, Page } from "playwright-core";
+import { findChrome, launch, measure, serveDir, SIZES } from "./harness.ts";
+import { checkName, line, STORY } from "../src/onboarding/story.ts";
+
+const APP = fileURLToPath(new URL("..", import.meta.url));
+const skip = findChrome() ? false : "no Chromium on this machine";
+let browser: Browser;
+let site: { url: string; close(): Promise<void> };
+let out: string;
+
+before(async () => {
+  if (skip) return;
+  out = mkdtempSync(join(tmpdir(), "orbs-intro-"));
+  await build({ root: APP, logLevel: "silent", build: { outDir: out, emptyOutDir: true } });
+  site = await serveDir(out);
+  browser = await launch();
+});
+after(async () => {
+  await browser?.close();
+  await site?.close();
+  if (out) rmSync(out, { recursive: true, force: true });
+});
+
+type Played = { sound: string };
+async function open(size: keyof typeof SIZES = "desk", query = "?splash=0"): Promise<Page> {
+  const ctx = await browser.newContext({ viewport: SIZES[size], colorScheme: "dark" });
+  const page = await ctx.newPage();
+  await page.addInitScript(() => ((globalThis as { __orbsSounds?: Played[] }).__orbsSounds = []));
+  await page.goto(`${site.url}/orbs.html${query}`);
+  return page;
+}
+const beat = (p: Page) => p.locator("[data-onboarding]").getAttribute("data-onboarding");
+/** Presses on until the story reaches a beat of this kind. */
+async function until(p: Page, kind: string, max = 40): Promise<void> {
+  for (let n = 0; n < max && (await beat(p)) !== kind; n++) {
+    await p.keyboard.press("Enter");
+    await p.waitForTimeout(60);
+  }
+  assert.equal(await beat(p), kind, `reached ${kind}`);
+}
+
+test("the story's lines: a name is needed, and the person's name is in what is said after", () => {
+  assert.equal(checkName("   ").ok, false);
+  assert.deepEqual(checkName("  Robin   Hood "), { ok: true, name: "Robin Hood" });
+  assert.equal(checkName("x".repeat(30)).ok, false, "a nameplate has room for 24");
+  const asked = STORY.findIndex((b) => b.kind === "ask-name");
+  assert.ok(asked > 0 && STORY.slice(asked).some((b) => b.kind === "say" && b.text.includes("{name}")), "said with the name, after asking it");
+  assert.ok(STORY.slice(0, asked).every((b) => b.kind !== "say" || !b.text.includes("{name}")), "never before it is known");
+  assert.ok(STORY.some((b) => b.kind === "say" && /CEO/.test(b.text)) && STORY.some((b) => b.kind === "ceo"), "you are made CEO");
+  assert.equal(line("So, {name}, ...", { name: "Robin" }), "So, Robin, ...");
+});
+
+test("a first open plays the story: Ash asks your name, makes you CEO, the crew says hello, and you choose where to start", { skip }, async () => {
+  const page = await open();
+  try {
+    await page.locator("[data-onboarding]").waitFor();
+    assert.equal(await beat(page), "say");
+    await page.waitForTimeout(600);
+    assert.ok((await page.evaluate(() => (globalThis as { __orbsSounds?: Played[] }).__orbsSounds!)).some((s) => s.sound === "blip"), "his words blip as they type");
+    await until(page, "ask-name");
+    // no name, no going on
+    await page.getByRole("button", { name: "That's me" }).click();
+    assert.equal(await page.getByText("Ash needs something to call you.").count(), 1);
+    assert.equal(await beat(page), "ask-name");
+    await page.getByRole("textbox", { name: "Your name" }).fill("Robin");
+    await page.getByRole("button", { name: "That's me" }).click();
+    await page.keyboard.press("Enter"); // finish typing the next line
+    await page.waitForTimeout(100);
+    assert.match(await page.locator("[data-onboarding]").innerText(), /Robin\. Nice\./);
+    await until(page, "ceo");
+    assert.match(await page.locator("[data-ceo]").innerText(), /CEO[\s\S]*Robin/);
+    await until(page, "crew");
+    assert.ok((await page.locator("[data-onboarding] canvas").count()) >= 6, "the crew pops in");
+    await until(page, "hire");
+    await page.getByRole("button", { name: "Hire my first orb" }).click();
+    await page.locator("[data-onboarding]").waitFor({ state: "detached" });
+    assert.equal(await page.getByRole("tablist").count(), 1, "straight into the creator, a new orb");
+    assert.equal(await page.getByText("CEO Robin").count(), 1, "and the office knows its CEO");
+    await page.reload();
+    await page.waitForSelector("canvas", { state: "attached" });
+    assert.equal(await page.locator("[data-onboarding]").count(), 0, "a second open does not play it again");
+    assert.equal(await page.getByText("CEO Robin").count(), 1, "and still knows you");
+  } finally {
+    await page.context().close();
+  }
+});
+
+test("'Skip the story' still asks what to call you, then lets you in", { skip }, async () => {
+  const page = await open();
+  try {
+    await page.getByRole("button", { name: "Skip the story" }).click();
+    assert.equal(await beat(page), "ask-name");
+    await page.getByRole("textbox", { name: "Your name" }).fill("Sam");
+    await page.keyboard.press("Enter");
+    await page.getByRole("button", { name: "Skip the story" }).click();
+    assert.equal(await beat(page), "hire");
+    await page.getByRole("button", { name: "Show me the office" }).click();
+    await page.locator("[data-onboarding]").waitFor({ state: "detached" });
+    assert.equal(await page.getByText("CEO Sam").count(), 1);
+    assert.equal(await page.getByRole("heading", { name: "Ash" }).count(), 1, "in the office");
+  } finally {
+    await page.context().close();
+  }
+});
+
+test("with sounds off, he types in silence", { skip }, async () => {
+  const ctx = await browser.newContext({ viewport: SIZES.desk, colorScheme: "dark" });
+  const page = await ctx.newPage();
+  try {
+    await page.addInitScript(() => {
+      localStorage.setItem("orbs.sounds", "off");
+      (globalThis as { __orbsSounds?: Played[] }).__orbsSounds = [];
+    });
+    await page.goto(`${site.url}/orbs.html?splash=0`);
+    await page.locator("[data-onboarding]").waitFor();
+    await page.waitForTimeout(700);
+    assert.deepEqual(await page.evaluate(() => (globalThis as { __orbsSounds?: Played[] }).__orbsSounds!), []);
+  } finally {
+    await ctx.close();
+  }
+});
+
+for (const size of ["phone", "desk"] as const) {
+  test(`the layout rule holds on every beat, at ${size} size`, { skip }, async () => {
+    const page = await open(size);
+    try {
+      await page.locator("[data-onboarding]").waitFor();
+      const seen = new Set<string>();
+      for (let n = 0; n < 40; n++) {
+        const b = (await beat(page))!;
+        if (!seen.has(b)) {
+          seen.add(b);
+          await page.waitForTimeout(800);
+          assert.deepEqual(await measure(page), [], `on a ${b} beat`);
+        }
+        if (b === "hire") break;
+        if (b === "ask-name") {
+          await page.getByRole("textbox", { name: "Your name" }).fill("Robin");
+          await page.keyboard.press("Enter");
+        } else await page.keyboard.press("Enter");
+        await page.waitForTimeout(40);
+      }
+      assert.deepEqual([...seen].sort(), ["ask-name", "ceo", "crew", "hire", "say"]);
+    } finally {
+      await page.context().close();
+    }
+  });
+}
+
+test("?intro=0 skips it", { skip }, async () => {
+  const page = await open("desk", "?splash=0&intro=0");
+  try {
+    await page.waitForSelector("canvas", { state: "attached" });
+    assert.equal(await page.locator("[data-onboarding]").count(), 0);
+  } finally {
+    await page.context().close();
+  }
+});

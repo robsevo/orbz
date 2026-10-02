@@ -17,7 +17,7 @@ for (const [name, vp] of [["desk", { width: 1280, height: 1100 }], ["phone", { w
   page.on("console", (m) => { if (m.type() === "error") errs.push(m.text()); });
   page.on("pageerror", (e) => errs.push(String(e)));
   await page.addInitScript(() => { (globalThis as { __orbsTime?: number }).__orbsTime = 3.4; });
-  await page.goto(`${site.url}/orbs.html`);
+  await page.goto(`${site.url}/orbs.html?splash=0&intro=0`);
   await page.waitForSelector("canvas", { state: "attached" });
   await page.evaluate(() => document.fonts.ready);
   await page.waitForTimeout(600);

@@ -177,7 +177,7 @@ export async function measure(page: Page): Promise<Finding[]> {
 }
 
 /** Starts a new orb on the app's page and dresses him plainly, the way the picker limits were
- * measured: Ash's bean, eyes and colour, glass, no hat, no glasses, Ash's goo. The rest (his name,
+ * measured: Ash's bean, his classic eyes and colour, glass, no hat, no glasses, Ash's goo. The rest (his name,
  * his personality) stays as the dice left it. */
 export async function plainNewOrb(page: Page): Promise<void> {
   await page.getByRole("button", { name: "New orb" }).first().click();
@@ -191,7 +191,7 @@ export async function plainNewOrb(page: Page): Promise<void> {
   await page.getByRole("tab", { name: "Glasses" }).click();
   await page.locator('button[data-pick="none"]').click();
   await page.getByRole("tab", { name: "Eyes" }).click();
-  await page.locator('button[data-pick="ash"]').click();
+  await page.locator('button[data-pick="classic"]').click();
   await page.getByRole("tab", { name: "Shape" }).click();
   await page.locator('button[data-pick="bean"]').click();
 }

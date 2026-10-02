@@ -57,7 +57,7 @@ async function open(): Promise<Page> {
     (globalThis as { __orbsTime?: number }).__orbsTime = 3.4;
     (globalThis as { __orbsSounds?: Played[] }).__orbsSounds = [];
   });
-  await page.goto(`${site.url}/orbs.html`);
+  await page.goto(`${site.url}/orbs.html?splash=0&intro=0`);
   await page.waitForSelector("canvas", { state: "attached" });
   return page;
 }
@@ -68,18 +68,35 @@ test("a press squishes the moment it goes down, sounds then, and springs back wh
   const page = await open();
   try {
     const chip = page.getByRole("button", { name: "Wiggle" });
-    const scale = (): Promise<string> => chip.evaluate((el) => getComputedStyle(el).scale);
+    const scale = (): Promise<number> => chip.evaluate((el) => {
+      const v = getComputedStyle(el).scale;
+      return v === "none" ? 1 : Number.parseFloat(v);
+    });
+    // waits until the press has settled where it should (a loaded machine runs the 70 ms squish late)
+    const settles = (want: (v: number) => boolean): Promise<unknown> => chip.evaluate((el, w) => new Promise<void>((ok, fail) => {
+      const t0 = performance.now();
+      const look = (): void => {
+        const v = getComputedStyle(el).scale;
+        const n = v === "none" ? 1 : Number.parseFloat(v);
+        if (w === "down" ? n <= 0.945 : n >= 0.999) ok();
+        else if (performance.now() - t0 > 3000) fail(new Error(`scale stayed ${v}`));
+        else requestAnimationFrame(look);
+      };
+      look();
+    }), want(0.9) ? "down" : "up");
     await chip.hover();
     await page.waitForTimeout(300);
-    assert.equal(await scale(), "none", "control: at rest it is its own size");
+    assert.equal(await scale(), 1, "control: at rest it is its own size");
     await clear(page);
     await page.mouse.down();
-    await page.waitForTimeout(150);
-    assert.equal(await scale(), "0.94", "down: squished");
+    await settles((v) => v < 1);
+    assert.ok((await scale()) <= 0.945, "down: squished");
     assert.deepEqual((await played(page)).map((p) => p.sound), ["tap"], "and it sounded already, before the release");
     await page.mouse.up();
-    await page.waitForTimeout(500);
-    assert.equal(await scale(), "none", "up: sprung back");
+    await settles((v) => v >= 1);
+    // it springs past its size and back (the spring's overshoot): wait for that to finish too
+    await chip.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
+    assert.equal(await scale(), 1, "up: sprung back");
   } finally {
     await page.close();
   }
@@ -206,7 +223,7 @@ test("every sound, rendered and measured: quiet, no pop at the start, over quick
         return { sound, peak, onset: onset / peak, tail: (last - start) / sr, centroid: num / den };
       };
       const out: Measured[] = [];
-      for (const s of ["tap", "tick", "pick", "roll", "create", "delete", "poke", "toggle"]) out.push(await measure(s, S.recipe(s)));
+      for (const s of ["tap", "tick", "pick", "roll", "create", "delete", "poke", "toggle", "blip"]) out.push(await measure(s, S.recipe(s)));
       // the control: a planted harsh click, square and loud and sudden and long
       out.push(await measure("harsh", [{ at: 0, wave: "square", f0: 3000, f1: 3000, dur: 0.3, gain: 0.9, attack: 0 }]));
       return out;
@@ -217,7 +234,7 @@ test("every sound, rendered and measured: quiet, no pop at the start, over quick
         m.onset > 0.3 ? `starts at ${(m.onset * 100).toFixed(0)}% of its peak in a quarter millisecond: it pops` : "",
         m.tail > longest ? `rings for ${m.tail.toFixed(3)} s, over ${longest}` : "",
       ].filter(Boolean);
-    const LONGEST: Record<string, number> = { tap: 0.09, tick: 0.05, pick: 0.15, roll: 0.4, create: 0.7, delete: 0.2, poke: 0.15, toggle: 0.12, harsh: 0.09 };
+    const LONGEST: Record<string, number> = { tap: 0.09, tick: 0.05, pick: 0.15, roll: 0.4, create: 0.7, delete: 0.2, poke: 0.15, toggle: 0.12, blip: 0.05, harsh: 0.09 };
     for (const m of rows.filter((r) => r.sound !== "harsh")) assert.deepEqual(soft(m, LONGEST[m.sound]!), [], m.sound);
     for (const s of ["tap", "pick", "poke", "delete"]) {
       const m = rows.find((r) => r.sound === s)!;

@@ -118,3 +118,13 @@ test("the roster: five families, wide enough to staff an office, the real-life r
   assert.equal((SPECIALTIES.frontend as { limits?: string }).limits, undefined, "control: a builder needs no such line");
   assert.ok(Object.keys(FINISHES).length >= 9 && Object.keys(HATS).length >= 30 && Object.keys(GLASSES).length >= 17, "more colours, hats and glasses to suit them");
 });
+
+test("eye styles are shapes, never expressions: a wink, a happy face and a doze are things an orb does", () => {
+  for (const [k, e] of Object.entries(EYES)) {
+    assert.equal(e.b[2], 0, `${k} is happy at rest: that is a hop's face, not a style`);
+    assert.equal(e.b[3], 0, `${k} winks at rest: a wink is a gesture`);
+  }
+  for (const gone of ["wink", "happy", "sleepy", "ash"]) assert.ok(!(gone in EYES), `"${gone}" is not a style (owner, 10-01: plain names, and he must look alive)`);
+  assert.ok("classic" in EYES, "Ash's own eyes, by a plain name");
+  assert.ok(Object.values(PERSONALITIES).some((p) => (p.fidgets as readonly string[]).includes("wink")), "and some orbs wink, now and then");
+});

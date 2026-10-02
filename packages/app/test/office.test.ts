@@ -39,7 +39,7 @@ async function open(size: keyof typeof SIZES = "desk", theme: "dark" | "light" =
   await page.addInitScript(() => {
     (globalThis as { __orbsTime?: number }).__orbsTime = 3.4;
   });
-  await page.goto(`${site.url}/orbs.html`);
+  await page.goto(`${site.url}/orbs.html?splash=0&intro=0`);
   await page.waitForSelector("canvas", { state: "attached" });
   await page.evaluate(() => document.fonts.ready);
   return page;

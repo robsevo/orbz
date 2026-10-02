@@ -35,7 +35,7 @@ before(async () => {
   await page.addInitScript(() => {
     (globalThis as { __orbsTime?: number }).__orbsTime = 3.4;
   });
-  await page.goto(`${site.url}/orbs.html`);
+  await page.goto(`${site.url}/orbs.html?splash=0&intro=0`);
   await page.waitForSelector("canvas", { state: "attached" });
   await plainNewOrb(page);
 });
@@ -110,7 +110,7 @@ for (const tab of ["Shape", "Eyes", "Hat", "Glasses"]) {
     await page.getByRole("tab", { name: tab }).click();
     await page.waitForTimeout(300);
     const probes = await probeThumbs(page);
-    assert.ok(probes.length >= 14, `control: the ${tab} tab shows its options (${probes.length})`);
+    assert.ok(probes.length >= 10, `control: the ${tab} tab shows its options (${probes.length})`);
     const L = LIMITS[tab]!;
     for (const p of probes) {
       assert.ok(p.body > p.w * p.h * 0.05, `${p.pick}: hardly drawn (${p.body} body pixels)`);
@@ -126,7 +126,7 @@ for (const tab of ["Shape", "Eyes", "Hat", "Glasses"]) {
 test("no mouth, by pixels: below his eyes nothing is as dark as an eye (and the eyes are)", { skip }, async () => {
   await page.getByRole("tab", { name: "Eyes" }).click();
   await page.waitForTimeout(300);
-  const picks = ["ash", "big", "dots", "ovals", "beans", "sleepy"] as const;
+  const picks = ["classic", "big", "dots", "ovals", "beans", "droopy"] as const;
   // where his face is, from his frame's own geometry and each eye style's numbers (spec.ts EYES)
   const geometry = { w: PORTRAIT.w, h: PORTRAIT.h, cy: PORTRAIT.cy, radius: PORTRAIT.radius, scale: lookOf(ASH).shapeD[1] };
   const eyes = Object.fromEntries(picks.map((k) => [k, EYES[k].a]));
@@ -169,7 +169,7 @@ test("no mouth, by pixels: below his eyes nothing is as dark as an eye (and the 
  * darker it is there. */
 function glassesOverEyes(p: Page, picks: string[]): Promise<{ pick: string; diff: number; darker: number }[]> {
   const geometry = { w: PORTRAIT.w, h: PORTRAIT.h, cy: PORTRAIT.cy, radius: PORTRAIT.radius, scale: lookOf(ASH).shapeD[1] };
-  const eye = EYES.ash.a; // the plain new orb has Ash's eyes
+  const eye = EYES.classic.a; // the plain new orb has Ash's classic eyes
   return p.evaluate(({ picks, geometry, eye }) => {
     const pixels = (pick: string): Uint8ClampedArray => {
       const c = document.querySelector<HTMLButtonElement>(`button[data-pick="${pick}"]`)!.querySelector("canvas")!;

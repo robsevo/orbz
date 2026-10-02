@@ -242,6 +242,9 @@ export function stylesheet(fontUrl = "fonts/Nunito.ttf"): string {
     `@keyframes orbs-roll { 0% { rotate: 0deg; scale: 1; } 45% { scale: 1.3; } 100% { rotate: 360deg; scale: 1; } }`,
     `@keyframes orbs-arrive { 0% { transform: scale(.6); opacity: 0; } 60% { transform: scale(1.06); opacity: 1; } 100% { transform: none; } }`,
     `@keyframes orbs-leave { to { transform: scale(.5); opacity: 0; } }`,
+    `@keyframes orbs-fact { from { opacity: 0; translate: 0 4px; } to { opacity: 1; translate: none; } }`,
+    `@keyframes orbs-stamp { 0% { transform: scale(1.8) rotate(-8deg); opacity: 0; } 55% { transform: scale(.94) rotate(1deg); opacity: 1; } 100% { transform: none; } }`,
+    `@keyframes orbs-nudge { 0%, 100% { translate: 0 0; } 50% { translate: 0 3px; } }`,
     `@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }`,
   ].join("\n");
 }

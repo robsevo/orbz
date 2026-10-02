@@ -16,6 +16,11 @@ import { Orb } from "./orb/Orb.tsx";
 import { Balanced, OneLine, useMore } from "./ui/Balanced.tsx";
 import { installFeel } from "./ui/feel.ts";
 import { setSounds, soundsOn } from "./ui/sound.ts";
+import { Splash, splashWanted } from "./ui/Splash.tsx";
+import { Onboarding } from "./onboarding/Onboarding.tsx";
+import { introWanted, loadPerson, savePerson, type Person } from "./onboarding/story.ts";
+import { parseRoute, routeHash, type Route } from "./ui/nav.ts";
+import { Settings } from "./rooms/Settings.tsx";
 import type { Gesture, OrbState } from "./orb/life.ts";
 import {
   ASH, EYES, FAMILIES, FINISHES, GLASSES, HATS, orbName, PERSONALITIES, REPLIES, SHAPES, sheetOf, speaks, SPECIALTIES, surprise, voice, VOICES, withPersonality,
@@ -26,12 +31,12 @@ const OFFICE: Character[] = [
   ASH,
   { name: "Oscar", personality: "dapper", specialty: "backend", seed: 11, hue: "iris", hue2: null, finish: "glass", shape: "pebble", eyes: "ovals", hat: "top hat", glasses: "monocle", voice: "bm_fable", goo: 0.3 },
   { name: "Luna", personality: "dreamy", specialty: "design", seed: 12, hue: "teal", hue2: "lavender", finish: "glass", shape: "ghost", eyes: "huge", hat: "antenna", glasses: "cat-eye", voice: "af_sky", goo: 0.9 },
-  { name: "Daisy", personality: "cheerful", specialty: "frontend", seed: 13, hue: "rose", hue2: null, finish: "pearl", shape: "teddy", eyes: "happy", hat: "bow", glasses: "hearts", voice: "af_bella", goo: 0.75 },
+  { name: "Daisy", personality: "cheerful", specialty: "frontend", seed: 13, hue: "rose", hue2: null, finish: "pearl", shape: "teddy", eyes: "big", hat: "bow", glasses: "hearts", voice: "af_bella", goo: 0.75 },
   { name: "Milo", personality: "curious", specialty: "research", seed: 14, hue: "lime", hue2: null, finish: "glass", shape: "drop", eyes: "big", hat: "sprout", glasses: "big round", voice: "am_puck", goo: 0.6 },
-  { name: "Theo", personality: "sleepy", specialty: "data", seed: 15, hue: "violet", hue2: null, finish: "smoke", shape: "kitty", eyes: "sleepy", hat: "headphones", glasses: "none", voice: "af_river", goo: 0.65 },
+  { name: "Theo", personality: "sleepy", specialty: "data", seed: 15, hue: "violet", hue2: null, finish: "smoke", shape: "kitty", eyes: "droopy", hat: "headphones", glasses: "none", voice: "af_river", goo: 0.65 },
   { name: "Hazel", personality: "wise", specialty: "planning", seed: 16, hue: "honey", hue2: null, finish: "glass", shape: "moon", eyes: "close", hat: "crown", glasses: "reading", voice: "bm_george", goo: 0.35 },
-  { name: "Rosie", personality: "cozy", specialty: "assistant", seed: 17, hue: "leaf", hue2: null, finish: "glass", shape: "cloud", eyes: "happy", hat: "beanie", glasses: "none", voice: "af_heart", goo: 0.8 },
-  { name: "Benny", personality: "silly", specialty: "fullstack", seed: 18, hue: "coral", hue2: "marigold", finish: "glass", shape: "bean", eyes: "wink", hat: "party hat", glasses: "stars", voice: "am_santa", goo: 0.85 },
+  { name: "Rosie", personality: "cozy", specialty: "assistant", seed: 17, hue: "leaf", hue2: null, finish: "glass", shape: "cloud", eyes: "classic", hat: "beanie", glasses: "none", voice: "af_heart", goo: 0.8 },
+  { name: "Benny", personality: "silly", specialty: "fullstack", seed: 18, hue: "coral", hue2: "marigold", finish: "glass", shape: "bean", eyes: "big", hat: "party hat", glasses: "stars", voice: "am_santa", goo: 0.85 },
   { name: "June", personality: "shy", specialty: "writing", seed: 19, hue: "orchid", hue2: null, finish: "pearl", shape: "drop", eyes: "droopy", hat: "flower", glasses: "round", voice: "af_nicole", goo: 0.6 },
   { name: "Nico", personality: "techy", specialty: "testing", seed: 20, hue: "amber", hue2: null, finish: "glass", shape: "squircle", eyes: "dots", hat: "none", glasses: "goggles", voice: "am_echo", goo: 0.45 },
   { name: "Ada", personality: "dapper", specialty: "accountant", seed: 22, hue: "jade", hue2: null, finish: "glass", shape: "egg", eyes: "beans", hat: "eyeshade", glasses: "half-rims", voice: "bf_emma", goo: 0.35 },
@@ -40,7 +45,7 @@ const OFFICE: Character[] = [
 ];
 
 const MOODS: [OrbState, string][] = [["idle", "Awake"], ["listening", "Listening"], ["thinking", "Thinking"], ["speaking", "Speaking"]];
-const GESTURES: [Gesture, string][] = [["hop", "Hop"], ["wiggle", "Wiggle"], ["squish", "Squish"], ["jelly", "Jelly"], ["look", "Look round"], ["pout", "Pout"], ["doze", "Doze"], ["nod", "Nod"]];
+const GESTURES: [Gesture, string][] = [["hop", "Hop"], ["wink", "Wink"], ["wiggle", "Wiggle"], ["squish", "Squish"], ["jelly", "Jelly"], ["look", "Look round"], ["pout", "Pout"], ["doze", "Doze"], ["nod", "Nod"]];
 const TABS = ["Personality", "Specialty", "Shape", "Eyes", "Hat", "Glasses", "Colour", "Voice"] as const;
 type Tab = (typeof TABS)[number];
 const cap = (s: string): string => s[0]!.toUpperCase() + s.slice(1);
@@ -308,7 +313,7 @@ function Creator({ me, edit, replies, setReplies }: { me: Character; edit: (p: P
     ["American", VOICES.filter((v) => v.accent.startsWith("American"))],
     ["British", VOICES.filter((v) => v.accent.startsWith("British"))],
     ["In their own language (English for these comes with the voice row)", VOICES.filter((v) => !v.english)],
-    ["Ash's own, or none", VOICES.filter((v) => v.id === "silent" || v.id === "ash")],
+    ["Classic, or none", VOICES.filter((v) => v.id === "silent" || v.id === "ash")],
   ];
   return (
     <div style={{ ...s.panel, display: "grid", gap: "var(--s4)", alignContent: "start" }}>
@@ -479,6 +484,14 @@ function App() {
   const [arrived, setArrived] = useState<string | null>(null);
   const [rolls, setRolls] = useState(0);
   const lastReact = useRef(0);
+  const [opening, setOpening] = useState(splashWanted);
+  const [drawn, setDrawn] = useState(!opening); // the office draws once the splash starts to leave
+  const [person, setPerson] = useState<Person | null>(loadPerson);
+  // the first open is a story (PLAN 2.5): until it is played, it is what the person sees
+  const [intro, setIntro] = useState(() => !loadPerson() && introWanted());
+  const [room, setRoom] = useState<"office" | "settings">(() => (parseRoute(location.hash).room === "settings" ? "settings" : "office"));
+  const [depth, setDepth] = useState(0); // how far in this visit has gone: Back is there when it is more than none
+  const [menu, setMenu] = useState(false); // the side menu, slid in on a phone
   useEffect(installFeel, []);
 
   const making = view.kind === "new";
@@ -530,25 +543,116 @@ function App() {
     setSoundsShown(!sounds);
   };
 
+  // where you are is an address (ui/nav.ts): going somewhere adds it to the history, so the side
+  // menu's Back and the browser's Back are the same Back
+  const routeOf = (): Route => (room === "settings" ? { room: "settings" } : view.kind === "new" ? { room: "new" } : { room: "office", orb: view.name });
+  const show = (r: Route): void => {
+    if (r.room === "settings") setRoom("settings");
+    else {
+      setRoom("office");
+      if (r.room === "new") setView((v) => (v.kind === "new" ? v : { kind: "new", draft: fresh() }));
+      else setView({ kind: "orb", name: r.orb && office.some((c) => c.name === r.orb) ? r.orb : office[0]?.name ?? ASH.name });
+    }
+  };
+  const go = (r: Route): void => {
+    setMenu(false);
+    if (routeHash(r) === routeHash(routeOf())) return show(r);
+    history.pushState({ orbs: depth + 1 }, "", routeHash(r));
+    setDepth((d) => d + 1);
+    show(r);
+  };
+  useEffect(() => {
+    const back = (e: PopStateEvent): void => {
+      setDepth(Number((e.state as { orbs?: number } | null)?.orbs ?? 0));
+      setMenu(false);
+      show(parseRoute(location.hash));
+    };
+    window.addEventListener("popstate", back);
+    return () => window.removeEventListener("popstate", back);
+  });
+  useEffect(() => {
+    const r = parseRoute(location.hash);
+    if (r.room !== "settings") show(r); // a link straight to an orb, or to a new one
+    history.replaceState({ orbs: 0 }, "", location.hash || routeHash(routeOf()));
+  }, []);
+  useEffect(() => {
+    if (!menu) return;
+    const esc = (e: KeyboardEvent): void => {
+      if (e.key === "Escape") setMenu(false);
+    };
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [menu]);
+  const backButton = (style: CSSProperties = {}): ReactNode => (
+    <button onClick={() => history.back()} disabled={depth === 0} aria-label="Back" style={{ ...s.btn, display: "inline-flex", alignItems: "center", gap: 6, opacity: depth === 0 ? 0.45 : 1, cursor: depth === 0 ? "default" : "pointer", ...style }}>
+      <span aria-hidden style={{ font: "800 16px/16px var(--font)" }}>‹</span> Back
+    </button>
+  );
+  const navItem = (label: string, on: boolean, to: Route, mark: ReactNode): ReactNode => (
+    <button key={label} aria-current={on ? "page" : undefined} onClick={() => go(to)} style={{ ...s.btn, display: "flex", alignItems: "center", gap: 10, textAlign: "left", background: on ? "var(--accent-wash)" : "transparent", boxShadow: on ? "inset 0 0 0 1px var(--accent)" : "none" }} data-orb={me.hue}>
+      <span aria-hidden style={{ width: 18, display: "grid", placeItems: "center", color: "var(--accent)", font: "800 15px/16px var(--font)" }}>{mark}</span>
+      {label}
+    </button>
+  );
+
   return (
     <main style={{ padding: "var(--s5) var(--margin)" }}>
+      {opening && (
+        <Splash
+          office={office}
+          facts={[`${office.length} orbs in the office`, sounds ? "Sounds on" : "Sounds off"]}
+          ready={() => globalThis.__orbsReady ?? document.fonts.ready}
+          onLeaving={() => setDrawn(true)}
+          onDone={() => setOpening(false)}
+        />
+      )}
+      {!opening && intro && (
+        <Onboarding
+          office={office}
+          person={person}
+          onDone={(p, then) => {
+            savePerson(p);
+            setPerson(p);
+            setIntro(false);
+            if (then === "hire") go({ room: "new" });
+          }}
+        />
+      )}
+      {drawn && !intro && (
       <div className="orbs-window" style={s.window}>
-        <aside className="orbs-side" style={s.side}>
+        {/* on a phone: Back, the name, and the menu, which slides in */}
+        <div className="orbs-topbar" style={{ display: "none", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "var(--s3) var(--s4) 0" }}>
+          {backButton({ padding: "6px 12px" })}
+          <span style={{ font: "700 12px/20px var(--font)", letterSpacing: ".12em", color: "var(--text-3)" }}>ORBS</span>
+          <button aria-label="Menu" aria-expanded={menu} onClick={() => setMenu(true)} style={{ ...s.btn, padding: "6px 12px", font: "800 16px/20px var(--font)" }}>
+            ☰
+          </button>
+        </div>
+        {menu && <div className="orbs-scrim" aria-hidden onClick={() => setMenu(false)} />}
+        <aside className="orbs-side" data-open={menu} style={s.side}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 var(--s2)", font: "700 12px/20px var(--font)", letterSpacing: ".12em", color: "var(--text-3)" }}>
             <i aria-hidden data-orb={me.hue} style={{ width: 9, height: 9, borderRadius: "50%", background: "radial-gradient(circle at 35% 30%, var(--text-1) 0%, var(--accent) 60%)", boxShadow: "0 0 8px var(--accent-glow)" }} />
             ORBS
           </div>
-          <button aria-pressed={making} onClick={() => setView({ kind: "new", draft: fresh() })} style={{ ...s.btn, ...(making ? chosen(true) : {}), textAlign: "left", marginTop: "var(--s2)" }}>
-            <b data-orb={me.hue} style={{ color: "var(--accent)", marginRight: 8 }}>+</b>New orb
-          </button>
+          {person && (
+            <div style={{ padding: "0 var(--s2)", font: "600 13px/18px var(--font)", color: "var(--text-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              CEO {person.name}
+            </div>
+          )}
+          <nav aria-label="Rooms" style={{ display: "grid", gap: 4, marginTop: "var(--s2)" }}>
+            {backButton({ justifySelf: "start", marginBottom: "var(--s1)" })}
+            {navItem("The office", room === "office" && !making, { room: "office", orb: making ? null : me.name }, "◉")}
+            {navItem("New orb", room === "office" && making, { room: "new" }, "+")}
+            {navItem("Settings", room === "settings", { room: "settings" }, "⚙")}
+          </nav>
           <div style={{ ...s.head, margin: "var(--s3) var(--s2) var(--s1)" }}>The office</div>
           <div style={{ display: "grid", gap: 2, overflowY: "auto", minHeight: 0 }}>
             {office.map((c) => (
               <button
                 key={c.name}
                 data-orb={c.hue}
-                onClick={() => setView({ kind: "orb", name: c.name })}
-                style={{ display: "flex", alignItems: "center", gap: 10, padding: "4px 8px", border: 0, borderRadius: 10, cursor: "pointer", textAlign: "left", background: !making && c.name === me.name ? "var(--accent-wash)" : "transparent", color: "var(--text-2)", font: "600 14px/20px var(--font)", minWidth: 0 }}
+                onClick={() => go({ room: "office", orb: c.name })}
+                style={{ display: "flex", alignItems: "center", gap: 10, padding: "4px 8px", border: 0, borderRadius: 10, cursor: "pointer", textAlign: "left", background: room === "office" && !making && c.name === me.name ? "var(--accent-wash)" : "transparent", color: "var(--text-2)", font: "600 14px/20px var(--font)", minWidth: 0 }}
               >
                 <Orb character={c} size={30} poke={false} every={3} fidget={false} />
                 <span style={{ display: "grid", minWidth: 0 }}>
@@ -560,6 +664,22 @@ function App() {
           </div>
         </aside>
 
+        {room === "settings" ? (
+          <Settings
+            person={person}
+            rename={(p) => {
+              savePerson(p);
+              setPerson(p);
+            }}
+            sounds={sounds}
+            setSounds={(on) => {
+              if (on !== sounds) flipSounds();
+            }}
+            replies={replies}
+            setReplies={setReplies}
+            replayIntro={() => setIntro(true)}
+          />
+        ) : (
         <section style={{ minWidth: 0, display: "grid", alignContent: "start", gap: "var(--s5)", padding: "0 0 var(--s6)" }}>
           <div data-orb={me.hue} data-cradle data-gesture={gesture?.name} style={{ position: "relative", display: "grid", justifyItems: "center", gap: "var(--s2)", padding: "var(--s5) var(--s4) 0", background: "radial-gradient(50% 80% at 50% 30%, var(--accent-wash), transparent 70%)" }}>
             <button aria-label={sounds ? "Sounds on" : "Sounds off"} aria-pressed={sounds} title={sounds ? "Sounds on" : "Sounds off"} data-sound="none" onClick={flipSounds} style={{ ...s.chip, position: "absolute", top: "var(--s4)", right: "var(--s4)", padding: 8, display: "grid", placeItems: "center", color: sounds ? "var(--text-1)" : "var(--text-3)" }}>
@@ -618,7 +738,7 @@ function App() {
               lead={
                 <button
                   aria-pressed={making}
-                  onClick={() => setView({ kind: "new", draft: fresh() })}
+                  onClick={() => go({ room: "new" })}
                   style={{ display: "grid", placeItems: "center", alignContent: "center", gap: 4, minHeight: 72, padding: "var(--s3) var(--s2)", border: 0, cursor: "pointer", borderRadius: 18, background: making ? "var(--accent-wash)" : "transparent", boxShadow: "inset 0 0 0 1.5px var(--fill-2)", color: "var(--text-2)", font: "700 15px/20px var(--font)", minWidth: 0 }}
                 >
                   <b aria-hidden style={{ font: "800 30px/30px var(--font)", color: "var(--text-3)" }}>+</b>
@@ -630,7 +750,7 @@ function App() {
                 <button
                   key={c.name}
                   data-orb={c.hue}
-                  onClick={() => setView({ kind: "orb", name: c.name })}
+                  onClick={() => go({ room: "office", orb: c.name })}
                   style={{
                     display: "grid", justifyItems: "center", alignContent: "start", gap: 2, padding: "var(--s3) var(--s2)", border: 0, cursor: "pointer", borderRadius: 18, background: !making && c.name === me.name ? "var(--accent-wash)" : "var(--fill)", boxShadow: "inset 0 0 0 .5px var(--hairline)", minWidth: 0,
                     animation: leaving === c.name ? "orbs-leave 260ms var(--m-physical) forwards" : arrived === c.name ? "orbs-arrive 520ms var(--m-spring)" : undefined,
@@ -648,14 +768,24 @@ function App() {
             </Balanced>
           </div>
         </section>
+        )}
       </div>
+      )}
     </main>
   );
 }
 
 const style = document.createElement("style");
 style.textContent = `${stylesheet(`${import.meta.env.BASE_URL}fonts/Nunito.ttf`)}
-@media (max-width: 760px) { .orbs-window { grid-template-columns: minmax(0, 1fr) !important; } .orbs-side { display: none !important; } }
+/* a phone: the side menu slides in from the left, over a scrim, and a top bar holds Back and the menu */
+@media (max-width: 760px) {
+  .orbs-window { grid-template-columns: minmax(0, 1fr) !important; overflow: visible !important; }
+  .orbs-topbar { display: flex !important; }
+  /* closed, it is hidden once it has slid away (out of Tab's reach and a screen reader's), and shown as it slides in */
+  .orbs-side { position: fixed; inset: 0 auto 0 0; z-index: 30; width: min(300px, 86vw); overflow-y: auto; translate: -105% 0; visibility: hidden; transition: translate var(--m-slow) var(--m-spring), visibility 0s linear var(--m-slow); box-shadow: 4px 0 24px var(--shadow) !important; }
+  .orbs-side[data-open="true"] { translate: 0 0; visibility: visible; transition: translate var(--m-slow) var(--m-spring), visibility 0s; }
+  .orbs-scrim { position: fixed; inset: 0; z-index: 29; background: var(--ground); opacity: .72; }
+}
 @media (min-width: 1100px) { .orbs-pair { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) !important; } }`;
 document.head.append(style);
 createRoot(document.getElementById("root")!).render(

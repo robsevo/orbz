@@ -11,7 +11,7 @@ const site = await serveDir(out);
 const browser = await launch();
 const page = await browser.newPage({ viewport: { width: 1280, height: 1100 }, deviceScaleFactor: 2, colorScheme: "dark" });
 await page.addInitScript(() => { (globalThis as { __orbsTime?: number }).__orbsTime = 3.4; });
-await page.goto(`${site.url}/orbs.html`);
+await page.goto(`${site.url}/orbs.html?splash=0&intro=0`);
 await page.waitForSelector("canvas", { state: "attached" });
 await plainNewOrb(page);
 for (const tab of ["Shape", "Eyes", "Hat", "Glasses"]) {

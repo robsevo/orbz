@@ -53,19 +53,21 @@ export const SHAPES = {
 export type ShapeName = keyof typeof SHAPES;
 
 // ── eyes ───────────────────────────────────────────────────────────────────────────────────────
+// Shapes of eyes, never expressions (owner, 2026-10-01: "the orbs have to look alive and
+// animate, so i dont know why wink is a set of eyes"): a wink, a happy ^ ^ and a doze are things
+// an orb DOES (life.ts gestures: wink, hop, doze), so they were taken out of the styles. And the
+// styles have plain names (owner: "instead of ash for eye colors and stuff, just put the normal
+// names"): Ash's own are "classic".
 /** [radius, aspect, gap, height], [sparkle, lids at rest, happy at rest, wink]. */
 export const EYES = {
-  ash: { a: [0.138, 1, 0.26, 0.1], b: [1, 0, 0, 0] }, // his own
+  classic: { a: [0.138, 1, 0.26, 0.1], b: [1, 0, 0, 0] }, // Ash's own
   big: { a: [0.172, 1.06, 0.28, 0.12], b: [1, 0, 0, 0] },
   huge: { a: [0.205, 1.1, 0.3, 0.12], b: [1, 0, 0, 0] },
   ovals: { a: [0.112, 1.55, 0.23, 0.06], b: [1, 0, 0, 0] },
   beans: { a: [0.15, 0.72, 0.27, 0.12], b: [1, 0, 0, 0] },
   dots: { a: [0.072, 1, 0.24, 0.1], b: [0, 0, 0, 0] },
   tiny: { a: [0.05, 1, 0.2, 0.1], b: [0, 0, 0, 0] },
-  sleepy: { a: [0.14, 1, 0.26, 0.12], b: [0.8, 0.55, 0, 0] },
   droopy: { a: [0.12, 1.4, 0.24, 0.1], b: [0.8, 0.35, 0, 0] },
-  happy: { a: [0.138, 1, 0.26, 0.1], b: [1, 0, 1, 0] },
-  wink: { a: [0.138, 1, 0.26, 0.1], b: [1, 0, 0, 1] },
   wide: { a: [0.13, 1, 0.34, 0.12], b: [1, 0, 0, 0] },
   close: { a: [0.13, 1, 0.18, 0.08], b: [1, 0, 0, 0] },
   low: { a: [0.14, 1, 0.26, 0.22], b: [1, 0, 0, 0] },
@@ -218,7 +220,7 @@ const OUR_NAMES: Record<string, string> = {
 
 export type Voice = { id: string; label: string; accent: string; english: boolean; kokoro: string | null; nth?: number };
 export const VOICES: Voice[] = [
-  { id: "ash", label: "Ash's own", accent: "his blend", english: true, kokoro: "ash" },
+  { id: "ash", label: "Classic", accent: "a warm blend (Ash's)", english: true, kokoro: "ash" },
   ...KOKORO.map((k, i) => {
     const lang = LANG[k[0]!]!;
     const sex = k[1] === "f" ? "female" : "male";
@@ -257,19 +259,19 @@ export type Personality = {
 };
 
 export const PERSONALITIES = {
-  steady: { label: "Steady", blurb: "Calm and capable; does the job, says what he did", tone: "calm, plain, kind; short sentences", voices: ["ash", "bm_george", "am_michael"], speed: 1, fidgets: ["look", "nod", "jelly"], every: [7, 12], breath: 1, sway: 1, goo: 0.55, eyes: "ash" },
-  cheerful: { label: "Cheerful", blurb: "Bubbly, quick to cheer you on", tone: "bright and warm, a little exclamation now and then", voices: ["af_bella", "af_nova", "af_jessica", "am_puck"], speed: 1.06, fidgets: ["hop", "wiggle", "jelly", "hop"], every: [3, 6], breath: 1.2, sway: 1.5, goo: 0.75, eyes: "happy" },
-  sleepy: { label: "Sleepy", blurb: "Slow, soft, always half a nap away", tone: "slow, soft, gentle; never in a hurry", voices: ["af_sky", "af_river", "bm_lewis"], speed: 0.9, fidgets: ["doze", "nod", "doze"], every: [6, 10], breath: 0.7, sway: 0.7, goo: 0.65, eyes: "sleepy" },
+  steady: { label: "Steady", blurb: "Calm and capable; does the job, says what he did", tone: "calm, plain, kind; short sentences", voices: ["ash", "bm_george", "am_michael"], speed: 1, fidgets: ["look", "nod", "jelly"], every: [7, 12], breath: 1, sway: 1, goo: 0.55, eyes: "classic" },
+  cheerful: { label: "Cheerful", blurb: "Bubbly, quick to cheer you on", tone: "bright and warm, a little exclamation now and then", voices: ["af_bella", "af_nova", "af_jessica", "am_puck"], speed: 1.06, fidgets: ["hop", "wiggle", "jelly", "hop", "wink"], every: [3, 6], breath: 1.2, sway: 1.5, goo: 0.75, eyes: "big" },
+  sleepy: { label: "Sleepy", blurb: "Slow, soft, always half a nap away", tone: "slow, soft, gentle; never in a hurry", voices: ["af_sky", "af_river", "bm_lewis"], speed: 0.9, fidgets: ["doze", "nod", "doze"], every: [6, 10], breath: 0.7, sway: 0.7, goo: 0.65, eyes: "droopy" },
   curious: { label: "Curious", blurb: "Notices everything, asks good questions", tone: "eager and inquisitive; asks one good question", voices: ["am_puck", "af_kore", "bf_lily"], speed: 1.04, fidgets: ["look", "look", "hop", "nod"], every: [3, 6], breath: 1.1, sway: 1.2, goo: 0.6, eyes: "big" },
   shy: { label: "Shy", blurb: "Quiet, careful, gets there", tone: "quiet and careful; gentle, never pushy", voices: ["af_nicole", "bf_alice", "af_aoede"], speed: 0.95, fidgets: ["look", "squish"], every: [6, 10], breath: 0.9, sway: 0.6, goo: 0.6, eyes: "droopy" },
   grumpy: { label: "Grumpy", blurb: "Grumbles, then does it perfectly", tone: "dry, a little grumbly, secretly fond of you", voices: ["am_onyx", "bm_daniel", "am_fenrir"], speed: 0.97, fidgets: ["pout", "look", "nod"], every: [8, 12], breath: 0.9, sway: 0.8, goo: 0.4, eyes: "beans" },
   dapper: { label: "Dapper", blurb: "Proper, polished, a touch formal", tone: "polished and courteous; a touch formal", voices: ["bm_fable", "bm_george", "bf_emma"], speed: 0.98, fidgets: ["nod", "look"], every: [8, 12], breath: 0.9, sway: 0.7, goo: 0.3, eyes: "ovals" },
   dreamy: { label: "Dreamy", blurb: "Floaty and imaginative", tone: "airy and imaginative; paints a picture", voices: ["af_sky", "af_aoede", "bf_isabella"], speed: 0.95, fidgets: ["jelly", "look", "doze"], every: [6, 10], breath: 0.85, sway: 1.1, goo: 0.9, eyes: "huge" },
   brave: { label: "Brave", blurb: "Up for anything, first to try", tone: "confident and direct; up for it", voices: ["am_adam", "am_fenrir", "af_kore"], speed: 1.02, fidgets: ["hop", "nod"], every: [5, 8], breath: 1.05, sway: 1.1, goo: 0.45, eyes: "wide" },
-  silly: { label: "Silly", blurb: "Goofy, playful, gets a laugh", tone: "playful and goofy; a joke when it helps", voices: ["am_puck", "af_jessica", "am_santa"], speed: 1.08, fidgets: ["wiggle", "hop", "squish", "jelly"], every: [2.5, 5], breath: 1.25, sway: 1.7, goo: 0.85, eyes: "wink" },
+  silly: { label: "Silly", blurb: "Goofy, playful, gets a laugh", tone: "playful and goofy; a joke when it helps", voices: ["am_puck", "af_jessica", "am_santa"], speed: 1.08, fidgets: ["wiggle", "hop", "squish", "jelly", "wink"], every: [2.5, 5], breath: 1.25, sway: 1.7, goo: 0.85, eyes: "big" },
   wise: { label: "Wise", blurb: "Unhurried, thoughtful, a good explainer", tone: "thoughtful and unhurried; explains well", voices: ["bm_george", "am_michael", "bf_emma"], speed: 0.92, fidgets: ["nod", "look"], every: [9, 14], breath: 0.8, sway: 0.6, goo: 0.35, eyes: "close" },
-  sassy: { label: "Sassy", blurb: "Quick wit, big opinions", tone: "witty and frank; a bit of sass", voices: ["af_nova", "bf_lily", "af_alloy"], speed: 1.05, fidgets: ["wiggle", "look", "pout"], every: [4, 7], breath: 1.1, sway: 1.4, goo: 0.6, eyes: "wink" },
-  cozy: { label: "Cozy", blurb: "Warm as a blanket", tone: "warm and homely; reassuring", voices: ["af_heart", "af_river", "am_liam"], speed: 0.96, fidgets: ["jelly", "doze", "nod"], every: [6, 10], breath: 0.85, sway: 0.9, goo: 0.8, eyes: "happy" },
+  sassy: { label: "Sassy", blurb: "Quick wit, big opinions", tone: "witty and frank; a bit of sass", voices: ["af_nova", "bf_lily", "af_alloy"], speed: 1.05, fidgets: ["wiggle", "look", "pout", "wink"], every: [4, 7], breath: 1.1, sway: 1.4, goo: 0.6, eyes: "ovals" },
+  cozy: { label: "Cozy", blurb: "Warm as a blanket", tone: "warm and homely; reassuring", voices: ["af_heart", "af_river", "am_liam"], speed: 0.96, fidgets: ["jelly", "doze", "nod"], every: [6, 10], breath: 0.85, sway: 0.9, goo: 0.8, eyes: "classic" },
   techy: { label: "Techy", blurb: "Precise, nerdy, loves a good detail", tone: "precise and nerdy; gets the details right", voices: ["am_echo", "af_alloy", "am_eric"], speed: 1.03, fidgets: ["look", "nod", "wiggle"], every: [5, 9], breath: 1, sway: 0.9, goo: 0.45, eyes: "dots" },
   quiet: { label: "Quiet", blurb: "Says it in writing; never speaks aloud", tone: "brief and calm", voices: ["silent"], speed: 1, fidgets: ["look"], every: [10, 15], breath: 0.85, sway: 0.6, goo: 0.5, eyes: "tiny" },
 } satisfies Record<string, Personality>;
@@ -414,7 +416,7 @@ export type Character = {
   goo: number;
 };
 
-export const ASH: Character = { name: "Ash", personality: "steady", specialty: "general", seed: 1, hue: "azure", hue2: null, finish: "glass", shape: "bean", eyes: "ash", hat: "none", glasses: "none", voice: "ash", goo: 0.55 };
+export const ASH: Character = { name: "Ash", personality: "steady", specialty: "general", seed: 1, hue: "azure", hue2: null, finish: "glass", shape: "bean", eyes: "classic", hat: "none", glasses: "none", voice: "ash", goo: 0.55 };
 
 /** " in a beret and round glasses", " with aviators": what he has on, as words. */
 export function wearing(c: Pick<Character, "hat" | "glasses">, word: "in" | "with"): string {

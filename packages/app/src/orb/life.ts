@@ -2,17 +2,18 @@
 // breathes unevenly, blinks now and then, his shape drifts toward and away from a clean sphere,
 // his eyes wander, and every few seconds he fidgets: looks round, wiggles, does a little hop. On
 // top of that, gestures can be played: a hop (stretch to take off, squash to land, happy eyes), a
-// wiggle, a squish when he is pressed, a jelly wobble, a pop when he appears, a doze, a pout, a nod.
+// wiggle, a squish when he is pressed, a jelly wobble, a pop when he appears, a doze, a pout, a nod,
+// a wink.
 // Ash's page gets the like from orblife.js and his voice; here each orb has a seed, so a page of
 // them never moves in step. Pure: the same seed, gestures and time give the same frame.
 import type { OrbFrame } from "./renderer.ts";
 
 export type OrbState = "idle" | "listening" | "thinking" | "speaking";
-export type Gesture = "hop" | "wiggle" | "squish" | "jelly" | "look" | "pop" | "doze" | "pout" | "nod";
+export type Gesture = "hop" | "wiggle" | "squish" | "jelly" | "look" | "pop" | "doze" | "pout" | "nod" | "wink";
 export type Play = { gesture: Gesture; at: number };
 
 const STATE: Record<OrbState, number> = { idle: 0, listening: 1, thinking: 2, speaking: 3 };
-export const LENGTH: Record<Gesture, number> = { hop: 0.95, wiggle: 1.1, squish: 0.8, jelly: 1.7, look: 2.6, pop: 0.9, doze: 4.5, pout: 1.6, nod: 0.7 };
+export const LENGTH: Record<Gesture, number> = { hop: 0.95, wiggle: 1.1, squish: 0.8, jelly: 1.7, look: 2.6, pop: 0.9, doze: 4.5, pout: 1.6, nod: 0.7, wink: 0.75 };
 
 const hash = (n: number): number => {
   const s = Math.sin(n * 127.1 + 311.7) * 43758.5453;
@@ -108,6 +109,12 @@ function apply(f: OrbFrame, g: Gesture, d: number): void {
       f.mad = Math.max(f.mad, bump(x));
       f.sway[0] += 2.5 * Math.sin(d * 30) * bump(x);
       break;
+    case "wink":
+      // one eye shut for a moment, his head tipped toward it, a little squash of glee
+      if (x > 0.12 && x < 0.72) f.wink = 1;
+      f.tilt += 0.09 * bump(x);
+      f.squash += 0.06 * bump(x);
+      break;
     case "nod":
       f.sway[1] += 5 * Math.sin(x * 2 * Math.PI) * (1 - x);
       f.squash += 0.08 * Math.sin(x * 2 * Math.PI);
@@ -151,7 +158,7 @@ export function lifeFrame(o: LifeInput, t: number): OrbFrame {
     gaze: [0.35 * (noise(t * 0.11, s + 5) - 0.5), 0.25 * (noise(t * 0.09, s + 9) - 0.5)],
     sway: [1.2 * m.sway * (noise(t * 0.13, s + 11) - 0.5), 0.8 * m.sway * (noise(t * 0.17, s + 17) - 0.5)],
     happy: 0, sleepy: 0, yawn: 0, surprise: 0, tilt: 0.06 * (noise(t * 0.05, s + 23) - 0.5), mad: 0, jiggle: 0,
-    sat: o.sat ?? 1, val: o.val ?? 1, hue2: o.turn2 ?? o.turn, grad: o.grad ?? 0, goo: o.goo, squash: 0,
+    sat: o.sat ?? 1, val: o.val ?? 1, hue2: o.turn2 ?? o.turn, grad: o.grad ?? 0, goo: o.goo, squash: 0, wink: 0,
   };
   if (o.pointer) {
     // he looks at you, and leans a little toward you

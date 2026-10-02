@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { layoutOf, planGrid, rowsOf } from "../src/ui/balance.ts";
 import { lengthOf, recipe, type Note, type Sound } from "../src/ui/sound.ts";
+import { lifeFrame } from "../src/orb/life.ts";
 
 test("a grid never leaves one item alone on its last row, at any count and any width", () => {
   for (let n = 1; n <= 60; n++) {
@@ -25,6 +26,7 @@ test("a grid never leaves one item alone on its last row, at any count and any w
   assert.deepEqual(rowsOf(planGrid(13, 4)), [4, 3, 3, 3], "thirteen at four across: even rows, not one column");
   assert.deepEqual(rowsOf(planGrid(13, 5)), [5, 5, 3]);
   assert.deepEqual(rowsOf(planGrid(24, 16)), [12, 12], "24 in twelves, not 16 + 8");
+  assert.deepEqual(rowsOf(planGrid(10, 8)), [5, 5], "the crew of ten in fives, not 8 + 2");
   // control: the check above does see a lone item when there is one
   assert.deepEqual(rowsOf({ cols: 2, spans: [1, 1, 1] }), [2, 1]);
   assert.deepEqual(planGrid(7, 2), { cols: 2, spans: [1, 1, 1, 1, 1, 1, 2] }, "seven, two across: three pairs and a full row");
@@ -52,7 +54,7 @@ function harsh(notes: Note[], longest: number): string[] {
   return out;
 }
 
-const LONGEST: Record<Sound, number> = { tap: 0.08, tick: 0.04, pick: 0.13, roll: 0.37, create: 0.66, delete: 0.18, poke: 0.13, toggle: 0.11 };
+const LONGEST: Record<Sound, number> = { tap: 0.08, tick: 0.04, pick: 0.13, roll: 0.37, create: 0.66, delete: 0.18, poke: 0.13, toggle: 0.11, blip: 0.04 };
 
 test("every sound is soft: it ramps in, it is quiet, it is round, and it is over quickly", () => {
   for (const s of Object.keys(LONGEST) as Sound[]) assert.deepEqual(harsh(recipe(s), LONGEST[s]), [], s);
@@ -67,4 +69,12 @@ test("no two presses alike, and quick presses climb", () => {
   assert.ok(Math.abs(f(0, 1) / f(0, -1) - 1) < 0.07, "but only a little different");
   assert.ok(f(2.1, 0) > f(1.4, 0) && f(1.4, 0) > f(0.7, 0) && f(0.7, 0) > f(0, 0), "a combo climbs");
   assert.ok(Math.abs(f(12, 0) / f(0, 0) - 2) < 1e-9, "a lift is in semitones");
+});
+
+test("a wink shuts one eye for a moment, then opens it", () => {
+  const at = (t: number) => lifeFrame({ seed: 3, turn: 0, tint: 0.8, goo: 0.5, state: "idle", plays: [{ gesture: "wink", at: 0 }] }, t).wink;
+  assert.equal(at(0.02), 0, "not yet");
+  assert.equal(at(0.35), 1, "shut");
+  assert.equal(at(0.7), 0, "open again");
+  assert.equal(lifeFrame({ seed: 3, turn: 0, tint: 0.8, goo: 0.5, state: "idle" }, 0.35).wink, 0, "control: no wink, no shut eye");
 });

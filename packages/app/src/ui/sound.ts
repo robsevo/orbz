@@ -12,7 +12,7 @@
 // The recipes are plain data and a pure function, so a test can render them offline and measure
 // them (test/feel.test.ts).
 
-export type Sound = "tap" | "tick" | "pick" | "roll" | "create" | "delete" | "poke" | "toggle";
+export type Sound = "tap" | "tick" | "pick" | "roll" | "create" | "delete" | "poke" | "toggle" | "blip";
 
 /** One voice of a sound. `at` and `dur` are in seconds; the pitch glides from f0 to f1. */
 export type Note = { at: number; wave: OscillatorType | "noise"; f0: number; f1: number; dur: number; gain: number; attack: number };
@@ -53,6 +53,8 @@ export function recipe(sound: Sound, lift = 0, vary = 0): Note[] {
         { at: 0, wave: "sine", f0: 240 * k, f1: 470 * k, dur: 0.12, gain: 0.18, attack: 0.002 },
         { at: 0.035, wave: "sine", f0: 480 * k, f1: 720 * k, dur: 0.08, gain: 0.06, attack: 0.002 },
       ];
+    case "blip": // a letter as an orb talks: tiny and soft, in his own pitch (the lift), never twice the same
+      return [{ at: 0, wave: "sine", f0: 680 * k, f1: 600 * k, dur: 0.03, gain: 0.05, attack: 0.002 }];
     case "toggle": // sounds on: two ticks rising
       return [
         { at: 0, wave: "sine", f0: 900, f1: 860, dur: 0.035, gain: 0.08, attack: 0.0012 },
@@ -139,15 +141,16 @@ export function setSounds(next: boolean): void {
   if (next) play("toggle");
 }
 
-/** Plays a sound now, if sounds are on. Taps and picks in quick succession climb (the combo). */
-export function play(sound: Sound): void {
+/** Plays a sound now, if sounds are on. Taps and picks in quick succession climb (the combo); a
+ * blip is pitched by `voice` (semitones: each orb talks in his own register). */
+export function play(sound: Sound, voice = 0): void {
   if (!on) return;
   const t = performance.now();
   if (sound === "tap" || sound === "pick") {
     streak = t - last < 650 ? Math.min(streak + 1, 6) : 0;
     last = t;
   }
-  const lift = sound === "tap" || sound === "pick" ? streak * 0.7 : 0;
+  const lift = sound === "tap" || sound === "pick" ? streak * 0.7 : sound === "blip" ? voice : 0;
   globalThis.__orbsSounds?.push({ sound, lift });
   try {
     ctx ??= new AudioContext({ latencyHint: "interactive" });
