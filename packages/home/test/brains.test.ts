@@ -15,7 +15,7 @@ import { browse, fakeChatGPT } from "./fakes/chatgpt.ts";
 import { fakeModel, type Turn } from "./fakes/model.ts";
 import { agentHome } from "./helpers.ts";
 
-const KEY = "AIzaSyFAKE-test-key-0123456789abcdef";
+const KEY = "test-gemini-key-not-real-0123456789"; // not shaped like a Google key: the secret scan (kit S.4) would rightly flag one
 
 /** A home with no preset key: the order is ChatGPT, Gemini, the local coder. */
 async function home(t: TestContext, o: { gemini?: Turn[]; local?: Turn[] | "down"; chatgpt?: boolean } = {}) {
@@ -116,7 +116,7 @@ test("the Gemini key: refused keys are never kept; a kept one is in the keychain
     fetch(`http://127.0.0.1:${door.port}${path}`, { method, headers: { authorization: `Bearer ${door.token}`, "content-type": "application/json" }, ...(body !== undefined && { body: JSON.stringify(body) }) });
   // a refused key: 400 with the reason, and the kept key stays the kept key
   h.gemini.modelsStatus = 400;
-  const refused = await call("POST", "/brains/gemini", { key: "AIzaSyREFUSED-0000000000000000000" });
+  const refused = await call("POST", "/brains/gemini", { key: "test-gemini-key-refused-000000000" });
   assert.equal(refused.status, 400);
   assert.match(((await refused.json()) as { error: string }).error, /refused that key/);
   assert.equal(await h.store.get("orbs.gemini"), KEY, "a refused key replaced nothing");
