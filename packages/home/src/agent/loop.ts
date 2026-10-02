@@ -33,6 +33,9 @@ import { standingContext } from "./standing.ts";
 import { streamChat } from "./stream.ts";
 import { type Background, runTool, type ToolContext, type ToolDef, type ToolResult, TOOLS, toolSpecs } from "./tools.ts";
 import type { CallSite, Guard } from "../rules/guard.ts";
+import type { Case, CaseStep, StepFn } from "../gym/cases.ts";
+import { taskOf } from "../gym/finder.ts";
+import type { Earned, Promoted } from "../gym/steps.ts";
 
 export type AgentOptions = {
   conversations: Conversations;
@@ -65,6 +68,18 @@ export type AgentOptions = {
   /** The bills and reminders kept, and moving one (the calendar, PLAN 2.12). */
   reminders?: ToolContext["reminders"];
   moveReminder?: ToolContext["moveReminder"];
+  /** Lessons (PLAN 3.5): the gate, and keeping one for the orb (only once approved). */
+  lessonGate?: ToolContext["lessonGate"];
+  learn?: (orb: string, line: string) => string[];
+  /** His habits (PLAN 3.2): the one the gym promoted for a schedule's or a trigger's task, and its next step. */
+  habits?: {
+    find: (orb: string, task: string) => Promoted | null;
+    step: (h: Promoted, input: Case["input"], done: CaseStep[]) => ReturnType<StepFn>;
+  };
+  /** His plan templates (PLAN 3.2). */
+  templates?: (orb: string) => { title: string; body: string }[];
+  /** His own brain (PLAN 3.4): the playbook it earned for a schedule's or a trigger's task, and the brain. */
+  own?: { find: (orb: string, task: string) => (Earned & { ep: Endpoint }) | null };
   tools?: ToolDef[];
   /** What decides each call (PLAN 1.6): the floor, the person's rules, the one-way switch, away. */
   guard: Guard;
@@ -94,7 +109,7 @@ export const PLAN_ANSWERS = {
 const est = (text: string): number => Math.ceil(text.length / 4) + 4;
 
 export class AgentRunner implements Runner {
-  readonly #o: Required<Omit<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned" | "searchKey" | "remind" | "reminders" | "moveReminder">> & Pick<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned" | "searchKey" | "remind" | "reminders" | "moveReminder">;
+  readonly #o: Required<Omit<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned" | "searchKey" | "remind" | "reminders" | "moveReminder" | "lessonGate" | "learn" | "habits" | "own" | "templates">> & Pick<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned" | "searchKey" | "remind" | "reminders" | "moveReminder" | "lessonGate" | "learn" | "habits" | "own" | "templates">;
   readonly #tools: Map<string, ToolDef>;
 
   constructor(opts: AgentOptions) {
@@ -118,11 +133,15 @@ export class AgentRunner implements Runner {
       ...(this.#o.remind && { remind: (r) => this.#o.remind!(ctx.orb, ctx.conversation, r) }),
       ...(this.#o.reminders && { reminders: this.#o.reminders }),
       ...(this.#o.moveReminder && { moveReminder: this.#o.moveReminder }),
+      ...(this.#o.lessonGate && { lessonGate: this.#o.lessonGate }),
+      ...(this.#o.learn && { learn: (line: string) => this.#o.learn!(ctx.orb, line) }),
+      ...(this.#o.templates && { templates: () => this.#o.templates!(ctx.orb) }),
       note: (text, meta) => conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "notice", run: ctx.run, content: text, meta }),
     };
     mkdirSync(tctx.workspace, { recursive: true });
     const step = this.#stepper(ctx);
-    step("input", { items: await Promise.all(ctx.items.map(async (i) => ({ id: i.id, source: i.source, text: await this.#safe(i.text), data: i.data }))) });
+    const seen = await Promise.all(ctx.items.map(async (i) => ({ id: i.id, source: i.source, text: await this.#safe(i.text), data: i.data })));
+    step("input", { items: seen });
 
     let freshened = false;
     for (const item of ctx.items) {
@@ -163,11 +182,14 @@ export class AgentRunner implements Runner {
 
     // The turn is the person's request this run works on; attended unless only a schedule or trigger woke it.
     const at = this.#site(ctx);
+    const byHabit = await this.#habit(ctx, tctx, step, at, seen);
+    if (byHabit) return byHabit;
+    let own = this.#ownFor(ctx, seen); // a task its own brain earned: the own brain, with its playbook
     await this.#o.ready?.();
     let passes = 0;
     for (let n = 0; n < this.#o.maxSteps; n++) {
       if (ctx.signal.aborted) return this.#ended("stopped", ctx);
-      let ep = this.#o.endpoint(); // every step: a plan at its limit since the last one has stepped aside
+      let ep = own?.ep ?? this.#o.endpoint(); // every step: a plan at its limit since the last one has stepped aside
       if (!ep) {
         const chain = this.#o.chain;
         const states = chain?.states() ?? [];
@@ -193,9 +215,9 @@ export class AgentRunner implements Runner {
         specialty: this.#o.orbSpecialty?.(ctx.orb), learned: this.#o.learned?.(ctx.orb), ...(team && { team }),
       });
       await this.#compact(ctx, ep, est(standing));
-      ep = this.#o.endpoint() ?? ep; // compaction may have met the plan's limit and moved on
+      if (!own) ep = this.#o.endpoint() ?? ep; // compaction may have met the plan's limit and moved on
       this.#o.spend.check(); // SpendCapError: the inbox stops the run cleanly ("capped")
-      const messages = [{ role: "system" as const, content: standing }, ...conv.toModel(conv.history(ctx.conversation), { me: ctx.orb, nameOf: this.#o.orbName })];
+      const messages = [{ role: "system" as const, content: own ? `${standing}\n\n${own.system}` : standing }, ...conv.toModel(conv.history(ctx.conversation), { me: ctx.orb, nameOf: this.#o.orbName })];
       ctx.activity("Thinking");
       const r = await streamChat(
         ep,
@@ -204,7 +226,7 @@ export class AgentRunner implements Runner {
       );
       if (r.promptTokens || r.completionTokens || r.costUsd) {
         this.#o.spend.record({
-          tier: "big", model: ep.model, costUsd: r.costUsd, costSource: r.costSource,
+          tier: own ? "own" : "big", model: ep.model, costUsd: r.costUsd, costSource: r.costSource,
           promptTokens: r.promptTokens, completionTokens: r.completionTokens, orb: ctx.orb, conversation: ctx.conversation,
         });
       }
@@ -234,15 +256,24 @@ export class AgentRunner implements Runner {
         n--;
         continue;
       }
+      if (r.error && own && !r.text && !r.toolCalls.length) {
+        // his own brain could not answer: the big brain takes the run on from here, saying so
+        this.#ownFell(ctx, own, r.error, step);
+        own = null;
+        n--;
+        continue;
+      }
       if (r.error) {
         if (r.text) conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "assistant", run: ctx.run, content: r.text, meta: { error: r.error } });
         conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "notice", run: ctx.run, content: `I couldn't finish: ${r.error}`, meta: { error: true } });
         throw new Error(r.error);
       }
       // `plan` marks a reply the ChatGPT plan served to completion: the only replies that carry its badge
-      const msg = conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "assistant", run: ctx.run, content: r.text, toolCalls: r.toolCalls, ...(ep.plan && { meta: { plan: ep.plan } }) });
+      const meta = { ...(ep.plan && { plan: ep.plan }), ...(own && { own: own.kind, ownTask: own.task }) };
+      const msg = conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "assistant", run: ctx.run, content: r.text, toolCalls: r.toolCalls, ...(Object.keys(meta).length && { meta }) });
       if (!r.toolCalls.length) {
         step("output", { text: r.text });
+        if (own) this.#o.events.append("ladder.answered", { kind: own.kind, tier: "own", run: ctx.run }, { orb: ctx.orb, conversation: ctx.conversation });
         return { outcome: "ok", summary: r.text.slice(0, 200) };
       }
       const calls = await this.#calls(msg, 0, ctx, tctx, step, at);
@@ -250,6 +281,112 @@ export class AgentRunner implements Runner {
     }
     conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "notice", run: ctx.run, content: `I stopped after ${this.#o.maxSteps} steps. Say "go on" and I'll continue.` });
     return { outcome: "ok", summary: "step limit" };
+  }
+
+  /** A promoted habit answers its task in the brain's place (PLAN 3.2): one step at a time, each
+   * call through the guard and the floor as the brain's are, a card waiting for the person just the
+   * same. When it refuses (its guard, an input it was never proved on, an error), or a call comes
+   * back off the path it learned (an error, a no), the brain takes the run on from where it is, and
+   * the refusal is kept for tonight's recompile (3.3). Null: the brain's turn. */
+  async #habit(ctx: RunContext, tctx: ToolContext, step: Stepper, at: CallSite, seen: { source: string; text: string; data: Record<string, unknown> }[]): Promise<RunResult | null> {
+    const habits = this.#o.habits;
+    if (!habits) return null;
+    const conv = this.#o.conversations;
+    for (let n = 0; n < this.#o.maxSteps; n++) {
+      if (ctx.signal.aborted) return this.#ended("stopped", ctx);
+      const s = this.#habitState(ctx, seen);
+      if (!s) return null;
+      if ("fell" in s) return this.#fell(ctx, s.h, s.fell, step);
+      ctx.activity("From habit");
+      const next = await habits.step(s.h, s.input, s.done);
+      if ("refused" in next) return this.#fell(ctx, s.h, next.refused, step);
+      const meta = { habit: { key: s.h.key, task: s.h.task, version: s.h.version, dir: s.h.dir, input: s.input } };
+      if ("output" in next) {
+        conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "assistant", run: ctx.run, content: next.output, meta });
+        step("model", { text: await this.#safe(next.output), tool_calls: [], habit: s.h.key });
+        step("output", { text: next.output, habit: s.h.key });
+        this.#o.events.append("ladder.answered", { kind: s.h.key, tier: "habit", run: ctx.run }, { orb: ctx.orb, conversation: ctx.conversation });
+        return { outcome: "ok", summary: next.output.slice(0, 200) };
+      }
+      const call: ToolCall = { id: `habit-${ctx.run}-${s.done.length}`, name: next.call.name, arguments: JSON.stringify(next.call.args) };
+      step("model", { text: "", tool_calls: [{ ...call, arguments: await this.#safe(call.arguments) }], habit: s.h.key });
+      const msg = conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "assistant", run: ctx.run, content: "", toolCalls: [call], meta });
+      const r = await this.#calls(msg, 0, ctx, tctx, step, at);
+      if (r !== "done") return this.#ended(r, ctx);
+    }
+    return null;
+  }
+
+  /** Where a habit is in this turn, read from the conversation (so a card's answer, or a restart,
+   * goes on where it was): its calls so far with their results, or why it hands the run on. */
+  #habitState(ctx: RunContext, seen: { source: string; text: string; data: Record<string, unknown> }[]): { h: Promoted; input: Case["input"]; done: CaseStep[] } | { h: Promoted; fell: string } | null {
+    const history = this.#o.conversations.history(ctx.conversation);
+    const asked = history.findLastIndex((m) => m.role === "user");
+    if (asked < 0) return null;
+    const turn = history.slice(asked + 1);
+    if (turn.some((m) => m.role === "notice" && m.meta.habitFell)) return null;
+    const said = turn.filter((m) => m.role === "assistant");
+    if (!said.length) {
+      if (!ctx.fresh) return null; // only what a schedule or a trigger asked: a chat is the brain's
+      const asks = seen.filter((i) => i.source !== "system");
+      if (asks.length !== 1) return null;
+      const h = this.#o.habits!.find(ctx.orb, taskOf(ctx.orb, asks).task);
+      return h && { h, input: { text: asks[0]!.text, data: asks[0]!.data ?? {} }, done: [] };
+    }
+    // a turn it began goes on, unless the brain has taken it over
+    if (!said.every((m) => m.orb === ctx.orb && m.meta.habit)) return null;
+    const { input, ...h } = said[0]!.meta.habit as Promoted & { input: Case["input"] };
+    const results = new Map(turn.filter((m) => m.role === "tool" && m.toolCallId).map((m) => [m.toolCallId!, m]));
+    const done: CaseStep[] = [];
+    for (const m of said) {
+      for (const c of m.toolCalls ?? []) {
+        const r = results.get(c.id);
+        if (!r) return null;
+        if (r.meta.error || r.meta.stopped || r.content === DENIED || r.content === EXPIRED) return { h, fell: `${c.name} came back otherwise than on the path it learned` };
+        done.push({ call: { name: c.name, args: parseArgs(c) ?? {} }, result: r.content ?? "", isError: false });
+      }
+    }
+    return { h, input, done };
+  }
+
+  /** His own brain for this turn (PLAN 3.4): a turn it began goes on with it, unless the big brain
+   * has taken over; a new one is its own only if a schedule or a trigger asked a task it earned. */
+  #ownFor(ctx: RunContext, seen: { source: string; text: string; data: Record<string, unknown> }[]): (Earned & { ep: Endpoint }) | null {
+    const own = this.#o.own;
+    if (!own) return null;
+    const history = this.#o.conversations.history(ctx.conversation);
+    const asked = history.findLastIndex((m) => m.role === "user");
+    if (asked < 0) return null;
+    const turn = history.slice(asked + 1);
+    if (turn.some((m) => m.role === "notice" && m.meta.ownFell)) return null;
+    const said = turn.filter((m) => m.role === "assistant" && !m.meta.habit);
+    if (said.length) {
+      const task = said[0]!.meta.ownTask;
+      if (typeof task !== "string" || !said.every((m) => m.orb === ctx.orb && m.meta.ownTask === task)) return null;
+      return own.find(ctx.orb, task);
+    }
+    if (!ctx.fresh) return null;
+    const asks = seen.filter((i) => i.source !== "system");
+    return asks.length === 1 ? own.find(ctx.orb, taskOf(ctx.orb, asks).task) : null;
+  }
+
+  #ownFell(ctx: RunContext, own: Earned, why: string, step: Stepper): void {
+    step("fallback", { from: "own", why });
+    this.#o.events.append("own.fell", { kind: own.kind, version: own.version, run: ctx.run, why }, { orb: ctx.orb, conversation: ctx.conversation });
+    this.#o.conversations.add({
+      conversation: ctx.conversation, orb: ctx.orb, role: "notice", run: ctx.run,
+      content: `My own brain couldn't answer this one (${why}), so the big brain is taking it.`, meta: { ownFell: own.kind },
+    });
+  }
+
+  #fell(ctx: RunContext, h: Promoted, why: string, step: Stepper): null {
+    step("habit", { habit: h.key, version: h.version, fell: why });
+    this.#o.events.append("habit.fell", { kind: h.key, task: h.task, version: h.version, run: ctx.run, why }, { orb: ctx.orb, conversation: ctx.conversation });
+    this.#o.conversations.add({
+      conversation: ctx.conversation, orb: ctx.orb, role: "notice", run: ctx.run,
+      content: `My habit for this passed it on (${why}), so I'm thinking it through.`, meta: { habitFell: h.key },
+    });
+    return null;
   }
 
   /** Runs an assistant message's tool calls from `from` on. A call that needs the person opens a card. */
@@ -270,6 +407,7 @@ export class AgentRunner implements Runner {
         if (refused) result = { content: `Refused: ${refused}`, isError: true };
         else if (g && "sendBack" in g) result = { content: g.sendBack, isError: true }; // checked before anyone sees it
         else if (v!.decision === "never") {
+          this.#o.events.append("tool.never", { run: ctx.run, tool: call.name }, { orb: ctx.orb, conversation: ctx.conversation }); // the XP ledger hears it (PLAN 3.6)
           result = { content: `Not allowed: ${v!.described}${v!.why.length ? ` (${v!.why.join("; ")})` : ""}.`, isError: true };
         } else if (def.pause || v!.decision === "ask") {
           const title =

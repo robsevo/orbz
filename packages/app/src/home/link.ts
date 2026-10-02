@@ -31,8 +31,16 @@ export type CalendarEntry =
   | { kind: "schedule"; id: string; orb: string; title: string; day: string; time: string; cron: string; enabled: boolean };
 /** The notification centre (PLAN 2.11): what needs you or happened, as the home keeps it. */
 export type Notice = {
-  id: number; kind: "bill" | "reminder" | "approval" | "done"; orb: string; conversation: string | null; card: number | null; reminder: number | null;
+  id: number; kind: "bill" | "reminder" | "approval" | "done" | "promotion"; orb: string; conversation: string | null; card: number | null; reminder: number | null;
   title: string; detail: string; due: string | null; at: number;
+};
+/** The morning card (PLAN 3.5): yesterday's work, orb by orb, and the night after it. */
+export type Undo = { kind: "lesson"; orb: string; line: string; index: number } | { kind: "habit"; orb: string; habit: string; version: number };
+export type MorningCard = { day: string; orbs: { orb: string; habits: number; own: number; big: number; costUsd: number; tokens: number; learned: string[]; promoted: string[]; undo: Undo[] }[] };
+/** Where an orb stands (PLAN 3.8), and what the next level needs. */
+export type Standing = {
+  level: string;
+  next: { from: string; to: string; ready: boolean; missing: string[]; evidence: { xp: { has: number; needs: number }; tasks: { has: string[]; needs: number } } } | null;
 };
 /** A session (PLAN 2.9): a piece of work, with the orbs (by id) that work each tab, in turn order. */
 export type Session = { id: number; title: string; createdAt: number; brainstorm: string[]; floor: string[] };
@@ -58,6 +66,12 @@ export interface Office {
   answer(card: number, choice: Choice, text?: string): Promise<void>;
   /** The notification centre: what is out; putting one away, or all, for every device. */
   notices(): Promise<Notice[]>;
+  /** The gym (PLAN 3.5, 3.8): the morning card and its one-tap undo; an orb's level, and your yes. */
+  morning(): Promise<MorningCard | null>;
+  undo(u: Undo): Promise<MorningCard | null>;
+  standing(c: Character): Promise<Standing>;
+  promote(c: Character, to: string): Promise<void>;
+  notYet(c: Character, to: string): Promise<void>;
   putAway(id: number): Promise<void>;
   putAwayAll(): Promise<void>;
   /** The lab: what has `q` in it (everything when empty); a brainstorm reopened as a new session. */
@@ -170,6 +184,21 @@ export function doorOffice(base: Character): Office {
     },
     async notices() {
       return (await call<{ notices: Notice[] }>("../notices")).notices;
+    },
+    async morning() {
+      return (await call<{ card: MorningCard | null }>("../card")).card;
+    },
+    async undo(u) {
+      return (await call<{ card: MorningCard | null }>("../card/undo", { method: "POST", body: JSON.stringify(u) })).card;
+    },
+    async standing(c) {
+      return call<Standing>(`../orbs/${encodeURIComponent(idOf(c.name))}/level`);
+    },
+    async promote(c, to) {
+      await call(`../orbs/${encodeURIComponent(idOf(c.name))}/promote`, { method: "POST", body: JSON.stringify({ to }) });
+    },
+    async notYet(c, to) {
+      await call(`../orbs/${encodeURIComponent(idOf(c.name))}/decline-promotion`, { method: "POST", body: JSON.stringify({ to }) });
     },
     async putAway(id) {
       await call(`../notices/${id}/put-away`, { method: "POST" });

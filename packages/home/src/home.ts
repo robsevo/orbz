@@ -19,6 +19,14 @@ import { ChatGPT, type ChatGPTOptions } from "./chatgpt/chatgpt.ts";
 import { Brains, type BrainsOptions } from "./brain/brains.ts";
 import { Learned } from "./brain/learned.ts";
 import { About } from "./about.ts";
+import { Xp } from "./gym/xp.ts";
+import { Gym } from "./gym/night.ts";
+import type { Undo } from "./gym/card.ts";
+import { type Level, levelOf, nextFor } from "./gym/levels.ts";
+import { SPECIALTY_FAMILIES } from "./brain/constitution.ts";
+import type { Case, CaseStep, StepFn } from "./gym/cases.ts";
+import { earnedFor, promotedFor, type Promoted } from "./gym/steps.ts";
+import { templatesFor } from "./gym/templates.ts";
 import { comesUpAt, Notices } from "./notices.ts";
 import { Team } from "./team.ts";
 import { Spend } from "./brain/spend.ts";
@@ -42,7 +50,7 @@ export type HomeOptions = {
   /** What does the work of a run. Default: the agent loop (PLAN 1.5) on the preset's big brain. */
   runner?: Runner;
   /** Agent loop settings (tools, step limit, compaction) when the default runner is used. */
-  agent?: Partial<Pick<AgentOptions, "tools" | "maxSteps" | "compactAtTokens" | "keepRecentTokens" | "onText" | "passWaitMs">> & {
+  agent?: Partial<Pick<AgentOptions, "tools" | "maxSteps" | "compactAtTokens" | "keepRecentTokens" | "onText" | "passWaitMs" | "lessonGate" | "habits" | "own">> & {
     /** Test hook: what the rules say for a call (the floor, the one-way switch and away still apply). */
     decide?: (def: ToolDef, args: Record<string, unknown>) => Decision | null;
     /** The plain-English rule matcher. Default: the preset's own brain (else its big brain). */
@@ -128,6 +136,11 @@ export class Home {
   readonly about: About;
   /** Sessions (PLAN 2.9): a Brainstorm and a Floor, the orbs chosen for each taking their turns. */
   readonly team: Team;
+  /** XP from graded evidence only (PLAN 3.6): the ledger, in the event log. */
+  readonly xp: Xp;
+  /** The gym's night (PLAN 3.2): habits (with the kit, proved in its sandbox), the own brain's
+   * exams, plan templates, promotions proposed. */
+  readonly gym: Gym;
   /** The notification centre (PLAN 2.11): bills and reminders kept for you, approvals waiting, work finished. */
   readonly notices: Notices;
   /** Every plan shown to the person (PLAN 1.7). */
@@ -170,6 +183,11 @@ export class Home {
       db, clock: this.clock, rules: this.rules, turns: new Turns(db, this.clock), kit: this.kit, dataDir: this.dataDir,
       matcher: () => matcher,
       ...(opts.agent?.decide && { ruleOverride: opts.agent.decide }),
+      // the one thing rank widens (PLAN 3.8, rules/rank.ts): a Senior's read-only command
+      rankOf: (orb) => {
+        const o = this.inbox.orb(orb);
+        return o ? { level: levelOf(this.events, orb), family: SPECIALTY_FAMILIES[o.specialty] } : null;
+      },
     });
     const kit = this.kit;
     this.plans = new Plans(db, this.events, this.clock);
@@ -221,9 +239,53 @@ export class Home {
           },
           reminders: () => this.notices.reminders(),
           moveReminder: (id, due) => this.notices.move(id, due),
+          learn: (orb, line) => this.learned.add(orb, line),
+          templates: (orb) => templatesFor(this.events, orb),
+          // his own brain (PLAN 3.4): the preset's, for the task types it earned at night
+          ...(opts.agent?.own ? { own: opts.agent.own } : opts.brain?.preset.own && {
+            own: {
+              find: (orb: string, task: string) => {
+                const ep = opts.brain!.preset.own!;
+                const e = earnedFor(this.events, orb, task, ep.model);
+                return e && { ...e, ep };
+              },
+            },
+          }),
+          ...(opts.agent?.habits ? { habits: opts.agent.habits } : kit && {
+            // his habits (PLAN 3.2), each step in the kit's sandbox; the kit down, the brain answers
+            habits: {
+              find: (orb: string, task: string) => promotedFor(this.events, this.dataDir, orb, task),
+              step: async (h: Promoted, input: Case["input"], done: CaseStep[]) => {
+                try {
+                  return (await kit.call("habit_step", { habit_dir: h.dir, input, done })) as Awaited<ReturnType<StepFn>>;
+                } catch (e) {
+                  return { refused: `the kit could not run it: ${e instanceof Error ? e.message : String(e)}` };
+                }
+              },
+            },
+          }),
+          ...(opts.agent?.lessonGate ? { lessonGate: opts.agent.lessonGate } : kit && {
+            // Ash's learn_gate, through the kit; with the kit down the card still asks the person
+            lessonGate: async (text: string) => {
+              try {
+                const v = (await kit.call("learn_verdict", { text })) as { ok?: boolean; reason?: string };
+                return { ok: v.ok !== false, reason: String(v.reason ?? "") };
+              } catch {
+                return { ok: true, reason: "" };
+              }
+            },
+          }),
         });
     this.inbox = new Inboxes(db, this.events, this.clock, opts.runner ?? this.agent!, opts.graceMs);
     this.team = new Team({ db, events: this.events, clock: this.clock, inbox: this.inbox, conversations: this.conversations });
+    this.xp = new Xp(this.events, { planOrb: (plan) => this.plans.get(plan)?.orb ?? null });
+    this.gym = new Gym({
+      events: this.events, clock: this.clock, dataDir: this.dataDir, spend: this.spend, kit: kit && ((tool, args) => kit.call(tool, args)),
+      teacher: () => opts.brain?.preset.teacher ?? this.brains.chain.current()?.ep ?? null, // the preset's teacher, else the big brain
+      own: () => opts.brain?.preset.own ?? null,
+      orbs: () => this.inbox.orbs().filter((o) => o.letGoAt === null).map((o) => ({ id: o.id, specialty: o.specialty })),
+      plans: () => this.plans.list(),
+    });
     this.notices = new Notices(db, this.events, this.clock, {
       nameOf: (orb) => this.inbox.orb(orb)?.name ?? orb,
       lastReply: (c) => this.conversations.list(c).findLast((m) => m.role === "assistant" && m.content.trim())?.content ?? null,
@@ -268,7 +330,8 @@ export class Home {
     this.inbox.pumpAll();
     void this.tick();
     this.kit?.start().catch((e: unknown) => {
-      this.events.append("kit.start_failed", { error: e instanceof Error ? e.message : String(e) });
+      // closed while it was starting: the log is closed too, and there is nothing to report
+      if (!this.#closed) this.events.append("kit.start_failed", { error: e instanceof Error ? e.message : String(e) });
     });
   }
 
@@ -332,6 +395,41 @@ export class Home {
     return done;
   }
 
+  /** One tap on the morning card (PLAN 3.5): a habit taken back (the version before it answers
+   * again, untouched), or a lesson. Either way the XP it gave is taken back, exactly; an undo is
+   * not a rollback, so it costs nothing more. */
+  undo(u: Undo): void {
+    if (u.kind === "habit") {
+      const promoted = this.events.ofType("habit.promoted").findLast((e) => e.orb === u.orb && e.data.kind === u.habit && Number(e.data.version) === u.version);
+      if (!promoted) throw new Error(`no habit ${u.habit} v${u.version} for ${u.orb}`);
+      if (this.events.ofType("habit.undone").some((e) => e.orb === u.orb && e.data.kind === u.habit && Number(e.data.version) === u.version)) return;
+      this.events.append("habit.undone", { kind: u.habit, version: u.version }, { orb: u.orb });
+      this.events.append("undo", { source: promoted.seq, what: `the habit ${u.habit} v${u.version}` }, { orb: u.orb });
+      return;
+    }
+    const lines = this.learned.list(u.orb);
+    if (lines[u.index] !== u.line) throw new Error("that lesson is no longer where the card saw it");
+    const kept = this.events.ofType("orb.learned").findLast((e) => e.orb === u.orb && e.data.line === u.line);
+    this.learned.remove(u.orb, u.index);
+    if (kept) this.events.append("undo", { source: kept.seq, what: `the lesson "${u.line}"` }, { orb: u.orb });
+  }
+
+  /** You promote an orb to its next level (PLAN 3.8): only on the evidence, and only you. */
+  promote(orb: string, to: string): Level {
+    const who = this.inbox.orb(orb);
+    if (!who) throw new Error(`no orb "${orb}"`);
+    const p = nextFor(this.events, orb, { specialty: who.specialty, now: this.clock.now() });
+    if (!p || p.to !== to) throw new Error(`${to} is not ${who.name}'s next level`);
+    if (!p.ready) throw new Error(`not yet: ${p.missing.join("; ")}`);
+    this.events.append("orb.promoted", { from: p.from, to: p.to, evidence: p.evidence }, { orb });
+    return p.to;
+  }
+
+  /** Not yet: the proposal is put away until the evidence is proposed again. */
+  declinePromotion(orb: string, to: string): void {
+    this.events.append("promotion.declined", { to }, { orb });
+  }
+
   /** The owner's verdict on a run, for the gym (PLAN 3.x). */
   feedback(run: number, verdict: "approve" | "correct", note = ""): void {
     feedback(this.events, run, verdict, note);
@@ -342,6 +440,7 @@ export class Home {
     this.#closed = true;
     this.#cancelTimer?.();
     await this.#ticking;
+    await this.gym.close();
     await this.inbox.close();
     await this.loops.close();
     await this.kit?.close();
@@ -362,6 +461,7 @@ export class Home {
     this.schedules.due();
     this.notices.due();
     this.loops.startDue();
+    void this.gym.due(); // the night goes on beside the ticks; close() waits for it
     await this.triggers.poll({ all: woke });
   }
 
@@ -370,7 +470,7 @@ export class Home {
     this.#cancelTimer?.();
     const now = this.clock.now();
     let delay = this.#heartbeatMs;
-    for (const at of [this.schedules.nextDueAt(), this.notices.nextDueAt(), this.loops.nextDueAt(), this.triggers.nextPollAt()]) {
+    for (const at of [this.schedules.nextDueAt(), this.notices.nextDueAt(), this.loops.nextDueAt(), this.triggers.nextPollAt(), this.gym.nextAt()]) {
       if (at !== null) delay = Math.min(delay, at - now);
     }
     this.#cancelTimer = this.clock.timer(Math.max(MIN_DELAY_MS, delay), () => void this.tick());

@@ -12,7 +12,7 @@ import type { Clock } from "./clock.ts";
 import { tx } from "./db.ts";
 import type { EventLog, HomeEvent } from "./events.ts";
 
-export type NoticeKind = "bill" | "reminder" | "approval" | "done";
+export type NoticeKind = "bill" | "reminder" | "approval" | "done" | "promotion";
 export type Notice = {
   id: number; kind: NoticeKind; orb: string; conversation: string | null; card: number | null; reminder: number | null;
   title: string; detail: string; due: string | null; at: number;
@@ -185,6 +185,15 @@ export class Notices {
       this.#add(`card:${String(e.data.card)}`, { kind: "approval", orb: e.orb, conversation: e.conversation, card: Number(e.data.card), title: String(e.data.title ?? "Waiting for your OK"), detail: "", due: null });
     } else if (e.type === "card.resolved") {
       this.#settle("card = ?", Number(e.data.card));
+    } else if (e.type === "promotion.proposed" && e.orb) {
+      // a promotion waits for you, with its evidence (PLAN 3.8); only you promote
+      const x = e.data.evidence as { xp: { has: number }; tasks: { has: string[] } };
+      this.#add(`promotion:${e.orb}:${String(e.data.to)}`, {
+        kind: "promotion", orb: e.orb, conversation: null, title: `${this.#nameOf(e.orb)} is ready for ${String(e.data.to)}`,
+        detail: `${x.xp.has} XP; ${x.tasks.has.length} task type(s) earned in the specialty; no regression lately`, due: null,
+      });
+    } else if ((e.type === "orb.promoted" || e.type === "promotion.declined") && e.orb) {
+      this.#settle("kind = 'promotion' AND orb = ?", e.orb);
     } else if (e.type === "run.finished" && e.data.outcome === "ok" && e.orb && e.conversation) {
       const reply = this.#lastReply(e.conversation);
       if (!reply) return; // a run that said nothing finished nothing to read

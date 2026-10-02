@@ -31,6 +31,7 @@ import statepaths  # noqa: E402
 import oneway  # noqa: E402
 import whenparse  # noqa: E402
 import write_guard  # noqa: E402
+import learn_gate  # noqa: E402
 
 from orbs_kit import habits  # noqa: E402
 
@@ -78,6 +79,19 @@ class OnewayVerdict(TypedDict):
 class Protected(TypedDict):
     path: str
     why: str
+
+
+class LearnVerdict(TypedDict):
+    ok: bool
+    klass: str
+    reason: str
+
+
+@server.tool(description="Whether a lesson an orb proposes may be learned at all (PLAN 3.5: Ash's learn_gate). "
+             "Refused, it says which class it is and what to capture instead; the person still decides on the rest.")
+def learn_verdict(text: str) -> LearnVerdict:
+    ok, klass, reason = learn_gate.verdict(text)
+    return {"ok": ok, "klass": klass, "reason": reason}
 
 
 class KitStatus(TypedDict):
@@ -132,6 +146,24 @@ def oneway_quote(turn: str, text: str, limit: int = 20000) -> str:
 @server.tool(description="The paths write_guard protects: what no orb may write.")
 def protected_paths() -> list[Protected]:
     return [{"path": str(p), "why": why} for p, why in write_guard.PROTECTED]
+
+
+class HabitStep(TypedDict, total=False):
+    call: dict
+    output: str
+    refused: str
+
+
+@server.tool(description="A step habit's next step (PLAN 3.2): the next call, the answer, or why it will not; "
+             "with `code`, that code is tried in the sandbox before anything is saved.")
+def habit_step(habit_dir: str, input: dict, done: list[dict], code: str | None = None, check_input: bool = True) -> HabitStep:  # noqa: A002
+    return habits.step(Path(habit_dir), input, done, code=code, check_input=check_input)
+
+
+@server.tool(description="Store a step habit, and the familiarity learned from the inputs of the runs it replayed (PLAN 3.2).")
+def habit_learn_steps(habit_dir: str, code: str, inputs: list[dict], version: int = 1) -> str:
+    habits.save_steps(Path(habit_dir), code, inputs, version)
+    return habit_dir
 
 
 @server.tool(description="Store a habit learned from approved (input, output) cases (PLAN 3.2 calls this "

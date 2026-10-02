@@ -33,6 +33,12 @@ export type ToolContext = {
   /** The bills and reminders kept, and moving one (only once the person approves: the floor). */
   reminders?: () => { id: number; kind: string; title: string; due: string; amount: string | null }[];
   moveReminder?: (id: number, due: string) => { id: number; due: string };
+  /** A lesson (PLAN 3.5): whether it may be learned at all (Ash's learn_gate, through the kit), and
+   * keeping it (only once the person says yes: the floor). */
+  lessonGate?: (text: string) => Promise<{ ok: boolean; reason: string }>;
+  learn?: (line: string) => string[];
+  /** His plan templates (PLAN 3.2): plans you approved the same way, each passed by the gate. */
+  templates?: () => { title: string; body: string }[];
 };
 type Args = Record<string, unknown>;
 
@@ -402,6 +408,44 @@ export const TOOLS: ToolDef[] = [
         const kind = s(a.kind) === "bill" ? "bill" : "reminder";
         const r = ctx.remind({ kind, title: s(a.title), due: s(a.due), amount: typeof a.amount === "string" ? a.amount : null, ...(typeof a.ahead_days === "number" && { aheadDays: a.ahead_days }) });
         return { content: `Kept (${kind} ${r.id}). It comes up ${new Date(r.comesUpAt).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}.` };
+      } catch (e) {
+        return { content: e instanceof Error ? e.message : String(e), isError: true };
+      }
+    },
+  },
+  {
+    name: "plan_templates",
+    label: "Looking at my plan templates",
+    description:
+      "Your plan templates: plans the person approved three times the same way, each passed by the plan gate. When a job is one of these, start its plan from the template (then propose_plan it as usual: it is checked again).",
+    parameters: obj({}, []),
+    describe: () => "look at its plan templates",
+    decision: "allow",
+    async run(_a, ctx) {
+      const t = ctx.templates?.() ?? [];
+      if (!t.length) return { content: "No plan templates yet: a plan becomes one when the person has approved three of that shape." };
+      return { content: t.map((x) => `## Template: ${x.title}\n\n${x.body.trim()}`).join("\n\n---\n\n") };
+    },
+  },
+  {
+    name: "propose_lesson",
+    label: "Asking to learn something",
+    description:
+      "Propose a lesson you learned from the person: a short rule for how they like things done (\"Charts start at zero\", \"Invoices go out on the 1st\"). It reaches them as a card; you learn it only if they say yes. Never a complaint about a tool, a one-off, or an error that went away.",
+    parameters: obj({ line: { type: "string", description: "The lesson, in one line, as a rule." }, why: { type: "string", description: "What the person said or did that taught it." } }, ["line"]),
+    describe: (a) => `remember: "${s(a.line)}"${a.why ? ` (${s(a.why)})` : ""}`,
+    decision: "ask",
+    floor: () => [{ category: "lessons", why: FLOOR_WORDS.lessons }],
+    async gate(a, ctx) {
+      // what must never be learned is turned away before the person is asked (Ash's learn_gate)
+      const v = ctx.lessonGate ? await ctx.lessonGate(s(a.line)) : { ok: true, reason: "" };
+      return v.ok ? { detail: s(a.line), meta: { lesson: s(a.line) } } : { sendBack: `Not a lesson to keep: ${v.reason}` };
+    },
+    async run(a, ctx) {
+      if (!ctx.learn) return { content: "Lessons are not kept here.", isError: true };
+      try {
+        const lines = ctx.learn(s(a.line));
+        return { content: `Learned. You now keep ${lines.length} ${lines.length === 1 ? "lesson" : "lessons"} from them.` };
       } catch (e) {
         return { content: e instanceof Error ? e.message : String(e), isError: true };
       }

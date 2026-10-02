@@ -18,6 +18,10 @@ import { standingContext } from "./agent/standing.ts";
 import { listWorkspace, MissingError, OutsideError, readWorkspace } from "./workspace.ts";
 import { calendarOf } from "./calendar.ts";
 import { labOf, reopen } from "./lab.ts";
+import { morningCard } from "./gym/card.ts";
+import { levelOf, nextFor } from "./gym/levels.ts";
+import { findHotPaths } from "./gym/finder.ts";
+import { nichesOf, radarOf } from "./gym/specialty.ts";
 import { version } from "./version.ts";
 
 export type HomeDoor = {
@@ -319,6 +323,52 @@ async function handle(
     }
   }
   if (method === "GET" && url.pathname === "/reminders") return { reminders: home.notices.reminders() };
+  // the gym (PLAN 3.x): the morning card, each orb's XP and where it lies, the night's candidates
+  if (method === "POST" && url.pathname === "/card/undo") {
+    const b = (await body(req)) as Record<string, unknown>;
+    const u =
+      b.kind === "habit" ? { kind: "habit" as const, orb: text(b, "orb"), habit: text(b, "habit"), version: Number(b.version) }
+        : b.kind === "lesson" ? { kind: "lesson" as const, orb: text(b, "orb"), line: text(b, "line"), index: Number(b.index) }
+          : null;
+    if (!u) throw new HttpError(400, 'kind is "habit" or "lesson"');
+    try {
+      home.undo(u);
+    } catch (e) {
+      throw new HttpError(409, e instanceof Error ? e.message : String(e));
+    }
+    return { card: morningCard(home.events, { now: home.clock.now(), learned: (orb) => home.learned.list(orb) }) };
+  }
+  if (method === "GET" && url.pathname === "/card") return { card: morningCard(home.events, { now: home.clock.now(), learned: (orb) => home.learned.list(orb) }) };
+  // levels (PLAN 3.8): where he stands, what the next one needs; only you promote
+  if (method === "GET" && parts[0] === "orbs" && parts.length === 3 && parts[2] === "level") {
+    const orb = decodeURIComponent(parts[1]!);
+    const who = home.inbox.orb(orb);
+    if (!who) throw new HttpError(404, `no orb "${orb}"`);
+    return { level: levelOf(home.events, orb), next: nextFor(home.events, orb, { specialty: who.specialty, now: home.clock.now() }) };
+  }
+  if (method === "POST" && parts[0] === "orbs" && parts.length === 3 && (parts[2] === "promote" || parts[2] === "decline-promotion")) {
+    const orb = decodeURIComponent(parts[1]!);
+    if (!home.inbox.orb(orb)) throw new HttpError(404, `no orb "${orb}"`);
+    const to = text((await body(req)) as Record<string, unknown>, "to");
+    if (parts[2] === "decline-promotion") {
+      home.declinePromotion(orb, to);
+      return { level: levelOf(home.events, orb) };
+    }
+    try {
+      return { level: home.promote(orb, to) };
+    } catch (e) {
+      throw new HttpError(409, e instanceof Error ? e.message : String(e));
+    }
+  }
+  if (method === "GET" && parts[0] === "orbs" && parts.length === 3 && parts[2] === "xp") {
+    const orb = decodeURIComponent(parts[1]!);
+    if (!home.inbox.orb(orb)) throw new HttpError(404, `no orb "${orb}"`);
+    return { xp: home.xp.of(orb, home.clock.now()), radar: radarOf(home.events, orb), niches: nichesOf(home.events, orb) };
+  }
+  if (method === "GET" && url.pathname === "/gym/candidates") {
+    const days = Math.min(60, Math.max(1, Number(url.searchParams.get("days") ?? 14) || 14));
+    return { candidates: findHotPaths(home.events, { since: home.clock.now() - days * 86_400_000 }) };
+  }
   // the lab (PLAN 2.13): every brainstorm and every plan shown, searchable; a brainstorm reopened
   if (method === "GET" && url.pathname === "/lab") return labOf(home, url.searchParams.get("q") ?? "");
   if (method === "POST" && parts[0] === "lab" && parts[1] === "sessions" && parts.length === 4 && parts[3] === "reopen") {

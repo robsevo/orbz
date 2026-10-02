@@ -5,11 +5,11 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { Orb } from "../orb/Orb.tsx";
 import type { Character } from "../orb/spec.ts";
-import { idOf, type Notice, type Office } from "../home/link.ts";
+import { idOf, type MorningCard, type Notice, type Office, type Undo } from "../home/link.ts";
 import type { Route } from "../ui/nav.ts";
 
-const MARK: Record<Notice["kind"], string> = { bill: "¤", reminder: "◷", approval: "!", done: "✓" };
-const KIND_WORDS: Record<Notice["kind"], string> = { bill: "Bill", reminder: "Reminder", approval: "Waiting for your OK", done: "Finished" };
+const MARK: Record<Notice["kind"], string> = { bill: "¤", reminder: "◷", approval: "!", done: "✓", promotion: "↑" };
+const KIND_WORDS: Record<Notice["kind"], string> = { bill: "Bill", reminder: "Reminder", approval: "Waiting for your OK", done: "Finished", promotion: "Ready for promotion" };
 const button: CSSProperties = { font: "600 13px/18px var(--font)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 10, padding: "6px 12px", cursor: "pointer", boxShadow: "inset 0 0 0 .5px var(--hairline)", minHeight: 32 };
 
 /** What is out, kept up to date as it comes and goes (on this device or another). */
@@ -33,6 +33,27 @@ export function useNotices(home: Office | null): { notices: Notice[]; reload: ()
     });
   }, [home]);
   return { notices, reload, live };
+}
+
+/** The morning card (PLAN 3.5), kept up to date as the night and your taps change it. */
+export function useMorning(home: Office | null): { card: MorningCard | null; setCard: (c: MorningCard | null) => void } {
+  const [card, setCard] = useState<MorningCard | null>(null);
+  useEffect(() => {
+    if (!home) return;
+    const load = (): void => void home.morning().then(setCard, () => {});
+    load();
+    return home.watch({ open: load, event: (e) => void (MORNING_EVENTS.has(e.type) && load()) });
+  }, [home]);
+  return { card, setCard };
+}
+const MORNING_EVENTS = new Set(["gym.night_done", "habit.promoted", "habit.undone", "orb.learned", "orb.unlearned"]);
+
+/** A habit's task, in words: what starts it and what it does ("A trigger (t1): read file, then remind"). */
+export function habitWords(key: string): string {
+  const [, trigger = "", shape = ""] = key.split("|");
+  const [kind, id] = trigger.split(":");
+  const tools = shape.split(" ")[0]!.split(">").map((t) => t.replace(/_/g, " "));
+  return `${kind === "schedule" ? "A schedule" : kind === "trigger" ? "A trigger" : "A task"}${id ? ` (${id})` : ""}: ${tools.join(", then ")}`;
 }
 
 /** Where a notice came from, as an address: a private chat, or a session's tab. */
@@ -64,6 +85,7 @@ const dueWords = (due: string): string => {
 
 export function NoticesRoom(o: { home: Office | null; office: Character[]; notices: Notice[]; reload: () => void; live: boolean; go: (r: Route) => void }) {
   const [said, setSaid] = useState<string | null>(null);
+  const morning = useMorning(o.home);
   if (!o.home) {
     return (
       <div style={{ display: "grid", placeItems: "center", alignContent: "center", gap: "var(--s3)", padding: "var(--s7) var(--s5)", textAlign: "center" }}>
@@ -79,6 +101,18 @@ export function NoticesRoom(o: { home: Office | null; office: Character[]; notic
   const away = (id?: number): void => {
     (id === undefined ? home.putAwayAll() : home.putAway(id)).then(o.reload, (e: Error) => setSaid(e.message));
   };
+  const takeBack = (u: Undo): void => {
+    home.undo(u).then(morning.setCard, (e: Error) => setSaid(e.message));
+  };
+  // a promotion is yours to give (PLAN 3.8): to the level the evidence names, or not yet
+  const promotion = (n: Notice, yes: boolean): void => {
+    const c = o.office.find((x) => idOf(x.name) === n.orb);
+    if (!c) return;
+    home
+      .standing(c)
+      .then((st) => (st.next ? (yes ? home.promote(c, st.next.to) : home.notYet(c, st.next.to)) : undefined))
+      .then(o.reload, (e: Error) => setSaid(e.message));
+  };
   return (
     <div data-stream={o.live ? "open" : "connecting"} style={{ display: "grid", gap: "var(--s5)", padding: "var(--s5)", alignContent: "start", minWidth: 0 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
@@ -90,6 +124,7 @@ export function NoticesRoom(o: { home: Office | null; office: Character[]; notic
         )}
       </div>
       {said && <span role="alert" style={{ color: "var(--alert)" }}>{said}</span>}
+      {morning.card && <Morning card={morning.card} office={o.office} takeBack={takeBack} />}
       {!o.notices.length && (
         <div style={{ display: "grid", justifyItems: "center", gap: 8, padding: "var(--s6) 0", textAlign: "center" }}>
           <span style={{ font: "700 17px/22px var(--font)", color: "var(--text-1)" }}>Nothing needs you</span>
@@ -112,11 +147,21 @@ export function NoticesRoom(o: { home: Office | null; office: Character[]; notic
                   <span aria-hidden style={{ width: 28, height: 28, borderRadius: "50%", display: "grid", placeItems: "center", background: "var(--accent-fill)", color: "var(--accent)", font: "800 14px/16px var(--font)" }}>{MARK[n.kind]}</span>
                   <span style={{ display: "grid", minWidth: 0 }}>
                     <span style={{ font: "700 14px/19px var(--font)", color: "var(--text-1)", overflowWrap: "anywhere", textWrap: "balance" }}>{n.title}</span>
-                    <span style={{ font: "400 12px/17px var(--font)", color: "var(--text-3)", overflowWrap: "anywhere" }}>
+                    <span style={{ font: "400 12px/17px var(--font)", color: "var(--text-3)", overflowWrap: "anywhere", textWrap: "balance" }}>
                       {[KIND_WORDS[n.kind], n.detail, n.due && dueWords(n.due), ago(n.at, now)].filter(Boolean).join(" · ")}
                     </span>
                   </span>
-                  <span style={{ display: "flex", gap: 6, flex: "0 0 auto" }}>
+                  <span style={{ display: "flex", gap: 6, flex: "0 0 auto", flexWrap: "wrap", justifyContent: "end" }}>
+                    {n.kind === "promotion" && (
+                      <>
+                        <button data-sound="pick" onClick={() => promotion(n, true)} style={{ ...button, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)" }}>
+                          Promote
+                        </button>
+                        <button onClick={() => promotion(n, false)} style={button}>
+                          Not yet
+                        </button>
+                      </>
+                    )}
                     {where && (
                       <button onClick={() => o.go(where)} style={button}>
                         Open
@@ -133,5 +178,54 @@ export function NoticesRoom(o: { home: Office | null; office: Character[]; notic
         );
       })}
     </div>
+  );
+}
+
+/** This morning (PLAN 3.5): who answered yesterday's work (his habits, his own brain, the big brain),
+ * what it cost, what he learned and the habits the night made, each a tap from being taken back. */
+function Morning(o: { card: MorningCard; office: Character[]; takeBack: (u: Undo) => void }) {
+  const day = new Date(`${o.card.day}T12:00:00`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+  return (
+    <section aria-label="This morning" data-morning={o.card.day} style={{ display: "grid", gap: "var(--s3)", padding: "var(--s4)", borderRadius: 18, background: "var(--card)", boxShadow: "inset 0 0 0 .5px var(--hairline)", minWidth: 0 }}>
+      <span style={{ display: "grid" }}>
+        <span style={{ font: "800 17px/22px var(--font)", color: "var(--text-1)" }}>This morning</span>
+        <span style={{ font: "400 12px/17px var(--font)", color: "var(--text-3)" }}>{day}, and the night after it</span>
+      </span>
+      {o.card.orbs.map((n) => {
+        const c = o.office.find((x) => idOf(x.name) === n.orb);
+        const answered = n.habits + n.own + n.big;
+        return (
+          <div key={n.orb} data-orb={c?.hue} data-morning-orb={n.orb} style={{ display: "grid", gap: 8, minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+              {c && <Orb character={c} size={26} poke={false} still />}
+              <span style={{ font: "800 14px/19px var(--font)", color: "var(--accent)" }}>{c?.name ?? n.orb}</span>
+              <span style={{ font: "400 12px/17px var(--font)", color: "var(--text-3)", marginLeft: "auto" }}>{n.costUsd ? `$${n.costUsd.toFixed(4)}` : "no cost"} · {n.tokens.toLocaleString("en-GB")} tokens</span>
+            </div>
+            {answered > 0 && (
+              <div role="img" aria-label={`${n.habits} by his habits, ${n.own} by his own brain, ${n.big} by the big brain`} style={{ display: "grid", gap: 4 }}>
+                <span style={{ display: "flex", height: 8, borderRadius: 4, overflow: "hidden", background: "var(--fill)" }}>
+                  {n.habits > 0 && <i data-split="habits" style={{ flex: n.habits, background: "var(--accent)" }} />}
+                  {n.own > 0 && <i data-split="own" style={{ flex: n.own, background: "var(--accent-glow)" }} />}
+                  {n.big > 0 && <i data-split="big" style={{ flex: n.big, background: "var(--text-3)" }} />}
+                </span>
+                <span style={{ font: "400 12px/17px var(--font)", color: "var(--text-2)" }}>
+                  {n.habits} by habit · {n.own} by his own brain · {n.big} by the big brain
+                </span>
+              </div>
+            )}
+            {n.undo.map((u) => (
+              <div key={u.kind === "lesson" ? `l${u.index}` : `h${u.habit}${u.version}`} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: 8, alignItems: "center" }}>
+                <span style={{ font: "400 13px/18px var(--font)", color: "var(--text-1)", overflowWrap: "anywhere" }}>
+                  {u.kind === "lesson" ? `Learned: “${u.line}”` : `A new habit: ${habitWords(u.habit)}`}
+                </span>
+                <button onClick={() => o.takeBack(u)} style={button}>
+                  Take back
+                </button>
+              </div>
+            ))}
+          </div>
+        );
+      })}
+    </section>
   );
 }

@@ -49,6 +49,13 @@ async def main():
                 ok(not r.is_error and (r2.structured_content or {}).get("pid"),
                    "SV.4 a module that prints to stdout does not corrupt the next message")
 
+                r = await s.call_tool("learn_verdict", {"text": "Charts start at zero on the y axis."})
+                good = r.structured_content or {}
+                r = await s.call_tool("learn_verdict", {"text": "The export tool is broken, never use it."})
+                bad = r.structured_content or {}
+                ok(good.get("ok") is True and bad.get("ok") is False and bad.get("klass") == "negative" and "capture" in bad.get("reason", ""),
+                   f"SV.6 a lesson goes through Ash's learn_gate: a durable one passes, a negative one is refused with what to capture instead ({good}, {bad})")
+
                 r = await s.call_tool("no_such_tool", {})
                 ok(r.is_error, "SV.5 CONTROL: an unknown tool is an error, so SV.1-SV.4 are not "
                                "passing on a server that answers everything")

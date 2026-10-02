@@ -7,8 +7,10 @@
 //   5. the one-way switch: a turn that read untrusted content acts outward only with a fresh yes
 //   6. away (a schedule or trigger running unwatched): read-only, so anything outward asks
 //
-// Steps 4-6 only ever raise. Tier (habit, own brain, big brain) and rank (Junior to Chief, PLAN
-// 3.8) are deliberately NOT inputs: nothing about who proposes an action loosens the floor.
+// Steps 4-6 only ever raise. Tier (habit, own brain, big brain) is not an input. Rank (Junior to
+// Chief, PLAN 3.8) enters at step 3 only, as a default where neither your rules nor anything else
+// said (rules/rank.ts: a Senior's read-only command): steps 4-6 still raise it, so nothing about
+// who proposes an action loosens the floor.
 import type { Decision } from "../agent/tools.ts";
 import { type FloorHit } from "./floor.ts";
 import { strictest } from "./rules.ts";
@@ -23,6 +25,8 @@ export type CallFacts = {
   oneway: { allowed: boolean; why: string } | null;
   mode: Mode;
   outward: boolean;
+  /** Why the orb's rank lets an "ask" by default go without asking (rules/rank.ts), or null. */
+  rank?: string | null;
 };
 
 export type Verdict = { decision: Decision; why: string[]; floor: FloorHit[]; mayAlways: boolean };
@@ -35,6 +39,10 @@ export function decide(f: CallFacts): Verdict {
 
   let d: Decision = f.rule.decision ?? f.defaultDecision;
   if (f.rule.why) why.push(f.rule.why);
+  if (f.rule.decision === null && d === "ask" && f.rank) {
+    d = "allow";
+    why.push(f.rank);
+  }
   for (const h of f.floor) {
     d = strictest(d, "ask");
     why.push(h.why);

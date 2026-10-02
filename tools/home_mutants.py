@@ -215,7 +215,7 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ("      if (r.limited && ep.plan) {", "      if (false) {"),
     ], ["chatgpt.test.ts"]),
     ("every reply wears the plan's badge", "src/agent/loop.ts", [
-        ("...(ep.plan && { meta: { plan: ep.plan } })", '...{ meta: { plan: "chatgpt" } }'),
+        ("      const meta = { ...(ep.plan && { plan: ep.plan }),", '      const meta = { plan: "chatgpt",'),
     ], ["chatgpt.test.ts"]),
     ("a usage limit says nothing of Manage usage", "src/agent/loop.ts", [
         ('{ limit: why, action: { label: "Manage usage", url: MANAGE_USAGE } }', "{ limit: why }"),
@@ -364,6 +364,281 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("what one orb agreed stays his", "src/agent/conversation.ts", [
         ('      else if (m.role === "notice" && o.me && m.orb !== o.me && typeof m.meta.agreed === "string") out.push({ role: "user", content: `[Agreed]: ${m.meta.agreed}` });\n', ""),
     ], ["lab.test.ts"]),
+    ("a one-off task qualifies for a habit", "src/gym/finder.ts", [
+        ("export const MIN_APPROVED = 3;", "export const MIN_APPROVED = 1;"),
+    ], ["finder.test.ts"]),
+    ("a corrected run counts as approved", "src/gym/finder.ts", [
+        ("approved: verdict.get(run) === \"approve\",", "approved: verdict.has(run),"),
+    ], ["finder.test.ts"]),
+    ("another data shape counts as the same task", "src/gym/finder.ts", [
+        ('  const shape = `${tools.join(">") || "(no tools)"}${t.fields.length ? ` {${t.fields.join(",")}}` : ""}`;', '  const shape = `${tools.join(">") || "(no tools)"}`;'),
+    ], ["finder.test.ts"]),
+    ("approving a job twice pays twice", "src/gym/xp.ts", [
+        ('        if (e.data.verdict === "approve" && earlier?.data.verdict !== "approve") {', '        if (e.data.verdict === "approve") {'),
+    ], ["xp.test.ts"]),
+    ("the daily cap is not kept", "src/gym/xp.ts", [
+        ("      const granted = Math.min(amount, room);", "      const granted = amount + room * 0;"),
+    ], ["xp.test.ts"]),
+    ("an undo takes nothing back", "src/gym/xp.ts", [
+        ('        this.#takeBack([Number(e.data.source)], `undone: ${String(e.data.what ?? "it")}`, e);\n', ""),
+    ], ["xp.test.ts"]),
+    ("a restart pays for the same evidence again", "src/gym/xp.ts", [
+        ('    const done = Math.max(0, ...ledger(events).map((e) => e.source), ...events.ofType("xp.considered").map((e) => Number(e.data.source)));', "    const done = 0;"),
+    ], ["xp.test.ts"]),
+    ("the radar counts XP taken back as earned", "src/gym/specialty.ts", [
+        ("    if (area) radar[area].xp += x.amount;", "    if (area) radar[area].xp += Math.abs(x.amount);"),
+    ], ["specialty.test.ts"]),
+    ("a niche is measured against an average its own runs make", "src/gym/specialty.ts", [
+        ("    const elsewhere = rest.length ? count(rest, w) / rest.length : 0;", "    const elsewhere = count(approved, w) / approved.length;"),
+    ], ["specialty.test.ts"]),
+    ("an orb learns a lesson without your yes", "src/agent/tools.ts", [
+        ('    decision: "ask",\n    floor: () => [{ category: "lessons", why: FLOOR_WORDS.lessons }],', '    decision: "allow",'),
+    ], ["lessons.test.ts"]),
+    ("a lesson that must never be learned reaches you", "src/agent/tools.ts", [
+        ('      const v = ctx.lessonGate ? await ctx.lessonGate(s(a.line)) : { ok: true, reason: "" };', '      const v = { ok: true, reason: "" };'),
+    ], ["lessons.test.ts"]),
+    ("the morning card counts a failed run as an answer", "src/gym/card.ts", [
+        ('} else if (e.type === "run.finished" && e.data.outcome === "ok" && !byHabit.has(Number(e.data.run))) night(e.orb).big++;', '} else if (e.type === "run.finished" && !byHabit.has(Number(e.data.run))) night(e.orb).big++;'),
+    ], ["card.test.ts"]),
+    ("a quiet night still makes a card", "src/gym/card.ts", [
+        ("  return orbs.length ? { day, orbs } : null;", "  return { day, orbs };"),
+    ], ["card.test.ts"]),
+    ("the morning card counts a habit's run as the big brain's too", "src/gym/card.ts", [
+        (" && !byHabit.has(Number(e.data.run))) night(e.orb).big++;", ") night(e.orb).big++;"),
+    ], ["habit-runs.test.ts"]),
+    # habits (PLAN 3.2, 3.3)
+    ("a run of two mails is one case", "src/gym/cases.ts", [
+        ("  if (!first || items.length > 1) return null;", "  if (!first) return null;"),
+    ], ["cases.test.ts"]),
+    ("the brief carries every run, whole", "src/gym/compile.ts", [
+        ("  const shown = cases.slice(-BRIEF_RUNS).map(", "  const shown = cases.slice(-BRIEF_RUNS * 100).map("),
+    ], ["compile.test.ts"]),
+    ("a habit is promoted on the teacher's word", "src/gym/compile.ts", [
+        ("    if (!r.ok) return done(false, `run ${k.run}: ${r.why}`);\n", ""),
+    ], ["compile.test.ts"]),
+    ("a rejected habit is kept anyway", "src/gym/compile.ts", [
+        ("  for (const k of o.cases) {\n    const r = await replay(step, k);", "  await o.kit(\"habit_learn_steps\", { habit_dir: dir, code, inputs: o.cases.map((k) => k.input), version });\n  for (const k of o.cases) {\n    const r = await replay(step, k);"),
+    ], ["compile.test.ts"]),
+    ("the home runs a habit on an input it was never proved on", "src/home.ts", [
+        ('{ habit_dir: h.dir, input, done }', '{ habit_dir: h.dir, input, done, check_input: false }'),
+    ], ["compile.test.ts"]),
+    ("a rolled-back habit still answers", "src/gym/steps.ts", [
+        ("    if (back.has(`${orb}|${key}|${version}`)) continue;\n", ""),
+    ], ["habit-runs.test.ts"]),
+    ("a habit answers a chat too", "src/agent/loop.ts", [
+        ("      if (!ctx.fresh) return null; // only what a schedule or a trigger asked: a chat is the brain's\n", ""),
+    ], ["habit-runs.test.ts"]),
+    ("a habit's call skips the guard and the floor", "src/agent/loop.ts", [
+        ("      const r = await this.#calls(msg, 0, ctx, tctx, step, at);\n      if (r !== \"done\") return this.#ended(r, ctx);\n    }\n    return null;",
+         "      this.#result(msg, call, await runTool(this.#tools.get(call.name)!, next.call.args, tctx), ctx);\n      const r = \"done\" as \"done\" | \"waiting\" | \"stopped\";\n      if (r !== \"done\") return this.#ended(r, ctx);\n    }\n    return null;"),
+    ], ["habit-runs.test.ts"]),
+    ("a habit goes on past your no", "src/agent/loop.ts", [
+        (" || r.content === DENIED || r.content === EXPIRED) return", ") return"),
+    ], ["habit-runs.test.ts"]),
+    ("a habit's refusal is not kept for tonight", "src/agent/loop.ts", [
+        ('    this.#o.events.append("habit.fell", { kind: h.key, task: h.task, version: h.version, run: ctx.run, why }, { orb: ctx.orb, conversation: ctx.conversation });\n', ""),
+    ], ["habit-runs.test.ts"]),
+    ("the night writes a habit for a chat", "src/gym/night.ts", [
+        ('      if (!c.trigger.startsWith("schedule:") && !c.trigger.startsWith("trigger:")) continue;\n', ""),
+    ], ["night.test.ts"]),
+    ("the night asks the teacher again with nothing new", "src/gym/night.ts", [
+        ("        if (c.runs.every((r) => tried.has(r) || answered.has(r))) return null;\n", ""),
+    ], ["night.test.ts"]),
+    ("a habit that works is written again every night", "src/gym/night.ts", [
+        ("        if (c.runs.every((r) => tried.has(r) || answered.has(r))) return null;", "        if (c.runs.every((r) => tried.has(r))) return null;"),
+    ], ["night.test.ts"]),
+    ("the own brain sits again for runs it answered itself", "src/gym/night.ts", [
+        ("    if (all.length && runs.every((r) => sat.has(r) || answered.has(r))) return null;", "    if (all.length && runs.every((r) => sat.has(r))) return null;"),
+    ], ["playbook.test.ts"]),
+    ("a recompile overwrites the version before", "src/gym/night.ts", [
+        ("    return version + 1;\n  }\n\n  /** The runs a habit", "    return 1;\n  }\n\n  /** The runs a habit"),
+    ], ["night.test.ts"]),
+    ("the teacher's cost is spent on no one", "src/gym/night.ts", [
+        ("            this.#o.spend?.record(", "            void this.#o.spend; void ("),
+    ], ["night.test.ts"]),
+    ("the night runs every tick", "src/gym/night.ts", [
+        ("    if (last) return Number(last.data.night) + DAY_MS;", "    if (last) return Number(last.data.night);"),
+    ], ["night.test.ts"]),
+    ("a new home's first night never comes", "src/gym/night.ts", [
+        ("    return nightOf(began) + DAY_MS;", "    return nightOf(this.#o.clock.now() + began * 0) + DAY_MS;"),
+    ], ["night.test.ts"]),
+    ("closing the home does not wait for the night", "src/home.ts", [
+        ("    await this.gym.close();\n", ""),
+    ], ["night.test.ts"]),
+    ("a teacher cut short by closing is a rejection", "src/gym/compile.ts", [
+        ("    if (o.signal?.aborted) throw e;\n", ""),
+    ], ["night.test.ts"]),
+    ("a kit still starting at close writes to a closed log", "src/home.ts", [
+        ("      if (!this.#closed) this.events.append(\"kit.start_failed\"", "      this.events.append(\"kit.start_failed\""),
+    ], ["night.test.ts"]),
+    ("a habit you took back still answers", "src/gym/steps.ts", [
+        ('[...events.ofType("habit.rolled_back"), ...events.ofType("habit.undone")]', '[...events.ofType("habit.rolled_back")]'),
+    ], ["undo.test.ts"]),
+    ("an undo takes no XP back", "src/home.ts", [
+        ("      this.events.append(\"undo\", { source: promoted.seq, what: `the habit ${u.habit} v${u.version}` }, { orb: u.orb });\n", ""),
+    ], ["undo.test.ts"]),
+    ("an undo costs a rollback's XP too", "src/home.ts", [
+        ('      this.events.append("habit.undone", { kind: u.habit, version: u.version }, { orb: u.orb });', '      this.events.append("habit.undone", { kind: u.habit, version: u.version }, { orb: u.orb });\n      this.events.append("habit.rolled_back", { kind: u.habit, version: u.version }, { orb: u.orb });'),
+    ], ["undo.test.ts"]),
+    ("a lesson undone stays learned", "src/home.ts", [
+        ("    this.learned.remove(u.orb, u.index);\n", ""),
+    ], ["undo.test.ts"]),
+    ("the card offers a habit you took back", "src/gym/card.ts", [
+        ("      if (!undone.has(`${e.orb}|${String(e.data.kind)}|${version}`)) n.undo.push(", "      n.undo.push("),
+    ], ["card.test.ts"]),
+    ("the night's promotions are left off its card", "src/gym/card.ts", [
+        ('    if (e.type === "habit.promoted" && e.orb && e.at >= nightFrom && e.at < nightTo) {', '    if (e.type === "habit.promoted" && e.orb && e.at >= from + nightFrom * 0 && e.at < to + nightTo * 0) {'),
+    ], ["card.test.ts"]),
+    # the exam (PLAN 3.5), by Ash's run.mjs
+    ("the exam is one coin flip a case", "src/gym/exam.ts", [
+        ("  const k = o.k ?? K;", "  const k = 1 + (o.k ?? K) * 0;"),
+    ], ["exam.test.ts"]),
+    ("a rate limit counts as a failure", "src/gym/exam.ts", [
+        ("continue; // no evidence either way", "{ n++; continue; } // no evidence either way"),
+    ], ["exam.test.ts"]),
+    ("another model's baseline is compared as if the same", "src/gym/exam.ts", [
+        ("  if (base.brain && now.brain && base.brain !== now.brain) return", "  if (false) return"),
+    ], ["exam.test.ts"]),
+    ("a coin flip is compared with a rate", "src/gym/exam.ts", [
+        ("  if ((base.k > 1) !== (now.k > 1)) return", "  if (false) return"),
+    ], ["exam.test.ts"]),
+    ("a sitting cut short is judged", "src/gym/exam.ts", [
+        ("  if (now.missing.length) return", "  if (false) return"),
+    ], ["exam.test.ts"]),
+    ("the whole sitting's fall is not a regression", "src/gym/exam.ts", [
+        ("  const fell = base.suite !== null", "  const fell = false && base.suite !== null"),
+    ], ["exam.test.ts"]),
+    ("one sample a case clears the bar", "src/gym/exam.ts", [
+        ("  if (!s || s.missing.length || s.k < 2 || s.suite === null) return false;", "  if (!s || s.missing.length || s.suite === null) return false;"),
+    ], ["exam.test.ts"]),
+    ("a brain's exam reads its claim, not its calls", "src/gym/cases.ts", [
+        ("      if (i < c.steps.length) return { ok: false, why: `it answered after", "      if (i < c.steps.length && o.answer !== \"said\") return { ok: false, why: `it answered after"),
+    ], ["exam.test.ts"]),
+    # the own brain's playbook (PLAN 3.4)
+    ("the own brain's exam includes the answers it was shown", "src/gym/night.ts", [
+        ("cases: cases.slice(0, -EXAMPLES), k:", "cases, k:"),
+    ], ["playbook.test.ts"]),
+    ("a task moves to the own brain under the bar", "src/gym/steps.ts", [
+        ("  if (!last || last.data.earned !== true) return null;", "  if (!last) return null;"),
+    ], ["playbook.test.ts"]),
+    ("a refused playbook replaces the one before", "src/gym/night.ts", [
+        ('    const accepted = v.verdict === "pass" || v.verdict === "incomparable";', "    const accepted = v.verdict !== null;"),
+    ], ["playbook.test.ts"]),
+    ("the own brain sits again with nothing new", "src/gym/night.ts", [
+        ("    if (all.length && runs.every((r) => sat.has(r) || answered.has(r))) return null;", "    if (false) return null;"),
+    ], ["playbook.test.ts"]),
+    ("the playbook kept is not the one sat", "src/gym/night.ts", [
+        ("...(accepted && { system: x.pb.system })", '...(accepted && { system: "" })'),
+    ], ["playbook.test.ts"]),
+    ("his own brain answers a chat too", "src/agent/loop.ts", [
+        ("    if (!ctx.fresh) return null;\n    const asks = seen.filter((i) => i.source !== \"system\");\n    return asks.length", "    const asks = seen.filter((i) => i.source !== \"system\");\n    return asks.length"),
+    ], ["playbook.test.ts"]),
+    ("his own brain's failure ends the run", "src/agent/loop.ts", [
+        ("      if (r.error && own && !r.text && !r.toolCalls.length) {", "      if (r.error && own && !r.text && !r.toolCalls.length && false) {"),
+    ], ["playbook.test.ts"]),
+    ("his own brain answers without its playbook", "src/agent/loop.ts", [
+        ("content: own ? `${standing}\\n\\n${own.system}` : standing }", "content: standing }"),
+    ], ["playbook.test.ts"]),
+    ("his own brain's cost is billed as the big brain's", "src/agent/loop.ts", [
+        ('          tier: own ? "own" : "big", model: ep.model,', '          tier: "big", model: ep.model,'),
+    ], ["playbook.test.ts"]),
+    ("the morning card counts his own brain's run as the big brain's too", "src/gym/card.ts", [
+        ('(e.data.tier === "habit" || e.data.tier === "own") && typeof e.data.run', 'e.data.tier === "habit" && typeof e.data.run'),
+    ], ["playbook.test.ts"]),
+    # what rank widens (PLAN 3.8, rules/rank.ts)
+    ("rank widens a command that is not a reader", "src/rules/rank.ts", [
+        ("  if (!READERS.has(program!)) return false;\n", ""),
+    ], ["rank.test.ts"]),
+    ("a reader's run-something flag passes as reading", "src/rules/rank.ts", [
+        ("rest.every((t) => !RUNS_SOMETHING.test(t) && ", "rest.every((t) => "),
+    ], ["rank.test.ts"]),
+    ("a path out of the workspace passes as reading", "src/rules/rank.ts", [
+        ('!t.startsWith("/") && !t.startsWith("~") && ', ""),
+    ], ["rank.test.ts"]),
+    ("shell syntax passes as reading", "src/rules/rank.ts", [
+        ("  if (!c || SYNTAX.test(c)) return false;", "  if (!c) return false;"),
+    ], ["rank.test.ts"]),
+    ("rank widens below Senior", "src/rules/rank.ts", [
+        ("  if (LEVELS.indexOf(o.level) < LEVELS.indexOf(WIDENS_AT) || o.family", "  if (o.family"),
+    ], ["rank.test.ts"]),
+    ("rank widens outside a Build specialty", "src/rules/rank.ts", [
+        (' || o.family !== "build" || o.background', " || o.background"),
+    ], ["rank.test.ts"]),
+    ("rank overrides your own rule", "src/rules/policy.ts", [
+        ('  if (f.rule.decision === null && d === "ask" && f.rank) {', '  if (d === "ask" && f.rank) {'),
+    ], ["rank.test.ts"]),
+    ("rank lowers the floor", "src/rules/policy.ts", [
+        ("  for (const h of f.floor) {", "  for (const h of f.rank ? [] : f.floor) {"),
+    ], ["rank.test.ts"]),
+    ("rank waives being away", "src/rules/policy.ts", [
+        ('  if (f.mode === "away" && f.outward) {', '  if (f.mode === "away" && f.outward && !f.rank) {'),
+    ], ["rank.test.ts"]),
+    ("no orb's rank reaches the guard", "src/home.ts", [
+        ("        return o ? { level: levelOf(this.events, orb), family: SPECIALTY_FAMILIES[o.specialty] } : null;", "        return o && null;"),
+    ], ["rank.test.ts"]),
+    # levels and promotions (PLAN 3.8)
+    ("XP alone earns a promotion", "src/gym/levels.ts", [
+        ("  if (tasks.length < need.tasks) missing.push(", "  if (false) missing.push("),
+    ], ["levels.test.ts"]),
+    ("a regression is forgotten at once", "src/gym/levels.ts", [
+        ("    .filter((e) => e.orb === orb && e.at >= since)", "    .filter((e) => e.orb === orb && e.at >= o.now + since * 0)"),
+    ], ["levels.test.ts"]),
+    ("work outside its specialty counts toward it", "src/gym/levels.ts", [
+        ("    .filter(([, runs]) => !areas || areaOf(events, runs).some((a) => areas.includes(a)))", "    .filter(([, runs]) => !areas || runs.length >= 0)"),
+    ], ["levels.test.ts"]),
+    ("a habit you took back still counts toward a level", "src/gym/levels.ts", [
+        ('  const gone = new Set([...events.ofType("habit.rolled_back"), ...events.ofType("habit.undone")].map(', '  const gone = new Set([...events.ofType("habit.rolled_back")].map('),
+    ], ["levels.test.ts"]),
+    ("the night promotes on its own", "src/gym/night.ts", [
+        ('      events.append("promotion.proposed", { from: p.from, to: p.to, evidence: p.evidence }, { orb: o.id });', '      events.append("promotion.proposed", { from: p.from, to: p.to, evidence: p.evidence }, { orb: o.id });\n      events.append("orb.promoted", { from: p.from, to: p.to }, { orb: o.id });'),
+    ], ["levels.test.ts"]),
+    ("a promotion is proposed every night", "src/gym/night.ts", [
+        ("      if (events.ofType(\"promotion.proposed\", settled).some((e) => e.orb === o.id && e.data.to === p.to)) continue;\n", ""),
+    ], ["levels.test.ts"]),
+    ("you can promote past the evidence", "src/home.ts", [
+        ('    if (!p.ready) throw new Error(`not yet: ${p.missing.join("; ")}`);\n', ""),
+    ], ["levels.test.ts"]),
+    ("you can skip a level", "src/home.ts", [
+        ("    if (!p || p.to !== to) throw new Error(", "    if (!p) throw new Error("),
+    ], ["levels.test.ts"]),
+    ("a promotion's notice stays after your answer", "src/notices.ts", [
+        ('    } else if ((e.type === "orb.promoted" || e.type === "promotion.declined") && e.orb) {\n      this.#settle("kind = \'promotion\' AND orb = ?", e.orb);', '    } else if (e.type === "never.happens" && e.orb) {\n      this.#settle("kind = \'promotion\' AND orb = ?", e.orb);'),
+    ], ["levels.test.ts"]),
+    ("the loop lets a promoted orb skip a card", "src/agent/loop.ts", [
+        ('        } else if (def.pause || v!.decision === "ask") {', '        } else if (def.pause || (v!.decision === "ask" && levelOf(this.#o.events, ctx.orb) === "Junior")) {'),
+        ('import { taskOf } from "../gym/finder.ts";', 'import { taskOf } from "../gym/finder.ts";\nimport { levelOf } from "../gym/levels.ts";'),
+    ], ["levels.test.ts"]),
+    ("a held exam pays every night", "src/gym/xp.ts", [
+        ("        if (e.data.earned === true && !held) this.#give(", "        if (e.data.earned === true) this.#give("),
+    ], ["xp.test.ts"]),
+    ("an exam that no longer holds keeps its XP", "src/gym/xp.ts", [
+        ("        else if (e.data.earned !== true && held) {", "        else if (e.data.earned !== true && held && false) {"),
+    ], ["xp.test.ts"]),
+    ("a refused sitting moves XP", "src/gym/xp.ts", [
+        ("        if (!e.orb || e.data.accepted !== true) return;", "        if (!e.orb) return;"),
+    ], ["xp.test.ts"]),
+    # plan templates (PLAN 3.2)
+    ("a template is kept without the gate's yes", "src/gym/templates.ts", [
+        ("    if (why.length) refused.push({ shape, why });", "    if (why.length < 0) refused.push({ shape, why });"),
+    ], ["templates.test.ts"]),
+    ("two approved plans make a template", "src/gym/templates.ts", [
+        ("    if (ps.length < MIN_APPROVED) continue;", "    if (ps.length < MIN_APPROVED - 1) continue;"),
+    ], ["templates.test.ts"]),
+    ("a declined plan counts toward a template", "src/gym/templates.ts", [
+        ('    if (p.orb !== orb || p.status !== "approved") continue;', '    if (p.orb !== orb || p.status === "submitted") continue;'),
+    ], ["templates.test.ts"]),
+    ("a template keeps the old plan's ticks", "src/gym/templates.ts", [
+        ('    const body = newest.body.replace(/\\[(x|~)\\]/gi, "[ ]");', "    const body = newest.body;"),
+    ], ["templates.test.ts"]),
+    ("the night keeps a template again every night", "src/gym/templates.ts", [
+        ("    if (known.has(`${t.shape}|${t.plans.join(\",\")}`)) continue;\n", ""),
+    ], ["templates.test.ts"]),
+    ("one orb's templates are another's", "src/gym/templates.ts", [
+        ("    if (e.orb !== orb) continue;\n    byShape.set(", "    byShape.set("),
+    ], ["templates.test.ts"]),
+    ("a habit's refusal still answers", "src/agent/loop.ts", [
+        ('      if ("refused" in next) return this.#fell(ctx, s.h, next.refused, step);\n', '      if ("refused" in next) { this.#fell(ctx, s.h, next.refused, step); return { outcome: "ok", summary: "" }; }\n'),
+    ], ["habit-runs.test.ts"]),
     # the researchers' tools (PLAN 3.10)
     ("the web tools may reach loopback", "src/agent/net.ts", [
         ("    a === 0 || a === 10 || a === 127 ||", "    a === 0 || a === 10 ||"),

@@ -16,6 +16,9 @@ import type { Decision } from "../agent/tools.ts";
 import { type FloorHit, shellFloor } from "./floor.ts";
 import { decide, type Mode, type Verdict } from "./policy.ts";
 import type { Matcher, Rules } from "./rules.ts";
+import { rankWidens } from "./rank.ts";
+import type { Family } from "../brain/constitution.ts";
+import type { Level } from "../gym/levels.ts";
 
 export type Taint = { source: string; detail: string };
 export type TurnState = { taints: Taint[]; approved: string[] };
@@ -64,6 +67,8 @@ export type GuardOptions = {
   matcher?: () => Matcher | null;
   /** Test hook: overrides what the rules say (the floor, the switch and away still apply). */
   ruleOverride?: (def: ToolDef, args: Record<string, unknown>) => Decision | null;
+  /** An orb's level and its specialty's family, for the one thing rank widens (rules/rank.ts). */
+  rankOf?: (orb: string) => { level: Level; family: Family } | null;
 };
 
 export type CallSite = { orb: string; turn: string; mode: Mode; signal?: AbortSignal };
@@ -95,8 +100,8 @@ export class Guard {
   async verdict(def: ToolDef, args: Record<string, unknown>, at: CallSite): Promise<Verdict & { described: string }> {
     const described = def.describe(args);
     const floor: FloorHit[] = [...(def.floor?.(args) ?? [])];
+    let command = String(args.command ?? "");
     if (def.act === "shell") {
-      let command = String(args.command ?? "");
       try {
         command = def.commandOf?.(args) ?? command;
       } catch {
@@ -109,7 +114,9 @@ export class Guard {
       ? { decision: override, why: "" }
       : await this.#o.rules.decide(at.orb, described, this.#o.matcher?.() ?? null, at.signal);
     const oneway = def.act ? await this.#oneway(at.turn, def.act) : null;
-    return { ...decide({ floor, rule, defaultDecision: def.decision, oneway, mode: at.mode, outward: Boolean(def.act) }), described };
+    const r = def.act === "shell" ? this.#o.rankOf?.(at.orb) : null;
+    const rank = r ? rankWidens({ ...r, command, background: Boolean(args.background) }) : null;
+    return { ...decide({ floor, rule, defaultDecision: def.decision, oneway, mode: at.mode, outward: Boolean(def.act), rank }), described };
   }
 
   /** A card's yes for an outward action opens the switch for that action, this turn only. */
