@@ -1,6 +1,6 @@
 [Desktop Entry]
 Type=Application
-Name=Orbs
+Name=Orbz
 GenericName=Your office of orbs
 Comment=Chat with your orbs and see their work
 Exec=@HOME@/.local/bin/orbs-open

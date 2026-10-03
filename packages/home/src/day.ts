@@ -93,7 +93,7 @@ export function dayTools(h: Home, now: () => number): ToolDef[] {
         const t = now();
         try {
           const r = (await h.kit.call("day_answer", { text: typeof a.question === "string" ? a.question : "", ...(await feedOf(h, t)), now: t / 1000 })) as { kind: string; said: string };
-          return { content: r.kind === "read_only" ? `${r.said} (Orbs reads the person's calendars; a change is theirs to make.)` : r.said };
+          return { content: r.kind === "read_only" ? `${r.said} (Orbz reads the person's calendars; a change is theirs to make.)` : r.said };
         } catch (e) {
           return { content: `The day could not be read: ${e instanceof Error ? e.message : String(e)}`, isError: true };
         }

@@ -7,7 +7,7 @@ import { DatabaseSync } from "node:sqlite";
 
 export class HomeLockedError extends Error {
   constructor(dataDir: string) {
-    super(`another Orbs home is already running on ${dataDir}`);
+    super(`another Orbz home is already running on ${dataDir}`);
     this.name = "HomeLockedError";
   }
 }

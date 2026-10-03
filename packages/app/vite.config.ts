@@ -13,8 +13,8 @@ const ground = hex(SURFACES.dark.ground);
 
 function installable(): Plugin {
   const manifest = {
-    name: "Orbs",
-    short_name: "Orbs",
+    name: "Orbz",
+    short_name: "Orbz",
     description: "Your office of orbs: assistants that work on their own computer and form habits.",
     start_url: "./orbs.html",
     scope: "./",

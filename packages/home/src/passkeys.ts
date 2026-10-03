@@ -147,7 +147,7 @@ export class Passkeys {
   createOptions(where: Where, owner: string): Record<string, unknown> {
     return {
       challenge: this.#challenge("create"),
-      rp: { id: where.rpId, name: "Orbs" },
+      rp: { id: where.rpId, name: "Orbz" },
       user: { id: b64u(this.#user), name: owner, displayName: owner },
       pubKeyCredParams: [{ type: "public-key", alg: ES256 }],
       timeout: CHALLENGE_MS,

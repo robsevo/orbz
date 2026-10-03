@@ -76,7 +76,7 @@ test("one command starts a headless home; it answers only with its token, refuse
 
   const twin = start(dataDir);
   assert.equal(await twin.exit, 3, "a second home on the same data is refused");
-  assert.match(twin.out(), /another Orbs home is already running/);
+  assert.match(twin.out(), /another Orbz home is already running/);
 
   home.child.kill("SIGTERM");
   assert.equal(await home.exit, 0);

@@ -211,7 +211,7 @@ export class Loops {
     const before = hashFiles(globs);
     const tripped = (e: Omit<LoopEntry, "loop" | "day">): LoopEntry | null => {
       if (hashFiles(globs) === before) return null;
-      const why = `TRIPWIRE: loop "${def.name}" changed a protected file (the rules, the brain or Orbs' own source)`;
+      const why = `TRIPWIRE: loop "${def.name}" changed a protected file (the rules, the brain or Orbz' own source)`;
       writeFileSync(join(this.#opts.dir, "DISABLED"), `${why}; every loop is off until someone reviews it and removes this file\n`);
       this.#events.append("notify", { level: "alarm", text: `${why}. Every loop is switched off.`, loop: def.name });
       return journal({ ...e, note: `${why}; every loop switched off` });

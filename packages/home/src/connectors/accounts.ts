@@ -173,7 +173,7 @@ export class Accounts {
       };
       const q = url.searchParams;
       if (q.get("state") !== state) {
-        page(400, "This is not the sign-in Orbs started", "Go back to Orbs and connect the account again.");
+        page(400, "This is not the sign-in Orbz started", "Go back to Orbz and connect the account again.");
         return finish(new AccountError("the sign-in came back with a state this sign-in did not send"));
       }
       if (q.get("error")) {
@@ -182,7 +182,7 @@ export class Accounts {
       }
       const code = q.get("code");
       if (!code) {
-        page(400, `${p.title} is not connected`, "The sign-in came back without what Orbs needs. Try again.");
+        page(400, `${p.title} is not connected`, "The sign-in came back without what Orbz needs. Try again.");
         return finish(new AccountError("the sign-in brought back no code"));
       }
       void (async () => {
@@ -196,7 +196,7 @@ export class Accounts {
           const account: Account = { provider: id, email };
           this.#save({ ...this.list(), [name]: account });
           this.#o.events.append("account.connected", { name, provider: id }); // never the address or a token
-          page(200, `${p.title} is connected`, "You can close this tab and go back to Orbs.");
+          page(200, `${p.title} is connected`, "You can close this tab and go back to Orbz.");
           finish(null, { name, account });
         } catch (e) {
           page(400, `${p.title} is not connected`, e instanceof Error ? e.message : String(e));

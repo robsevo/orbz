@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Puts Orbs on this Linux desktop (owner, 10-03: "make the desktop icon please"): the launcher
+# Puts Orbz on this Linux desktop (owner, 10-03: "make the desktop icon please"): the launcher
 # (orbs-open) in ~/.local/bin, the app's icon (packages/app/public/icons/orbs-512.png, the office on
 # its card, drawn by tools/shoot_icons.ts) in the icon theme at each size, Orbs in the app grid, and
 # a copy on ~/Desktop. `--repo DIR` is the checkout the launcher starts the home from (default: the
@@ -28,4 +28,4 @@ if [ -d "$HOME/Desktop" ]; then
   install -m 755 "$APPS/orbs.desktop" "$HOME/Desktop/orbs.desktop"
   gio set "$HOME/Desktop/orbs.desktop" metadata::trusted true 2>/dev/null || true
 fi
-echo "Orbs is in your apps$( [ -d "$HOME/Desktop" ] && echo " and on your Desktop"): it starts the home from $REPO"
+echo "Orbz is in your apps$( [ -d "$HOME/Desktop" ] && echo " and on your Desktop"): it starts the home from $REPO"

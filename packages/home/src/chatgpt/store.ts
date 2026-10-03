@@ -67,11 +67,11 @@ export class KeychainStore implements SecretStore {
     if (this.#mac) {
       // in interactive mode the command, secret included, is read from stdin; base64 keeps it one word
       const b64 = Buffer.from(value, "utf8").toString("base64");
-      const r = await run(this.#tool, ["-i"], `add-generic-password -U -s ${SERVICE} -a ${key} -l "Orbs: ChatGPT sign-in" -w ${b64}\n`);
+      const r = await run(this.#tool, ["-i"], `add-generic-password -U -s ${SERVICE} -a ${key} -l "Orbz: ChatGPT sign-in" -w ${b64}\n`);
       if (r.code !== 0) throw new Error(`the keychain refused the secret (${r.err.trim().slice(0, 200) || `exit ${r.code}`})`);
       return;
     }
-    const r = await run(this.#tool, ["store", `--label=Orbs: ChatGPT sign-in`, "service", SERVICE, "key", key], value);
+    const r = await run(this.#tool, ["store", `--label=Orbz: ChatGPT sign-in`, "service", SERVICE, "key", key], value);
     if (r.code !== 0) throw new Error(`the keychain refused the secret (${r.err.trim().slice(0, 200) || `exit ${r.code}`})`);
   }
 

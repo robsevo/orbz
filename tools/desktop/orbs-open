@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Opens Orbs from the desktop (owner, 10-03; tools/desktop/install.sh puts it in ~/.local/bin).
+# Opens Orbz from the desktop (owner, 10-03; tools/desktop/install.sh puts it in ~/.local/bin).
 # It starts the home if it is not running (the checkout it was installed for, its output in
 # <data>/home.log), then opens the app in a window of its own: a Chromium browser's app window with
 # a profile of its own (<data>/window), so its session and its place in the dock are Orbs'. The
@@ -12,7 +12,7 @@ DATA="${ORBS_HOME:-$HOME/.orbs}"
 WIN="$DATA/window"
 
 say() {
-  command -v notify-send >/dev/null && notify-send -a Orbs -i orbs "Orbs" "$1"
+  command -v notify-send >/dev/null && notify-send -a Orbz -i orbs "Orbz" "$1"
   echo "orbs-open: $1" >&2
 }
 field() { python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])' "$DATA/home.json" "$1" 2>/dev/null; }
@@ -22,7 +22,7 @@ alive() {
 }
 
 if ! alive; then
-  [ -d "$REPO/packages/home" ] || { say "there is no Orbs checkout at $REPO"; exit 1; }
+  [ -d "$REPO/packages/home" ] || { say "there is no Orbz checkout at $REPO"; exit 1; }
   mkdir -p "$DATA"
   ( cd "$REPO" && setsid "$NODE" packages/home/src/main.ts >> "$DATA/home.log" 2>&1 < /dev/null & )
   for _ in $(seq 1 120); do alive && break; sleep 0.5; done

@@ -222,7 +222,7 @@ export function Connections({ home }: { home: Office }) {
             <input type="password" autoComplete="off" value={mail.password} onChange={(e) => setMail((m) => ({ ...m, password: e.target.value }))} aria-label="Its password" placeholder="An app password, if your mail has them" size={1} required style={field} />
             <input inputMode="numeric" value={mail.port} onChange={(e) => setMail((m) => ({ ...m, port: e.target.value.replace(/\D/g, "") }))} aria-label="Its port" placeholder="993" size={1} maxLength={5} style={{ ...field, flex: "0 1 96px" }} />
           </div>
-          <span style={small}>Your orbs read what arrives and keep replies in your Drafts for you to send. Orbs never sends mail.</span>
+          <span style={small}>Your orbs read what arrives and keep replies in your Drafts for you to send. Orbz never sends mail.</span>
           <button type="submit" disabled={busy} style={{ ...button, justifySelf: "start" }}>
             Add the account
           </button>

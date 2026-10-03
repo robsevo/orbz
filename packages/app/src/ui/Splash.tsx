@@ -79,7 +79,7 @@ export function Splash({ office, facts, ready, onLeaving, onDone, signIn }: {
     opacity: phase === "leaving" ? 0 : 1, transition: "opacity 380ms var(--m-physical)", pointerEvents: phase === "leaving" ? "none" : "auto",
   };
   return (
-    <div role="status" aria-live="polite" aria-label="Orbs is opening" data-splash={phase} style={veil}>
+    <div role="status" aria-live="polite" aria-label="Orbz is opening" data-splash={phase} style={veil}>
       <div style={{ display: "flex", flexWrap: "nowrap", justifyContent: "center", alignItems: "end", gap: 4, maxWidth: "100%" }}>
         {shown.map((c, i) => (
           <div key={c.name} style={{ animation: calm ? undefined : `orbs-arrive 520ms var(--m-spring) ${i * STAGGER_MS}ms both`, minWidth: 0 }}>
@@ -88,7 +88,7 @@ export function Splash({ office, facts, ready, onLeaving, onDone, signIn }: {
         ))}
       </div>
       <div style={{ display: "grid", justifyItems: "center", gap: "var(--s2)", textAlign: "center" }}>
-        <span style={{ font: "800 40px/44px var(--font)", letterSpacing: ".18em", color: "var(--text-1)", animation: calm ? undefined : "orbs-arrive 600ms var(--m-spring) 240ms both" }}>ORBS</span>
+        <span style={{ font: "800 40px/44px var(--font)", letterSpacing: ".18em", color: "var(--text-1)", animation: calm ? undefined : "orbs-arrive 600ms var(--m-spring) 240ms both" }}>ORBZ</span>
         {phase === "failed" ? (
           <div style={{ display: "grid", justifyItems: "center", gap: "var(--s3)" }}>
             <span style={{ font: "600 15px/21px var(--font)", color: "var(--alert)", maxWidth: 520, textWrap: "balance" }}>Can't reach your home: {why}</span>

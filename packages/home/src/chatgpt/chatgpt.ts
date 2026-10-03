@@ -81,7 +81,7 @@ export class ChatGPT {
 
   constructor(o: ChatGPTOptions) {
     this.#o = {
-      issuer: ISSUER, apiBase: RESOURCE, appName: "Orbs", signInTimeoutMs: 10 * 60_000, pauseMs: 60 * 60_000,
+      issuer: ISSUER, apiBase: RESOURCE, appName: "Orbz", signInTimeoutMs: 10 * 60_000, pauseMs: 60 * 60_000,
       ...o, store: o.store ?? null,
     };
     this.#hostFile = join(o.dataDir, "chatgpt-host.json");
@@ -208,19 +208,19 @@ export class ChatGPT {
         res.end(`<!doctype html><meta charset="utf-8"><title>${esc(title)}</title><body style="font:16px system-ui;margin:4em auto;max-width:32em"><h1 style="font-size:1.3em">${esc(title)}</h1><p>${esc(body)}</p>`);
       };
       if (q.get("state") !== state) {
-        page(400, "This sign-in is not the one Orbs started", "Go back to Orbs and choose Continue with ChatGPT again.");
+        page(400, "This sign-in is not the one Orbz started", "Go back to Orbz and choose Continue with ChatGPT again.");
         finish(new SignInError("the sign-in came back with a state this sign-in did not send"));
         return;
       }
       if (q.get("error")) {
-        page(400, "Orbs is not signed in", `ChatGPT said: ${q.get("error_description") ?? q.get("error")}`);
+        page(400, "Orbz is not signed in", `ChatGPT said: ${q.get("error_description") ?? q.get("error")}`);
         finish(new SignInError(`ChatGPT did not sign you in (${q.get("error")})`, q.get("error")));
         return;
       }
       const code = q.get("code");
       const issued = q.get("client_id") ?? this.#reg.clientId;
       if (!code || !issued || issued === DYNAMIC_CLIENT) {
-        page(400, "Orbs is not signed in", "The sign-in came back without what Orbs needs. Try again.");
+        page(400, "Orbz is not signed in", "The sign-in came back without what Orbz needs. Try again.");
         finish(new SignInError(code ? "the sign-in issued no client ID" : "the sign-in brought back no code"));
         return;
       }
@@ -237,10 +237,10 @@ export class ChatGPT {
           if (sharing) await this.#refreshModels(t.accessToken);
           this.#saveReg();
           this.#o.events.append("chatgpt.connected", { email: who.email, sharing, model: this.#reg.model });
-          page(200, sharing ? "You're using your ChatGPT plan" : "Signed in to ChatGPT", sharing ? "You can close this tab and go back to Orbs." : "ChatGPT did not allow plan use for this account, so Orbs will use its other brain. You can close this tab.");
+          page(200, sharing ? "You're using your ChatGPT plan" : "Signed in to ChatGPT", sharing ? "You can close this tab and go back to Orbz." : "ChatGPT did not allow plan use for this account, so Orbz will use its other brain. You can close this tab.");
           finish(null, await this.status());
         } catch (e) {
-          page(400, "Orbs is not signed in", (e as Error).message);
+          page(400, "Orbz is not signed in", (e as Error).message);
           finish(e instanceof Error ? e : new Error(String(e)));
         }
       })();

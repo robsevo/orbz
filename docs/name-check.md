@@ -50,3 +50,28 @@ distinctive handle everywhere: **`useorbs`** — free on GitHub, npm and PyPI, a
   ever needs a public name.
 - [x] Owner: name picked — "just orbs"
 - [ ] Later, before any paid branding: the USPTO + CIPO search for "ORBS" in classes 9 and 42
+
+## Decision (owner, 2026-10-03): "can we call it Orbz instead?"
+
+- **On screen: Orbz.** The app's title, its install name, the desktop icon, the splash and the
+  welcome, the sign-in pages and the passkey prompt. The characters are still orbs ("your orbs").
+- **Underneath: still `orbs`.** The repo and folder, the data directory (`~/.orbs`), the `orbs`
+  command, the packages, the `ORBS_*` variables and the code's names stay as they are, so nothing of
+  the owner's moves.
+- Checked 2026-10-03 the same way (GitHub API, npm and PyPI registries, DNS):
+
+| Where | Result |
+|---|---|
+| GitHub `orbz` | taken: an empty user (2023, no repos) |
+| GitHub `orbzhq` | taken: an organization (2021, 3 repos) |
+| GitHub `orbz-app`, `orbzapp`, `useorbz`, `getorbz` | free |
+| npm `orbz` | taken (updated 2026-08) |
+| npm `useorbz`, `getorbz`; PyPI `orbz`, `useorbz` | free |
+| `orbz.ai` | registered: "ORBZ.ai", an AI consultancy in Indaiatuba, Brazil (the same field) |
+| `orbz.app` | registered: an app called "Orbz · Use it, or it burns." |
+| `orbz.com`, `orbz.io` | registered (`orbz.com`'s page is titled "ORBZ") |
+| `orbz.dev`, `getorbz.com`, `useorbz.com`, `useorbz.app`, `getorbz.app` | no DNS answer (confirm at a registrar) |
+| `github.com/robsevo/orbz` | free |
+
+- [x] Owner: "Orbz" on screen (10-03)
+- [ ] Later, before any paid branding: the USPTO + CIPO search, now for "ORBZ" too, in classes 9 and 42

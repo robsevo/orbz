@@ -115,7 +115,7 @@ function Specimen() {
     <main style={page}>
       <header style={{ display: "flex", flexWrap: "wrap", alignItems: "end", justifyContent: "space-between", gap: "var(--s4)" }}>
         <div style={{ minWidth: 0 }}>
-          <h1 style={{ font: "var(--t-large)", color: "var(--text-1)", margin: 0, letterSpacing: "-.01em" }}>Orbs</h1>
+          <h1 style={{ font: "var(--t-large)", color: "var(--text-1)", margin: 0, letterSpacing: "-.01em" }}>Orbz</h1>
           <p style={{ font: "var(--t-subhead)", color: "var(--text-3)", margin: "var(--s1) 0 0" }}>The design system: every token, as it renders.</p>
         </div>
         <div role="group" aria-label="Theme" style={{ display: "flex", gap: "var(--s2)" }}>

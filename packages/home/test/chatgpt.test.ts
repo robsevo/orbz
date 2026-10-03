@@ -47,7 +47,7 @@ test("C.0 CONTROL: a sign-in with nothing wrong connects, and says what it sent"
   assert.equal(q.get("scope"), "openid profile email offline_access resource.invoke chatgpt.tokens.use.direct");
   assert.equal(q.get("code_challenge_method"), "S256");
   assert.equal(q.get("resource"), "https://api.openai.com/v1");
-  assert.equal(q.get("agent_name_hint"), "Orbs");
+  assert.equal(q.get("agent_name_hint"), "Orbz");
   assert.match(q.get("redirect_uri")!, /^http:\/\/127\.0\.0\.1:\d+\/callback$/);
   assert.ok(q.get("state") && q.get("nonce") && q.get("state") !== q.get("nonce"));
   const host = JSON.parse(readFileSync(join(h.dataDir, "chatgpt-host.json"), "utf8")) as { hostId: string };
@@ -284,7 +284,7 @@ esac
   await k.delete("chatgpt:host");
   assert.equal(await k.get("chatgpt:host"), null);
   assert.doesNotMatch(readFileSync(log, "utf8"), /SECRET/, "the secret never reached argv");
-  assert.match(readFileSync(log, "utf8"), /^store --label=Orbs: ChatGPT sign-in service orbs key chatgpt:host$/m, "control: the log records the calls");
+  assert.match(readFileSync(log, "utf8"), /^store --label=Orbz: ChatGPT sign-in service orbs key chatgpt:host$/m, "control: the log records the calls");
   writeFileSync(join(dir, "broken"), "");
   assert.equal(await k.available(), false, "no Secret Service: the home falls back to a file and says so");
 });

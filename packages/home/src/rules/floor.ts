@@ -24,7 +24,7 @@ export const FLOOR_WORDS: Record<FloorCategory, string> = {
   messaging: "messaging someone always asks",
   calendar: "changing your calendar always asks",
   lessons: "what an orb learns, it learns only with your yes",
-  protected: "the owner's brain and Orbs' own data are never written",
+  protected: "the owner's brain and Orbz' own data are never written",
 };
 
 const DELETING = [

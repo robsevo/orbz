@@ -155,7 +155,7 @@ export function Onboarding({ office, person, home, onDone }: { office: Character
   return (
     <div
       role="dialog"
-      aria-label="Welcome to Orbs"
+      aria-label="Welcome to Orbz"
       data-onboarding={beat.kind}
       onPointerDownCapture={(e) => {
         if (!(e.target instanceof HTMLElement && e.target.closest("[data-music]"))) begin();
