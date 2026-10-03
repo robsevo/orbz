@@ -135,8 +135,16 @@ test("quick presses climb, and fall back once you stop", { skip }, async () => {
   const page = await open();
   try {
     await clear(page);
-    for (const g of ["Hop", "Wiggle", "Squish", "Jelly"]) await page.getByRole("button", { name: g }).click({ delay: 20 });
-    await page.waitForTimeout(800);
+    // the four presses in one go, inside the page: Playwright's own clicks, one after another, can
+    // take longer than the combo's 650 ms when the gate has every core busy (a race, not a combo)
+    await page.evaluate((names) => {
+      for (const n of names) {
+        const b = [...document.querySelectorAll("button")].find((x) => x.getAttribute("aria-label") === n || x.textContent?.trim() === n)!;
+        b.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, pointerType: "mouse" }));
+        b.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, button: 0, pointerType: "mouse" }));
+      }
+    }, ["Hop", "Wiggle", "Squish", "Jelly"]);
+    await page.waitForTimeout(800); // a rest: under load it only grows, so the fall back still holds
     await page.getByRole("button", { name: "Nod" }).click();
     const lifts = (await played(page)).map((p) => p.lift);
     assert.deepEqual(lifts.map((l) => Math.round(l * 10) / 10), [0, 0.7, 1.4, 2.1, 0], "a combo, then rest");

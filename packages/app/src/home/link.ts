@@ -75,6 +75,10 @@ export type Connector = { name: string; state: "ready" | "failed" | "starting"; 
 export type Session = { id: number; title: string; createdAt: number; brainstorm: string[]; floor: string[] };
 /** A password saved for the orbs' browsers (PLAN 4.1): never the password itself. */
 export type VaultEntry = { site: string; username: string; added: number };
+/** What your hands do on his computer once you have it (PLAN 4.6), in his screen's pixels. */
+export type Hands = { kind: "click"; x: number; y: number } | { kind: "type"; text: string } | { kind: "key"; key: string } | { kind: "scroll"; dy: number } | { kind: "go"; url: string } | { kind: "back" | "forward" | "reload" };
+/** A piece of a command's output, live (PLAN 4.6): his, or yours in his terminal (`call` "you-…"). */
+export type TerminalChunk = { orb: string; conversation: string | null; run: number; call: string; chunk: string };
 /** His browser (PLAN 4.1): open or not, in your hands or not, and the last still of his screen. */
 export type ComputerState = { awake: boolean; takenOver: boolean; screen: { url: string; title: string; at: number; shot: number; cursor: { x: number; y: number } | null; width: number; height: number } | null };
 export const tabOf = (id: number, tab: Tab): string => `team:${id}:${tab}`;
@@ -163,12 +167,18 @@ export interface Office {
   computerAct(c: Character, act: "wake" | "sleep" | "reset" | "take-over" | "hand-back"): Promise<ComputerState>;
   /** The still `shot` (each still has its own number, so a new one is never an old one cached). */
   screenUrl(c: Character, shot: number): string;
+  /** His screen live (PLAN 4.6): an address an <img> shows frame by frame. */
+  liveUrl(c: Character): string;
+  /** Your hands on his page, once you have taken it over. */
+  hands(c: Character, h: Hands): Promise<ComputerState>;
+  /** A command you type into his terminal, once you have his computer: run in his sandbox. */
+  terminal(c: Character, command: string): Promise<{ output: string; failed: boolean }>;
   /** The passwords you save for your orbs' browsers (PLAN 4.1): listed, never shown back. */
   vault(): Promise<VaultEntry[]>;
   savePassword(site: string, username: string, password: string): Promise<VaultEntry[]>;
   removePassword(site: string, username: string): Promise<VaultEntry[]>;
   /** What happens as it happens: every event, and a reply's words as they stream. Returns a stop. */
-  watch(on: { event?: (e: { type: string; orb: string | null; conversation: string | null; at?: number; data?: Record<string, unknown> }) => void; text?: (d: { orb: string; conversation: string; delta: string; run: number }) => void; /** the stream is open: from here on nothing is missed */ open?: () => void }): () => void;
+  watch(on: { event?: (e: { type: string; orb: string | null; conversation: string | null; at?: number; data?: Record<string, unknown> }) => void; text?: (d: { orb: string; conversation: string; delta: string; run: number }) => void; /** his terminal, live (PLAN 4.6) */ terminal?: (d: TerminalChunk) => void; /** the stream is open: from here on nothing is missed */ open?: () => void }): () => void;
 }
 
 /** A private chat's conversation with an orb. */
@@ -242,6 +252,10 @@ function sharedStream(): (on: Watcher) => () => void {
       s.addEventListener("text", (m) => {
         const d = JSON.parse((m as MessageEvent).data as string);
         for (const w of [...watchers]) w.text?.(d);
+      });
+      s.addEventListener("terminal", (m) => {
+        const d = JSON.parse((m as MessageEvent).data as string) as TerminalChunk;
+        for (const w of [...watchers]) w.terminal?.(d);
       });
       s.addEventListener("open", () => {
         open = true;
@@ -456,6 +470,15 @@ export function doorOffice(base: Character): Office {
     },
     screenUrl(c, shot) {
       return `../orbs/${encodeURIComponent(idOf(c.name))}/screen.jpg?shot=${shot}`;
+    },
+    liveUrl(c) {
+      return `../orbs/${encodeURIComponent(idOf(c.name))}/computer/live`;
+    },
+    async hands(c, h) {
+      return call<ComputerState>(`../orbs/${encodeURIComponent(idOf(c.name))}/computer/hands`, { method: "POST", body: JSON.stringify(h) });
+    },
+    async terminal(c, command) {
+      return call<{ output: string; failed: boolean }>(`../orbs/${encodeURIComponent(idOf(c.name))}/terminal`, { method: "POST", body: JSON.stringify({ command }) });
     },
     async vault() {
       return (await call<{ entries: VaultEntry[] }>("../vault")).entries;

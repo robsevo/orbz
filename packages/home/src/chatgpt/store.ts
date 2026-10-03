@@ -27,6 +27,9 @@ function run(cmd: string, args: string[], input?: string): Promise<{ code: numbe
     c.stderr.on("data", (b: Buffer) => (err += b.toString()));
     c.once("error", (e) => ok({ code: -1, out: "", err: e.message }));
     c.once("close", (code) => ok({ code: code ?? -1, out, err }));
+    // a tool that exits without reading (no Secret Service to talk to) closes its end first: the
+    // write fails with EPIPE, and its exit code, not the write, says what happened
+    c.stdin.on("error", () => {});
     c.stdin.end(input ?? "");
   });
 }

@@ -4,9 +4,11 @@
 //   - Work: what he is making, shown as what it is (rooms/work.ts): a dataset as its table, a page
 //     as the page (its scripts do not run here), a dashboard's numbers as bars, a document, a
 //     calendar's events, or the code;
-//   - Browser: his own browser (PLAN 4.1): the last still of his screen, his face where he last
-//     clicked, and your hand on it (take over, hand back, reset);
-//   - Files: his workspace; Terminal: his commands and what they printed; Activity: every step;
+//   - Browser: his own browser (PLAN 4.1, 4.6): the last still of his screen, or his screen live,
+//     his face where he last clicked, and your hands on it (take over: clicks on his screen, typing,
+//     an address; hand back; reset);
+//   - Files: his workspace; Terminal: his commands and what they print as they print it, and yours
+//     when you have his computer; Activity: every step;
 //   - him as the cursor: his own orb, which goes to where his last step acted and stays put
 //     otherwise, with a little hop and a chime when he finishes.
 // Every number in it is read from his files and his run: none is typed.
@@ -14,7 +16,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type 
 import { Orb } from "../orb/Orb.tsx";
 import type { Character } from "../orb/spec.ts";
 import type { Gesture } from "../orb/life.ts";
-import { type ComputerState, idOf, type Entry, type Message, type Office, type WorkFile } from "../home/link.ts";
+import { type ComputerState, type Hands, idOf, type Entry, type Message, type Office, type WorkFile } from "../home/link.ts";
 import { play } from "../ui/sound.ts";
 import { OneLine } from "../ui/Balanced.tsx";
 import { ACT_WORDS, actsOf, chartOf, docBlocks, filesOf, icsEvents, kindOf, parseCsv, type Act, type Kind } from "./work.ts";
@@ -40,9 +42,26 @@ export function Computer(o: { home: Office; orb: Character; messages: Message[];
   const [dir, setDir] = useState("");
   const [entries, setEntries] = useState<Entry[] | null>(null);
   const [said, setSaid] = useState<string | null>(null);
-  // his browser's own news (a still, a sleep, your hand on it): the Browser tab looks again
+  // his browser's own news (a still, a sleep, your hand on it): its state is looked at again; and
+  // what his commands print, as they print it (PLAN 4.6)
   const [screenNews, setScreenNews] = useState(0);
-  useEffect(() => o.home.watch({ event: (e) => (e.orb === id && e.type.startsWith("computer.") ? setScreenNews((n) => n + 1) : undefined) }), [o.home, id]);
+  const [liveOut, setLiveOut] = useState<Record<string, string>>({});
+  useEffect(
+    () =>
+      o.home.watch({
+        event: (e) => (e.orb === id && e.type.startsWith("computer.") ? setScreenNews((n) => n + 1) : undefined),
+        terminal: (d) => (d.orb === id ? setLiveOut((m) => ({ ...m, [d.call]: ((m[d.call] ?? "") + d.chunk).slice(-20_000) })) : undefined),
+      }),
+    [o.home, id],
+  );
+  const [cstate, setCstate] = useState<ComputerState | null>(null);
+  useEffect(() => {
+    let live = true;
+    o.home.computer(o.orb).then((s) => live && setCstate(s), (e: Error) => live && setSaid(e.message));
+    return () => {
+      live = false;
+    };
+  }, [o.home, id, screenNews]);
 
   useEffect(() => {
     if (!open) return;
@@ -112,7 +131,7 @@ export function Computer(o: { home: Office; orb: Character; messages: Message[];
       </div>
       <div ref={panel} style={{ position: "relative", minWidth: 0, minHeight: o.big ? 320 : 200, maxHeight: o.big ? 560 : 360, overflowY: "auto", padding: 12 }}>
         {tab === "Work" && <Work open={open} file={file} acts={acts} touched={lastOnOpen} />}
-        {tab === "Browser" && <Browser home={o.home} orb={o.orb} news={screenNews} />}
+        {tab === "Browser" && <Browser home={o.home} orb={o.orb} state={cstate} setState={setCstate} />}
         {tab === "Files" && (
           <Files
             dir={dir}
@@ -125,7 +144,7 @@ export function Computer(o: { home: Office; orb: Character; messages: Message[];
             }}
           />
         )}
-        {tab === "Terminal" && <Terminal acts={acts.filter((a) => a.tool === "shell" || a.tool === "shell_output")} />}
+        {tab === "Terminal" && <Terminal home={o.home} orb={o.orb} acts={acts.filter((a) => a.tool === "shell" || a.tool === "shell_output")} live={liveOut} yours={cstate?.takenOver ?? false} />}
         {tab === "Activity" && <Activity acts={acts} />}
         {said && <span role="alert" style={{ font: "500 12px/16px var(--font)", color: "var(--alert)" }}>{said}</span>}
         {at && (
@@ -285,50 +304,113 @@ function Work({ open, file, acts, touched }: { open: string | null; file: WorkFi
   );
 }
 
-/** His browser (PLAN 4.1): the last still of his screen, with his face where he last clicked;
- * your hand on it. Driving it live from here is PLAN 4.6. */
-function Browser({ home, orb, news }: { home: Office; orb: Character; news: number }) {
-  const [state, setState] = useState<ComputerState | null>(null);
+/** His browser (PLAN 4.1, 4.6): the last still of his screen, or his screen live, with his face
+ * where he last clicked; your hands on it once you take it over (a press on his screen is a click
+ * there, typing, a key, an address), and a reset in two presses. */
+function Browser({ home, orb, state, setState }: { home: Office; orb: Character; state: ComputerState | null; setState: (s: ComputerState) => void }) {
   const [asking, setAsking] = useState(false);
+  const [watching, setWatching] = useState(false);
+  const [typed, setTyped] = useState("");
+  const [address, setAddress] = useState("");
   const [said, setSaid] = useState<string | null>(null);
-  useEffect(() => {
-    let live = true;
-    home.computer(orb).then((s) => live && setState(s), (e: Error) => live && setSaid(e.message));
-    return () => {
-      live = false;
-    };
-  }, [home, orb, news]);
   const act = (a: "take-over" | "hand-back" | "reset"): void => {
     setSaid(null);
     setAsking(false);
     home.computerAct(orb, a).then(setState, (e: Error) => setSaid(e.message));
   };
+  const hand = (h: Hands): void => {
+    setSaid(null);
+    home.hands(orb, h).then(setState, (e: Error) => setSaid(e.message));
+  };
   if (!state) return <Quiet>Looking…</Quiet>;
   const s = state.screen;
+  const live = watching || state.takenOver; // in your hands, you see him as he is
   const small: CSSProperties = { font: "500 12px/16px var(--font)", color: "var(--text-3)", overflowWrap: "anywhere" };
-  const button: CSSProperties = { font: "600 12px/16px var(--font)", border: 0, borderRadius: 8, padding: "6px 10px", background: "var(--fill)", color: "var(--text-1)", cursor: "pointer", minHeight: 30 };
+  const button: CSSProperties = { font: "600 12px/16px var(--font)", border: 0, borderRadius: 8, padding: "6px 10px", background: "var(--fill)", color: "var(--text-1)", cursor: "pointer", minHeight: 30, flex: "0 0 auto" };
+  const field: CSSProperties = { flex: "1 1 120px", minWidth: 0, font: "500 13px/18px var(--font)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 8, padding: "6px 10px", outline: 0, boxShadow: "inset 0 0 0 1px var(--hairline)" };
+  const width = s?.width ?? 1280;
+  const height = s?.height ?? 800;
   return (
     <div data-browser style={{ display: "grid", gap: 8, minWidth: 0 }}>
-      {s ? (
-        <>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 8, minWidth: 0 }}>
-            <span data-address style={{ flex: "1 1 auto", minWidth: 0, font: "600 12px/16px var(--mono)", color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.url}</span>
-            <span style={{ ...small, flex: "0 0 auto" }}>{hhmm(s.at)}</span>
-          </div>
-          <div style={{ position: "relative", borderRadius: 10, overflow: "hidden", boxShadow: "inset 0 0 0 1px var(--hairline)", background: "var(--raised)" }}>
-            {/* small here: a press opens his screen at its own size */}
-            <a href={home.screenUrl(orb, s.shot)} target="_blank" rel="noopener noreferrer" aria-label={`Open ${orb.name}'s screen at full size`} style={{ display: "block" }}>
-              <img src={home.screenUrl(orb, s.shot)} alt={`${orb.name}'s screen: ${s.title || s.url}`} style={{ display: "block", width: "100%", height: "auto" }} />
-            </a>
-            {s.cursor && (
-              <div data-browser-cursor aria-hidden style={{ position: "absolute", left: `${(s.cursor.x / s.width) * 100}%`, top: `${(s.cursor.y / s.height) * 100}%`, width: 28, transform: "translate(-14px, -13px)", pointerEvents: "none", filter: "drop-shadow(0 3px 6px var(--shadow))" }}>
-                <Orb character={orb} size={28} poke={false} fidget={false} framing="portrait" />
-              </div>
-            )}
-          </div>
-        </>
+      {s && (
+        <div style={{ display: "flex", alignItems: "baseline", gap: 8, minWidth: 0 }}>
+          <span data-address style={{ flex: "1 1 auto", minWidth: 0, font: "600 12px/16px var(--mono)", color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.url}</span>
+          <span style={{ ...small, flex: "0 0 auto" }}>{live ? "live" : hhmm(s.at)}</span>
+        </div>
+      )}
+      {live ? (
+        <div style={{ position: "relative", borderRadius: 10, overflow: "hidden", boxShadow: state.takenOver ? "inset 0 0 0 2px var(--accent)" : "inset 0 0 0 1px var(--hairline)", background: "var(--raised)", cursor: state.takenOver ? "crosshair" : "default" }}>
+          {/* his screen, frame by frame; in your hands a press on it is a click there, on his screen */}
+          <img
+            data-live
+            key={state.awake ? "awake" : "asleep"} // woken again (after a reset), the stream starts again
+            src={home.liveUrl(orb)}
+            alt={`${orb.name}'s screen, live`}
+            onClick={(e) => {
+              if (!state.takenOver) return;
+              const r = e.currentTarget.getBoundingClientRect();
+              hand({ kind: "click", x: Math.round(((e.clientX - r.left) / r.width) * width), y: Math.round(((e.clientY - r.top) / r.height) * height) });
+            }}
+            style={{ display: "block", width: "100%", height: "auto", aspectRatio: `${width} / ${height}` }}
+          />
+          {s?.cursor && (
+            <div data-browser-cursor aria-hidden style={{ position: "absolute", left: `${(s.cursor.x / width) * 100}%`, top: `${(s.cursor.y / height) * 100}%`, width: 28, transform: "translate(-14px, -13px)", pointerEvents: "none", filter: "drop-shadow(0 3px 6px var(--shadow))", transition: "left 360ms var(--m-spring), top 360ms var(--m-spring)" }}>
+              <Orb character={orb} size={28} poke={false} fidget={false} framing="portrait" />
+            </div>
+          )}
+        </div>
+      ) : s ? (
+        <div style={{ position: "relative", borderRadius: 10, overflow: "hidden", boxShadow: "inset 0 0 0 1px var(--hairline)", background: "var(--raised)" }}>
+          {/* small here: a press opens his screen at its own size */}
+          <a href={home.screenUrl(orb, s.shot)} target="_blank" rel="noopener noreferrer" aria-label={`Open ${orb.name}'s screen at full size`} style={{ display: "block" }}>
+            <img src={home.screenUrl(orb, s.shot)} alt={`${orb.name}'s screen: ${s.title || s.url}`} style={{ display: "block", width: "100%", height: "auto" }} />
+          </a>
+          {s.cursor && (
+            <div data-browser-cursor aria-hidden style={{ position: "absolute", left: `${(s.cursor.x / width) * 100}%`, top: `${(s.cursor.y / height) * 100}%`, width: 28, transform: "translate(-14px, -13px)", pointerEvents: "none", filter: "drop-shadow(0 3px 6px var(--shadow))" }}>
+              <Orb character={orb} size={28} poke={false} fidget={false} framing="portrait" />
+            </div>
+          )}
+        </div>
       ) : (
         <Quiet>{state.awake ? "His browser is open, on nothing yet." : "His browser is asleep: it wakes when he opens a page."}</Quiet>
+      )}
+      {state.takenOver && (
+        <div data-hands style={{ display: "grid", gap: 6, minWidth: 0 }}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (address.trim()) hand({ kind: "go", url: /^https?:\/\//i.test(address.trim()) ? address.trim() : `https://${address.trim()}` });
+            }}
+            style={{ display: "flex", gap: 6, minWidth: 0 }}
+          >
+            <button type="button" onClick={() => hand({ kind: "back" })} aria-label="Back" style={button}>
+              ‹
+            </button>
+            <button type="button" onClick={() => hand({ kind: "reload" })} aria-label="Reload" style={button}>
+              ↻
+            </button>
+            <input value={address} onChange={(e) => setAddress(e.target.value)} aria-label="Go to an address" placeholder="An address" size={1} autoComplete="off" spellCheck={false} style={field} />
+            <button type="submit" style={button}>
+              Go
+            </button>
+          </form>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (typed) hand({ kind: "type", text: typed });
+              setTyped("");
+            }}
+            style={{ display: "flex", gap: 6, minWidth: 0 }}
+          >
+            <input value={typed} onChange={(e) => setTyped(e.target.value)} aria-label="Type on his page" placeholder="Type on his page" size={1} autoComplete="off" style={field} />
+            <button type="submit" style={button}>
+              Type
+            </button>
+            <button type="button" onClick={() => hand({ kind: "key", key: "Enter" })} style={button}>
+              Enter
+            </button>
+          </form>
+        </div>
       )}
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
         {state.takenOver ? (
@@ -336,9 +418,14 @@ function Browser({ home, orb, news }: { home: Office; orb: Character; news: numb
             Hand back
           </button>
         ) : (
-          <button onClick={() => act("take-over")} style={button}>
-            Take over
-          </button>
+          <>
+            <button onClick={() => act("take-over")} style={button}>
+              Take over
+            </button>
+            <button onClick={() => setWatching((w) => !w)} aria-pressed={watching} style={button}>
+              {watching ? "Stop watching" : "Watch live"}
+            </button>
+          </>
         )}
         {asking ? (
           <>
@@ -356,7 +443,7 @@ function Browser({ home, orb, news }: { home: Office; orb: Character; news: numb
           </button>
         )}
       </div>
-      {state.takenOver && <span style={small}>You have his computer: his browser waits until you hand it back.</span>}
+      {state.takenOver && <span style={small}>You have his computer: a press on his screen clicks there. He waits until you hand it back.</span>}
       {said && <span role="alert" style={{ font: "500 12px/16px var(--font)", color: "var(--alert)" }}>{said}</span>}
     </div>
   );
@@ -391,19 +478,63 @@ function Files({ dir, entries, acts, go, pick }: { dir: string; entries: Entry[]
 }
 const row = (here: boolean): CSSProperties => ({ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "6px 8px", border: 0, borderRadius: 8, cursor: "pointer", background: here ? "var(--accent-wash)" : "transparent", font: "600 13px/18px var(--font)", color: "var(--text-1)", minHeight: 32 });
 
-function Terminal({ acts }: { acts: Act[] }) {
-  if (!acts.length) return <Quiet>No commands yet.</Quiet>;
+/** His commands and what they printed, the running one as it prints (PLAN 4.6); and, once you
+ * have his computer, a line for your own, run in his sandbox. */
+function Terminal({ home, orb, acts, live, yours }: { home: Office; orb: Character; acts: Act[]; live: Record<string, string>; yours: boolean }) {
+  const [line, setLine] = useState("");
+  const [mine, setMine] = useState<{ command: string; output: string | null; failed: boolean }[]>([]);
+  const running = Object.keys(live).filter((k) => k.startsWith("you-")).at(-1); // your command printing now
+  const run = (): void => {
+    const command = line.trim();
+    if (!command) return;
+    setLine("");
+    setMine((m) => [...m, { command, output: null, failed: false }]);
+    home.terminal(orb, command).then(
+      (r) => setMine((m) => m.map((x, i) => (i === m.length - 1 ? { command, output: r.output, failed: r.failed } : x))),
+      (e: Error) => setMine((m) => m.map((x, i) => (i === m.length - 1 ? { command, output: e.message, failed: true } : x))),
+    );
+  };
   return (
-    <div style={{ display: "grid", gap: 10, padding: 10, borderRadius: 10, background: "var(--ground)" }}>
-      {acts.map((a) => (
-        <div key={a.id} style={{ display: "grid", gap: 2 }}>
-          <span data-act={a.id} style={{ ...mono, color: "var(--text-1)" }}>
-            <span style={{ color: "var(--accent)" }}>$ </span>
-            {a.tool === "shell" ? String(a.args.command ?? "") : `(${ACT_WORDS[a.tool]?.toLowerCase() ?? a.tool} ${a.on})`}
-          </span>
-          <pre style={{ ...mono, color: a.failed ? "var(--alert)" : "var(--text-3)" }}>{a.result === null ? "waiting for your OK…" : a.result.split("\n").slice(0, 40).join("\n")}</pre>
+    <div style={{ display: "grid", gap: 10 }}>
+      {!acts.length && !mine.length && <Quiet>No commands yet.</Quiet>}
+      {(acts.length > 0 || mine.length > 0) && (
+        <div style={{ display: "grid", gap: 10, padding: 10, borderRadius: 10, background: "var(--ground)" }}>
+          {acts.map((a) => (
+            <div key={a.id} style={{ display: "grid", gap: 2 }}>
+              <span data-act={a.id} style={{ ...mono, color: "var(--text-1)" }}>
+                <span style={{ color: "var(--accent)" }}>$ </span>
+                {a.tool === "shell" ? String(a.args.command ?? "") : `(${ACT_WORDS[a.tool]?.toLowerCase() ?? a.tool} ${a.on})`}
+              </span>
+              <pre data-output={a.id} style={{ ...mono, color: a.failed ? "var(--alert)" : "var(--text-3)" }}>
+                {a.result === null ? (live[a.id] ?? "waiting for your OK…") : a.result.split("\n").slice(0, 40).join("\n")}
+              </pre>
+            </div>
+          ))}
+          {mine.map((x, i) => (
+            <div key={`you-${i}`} data-yours style={{ display: "grid", gap: 2 }}>
+              <span style={{ ...mono, color: "var(--text-1)" }}>
+                <span style={{ color: "var(--text-3)" }}>you $ </span>
+                {x.command}
+              </span>
+              <pre style={{ ...mono, color: x.failed ? "var(--alert)" : "var(--text-3)" }}>{x.output ?? (running ? live[running] : "running…")}</pre>
+            </div>
+          ))}
         </div>
-      ))}
+      )}
+      {yours && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            run();
+          }}
+          style={{ display: "flex", gap: 6, minWidth: 0 }}
+        >
+          <input value={line} onChange={(e) => setLine(e.target.value)} aria-label="A command for his terminal" placeholder="A command for his terminal" size={1} autoComplete="off" spellCheck={false} style={{ flex: "1 1 120px", minWidth: 0, font: "500 13px/18px var(--mono)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 8, padding: "6px 10px", outline: 0, boxShadow: "inset 0 0 0 1px var(--hairline)" }} />
+          <button type="submit" style={{ font: "600 12px/16px var(--font)", border: 0, borderRadius: 8, padding: "6px 10px", background: "var(--fill)", color: "var(--text-1)", cursor: "pointer", minHeight: 30 }}>
+            Run
+          </button>
+        </form>
+      )}
     </div>
   );
 }

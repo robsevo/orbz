@@ -17,6 +17,8 @@
 // The floor is asked about the words he named; at the moment of acting the button's or field's
 // WHOLE words are read again, and if they commit to more ("Continue" that is "Continue to
 // payment") nothing is pressed and he is told to name them, so the card shows what is real.
+//
+// While the person has his computer (PLAN 4.6) each act waits for them to hand it back.
 import { checkUrl } from "../agent/net.ts";
 import { inWorkspace, type ToolDef, type ToolResult } from "../agent/tools.ts";
 import { FLOOR_WORDS, type FloorCategory, type FloorHit } from "../rules/floor.ts";
@@ -88,6 +90,7 @@ export function computerTools(c: Computers, vault: Vault, pageCheck: PageCheck |
         const ok = await checkUrl(s(a.url));
         if (!ok.ok) return { content: `Not opened: ${ok.reason}. Your browser only goes to the web.`, isError: true };
         try {
+          await c.waitForHands(ctx.orb, ctx.signal);
           const r = await c.open(ctx.orb, s(a.url));
           return { content: await words(`Opened ${r.url} — "${r.title}". read_page to see what it says.`) };
         } catch (e) {
@@ -105,6 +108,7 @@ export function computerTools(c: Computers, vault: Vault, pageCheck: PageCheck |
       untrusted: "page",
       async run(_a, ctx) {
         try {
+          await c.waitForHands(ctx.orb, ctx.signal);
           const r = await c.read(ctx.orb);
           return { content: await words(`${r.url} — "${r.title}"\n\n${r.text || "(no words on the page)"}${r.cut ? "\n… [the page goes on]" : ""}`) };
         } catch (e) {
@@ -126,6 +130,7 @@ export function computerTools(c: Computers, vault: Vault, pageCheck: PageCheck |
       async run(a, ctx) {
         const asked = s(a.text);
         try {
+          await c.waitForHands(ctx.orb, ctx.signal);
           const r = await c.click(ctx.orb, asked, (label) =>
             covers(clickFloor(asked), clickFloor(label)) && (consents(asked) || !consents(label))
               ? null
@@ -158,6 +163,7 @@ export function computerTools(c: Computers, vault: Vault, pageCheck: PageCheck |
       async run(a, ctx) {
         const field = s(a.field);
         try {
+          await c.waitForHands(ctx.orb, ctx.signal);
           const r = await c.type(ctx.orb, field, s(a.text), Boolean(a.submit), (label) =>
             covers(fieldFloor(field), fieldFloor(label)) ? null : `Not typed: that field is "${label}". Name it by those words, so the person is asked first.`,
           );
@@ -179,6 +185,7 @@ export function computerTools(c: Computers, vault: Vault, pageCheck: PageCheck |
       floor: () => [{ category: "passwords", why: FLOOR_WORDS.passwords }],
       async run(a, ctx) {
         try {
+          await c.waitForHands(ctx.orb, ctx.signal);
           const login = await vault.loginFor(await c.url(ctx.orb), s(a.username) || undefined);
           const r = await c.fill(ctx.orb, login.site, login.username, login.password, hostOf);
           if (!r.filled) return { content: `No sign-in fields are showing on ${login.site}: open its sign-in form first.`, isError: true };

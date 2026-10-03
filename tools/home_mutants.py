@@ -1025,6 +1025,40 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("the office learns from work of any age", "src/gym/night.ts", [
         ("    const found = findHotPaths(events, { since: clock.now() - WINDOW_DAYS * DAY_MS })", "    const found = findHotPaths(events, { since: 0 })"),
     ], ["night.test.ts"]),
+    # his screen and terminal live, your hands on them, his sandbox (PLAN 4.6)
+    ("a page standing still stays blank until it paints", 'src/computer/browser.ts', [
+        ('    if (now && w.viewers.has(frame)) frame(now);\n', ''),
+    ], ['live.test.ts']),
+    ('his act does not wait for your hand', 'src/computer/tools.ts', [
+        ('        try {\n          await c.waitForHands(ctx.orb, ctx.signal);\n          const r = await c.open(ctx.orb, s(a.url));', '        try {\n          const r = await c.open(ctx.orb, s(a.url));'),
+    ], ['live.test.ts']),
+    ('a stop does not end his wait', 'src/computer/browser.ts', [
+        ('      else signal?.addEventListener("abort", stop, { once: true });', '      else void stop;'),
+    ], ['live.test.ts']),
+    ('your hands work before you take him over', 'src/computer/browser.ts', [
+        ('    if (!this.#taken.has(orb)) throw new ComputerError("take his computer over first");\n    const s = await this.#session(orb);', '    const s = await this.#session(orb);'),
+    ], ['live.test.ts']),
+    ('an address by your hands is not guarded', 'src/computer/browser.ts', [
+        ('      const ok = await checkUrl(h.url);\n      if (!ok.ok) throw new ComputerError(`not opened: ${ok.reason}`);\n', ''),
+    ], ['live.test.ts']),
+    ('frames go on after the last watcher', 'src/computer/browser.ts', [
+        ('      if (w.viewers.size || this.#watches.get(orb) !== w) return;', '      return;'),
+    ], ['live.test.ts']),
+    ("a command's output reaches you only at its end", 'src/agent/tools.ts', [
+        ('      o.onOutput?.(chunk);\n', ''),
+    ], ['live.test.ts']),
+    ('your terminal works before you take him over', 'src/home.ts', [
+        ('    if (!this.computers.takenOver(orb)) throw new Error("take his computer over first");\n    const call = `you-${++this.#yours}`;', '    const call = `you-${++this.#yours}`;'),
+    ], ['live.test.ts']),
+    ('his sandbox shows what is not his', 'src/computer/sandbox.ts', [
+        ('    for (const h of hidden) a.push("--tmpfs", h);\n', ''),
+    ], ['live.test.ts']),
+    ("his sandbox keeps the home's environment", 'src/computer/sandbox.ts', [
+        ('    a.push("--clearenv", ', '    a.push('),
+    ], ['live.test.ts']),
+    ('his own shell runs outside his sandbox', 'src/agent/tools.ts', [
+        ('      return runCommand(s(a.command), ctx.workspace, t, ctx.signal, { wrap: ctx.sandbox, onOutput: ctx.onOutput });', '      return runCommand(s(a.command), ctx.workspace, t, ctx.signal, { onOutput: ctx.onOutput });'),
+    ], ['live.test.ts']),
 ]
 
 # the app (PLAN 2.x): paths are inside packages/app
@@ -1444,10 +1478,10 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ], ["render.test.ts"]),
     # his computer's browser and your passwords (PLAN 4.1)
     ('his face is not drawn on his screen', 'src/rooms/Computer.tsx', [
-        ('            {s.cursor && (', '            {false && s.cursor && ('),
+        ('          {s.cursor && (', '          {false && s.cursor && ('),
     ], ['browser-view.test.ts']),
     ('his Browser tab keeps an old still', 'src/rooms/Computer.tsx', [
-        ('  useEffect(() => o.home.watch({ event: (e) => (e.orb === id && e.type.startsWith("computer.") ? setScreenNews((n) => n + 1) : undefined) }), [o.home, id]);\n', ''),
+        ('        event: (e) => (e.orb === id && e.type.startsWith("computer.") ? setScreenNews((n) => n + 1) : undefined),\n', '        event: () => undefined,\n'),
     ], ['browser-view.test.ts']),
     ('a reset in one press', 'src/rooms/Computer.tsx', [
         ('          <button onClick={() => setAsking(true)} style={button}>', '          <button onClick={() => act("reset")} style={button}>'),
@@ -1474,6 +1508,16 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("every new orb starts the Senior on his sheet", "src/orbs.tsx", [
         ("  const startsAs = (making ? !office.some((o) => o.specialty === me.specialty)", "  const startsAs = (making ? true"),
     ], ["creator.test.ts"]),
+    # his screen live in the app, your hands and his terminal (PLAN 4.6)
+    ('a press on his screen goes nowhere', 'src/rooms/Computer.tsx', [
+        ('              hand({ kind: "click", x: Math.round(((e.clientX - r.left) / r.width) * width), y: Math.round(((e.clientY - r.top) / r.height) * height) });\n', ''),
+    ], ['live-view.test.ts']),
+    ('the terminal takes your commands without your having him', 'src/rooms/Computer.tsx', [
+        ('      {yours && (', '      {(yours || true) && ('),
+    ], ['live-view.test.ts']),
+    ('his live screen shows only once you take over', 'src/rooms/Computer.tsx', [
+        ('  const live = watching || state.takenOver; // in your hands, you see him as he is', '  const live = state.takenOver;'),
+    ], ['live-view.test.ts']),
 ]
 
 # the `orbs` terminal (PLAN 1.9): paths are inside packages/terminal

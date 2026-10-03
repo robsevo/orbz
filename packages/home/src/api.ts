@@ -27,7 +27,7 @@ import type { Account } from "./connectors/mail.ts";
 import { ImapError } from "./connectors/imap.ts";
 import { CalendarError } from "./connectors/calendars.ts";
 import { AccountError } from "./connectors/accounts.ts";
-import { ComputerError, type Screen } from "./computer/browser.ts";
+import { ComputerError, type Hands, type Screen } from "./computer/browser.ts";
 import { VaultError } from "./computer/vault.ts";
 import type { Tab } from "./team.ts";
 import { standingContext } from "./agent/standing.ts";
@@ -670,6 +670,42 @@ async function handle(
       return STREAMING;
     }
     if (method === "GET" && parts[2] === "computer" && parts.length === 3) return state();
+    // his screen live (PLAN 4.6): a stream of JPEG frames an <img> shows as they come, for as long
+    // as the page watching it stays; the screencast ends with the last watcher
+    if (method === "GET" && parts[2] === "computer" && parts.length === 4 && parts[3] === "live") {
+      let stop: (() => Promise<void>) | null = null;
+      let gone = false;
+      let backedUp = false; // a slow phone gets the frames it can take, never a growing queue
+      res!.writeHead(200, { "content-type": "multipart/x-mixed-replace; boundary=orbsframe", "cache-control": "no-store", "x-content-type-options": "nosniff" });
+      res!.on("close", () => {
+        gone = true;
+        void stop?.();
+      });
+      try {
+        stop = await home.computers.watch(orb, (jpeg) => {
+          if (gone || backedUp) return;
+          res!.write(`--orbsframe\r\ncontent-type: image/jpeg\r\ncontent-length: ${jpeg.length}\r\n\r\n`);
+          res!.write(jpeg);
+          if (!res!.write("\r\n")) {
+            backedUp = true;
+            res!.once("drain", () => (backedUp = false));
+          }
+        });
+        if (gone) await stop();
+      } catch {
+        res!.end();
+      }
+      return STREAMING;
+    }
+    // the person's hands on his page, once they have taken it over
+    if (method === "POST" && parts[2] === "computer" && parts.length === 4 && parts[3] === "hands") {
+      if (!home.computers.takenOver(orb)) throw new HttpError(409, "take his computer over first");
+      try {
+        return { at: await home.computers.hands(orb, (await body(req)) as Hands), ...state() };
+      } catch (e) {
+        throw e instanceof ComputerError ? new HttpError(400, e.message) : e;
+      }
+    }
     if (method === "POST" && parts[2] === "computer" && parts.length === 4) {
       try {
         if (parts[3] === "wake") await home.computers.wake(orb);
@@ -683,6 +719,14 @@ async function handle(
       }
       return state();
     }
+  }
+  // a command the person types into his terminal, once they have his computer (PLAN 4.6)
+  if (method === "POST" && parts[0] === "orbs" && parts.length === 3 && parts[2] === "terminal") {
+    const orb = decodeURIComponent(parts[1]!);
+    if (!home.inbox.orb(orb)) throw new HttpError(404, `no orb "${orb}"`);
+    if (!home.computers.takenOver(orb)) throw new HttpError(409, "take his computer over first");
+    const r = await home.terminal(orb, text(await body(req), "command"));
+    return { output: r.content, failed: r.isError === true };
   }
   // his computer (PLAN 2.8): what he is making, his workspace's folders and files, to read
   // a file you give him, from a chat (PLAN 2.4): kept in his workspace's from-you/, the path back
@@ -763,13 +807,16 @@ function stream(home: Home, req: IncomingMessage, res: ServerResponse, since: nu
   for (const e of home.events.since(Number.isInteger(since) ? since : 0, 1000)) out("event", e);
   const onEvent = (e: unknown): void => out("event", e);
   const onText = (e: unknown): void => out("text", e);
+  const onTerminal = (e: unknown): void => out("terminal", e); // his commands' output as it comes (PLAN 4.6)
   home.live.on("event", onEvent);
   home.live.on("text", onText);
+  home.live.on("terminal", onTerminal);
   const beat = setInterval(() => res.write(": beat\n\n"), 15_000);
   req.on("close", () => {
     clearInterval(beat);
     home.live.off("event", onEvent);
     home.live.off("text", onText);
+    home.live.off("terminal", onTerminal);
   });
   return STREAMING;
 }

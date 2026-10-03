@@ -202,7 +202,7 @@ export function boardTools(board: Board, shown: (ctx: ToolContext, text: string)
           shown(ctx, said);
           return { content: said, isError: true };
         }
-        const res = await runCommand(cmd, ctx.workspace, 600_000, ctx.signal);
+        const res = await runCommand(cmd, ctx.workspace, 600_000, ctx.signal, { wrap: ctx.sandbox, onOutput: ctx.onOutput }); // in his sandbox (PLAN 4.6)
         if (res.stoppedByUser) return res;
         let passed = !res.isError;
         let evidence = res.content;

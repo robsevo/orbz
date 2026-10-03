@@ -17,7 +17,8 @@
 import { existsSync, globSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { chromium, type BrowserContext, type Locator, type Page } from "playwright-core";
+import { chromium, type BrowserContext, type CDPSession, type Locator, type Page } from "playwright-core";
+import { checkUrl } from "../agent/net.ts";
 import type { EventLog } from "../events.ts";
 import { safeName, workspaceOf } from "../workspace.ts";
 import { inWorkspace } from "../agent/tools.ts";
@@ -102,12 +103,30 @@ export type ComputersOptions = {
 
 type Session = { context: BrowserContext; page: Page; idle: NodeJS.Timeout | null; proxy: GuardedProxy };
 
+/** What the person's hands do on his computer once they have it (PLAN 4.6), in his screen's pixels. */
+export type Hands =
+  | { kind: "click"; x: number; y: number }
+  | { kind: "type"; text: string }
+  | { kind: "key"; key: string }
+  | { kind: "scroll"; dy: number }
+  | { kind: "go"; url: string }
+  | { kind: "back" | "forward" | "reload" };
+/** The keys a person may press on his page from the app: enough to fill a form and move about. */
+export const KEYS = new Set(["Enter", "Tab", "Backspace", "Delete", "Escape", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "PageUp", "PageDown", "Home", "End", "Space"]);
+
+/** The people watching one orb's screen live, and the screencast that feeds them (one at a time:
+ * `feeding` keeps two watchers who arrive together from starting two). */
+type Watch = { viewers: Set<(jpeg: Buffer) => void>; cdp: CDPSession | null; page: Page | null; feeding: Promise<void> };
+
 const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 export class Computers {
   readonly #o: ComputersOptions;
   readonly #sessions = new Map<string, Promise<Session>>();
   readonly #taken = new Set<string>();
+  /** His acts waiting for the person to hand his computer back. */
+  readonly #waiting = new Map<string, Set<() => void>>();
+  readonly #watches = new Map<string, Watch>();
   #shot = 0;
   #closed = false;
 
@@ -133,6 +152,110 @@ export class Computers {
   handBack(orb: string): void {
     if (!this.#taken.delete(orb)) return;
     this.#o.events.append("computer.handed_back", { orb }, { orb });
+    for (const go of this.#waiting.get(orb) ?? []) go();
+    this.#waiting.delete(orb);
+  }
+
+  /** Resolves once the person hands his computer back (at once if they do not have it): his act
+   * waits for them, the way the Dots film's orb waits for a hand. A stop of his run ends the wait. */
+  async waitForHands(orb: string, signal?: AbortSignal): Promise<void> {
+    if (!this.#taken.has(orb)) return;
+    this.#o.events.append("computer.waiting", { orb }, { orb });
+    await new Promise<void>((ok, fail) => {
+      const set = this.#waiting.get(orb) ?? new Set<() => void>();
+      this.#waiting.set(orb, set);
+      const go = (): void => {
+        signal?.removeEventListener("abort", stop);
+        ok();
+      };
+      const stop = (): void => {
+        set.delete(go);
+        fail(new ComputerError("stopped while the person had his computer"));
+      };
+      set.add(go);
+      if (signal?.aborted) stop();
+      else signal?.addEventListener("abort", stop, { once: true });
+    });
+  }
+
+  /** The person's hands on his page, only while they have it: a click, typing, a key, a scroll, an
+   * address (checked like his own: never this machine or its network), back and forward. */
+  async hands(orb: string, h: Hands): Promise<{ url: string; title: string }> {
+    if (!this.#taken.has(orb)) throw new ComputerError("take his computer over first");
+    const s = await this.#session(orb);
+    const p = s.page;
+    if (h.kind === "click") {
+      if (!(h.x >= 0 && h.x <= SCREEN.width && h.y >= 0 && h.y <= SCREEN.height)) throw new ComputerError("a click lands on his screen");
+      await this.#andWait(p, () => p.mouse.click(h.x, h.y));
+    } else if (h.kind === "type") await p.keyboard.type(h.text.slice(0, 2000));
+    else if (h.kind === "key") {
+      if (!KEYS.has(h.key)) throw new ComputerError(`not a key the app presses: ${h.key}`);
+      await this.#andWait(p, () => p.keyboard.press(h.key === "Space" ? " " : h.key));
+    } else if (h.kind === "scroll") await p.mouse.wheel(0, Math.max(-4000, Math.min(4000, h.dy)));
+    else if (h.kind === "go") {
+      const ok = await checkUrl(h.url);
+      if (!ok.ok) throw new ComputerError(`not opened: ${ok.reason}`);
+      await p.goto(h.url, { waitUntil: "domcontentloaded", timeout: NAV_MS }).catch((e: unknown) => {
+        throw new ComputerError(`the page did not open: ${(e instanceof Error ? e.message : String(e)).split("\n")[0]}`);
+      });
+    } else if (h.kind === "back") await p.goBack({ timeout: NAV_MS }).catch(() => null);
+    else if (h.kind === "forward") await p.goForward({ timeout: NAV_MS }).catch(() => null);
+    else await p.reload({ timeout: NAV_MS }).catch(() => null);
+    const now = (await this.#session(orb)).page;
+    await this.#still(orb, now, h.kind === "click" && now === p ? { x: Math.round(h.x), y: Math.round(h.y) } : null);
+    return { url: now.url(), title: await now.title().catch(() => "") };
+  }
+
+  /** Whether his screen is being sent live now: a screencast runs only while someone watches. */
+  watching(orb: string): boolean {
+    return Boolean(this.#watches.get(orb)?.cdp);
+  }
+
+  /** His screen as it changes, frame by frame (JPEG), for as long as someone watches: a screencast
+   * of the page he is on, following him to a new tab. Returns the watcher's stop; the last stop
+   * ends the screencast. Watching wakes his browser. */
+  async watch(orb: string, frame: (jpeg: Buffer) => void): Promise<() => Promise<void>> {
+    const s = await this.#session(orb);
+    const w = this.#watches.get(orb) ?? { viewers: new Set(), cdp: null, page: null, feeding: Promise.resolve() };
+    this.#watches.set(orb, w);
+    w.viewers.add(frame);
+    await this.#feed(s, w);
+    // his screen at once: a screencast sends a frame only when the page next paints, and a page
+    // that is standing still may not paint for a long while (the view would stay blank)
+    const now = await s.page.screenshot({ type: "jpeg", quality: 65 }).catch(() => null);
+    if (now && w.viewers.has(frame)) frame(now);
+    return async () => {
+      w.viewers.delete(frame);
+      if (w.viewers.size || this.#watches.get(orb) !== w) return;
+      this.#watches.delete(orb);
+      const cdp = w.cdp;
+      w.cdp = null;
+      await cdp?.send("Page.stopScreencast").catch(() => null);
+      await cdp?.detach().catch(() => null);
+    };
+  }
+
+  /** Starts the screencast on the page he is on now, unless it already runs there. */
+  #feed(s: Session, w: Watch): Promise<void> {
+    w.feeding = w.feeding.then(() => this.#feedNow(s, w), () => this.#feedNow(s, w));
+    return w.feeding;
+  }
+
+  async #feedNow(s: Session, w: Watch): Promise<void> {
+    if (w.cdp && w.page === s.page) return;
+    const old = w.cdp;
+    w.cdp = null;
+    await old?.detach().catch(() => null);
+    const page = s.page;
+    const cdp = await s.context.newCDPSession(page);
+    w.cdp = cdp;
+    w.page = page;
+    cdp.on("Page.screencastFrame", ({ data, sessionId }: { data: string; sessionId: number }) => {
+      const jpeg = Buffer.from(data, "base64");
+      for (const viewer of [...w.viewers]) viewer(jpeg);
+      void cdp.send("Page.screencastFrameAck", { sessionId }).catch(() => null);
+    });
+    await cdp.send("Page.startScreencast", { format: "jpeg", quality: 65, maxWidth: SCREEN.width, maxHeight: SCREEN.height, everyNthFrame: 1 });
   }
 
   async #launch(orb: string): Promise<Session> {
@@ -200,6 +323,8 @@ export class Computers {
     context.on("page", (p) => {
       watch(p);
       s.page = p;
+      const w = this.#watches.get(orb);
+      if (w) void this.#feed(s, w).catch(() => null); // whoever watches follows him to it
       p.once("close", () => {
         if (s.page === p) s.page = context.pages().at(-1) ?? s.page;
       });
@@ -225,7 +350,10 @@ export class Computers {
     }
     const got = await s;
     if (got.idle) clearTimeout(got.idle);
-    got.idle = setTimeout(() => void this.sleep(orb), this.#o.idleMs ?? IDLE_MS);
+    got.idle = setTimeout(() => {
+      if (this.#watches.get(orb)?.viewers.size || this.#taken.has(orb)) return void this.#session(orb).catch(() => null); // watched, or in your hands: awake
+      void this.sleep(orb);
+    }, this.#o.idleMs ?? IDLE_MS);
     got.idle.unref();
     return got;
   }
@@ -249,6 +377,11 @@ export class Computers {
     const got = await s.catch(() => null);
     if (!got) return;
     if (got.idle) clearTimeout(got.idle);
+    const w = this.#watches.get(orb);
+    if (w) {
+      this.#watches.delete(orb);
+      await w.cdp?.detach().catch(() => null);
+    }
     await got.context.close().catch(() => {});
     await got.proxy.close();
     this.#o.events.append("computer.slept", { orb }, { orb });

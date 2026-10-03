@@ -21,11 +21,16 @@ import type { CardKind } from "./conversation.ts";
 import type { FloorHit } from "../rules/floor.ts";
 import { transportCause } from "./stream.ts";
 import { type SearchKey, webFetch, webSearch } from "./web.ts";
+import type { Wrap } from "../computer/sandbox.ts";
 
 export type Decision = "allow" | "ask" | "never";
 export type ToolResult = { content: string; isError?: boolean; stoppedByUser?: boolean };
 export type ToolContext = {
   orb: string; conversation: string; workspace: string; signal?: AbortSignal; background: Background;
+  /** His sandbox (PLAN 4.6): what his commands run inside; absent where none can start. */
+  sandbox?: Wrap | null;
+  /** A command's output as it comes, for his terminal on the person's screen (never stored). */
+  onOutput?: (chunk: string) => void;
   /** The person's web-search key (Tavily), read from the keychain when a search needs it (PLAN 3.10). */
   searchKey?: () => Promise<SearchKey | null>;
   /** Puts a line in the conversation for everyone in it (a session's "✓ Agreed", PLAN 2.9). */
@@ -171,8 +176,8 @@ export class Background {
   readonly #jobs = new Map<string, { child: ChildProcess; output: string; done: string | null; command: string }>();
   #n = 0;
 
-  start(command: string, cwd: string): string {
-    const [bin, argv] = shellArgv(command);
+  start(command: string, cwd: string, wrap?: Wrap | null): string {
+    const [bin, argv] = wrap ? wrap(shellArgv(command)) : shellArgv(command);
     const child = spawn(bin, argv, { cwd, detached: process.platform !== "win32", stdio: ["ignore", "pipe", "pipe"] });
     const id = `bg${++this.#n}`;
     const job = { child, output: "", done: null as string | null, command };
@@ -207,10 +212,11 @@ export class Background {
   }
 }
 
-/** Runs a command in `cwd`; a stop kills its whole tree. */
-export function runCommand(command: string, cwd: string, timeoutMs: number, signal?: AbortSignal): Promise<ToolResult> {
+/** Runs a command in `cwd`; a stop kills its whole tree. In his sandbox when `wrap` is given (PLAN
+ * 4.6); its output goes to `onOutput` as it comes, as well as into the result. */
+export function runCommand(command: string, cwd: string, timeoutMs: number, signal?: AbortSignal, o: { wrap?: Wrap | null; onOutput?: (chunk: string) => void } = {}): Promise<ToolResult> {
   return new Promise((resolveResult) => {
-    const [bin, argv] = shellArgv(command);
+    const [bin, argv] = o.wrap ? o.wrap(shellArgv(command)) : shellArgv(command);
     let child: ChildProcess;
     try {
       child = spawn(bin, argv, { cwd, detached: process.platform !== "win32", stdio: ["ignore", "pipe", "pipe"] });
@@ -221,8 +227,10 @@ export function runCommand(command: string, cwd: string, timeoutMs: number, sign
     let output = "";
     let settled = false;
     const take = (d: Buffer): void => {
-      output += d.toString();
+      const chunk = d.toString();
+      output += chunk;
       if (output.length > OUTPUT_CAP * 4) output = output.slice(0, OUTPUT_CAP) + output.slice(-OUTPUT_CAP);
+      o.onOutput?.(chunk);
     };
     child.stdout?.on("data", take);
     child.stderr?.on("data", take);
@@ -275,11 +283,11 @@ export const TOOLS: ToolDef[] = [
     async run(a, ctx) {
       mkdirSync(ctx.workspace, { recursive: true });
       if (a.background) {
-        const id = ctx.background.start(s(a.command), ctx.workspace);
+        const id = ctx.background.start(s(a.command), ctx.workspace, ctx.sandbox);
         return { content: `[${id}] started in the background. Read it with shell_output(id="${id}"), stop it with stop_shell(id="${id}").` };
       }
       const t = Math.min(Math.max(Number(a.timeout_s) || 120, 1), 600) * 1000;
-      return runCommand(s(a.command), ctx.workspace, t, ctx.signal);
+      return runCommand(s(a.command), ctx.workspace, t, ctx.signal, { wrap: ctx.sandbox, onOutput: ctx.onOutput });
     },
   },
   {

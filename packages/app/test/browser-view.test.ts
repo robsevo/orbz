@@ -90,7 +90,7 @@ test("his Browser tab: the still of his screen, its address, his face where he c
   await shot(page, "after-a-click");
 
   await computer.getByRole("button", { name: "Take over" }).click();
-  await computer.getByText("You have his computer: his browser waits until you hand it back.").waitFor();
+  await computer.getByText("You have his computer: a press on his screen clicks there. He waits until you hand it back.").waitFor();
   assert.equal(h.computers.takenOver("hazel"), true, "your hand reached his computer");
   await assert.rejects(h.computers.click("hazel", "About us"), /the person has your computer/);
   await computer.getByRole("button", { name: "Hand back" }).click();

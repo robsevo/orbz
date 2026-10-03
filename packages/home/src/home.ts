@@ -45,7 +45,9 @@ import { Team } from "./team.ts";
 import { Spend } from "./brain/spend.ts";
 import { type Card, Conversations } from "./agent/conversation.ts";
 import { AgentRunner, type AgentOptions } from "./agent/loop.ts";
-import { Background } from "./agent/tools.ts";
+import { Background, runCommand, type ToolResult } from "./agent/tools.ts";
+import { sandboxFor, type Wrap } from "./computer/sandbox.ts";
+import { workspaceOf } from "./workspace.ts";
 import { feedback } from "./agent/trace.ts";
 import type { Decision, ToolDef } from "./agent/tools.ts";
 import { Guard, Turns } from "./rules/guard.ts";
@@ -150,6 +152,9 @@ export class Home {
   /** What happens as it happens, for whoever is watching (the terminal, the web app): every event
    * once committed ("event"), and a reply's text as it streams ("text"). Never stored. */
   readonly live = new EventEmitter();
+  /** That no sandbox can start here is said once (PLAN 4.6). */
+  #saidUnsandboxed = false;
+  #yours = 0;
   /** The person's rules (PLAN 1.6). */
   readonly rules: Rules;
   /** What every orb knows about the person (PLAN 2.4): the name the office calls you. */
@@ -279,6 +284,8 @@ export class Home {
           },
           tools,
           guard: this.guard,
+          sandbox: (orb) => this.sandbox(orb),
+          onTerminal: (e) => this.live.emit("terminal", e), // his terminal, live, on the person's screen
           ...(kit && {
             redact: async (text: string) => {
               try {
@@ -547,6 +554,31 @@ export class Home {
     if (this.mail.accounts()[name]?.oauth === name) await this.mail.remove(name);
     if (this.calendars.list().some((c) => c.name === name && c.account === name)) await this.calendars.remove(name);
     await this.accounts.remove(name);
+  }
+
+  /** His sandbox (PLAN 4.6): his workspace and a home of his own, nothing else of anyone's. Null
+   * where none can start; the home says so once. */
+  sandbox(orb: string): Wrap | null {
+    const wrap = sandboxFor({ workspace: workspaceOf(this.dataDir, orb), home: join(this.dataDir, "orbs", orb, "shell-home"), dataDir: this.dataDir });
+    if (!wrap && !this.#saidUnsandboxed) {
+      this.#saidUnsandboxed = true;
+      this.events.append("sandbox.unavailable", { why: process.platform === "linux" ? "bubblewrap is missing or cannot start here" : "his sandbox is bubblewrap's, on Linux" });
+    }
+    return wrap;
+  }
+
+  /** A command the person types into his terminal while they have his computer (PLAN 4.6): run in
+   * his sandbox, its output live on their screen as his is, and the result back. */
+  async terminal(orb: string, command: string, signal?: AbortSignal): Promise<ToolResult> {
+    if (!this.inbox.orb(orb)) throw new Error(`no orb "${orb}"`);
+    if (!this.computers.takenOver(orb)) throw new Error("take his computer over first");
+    const call = `you-${++this.#yours}`;
+    const r = await runCommand(command, workspaceOf(this.dataDir, orb), 120_000, signal, {
+      wrap: this.sandbox(orb),
+      onOutput: (chunk) => this.live.emit("terminal", { orb, conversation: null, run: 0, call, chunk }),
+    });
+    this.events.append("computer.you_ran", { orb, command: command.slice(0, 200), failed: r.isError === true }, { orb });
+    return r;
   }
 
   async close(): Promise<void> {

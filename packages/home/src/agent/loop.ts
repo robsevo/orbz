@@ -37,6 +37,7 @@ import type { CallSite, Guard } from "../rules/guard.ts";
 import type { Case, CaseStep, StepFn } from "../gym/cases.ts";
 import { taskOf } from "../gym/finder.ts";
 import type { Earned, Promoted } from "../gym/steps.ts";
+import type { Wrap } from "../computer/sandbox.ts";
 
 export type AgentOptions = {
   conversations: Conversations;
@@ -79,6 +80,10 @@ export type AgentOptions = {
   };
   /** Tools that come and go (PLAN 4.2: the person's connectors, as their servers are up). */
   extraTools?: () => ToolDef[];
+  /** His sandbox (PLAN 4.6): what his commands run inside, or null where none can start. */
+  sandbox?: (orb: string) => Wrap | null;
+  /** A command's output as it comes, for his terminal on the person's screen (never stored). */
+  onTerminal?: (e: { orb: string; conversation: string; run: number; call: string; chunk: string }) => void;
   /** His plan templates (PLAN 3.2). */
   templates?: (orb: string) => { title: string; body: string }[];
   /** Sets him a job on a schedule (PLAN 2.4). */
@@ -114,7 +119,7 @@ export const PLAN_ANSWERS = {
 const est = (text: string): number => Math.ceil(text.length / 4) + 4;
 
 export class AgentRunner implements Runner {
-  readonly #o: Required<Omit<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned" | "searchKey" | "remind" | "reminders" | "moveReminder" | "lessonGate" | "learn" | "habits" | "own" | "templates" | "schedule" | "extraTools">> & Pick<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned" | "searchKey" | "remind" | "reminders" | "moveReminder" | "lessonGate" | "learn" | "habits" | "own" | "templates" | "schedule" | "extraTools">;
+  readonly #o: Required<Omit<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned" | "searchKey" | "remind" | "reminders" | "moveReminder" | "lessonGate" | "learn" | "habits" | "own" | "templates" | "schedule" | "extraTools" | "sandbox" | "onTerminal">> & Pick<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned" | "searchKey" | "remind" | "reminders" | "moveReminder" | "lessonGate" | "learn" | "habits" | "own" | "templates" | "schedule" | "extraTools" | "sandbox" | "onTerminal">;
   readonly #tools: Map<string, ToolDef>;
 
   constructor(opts: AgentOptions) {
@@ -151,6 +156,7 @@ export class AgentRunner implements Runner {
       ...(this.#o.learn && { learn: (line: string) => this.#o.learn!(ctx.orb, line) }),
       ...(this.#o.templates && { templates: () => this.#o.templates!(ctx.orb) }),
       ...(this.#o.schedule && { schedule: (x) => this.#o.schedule!(ctx.orb, x) }),
+      ...(this.#o.sandbox && { sandbox: this.#o.sandbox(ctx.orb) }),
       note: (text, meta) => conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "notice", run: ctx.run, content: text, meta }),
     };
     mkdirSync(tctx.workspace, { recursive: true });
@@ -446,7 +452,7 @@ export class AgentRunner implements Runner {
           return "waiting";
         } else {
           ctx.activity(def.label);
-          result = await this.#o.guard.result(def, args, at.turn, await runTool(def, args, tctx));
+          result = await this.#o.guard.result(def, args, at.turn, await runTool(def, args, this.#forCall(tctx, ctx, call.id)));
         }
       }
       this.#result(msg, call, result, ctx);
@@ -454,6 +460,12 @@ export class AgentRunner implements Runner {
       if (result.stoppedByUser) return "stopped";
     }
     return "done";
+  }
+
+  /** The tool context for one call: what it prints goes to his terminal on the person's screen. */
+  #forCall(tctx: ToolContext, ctx: RunContext, call: string): ToolContext {
+    const on = this.#o.onTerminal;
+    return on ? { ...tctx, onOutput: (chunk: string) => on({ orb: ctx.orb, conversation: ctx.conversation, run: ctx.run, call, chunk }) } : tctx;
   }
 
   async #resume(cardId: number, ctx: RunContext, tctx: ToolContext, step: Stepper): Promise<"done" | "waiting" | "stopped"> {
@@ -480,7 +492,7 @@ export class AgentRunner implements Runner {
       else {
         this.#o.guard.approved(at.turn, def); // a fresh yes, for this act, this turn
         ctx.activity(def.label);
-        result = await this.#o.guard.result(def, args, at.turn, await runTool(def, args, tctx));
+        result = await this.#o.guard.result(def, args, at.turn, await runTool(def, args, this.#forCall(tctx, ctx, call.id)));
       }
     }
     this.#result(msg, call, result, ctx);

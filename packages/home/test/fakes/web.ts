@@ -65,6 +65,10 @@ export async function web(t: TestContext): Promise<Site> {
         }
         case "GET /cookie":
           return page("Cookie", `<p id="c"></p><script>document.getElementById("c").textContent = "cookie: " + (document.cookie || "none"); document.cookie = "seen=1; max-age=86400; path=/";</script>`);
+        case "GET /big-link": // a link over the whole page: a press anywhere on his screen opens it
+          return page("Big link", `<a href="/about" style="display:block;position:fixed;inset:0;font-size:40px">Anywhere</a>`);
+        case "GET /big-field": // one field over the whole page; what is typed shows in the page's title
+          return page("Big field", `<input name="q" aria-label="Q" style="position:fixed;inset:0;width:100%;height:100%;font-size:40px" oninput="document.title = this.value">`);
         case "GET /download":
           return page("Files", `<a href="/file">Get the file</a>`);
         case "GET /file":
