@@ -84,3 +84,37 @@ test("the brains in Settings: the order, a Gemini key kept (never shown back), a
   await brains.getByRole("button", { name: "Remove" }).last().click();
   await brains.locator('[data-brain="local"][data-state="absent"]').waitFor({ timeout: 20_000 });
 });
+
+test("the first open asks what he thinks with: a Gemini key kept there, then you make him", { skip, timeout: 150_000 }, async (t) => {
+  const gemini = await fakeModel(t, []);
+  gemini.models = ["models/gemini-3.8-flash"];
+  const data = mkdtempSync(join(tmpdir(), "orbs-brains-first-"));
+  t.after(() => rmSync(data, { recursive: true, force: true }));
+  const h = Home.open({ dataDir: data, protect: [], spendCapUsd: null, brains: { store: new MemoryStore(), geminiBase: gemini.url }, chatgpt: { store: new MemoryStore() } });
+  t.after(() => h.close());
+  h.start();
+  const d = await serve(h, { port: 0, appDir: dist });
+  t.after(() => d.close());
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: "dark" });
+  t.after(() => ctx.close());
+  const page = await ctx.newPage();
+  await page.goto(d.pairLink());
+  await page.locator("[data-onboarding]").waitFor({ timeout: 30_000 });
+  await page.getByRole("button", { name: "Skip the story" }).click();
+  await page.getByRole("textbox", { name: "Your name" }).fill("Robin");
+  await page.keyboard.press("Enter");
+  await page.getByRole("button", { name: "Skip the story" }).click();
+  const step = page.locator("[data-brains-step]");
+  await step.getByLabel("Your Gemini key", { exact: true }).fill(KEY);
+  await step.getByRole("button", { name: "Keep" }).first().click();
+  await step.locator('[data-brain-done="gemini"]').waitFor({ timeout: 20_000 });
+  assert.match(await step.innerText(), /✓ Gemini, gemini-3\.8-flash/);
+  assert.ok(!(await page.content()).includes(KEY), "the key never comes back to the page");
+  assert.equal(h.brains.status().gemini?.model, "gemini-3.8-flash", "kept by the home, as in Settings");
+  assert.deepEqual(await measure(page), [], "the step fits a phone");
+  await step.getByRole("button", { name: "Next" }).click();
+  for (let n = 0; n < 20 && !(await page.getByRole("button", { name: "Make me" }).isVisible()); n++) await page.keyboard.press("Enter");
+  await page.getByRole("button", { name: "Make me" }).click();
+  await page.locator("[data-onboarding]").waitFor({ state: "detached" });
+  assert.equal(await page.getByRole("tablist").count(), 1, "then the creator");
+});

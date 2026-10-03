@@ -37,6 +37,11 @@ const DELETING = [
 ];
 const MONEY = [
   /\b(stripe|paypal|braintree|squareup|adyen|coinbase|wise|venmo|revolut)\b/i,
+  // investing and crypto (owner, 10-02: "an investor persona, for crypto also"): an exchange, a trade,
+  // a wallet signing or sending: always the person's yes, at every rank
+  /\b(binance|kraken|robinhood|etoro|alpaca|bybit|okx|kucoin|bitstamp|bitfinex|uniswap)\b/i,
+  /\b(sell|trade|swap|withdraw|stake|unstake)\b/i,
+  /\b(eth_send(raw)?transaction|send(raw)?transaction|sign(and(send)?)?transaction|personal_sign)\b/i,
   /\/(charges|payments?|payouts|transfers|checkout|invoices\/[^/\s]+\/pay|orders)\b/i,
   /\b(purchase|buy|checkout|pay)\b/i,
 ];
@@ -67,5 +72,26 @@ export function shellFloor(command: string, protectedPaths: string[], home: stri
     const named = forms.find((f) => command.includes(f));
     if (named) hits.push({ category: "protected", why: `${FLOOR_WORDS.protected} (${named})` });
   }
+  return hits;
+}
+
+// A connector's tool (PLAN 4.2) is someone else's code: what it does is read off its name, the
+// words in it (`send_email`, `createPayment`, `deleteEvent`), and what the floor covers asks.
+const TOOL_WORDS: [FloorCategory, RegExp][] = [
+  ["money", /^(pay|payment|payments|charge|refund|transfer|purchase|buy|checkout|invoice|payout|order|sell|trade|swap|withdraw|deposit|stake|unstake|bridge)$/],
+  ["messaging", /^(send|reply|forward|post|message|email|mail|sms|tweet|dm|publish|invite|share)$/],
+  ["deleting", /^(delete|remove|destroy|drop|purge|trash|erase|wipe|unsubscribe)$/],
+  ["passwords", /^(password|passwords|secret|secrets|credential|credentials|token|tokens|key|keys)$/],
+];
+// the calendar is what changes it: a verb that changes, on a thing a calendar holds (list_events reads)
+const CHANGES = /^(create|add|update|edit|move|reschedule|cancel|set|book|accept|decline)$/;
+const ON_CALENDAR = /^(event|events|meeting|meetings|appointment|appointments|calendar|calendars|booking)$/;
+
+/** The floor's view of a connector's tool, by the words of its name. */
+export function toolFloor(name: string): FloorHit[] {
+  const words = name.replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  const hits: FloorHit[] = [];
+  for (const [category, re] of TOOL_WORDS) if (words.some((w) => re.test(w)) && !hits.some((h) => h.category === category)) hits.push({ category, why: FLOOR_WORDS[category] });
+  if (words.some((w) => CHANGES.test(w)) && words.some((w) => ON_CALENDAR.test(w))) hits.push({ category: "calendar", why: FLOOR_WORDS.calendar });
   return hits;
 }

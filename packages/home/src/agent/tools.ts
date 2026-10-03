@@ -59,7 +59,7 @@ export type ToolDef = {
   /** For a shell act whose command is not in its arguments (a row's committed test): the command. */
   commandOf?: (args: Args) => string;
   /** What it reads that came from outside (a page, a feed, mail): the turn is marked by it. */
-  untrusted?: "page" | "feed" | "document" | "mail";
+  untrusted?: "page" | "feed" | "document" | "mail" | "calendar";
   /** The floor's categories it touches, declared by a tool that does them directly. */
   floor?: (args: Args) => FloorHit[];
   /** For a pause tool that is checked before the person sees it (a plan): send it back with why,

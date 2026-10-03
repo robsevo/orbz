@@ -40,7 +40,8 @@ test("one task done the same way, approved enough times, is a candidate; its run
   const a = [run(bills), run(bills), run(bills), run(bills)];
   const corrected = run({ ...bills, verdicts: ["approve", "correct"] }); // the last word stands
   run({ orb: "gus", source: "chat", tools: ["shell"] }); // a one-off
-  const mail = { orb: "milo", source: "trigger", data: { trigger: "t1", event: "m1", at: 1, from: "x@y.z", subject: "Hi" }, tools: ["web_fetch", "write_file"] };
+  // as a real trigger gives it: `outside` is where its event's words start, not one of its fields
+  const mail = { orb: "milo", source: "trigger", data: { trigger: "t1", event: "m1", at: 1, outside: 31, from: "x@y.z", subject: "Hi" }, tools: ["web_fetch", "write_file"] };
   const m = [run(mail), run(mail), run(mail)];
   run({ ...mail, data: { trigger: "t1", event: "m9", at: 2, from: "x@y.z" } }); // other fields: another shape
   run({ ...bills, outcome: "failed" }); // did not finish: not seen

@@ -5,7 +5,7 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { Orb } from "../orb/Orb.tsx";
 import type { Character } from "../orb/spec.ts";
-import { idOf, type MorningCard, type Notice, type Office, type Undo } from "../home/link.ts";
+import { idOf, type YourDay, type MorningCard, type Notice, type Office, type Undo } from "../home/link.ts";
 import type { Route } from "../ui/nav.ts";
 
 const MARK: Record<Notice["kind"], string> = { bill: "¤", reminder: "◷", approval: "!", done: "✓", promotion: "↑" };
@@ -48,6 +48,18 @@ export function useMorning(home: Office | null): { card: MorningCard | null; set
 }
 const MORNING_EVENTS = new Set(["gym.night_done", "habit.promoted", "habit.undone", "orb.learned", "orb.unlearned"]);
 
+/** Your day (PLAN 4.5), read again when a calendar, a bill or a reminder changes. */
+export function useYourDay(home: Office | null): YourDay | null {
+  const [day, setDay] = useState<YourDay | null>(null);
+  useEffect(() => {
+    if (!home) return;
+    const load = (): void => void home.day().then(setDay, () => {});
+    load();
+    return home.watch({ open: load, event: (e) => void (/^(calendar\.|notice\.|reminder\.)/.test(e.type) && load()) });
+  }, [home]);
+  return day;
+}
+
 /** A habit's task, in words: what starts it and what it does ("A trigger (t1): read file, then remind"). */
 export function habitWords(key: string): string {
   const [, trigger = "", shape = ""] = key.split("|");
@@ -86,6 +98,7 @@ const dueWords = (due: string): string => {
 export function NoticesRoom(o: { home: Office | null; office: Character[]; notices: Notice[]; reload: () => void; live: boolean; go: (r: Route) => void }) {
   const [said, setSaid] = useState<string | null>(null);
   const morning = useMorning(o.home);
+  const today = useYourDay(o.home);
   if (!o.home) {
     return (
       <div style={{ display: "grid", placeItems: "center", alignContent: "center", gap: "var(--s3)", padding: "var(--s7) var(--s5)", textAlign: "center" }}>
@@ -124,6 +137,7 @@ export function NoticesRoom(o: { home: Office | null; office: Character[]; notic
         )}
       </div>
       {said && <span role="alert" style={{ color: "var(--alert)" }}>{said}</span>}
+      {today && "brief" in today && <YourDayCard day={today} go={o.go} />}
       {morning.card && <Morning card={morning.card} office={o.office} takeBack={takeBack} />}
       {!o.notices.length && (
         <div style={{ display: "grid", justifyItems: "center", gap: 8, padding: "var(--s6) 0", textAlign: "center" }}>
@@ -143,34 +157,38 @@ export function NoticesRoom(o: { home: Office | null; office: Character[]; notic
             {list.map((n) => {
               const where = whereOf(n, o.office);
               return (
-                <article key={n.id} data-notice={n.kind} style={{ display: "grid", gridTemplateColumns: "auto minmax(0, 1fr) auto", gap: 10, alignItems: "start", padding: "10px 12px", borderRadius: 14, background: "var(--card)", boxShadow: n.kind === "approval" || n.kind === "bill" ? "inset 0 0 0 1.5px var(--accent)" : "inset 0 0 0 .5px var(--hairline)", minWidth: 0 }}>
+                <article key={n.id} data-notice={n.kind} style={{ display: "grid", gridTemplateColumns: "auto minmax(0, 1fr) auto", gap: "6px 10px", alignItems: "start", padding: "10px 12px", borderRadius: 14, background: "var(--card)", boxShadow: n.kind === "approval" || n.kind === "bill" ? "inset 0 0 0 1.5px var(--accent)" : "inset 0 0 0 .5px var(--hairline)", minWidth: 0 }}>
                   <span aria-hidden style={{ width: 28, height: 28, borderRadius: "50%", display: "grid", placeItems: "center", background: "var(--accent-fill)", color: "var(--accent)", font: "800 14px/16px var(--font)" }}>{MARK[n.kind]}</span>
                   <span style={{ display: "grid", minWidth: 0 }}>
-                    <span style={{ font: "700 14px/19px var(--font)", color: "var(--text-1)", overflowWrap: "anywhere", textWrap: "balance" }}>{n.title}</span>
-                    <span style={{ font: "400 12px/17px var(--font)", color: "var(--text-3)", overflowWrap: "anywhere", textWrap: "balance" }}>
+                    <span style={{ font: "700 14px/19px var(--font)", color: "var(--text-1)", overflowWrap: "break-word", textWrap: "balance" }}>{n.title}</span>
+                    <span style={{ font: "400 12px/17px var(--font)", color: "var(--text-3)", overflowWrap: "break-word", textWrap: "pretty" }}>
                       {[KIND_WORDS[n.kind], n.detail, n.due && dueWords(n.due), ago(n.at, now)].filter(Boolean).join(" · ")}
                     </span>
                   </span>
-                  <span style={{ display: "flex", gap: 6, flex: "0 0 auto", flexWrap: "wrap", justifyContent: "end" }}>
-                    {n.kind === "promotion" && (
-                      <>
-                        <button data-sound="pick" onClick={() => promotion(n, true)} style={{ ...button, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)" }}>
-                          Promote
+                  {/* put away stays in the corner; what else he can do goes UNDER the words, so on a phone
+                      the words keep the card's width (owner, 10-02: three buttons beside them left 60 px) */}
+                  <button onClick={() => away(n.id)} aria-label={`Put away: ${n.title}`} style={{ ...button, padding: "6px 10px" }}>
+                    ✕
+                  </button>
+                  {(n.kind === "promotion" || where) && (
+                    <span style={{ gridColumn: "1 / -1", paddingLeft: 38, display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {n.kind === "promotion" && (
+                        <>
+                          <button data-sound="pick" onClick={() => promotion(n, true)} style={{ ...button, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)" }}>
+                            Promote
+                          </button>
+                          <button onClick={() => promotion(n, false)} style={button}>
+                            Not yet
+                          </button>
+                        </>
+                      )}
+                      {where && (
+                        <button onClick={() => o.go(where)} style={button}>
+                          Open
                         </button>
-                        <button onClick={() => promotion(n, false)} style={button}>
-                          Not yet
-                        </button>
-                      </>
-                    )}
-                    {where && (
-                      <button onClick={() => o.go(where)} style={button}>
-                        Open
-                      </button>
-                    )}
-                    <button onClick={() => away(n.id)} aria-label={`Put away: ${n.title}`} style={{ ...button, padding: "6px 10px" }}>
-                      ✕
-                    </button>
-                  </span>
+                      )}
+                    </span>
+                  )}
                 </article>
               );
             })}
@@ -178,6 +196,30 @@ export function NoticesRoom(o: { home: Office | null; office: Character[]; notic
         );
       })}
     </div>
+  );
+}
+
+/** Your day (PLAN 4.5): the brief in Ash's words, and what clashes, named, never moved for you. */
+function YourDayCard(o: { day: Extract<YourDay, { brief: string }>; go: (r: Route) => void }) {
+  return (
+    <section aria-label="Your day" data-day style={{ display: "grid", gap: "var(--s3)", padding: "var(--s4)", borderRadius: 18, background: "var(--card)", boxShadow: "inset 0 0 0 .5px var(--hairline)", minWidth: 0 }}>
+      <span style={{ font: "800 17px/22px var(--font)", color: "var(--text-1)" }}>Your day</span>
+      <span style={{ font: "400 15px/22px var(--font)", color: "var(--text-1)", textWrap: "pretty", overflowWrap: "anywhere" }}>{o.day.brief}</span>
+      {o.day.clashes.length > 0 && (
+        <ul aria-label="What clashes" style={{ display: "grid", gap: 6, margin: 0, padding: 0, listStyle: "none" }}>
+          {o.day.clashes.map((c, i) => (
+            <li key={i} data-clash={c.kind} style={{ display: "grid", gridTemplateColumns: "auto minmax(0, 1fr)", gap: 8, alignItems: "start", font: "600 13px/19px var(--font)", color: "var(--text-1)" }}>
+              <span aria-hidden style={{ width: 16, textAlign: "center", color: "var(--alert)" }}>{c.kind === "overlap" ? "⧉" : "⇥"}</span>
+              <span style={{ overflowWrap: "anywhere", textWrap: "pretty" }}>{c.said}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {o.day.owedSaid && <span data-owed style={{ font: "400 14px/20px var(--font)", color: "var(--text-2)", textWrap: "pretty", overflowWrap: "anywhere" }}>{o.day.owedSaid}</span>}
+      <button onClick={() => o.go({ room: "calendar" })} style={{ ...button, justifySelf: "start" }}>
+        Open the calendar
+      </button>
+    </section>
   );
 }
 

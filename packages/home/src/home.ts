@@ -23,6 +23,13 @@ import { Xp } from "./gym/xp.ts";
 import { Gym } from "./gym/night.ts";
 import { Sessions } from "./sessions.ts";
 import { Passkeys } from "./passkeys.ts";
+import { Connectors, type ConnectorsOptions } from "./connectors/connectors.ts";
+import { connectorTools } from "./connectors/tools.ts";
+import { Mail, mailTools } from "./connectors/mail.ts";
+import { Calendars, calendarTools } from "./connectors/calendars.ts";
+import { Accounts, type AccountsOptions, type ProviderId } from "./connectors/accounts.ts";
+import { dayTools } from "./day.ts";
+import { defaultStore, type SecretStore } from "./chatgpt/store.ts";
 import type { Undo } from "./gym/card.ts";
 import { type Level, levelOf, nextFor } from "./gym/levels.ts";
 import { SPECIALTY_FAMILIES } from "./brain/constitution.ts";
@@ -76,6 +83,10 @@ export type HomeOptions = {
   chatgpt?: Partial<Omit<ChatGPTOptions, "dataDir" | "events" | "clock">>;
   /** The brains after ChatGPT (PLAN 1.11): where the Gemini key is kept, and Gemini's root (a test's fake). */
   brains?: Pick<BrainsOptions, "store" | "geminiBase" | "tavilyBase">;
+  /** The person's connectors (PLAN 4.2): a test gives its own keychain and deadlines. */
+  connectors?: Partial<Pick<ConnectorsOptions, "handshakeMs" | "callMs">> & { store?: SecretStore };
+  /** Your Google and Microsoft accounts (PLAN 4.2): the apps registered with them, and stand-ins for tests. */
+  accounts?: Pick<AccountsOptions, "clients" | "endpoints" | "signInMs">;
   /** Dollars a day the brains may cost, by what the providers report; null for no cap. */
   spendCapUsd?: number | null;
 };
@@ -140,6 +151,14 @@ export class Home {
   /** The devices signed in to the app, and the owner's passkeys (PLAN 2.7). */
   readonly sessions: Sessions;
   readonly passkeys: Passkeys;
+  /** The person's own MCP servers, their tools the orbs' (PLAN 4.2). */
+  readonly connectors: Connectors;
+  /** Your mail accounts (PLAN 4.2): what arrives fires "mail" triggers; replies are drafted, never sent. */
+  readonly mail: Mail;
+  /** Your own calendars, by their ICS addresses, read only (PLAN 4.2). */
+  readonly calendars: Calendars;
+  /** Your Google and Microsoft accounts, each connected by its own sign-in (PLAN 4.2). */
+  readonly accounts: Accounts;
   /** Sessions (PLAN 2.9): a Brainstorm and a Floor, the orbs chosen for each taking their turns. */
   readonly team: Team;
   /** XP from graded evidence only (PLAN 3.6): the ledger, in the event log. */
@@ -185,6 +204,17 @@ export class Home {
     this.about = new About(db, this.events, this.clock);
     this.sessions = new Sessions(db, this.clock);
     this.passkeys = new Passkeys(db, this.clock, this.sessions, this.dataDir);
+    const keychain = opts.connectors?.store ?? opts.brains?.store;
+    this.connectors = new Connectors({
+      dataDir: this.dataDir, events: this.events,
+      ...(opts.connectors?.handshakeMs && { handshakeMs: opts.connectors.handshakeMs }),
+      ...(opts.connectors?.callMs && { callMs: opts.connectors.callMs }),
+      store: keychain ? () => Promise.resolve(keychain) : () => defaultStore(this.dataDir),
+    });
+    const secrets = keychain ? () => Promise.resolve(keychain) : () => defaultStore(this.dataDir);
+    this.accounts = new Accounts({ dataDir: this.dataDir, events: this.events, store: secrets, now: () => this.clock.now(), ...opts.accounts });
+    this.mail = new Mail({ dataDir: this.dataDir, events: this.events, store: secrets, token: (a) => this.accounts.token(a, "mail") });
+    this.calendars = new Calendars({ dataDir: this.dataDir, events: this.events, store: secrets, now: () => this.clock.now(), accountEvents: (a, from, to) => this.accounts.events(a, from, to) });
     const matcherEp = opts.brain?.preset.own ?? big;
     const matcher: Matcher | null = opts.agent?.matcher !== undefined ? opts.agent.matcher : matcherEp ? new ModelMatcher(matcherEp, this.spend) : null;
     this.guard = new Guard({
@@ -249,6 +279,12 @@ export class Home {
           moveReminder: (id, due) => this.notices.move(id, due),
           learn: (orb, line) => this.learned.add(orb, line),
           templates: (orb) => templatesFor(this.events, orb),
+          extraTools: () => [
+            ...connectorTools(this.connectors),
+            ...(Object.keys(this.mail.accounts()).length ? mailTools(this.mail) : []),
+            ...(this.calendars.list().length ? calendarTools(this.calendars, () => this.clock.now()) : []),
+            ...(this.kit ? dayTools(this, () => this.clock.now()) : []),
+          ],
           schedule: (orb, x) => {
             const made = this.schedules.add({ orb, name: x.name, instruction: x.instruction, cron: cronFor(x.rule) });
             return { id: made.id, words: wordsOf(made.cron), next: cronOf(made.cron, made.timezone).nextRun(new Date(this.clock.now()))?.getTime() ?? null };
@@ -306,6 +342,7 @@ export class Home {
     });
     this.schedules = new Schedules(db, this.events, this.inbox, this.clock);
     this.triggers = new Triggers(db, this.events, this.inbox, this.clock);
+    this.triggers.register("mail", this.mail.source());
     this.loops = new Loops(db, this.events, this.clock, {
       budgetCapped: () => this.spend.capped(),
       ...opts.loops,
@@ -346,6 +383,7 @@ export class Home {
       // closed while it was starting: the log is closed too, and there is nothing to report
       if (!this.#closed) this.events.append("kit.start_failed", { error: e instanceof Error ? e.message : String(e) });
     });
+    void this.connectors.startAll().catch(() => {}); // each fails open, on its own (PLAN 4.2)
   }
 
   /** One tick now (also what the timer calls). Ticks never overlap; a tick asked for during one
@@ -448,6 +486,37 @@ export class Home {
     feedback(this.events, run, verdict, note);
   }
 
+  /** Connects a Google or Microsoft account (PLAN 4.2): the address its sign-in opens at, and, once it
+   * comes back, its mail and its calendar kept under the same name. */
+  async connectAccount(provider: ProviderId): Promise<{ url: string; done: Promise<string> }> {
+    const taken = new Set([...Object.keys(this.accounts.list()), ...Object.keys(this.mail.accounts()), ...this.calendars.list().map((c) => c.name)]);
+    let name: string = provider;
+    for (let i = 2; taken.has(name); i++) name = `${provider}-${i}`;
+    const { url, done } = await this.accounts.connect(provider, name);
+    const linked = done.then(async ({ name: n, account }) => {
+      const p = this.accounts.provider(account.provider);
+      try {
+        const { host, port, tls } = p.endpoints.imap;
+        await this.mail.addConnected(n, { host, port, ...(tls !== undefined && { tls }), user: account.email, address: account.email, oauth: n });
+        await this.calendars.addAccount(n, `${p.title} (${account.email})`, n);
+      } catch (e) {
+        this.events.append("account.link_failed", { name: n, why: e instanceof Error ? e.message : String(e) });
+        throw e;
+      }
+      this.events.append("account.ready", { name: n, provider: account.provider });
+      return n;
+    });
+    linked.catch(() => {}); // a caller that never awaits it must not crash the home
+    return { url, done: linked };
+  }
+
+  /** Disconnects an account: its sign-in, its mail and its calendar, all at once. */
+  async disconnectAccount(name: string): Promise<void> {
+    if (this.mail.accounts()[name]?.oauth === name) await this.mail.remove(name);
+    if (this.calendars.list().some((c) => c.name === name && c.account === name)) await this.calendars.remove(name);
+    await this.accounts.remove(name);
+  }
+
   async close(): Promise<void> {
     if (this.#closed) return;
     this.#closed = true;
@@ -460,6 +529,8 @@ export class Home {
     this.chatgpt.close();
     this.team.close();
     this.#background.close();
+    await this.connectors.close();
+    this.accounts.close();
     this.events.append("home.stopped", {});
     this.#db.close();
   }

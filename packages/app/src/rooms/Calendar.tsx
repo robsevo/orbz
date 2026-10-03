@@ -13,7 +13,9 @@ import { ScheduleEditor } from "./ScheduleEditor.tsx";
 const pad = (n: number): string => String(n).padStart(2, "0");
 const dayOf = (d: Date): string => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const MARK: Record<CalendarEntry["kind"], string> = { bill: "¤", reminder: "◷", schedule: "↻" };
+const MARK: Record<CalendarEntry["kind"], string> = { bill: "¤", reminder: "◷", schedule: "↻", event: "▣" };
+/** The orb an entry is his, if any: your own calendar's events are yours. */
+const orbIdOf = (e: CalendarEntry): string | null => (e.kind === "event" ? null : e.orb);
 const CHANGES = /^(reminder\.(added|moved|done)|schedule\.(added|changed|enabled|disabled|removed))$/;
 const button: CSSProperties = { font: "600 13px/18px var(--font)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 10, padding: "6px 12px", cursor: "pointer", boxShadow: "inset 0 0 0 .5px var(--hairline)", minHeight: 32 };
 
@@ -142,7 +144,7 @@ export function CalendarRoom(o: { home: Office | null; office: Character[] }) {
               <span className="orbs-calnum" style={{ font: `${isToday ? 800 : 600} 12px/16px var(--font)`, color: isToday ? "var(--accent)" : "var(--text-1)" }}>{d.getDate()}</span>
               {/* on a wide screen what is on it, in its orb's colour; on a phone (the stylesheet) a dot each */}
               {list.slice(0, 3).map((e, i) => (
-                <span key={`${e.kind}-${e.id}-${i}`} data-entry={e.kind} data-orb={orbOf(e.orb)?.hue} className="orbs-calentry" style={{ display: "flex", alignItems: "center", gap: 3, minWidth: 0, font: "600 10px/14px var(--font)", color: "var(--text-1)", opacity: e.kind === "schedule" && !e.enabled ? 0.5 : 1 }}>
+                <span key={`${e.kind}-${e.id}-${i}`} data-entry={e.kind} data-orb={orbIdOf(e) === null ? undefined : orbOf(orbIdOf(e)!)?.hue} className="orbs-calentry" style={{ display: "flex", alignItems: "center", gap: 3, minWidth: 0, font: "600 10px/14px var(--font)", color: "var(--text-1)", opacity: e.kind === "schedule" && !e.enabled ? 0.5 : 1 }}>
                   <i aria-hidden style={{ flex: "0 0 auto", width: 6, height: 6, borderRadius: "50%", background: "var(--accent)" }} />
                   <span className="orbs-calword" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.time ? `${e.time} ` : ""}{e.title}</span>
                 </span>
@@ -157,7 +159,8 @@ export function CalendarRoom(o: { home: Office | null; office: Character[] }) {
         <span style={{ font: "800 16px/22px var(--font)", color: "var(--text-1)" }}>{new Date(`${picked}T00:00`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</span>
         {!agenda.length && <span style={{ font: "400 13px/18px var(--font)", color: "var(--text-3)" }}>Nothing on this day.</span>}
         {agenda.map((e, i) => {
-          const c = orbOf(e.orb);
+          const id = orbIdOf(e);
+          const c = id === null ? undefined : orbOf(id);
           return (
             <div key={`${e.kind}-${e.id}-${i}`} data-orb={c?.hue} data-item={e.kind} style={{ display: "grid", gridTemplateColumns: "auto minmax(0, 1fr)", gap: 10, alignItems: "start", padding: "8px 10px", borderRadius: 12, background: "var(--card)", boxShadow: e.kind === "bill" ? "inset 0 0 0 1.5px var(--accent)" : "inset 0 0 0 .5px var(--hairline)", minWidth: 0 }}>
               {c ? <Orb character={c} size={30} poke={false} still /> : <span aria-hidden style={{ width: 30 }}>{MARK[e.kind]}</span>}
@@ -165,14 +168,17 @@ export function CalendarRoom(o: { home: Office | null; office: Character[] }) {
                 <span style={{ display: "grid", minWidth: 0 }}>
                   <span style={{ font: "700 14px/19px var(--font)", color: "var(--text-1)", overflowWrap: "anywhere", textWrap: "balance" }}>
                     <span aria-hidden style={{ color: "var(--accent)" }}>{MARK[e.kind]} </span>
-                    {e.time ? `${e.time} · ` : ""}
+                    {e.time ? `${e.time}${e.kind === "event" && e.until && e.until !== e.time ? `–${e.until}` : ""} · ` : ""}
                     {e.title}
                   </span>
                   <span style={{ font: "400 12px/17px var(--font)", color: "var(--text-3)" }}>
-                    {[c?.name ?? e.orb, e.kind === "schedule" ? (e.enabled ? "runs then" : "paused") : e.kind === "bill" ? ["bill", e.amount].filter(Boolean).join(", ") : "reminder"].join(" · ")}
+                    {e.kind === "event"
+                      ? [e.calendar, e.location].filter(Boolean).join(" · ")
+                      : [c?.name ?? e.orb, e.kind === "schedule" ? (e.enabled ? "runs then" : "paused") : e.kind === "bill" ? ["bill", e.amount].filter(Boolean).join(", ") : "reminder"].join(" · ")}
                   </span>
                 </span>
-                <span style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                {/* your own calendar's events are read here, changed in your calendar */}
+                {e.kind !== "event" && <span style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
                   {e.kind === "schedule" ? (
                     <>
                       <TimeField key={`${e.id}-${e.time}`} label={`When ${e.title} runs`} value={e.time} set={(time) => act(home.setSchedule(e.id, { time }))} />
@@ -193,7 +199,7 @@ export function CalendarRoom(o: { home: Office | null; office: Character[] }) {
                       </button>
                     </>
                   )}
-                </span>
+                </span>}
               </div>
             </div>
           );

@@ -49,6 +49,7 @@ export function Chat({ orb, home, person }: { orb: Character; home: Office | nul
           conversation={conv}
           orbs={[orb]}
           send={(text) => home.say(orb, text)}
+          attach={(file) => home.give(orb, file)}
           placeholder={`Message ${orb.name}`}
           empty={`Say hello to ${orb.name}${person ? `, ${person}` : ""}. Just you two: no one else sees this.`}
           onBusy={setBusy}

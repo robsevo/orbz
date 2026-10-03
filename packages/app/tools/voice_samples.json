@@ -1,0 +1,387 @@
+{
+ "af_alloy": {
+  "line": "This is how I sound when I talk to you.",
+  "heard": "This is how I sound when I talk to you.",
+  "alike": 1.0,
+  "seconds": 2.98,
+  "kept": true
+ },
+ "af_aoede": {
+  "line": "This is how I sound when I talk to you.",
+  "heard": "This is how I sound when I talk to you.",
+  "alike": 1.0,
+  "seconds": 1.97,
+  "kept": true
+ },
+ "af_bella": {
+  "line": "This is how I sound when I talk to you.",
+  "heard": "This is how I sound when I talk to you.",
+  "alike": 1.0,
+  "seconds": 2.06,
+  "kept": true
+ },
+ "af_heart": {
+  "line": "This is how I sound when I talk to you.",
+  "heard": "This is how I sound when I talk to you.",
+  "alike": 1.0,
+  "seconds": 2.08,
+  "kept": true
+ },
+ "af_jessica": {
+  "line": "This is how I sound when I talk to you.",
+  "heard": "This is how I sound when I talk to you.",
+  "alike": 1.0,
+  "seconds": 2.31,
+  "kept": true
+ },
+ "af_kore": {
+  "line": "This is how I sound when I talk to you.",
+  "heard": "This is how I sound when I talk to you.",
+  "alike": 1.0,
+  "seconds": 2.19,
+  "kept": true
+ },
+ "af_nicole": {
+  "line": "This is how I sound when I talk to you.",
+  "heard": "This is how I sound when I talk to you.",
+  "alike": 1.0,
+  "seconds": 2.95,
+  "kept": true
+ },
+ "af_nova": {
+  "line": "This is how I sound when I talk to you.",
+  "heard": "This is how I sound when I talk to you.",
+  "alike": 1.0,
+  "seconds": 2.89,
+  "kept": true
+ },
+ "af_river": {
+  "line": "This is how I sound when I talk to you.",
+  "heard": "This is how I sound when I talk to you.",
+  "alike": 1.0,
+  "seconds": 2.4,
+  "kept": true
+ },
+ "af_sarah": {
+  "line": "This is how I sound when I talk to you.",
+  "heard": "This is how I sound when I talk to you.",
+  "alike": 1.0,
+  "seconds": 2.04,
+  "kept": true
+ },
+ "af_sky": {
+  "line": "This is how I sound when I talk to you.",
+  "heard": "This is how I sound when I talk to you.",
+  "alike": 1.0,
+  "seconds": 2.46,
+  "kept": true
+ },
+ "am_adam": {
+  "line": "This is how I sound when I talk to you.",
+  "heard": "This is how I sound when I talk to you.",
+  "alike": 1.0,
+  "seconds": 2.1,
+  "kept": true
+ },
+ "am_echo": {
+  "line": "This is how I sound when I talk to you.",
+  "heard": "This is how I sound when I talk to you.",
+  "alike": 1.0,
+  "seconds": 2.85,
+  "kept": true
+ },
+ "am_eric": {
+  "line": "This is how I sound when I talk to you.",
+  "heard": "This is how I sound when I talk to you.",
+  "alike": 1.0,
+  "seconds": 2.38,
+  "kept": true
+ },
+ "am_fenrir": {
+  "line": "This is how I sound when I talk to you.",
+  "heard": "This is how I sound when I talk to you.",
+  "alike": 1.0,
+  "seconds": 1.99,
+  "kept": true
+ },
+ "am_liam": {
+  "line": "This is how I sound when I talk to you.",
+  "heard": "This is how I sound when I talk to you.",
+  "alike": 1.0,
+  "seconds": 2.34,
+  "kept": true
+ },
+ "am_michael": {
+  "line": "This is how I sound when I talk to you.",
+  "heard": "This is how I sound when I talk to you.",
+  "alike": 1.0,
+  "seconds": 2.36,
+  "kept": true
+ },
+ "am_onyx": {
+  "line": "This is how I sound when I talk to you.",
+  "heard": "This is how I sound when I talk to you.",
+  "alike": 1.0,
+  "seconds": 2.95,
+  "kept": true
+ },
+ "am_puck": {
+  "line": "This is how I sound when I talk to you.",
+  "heard": "This is how I sound when I talk to you.",
+  "alike": 1.0,
+  "seconds": 2.12,
+  "kept": true
+ },
+ "am_santa": {
+  "line": "This is how I sound when I talk to you.",
+  "heard": "This is how I sound when I talk to you.",
+  "alike": 1.0,
+  "seconds": 2.93,
+  "kept": true
+ },
+ "ash": {
+  "line": "This is how I sound when I talk to you.",
+  "heard": "This is how I sound when I talk to you.",
+  "alike": 1.0,
+  "seconds": 2.57,
+  "kept": true
+ },
+ "bf_alice": {
+  "line": "This is how I sound when I talk to you.",
+  "heard": "This is how I sound when I talk to you.",
+  "alike": 1.0,
+  "seconds": 2.61,
+  "kept": true
+ },
+ "bf_emma": {
+  "line": "This is how I sound when I talk to you.",
+  "heard": "This is how I sound when I talk to you",
+  "alike": 1.0,
+  "seconds": 2.36,
+  "kept": true
+ },
+ "bf_isabella": {
+  "line": "This is how I sound when I talk to you.",
+  "heard": "This is how I sound when I talk to you.",
+  "alike": 1.0,
+  "seconds": 2.42,
+  "kept": true
+ },
+ "bf_lily": {
+  "line": "This is how I sound when I talk to you.",
+  "heard": "This is how I sound when I talk to you.",
+  "alike": 1.0,
+  "seconds": 2.74,
+  "kept": true
+ },
+ "bm_daniel": {
+  "line": "This is how I sound when I talk to you.",
+  "heard": "This is how I sound when I talk to you.",
+  "alike": 1.0,
+  "seconds": 2.46,
+  "kept": true
+ },
+ "bm_fable": {
+  "line": "This is how I sound when I talk to you.",
+  "heard": "This is how I sound when I talk to you.",
+  "alike": 1.0,
+  "seconds": 2.91,
+  "kept": true
+ },
+ "bm_george": {
+  "line": "This is how I sound when I talk to you.",
+  "heard": "This is how I sound when I talk to you.",
+  "alike": 1.0,
+  "seconds": 2.87,
+  "kept": true
+ },
+ "bm_lewis": {
+  "line": "This is how I sound when I talk to you.",
+  "heard": "This is how I sound when I talk to you.",
+  "alike": 1.0,
+  "seconds": 2.63,
+  "kept": true
+ },
+ "ef_dora": {
+  "line": "¡Hola! Así suena mi voz.",
+  "heard": "Hola, así suena mi voz.",
+  "alike": 1.0,
+  "seconds": 1.65,
+  "kept": true
+ },
+ "em_alex": {
+  "line": "¡Hola! Así suena mi voz.",
+  "heard": "Hola, así suena mi voz.",
+  "alike": 1.0,
+  "seconds": 1.74,
+  "kept": true
+ },
+ "em_santa": {
+  "line": "¡Hola! Así suena mi voz.",
+  "heard": "Hola, así suena mi voz.",
+  "alike": 1.0,
+  "seconds": 1.63,
+  "kept": true
+ },
+ "ff_siwis": {
+  "line": "Bonjour ! Voici ma voix.",
+  "heard": "Bonjour, voici ma voix.",
+  "alike": 0.98,
+  "seconds": 1.67,
+  "kept": true
+ },
+ "hf_alpha": {
+  "line": "नमस्ते! यह मेरी आवाज़ है।",
+  "heard": "नमस्ते यह मेरी आवाज है",
+  "alike": 1.0,
+  "seconds": 2.31,
+  "kept": true
+ },
+ "hf_beta": {
+  "line": "नमस्ते! यह मेरी आवाज़ है।",
+  "heard": "नमस्ते यह मेरी आवाज है.",
+  "alike": 1.0,
+  "seconds": 1.93,
+  "kept": true
+ },
+ "hm_omega": {
+  "line": "नमस्ते! यह मेरी आवाज़ है।",
+  "heard": "नमस्ते यह मेरी आवाज है",
+  "alike": 1.0,
+  "seconds": 2.31,
+  "kept": true
+ },
+ "hm_psi": {
+  "line": "नमस्ते! यह मेरी आवाज़ है।",
+  "heard": "नमस्ते यह मेरी आवाज है",
+  "alike": 1.0,
+  "seconds": 2.19,
+  "kept": true
+ },
+ "if_sara": {
+  "line": "Ciao! Questa è la mia voce.",
+  "heard": "Ciao questa è la mia voce.",
+  "alike": 1.0,
+  "seconds": 1.85,
+  "kept": true
+ },
+ "im_nicola": {
+  "line": "Ciao! Questa è la mia voce.",
+  "heard": "Ciao, questa è la mia voce.",
+  "alike": 1.0,
+  "seconds": 2.04,
+  "kept": true
+ },
+ "jf_alpha": {
+  "line": "こんにちは！これが私の声です。",
+  "heard": "こんにちはこれが私の声です",
+  "alike": 1.0,
+  "seconds": 2.34,
+  "kept": true
+ },
+ "jf_gongitsune": {
+  "line": "こんにちは！これが私の声です。",
+  "heard": "こんにちは。これが私の声です。",
+  "alike": 1.0,
+  "seconds": 3.47,
+  "kept": true
+ },
+ "jf_nezumi": {
+  "line": "こんにちは！これが私の声です。",
+  "heard": "こんにちは。これが私の声です。",
+  "alike": 1.0,
+  "seconds": 3.42,
+  "kept": true
+ },
+ "jf_tebukuro": {
+  "line": "こんにちは！これが私の声です。",
+  "heard": "こんにちは。これが私の声です。",
+  "alike": 1.0,
+  "seconds": 3.38,
+  "kept": true
+ },
+ "jm_kumo": {
+  "line": "こんにちは！これが私の声です。",
+  "heard": "こんにちは。これが私の声です。",
+  "alike": 1.0,
+  "seconds": 2.55,
+  "kept": true
+ },
+ "pf_dora": {
+  "line": "Olá! Esta é a minha voz.",
+  "heard": "Olá, esta é a minha voz.",
+  "alike": 1.0,
+  "seconds": 1.7,
+  "kept": true
+ },
+ "pm_alex": {
+  "line": "Olá! Esta é a minha voz.",
+  "heard": "Olá, esta é a minha voz.",
+  "alike": 1.0,
+  "seconds": 1.7,
+  "kept": true
+ },
+ "pm_santa": {
+  "line": "Olá! Esta é a minha voz.",
+  "heard": "Olá, esta é a minha voz.",
+  "alike": 1.0,
+  "seconds": 1.65,
+  "kept": true
+ },
+ "zf_xiaobei": {
+  "line": "你好！这是我的声音。",
+  "heard": "你好,这是我的声音。",
+  "alike": 1.0,
+  "seconds": 2.08,
+  "kept": true
+ },
+ "zf_xiaoni": {
+  "line": "你好！这是我的声音。",
+  "heard": "你好 这是我的生银",
+  "alike": 0.75,
+  "seconds": 1.8,
+  "kept": true
+ },
+ "zf_xiaoxiao": {
+  "line": "你好！这是我的声音。",
+  "heard": "你好这是我的声音。",
+  "alike": 1.0,
+  "seconds": 1.7,
+  "kept": true
+ },
+ "zf_xiaoyi": {
+  "line": "你好！这是我的声音。",
+  "heard": "你好这是我的声音",
+  "alike": 1.0,
+  "seconds": 1.76,
+  "kept": true
+ },
+ "zm_yunjian": {
+  "line": "你好！这是我的声音。",
+  "heard": "你好这是我的声音",
+  "alike": 1.0,
+  "seconds": 1.82,
+  "kept": true
+ },
+ "zm_yunxi": {
+  "line": "你好！这是我的声音。",
+  "heard": "你好,这是我的声音",
+  "alike": 1.0,
+  "seconds": 1.67,
+  "kept": true
+ },
+ "zm_yunxia": {
+  "line": "你好！这是我的声音。",
+  "heard": "你好这是我的声音。",
+  "alike": 1.0,
+  "seconds": 1.72,
+  "kept": true
+ },
+ "zm_yunyang": {
+  "line": "你好！这是我的声音。",
+  "heard": "你好,这是我的声音",
+  "alike": 1.0,
+  "seconds": 1.65,
+  "kept": true
+ }
+}

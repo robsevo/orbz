@@ -5,14 +5,16 @@ import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { contrast, hex, rgbToOklch, type RGB } from "../src/design/color.ts";
-import { AZURE, backgrounds, HUE_STEP, HUES, MIN_FONT, RADIUS, SPACE, stylesheet, SURFACES, TYPE, type Theme } from "../src/design/tokens.ts";
+import { AZURE, backgrounds, baseOf, HUE_STEP, HUES, MIN_FONT, RADIUS, SPACE, stylesheet, SURFACES, THEMES as ALL, TYPE, type Theme, type ThemeId } from "../src/design/tokens.ts";
 import { lintSource, lintTree } from "./lint.ts";
 
-const THEMES: Theme[] = ["dark", "light"];
+// every theme you can choose (owner, 10-02: "besides light or dark"), each held to the same checks
+const THEMES = Object.keys(ALL) as ThemeId[];
+const BASES: Theme[] = ["dark", "light"];
 const AA = 4.5;
 
 /** The worst contrast a colour gets on the surfaces it is used on (all of them, unless named), and where. */
-function worst(c: RGB, t: Theme, on: string[] | null = null): { ratio: number; on: string } {
+function worst(c: RGB, t: ThemeId, on: string[] | null = null): { ratio: number; on: string } {
   return Object.entries(backgrounds(t))
     .filter(([name]) => !on || on.includes(name))
     .map(([on, bg]) => ({ ratio: contrast(c, bg), on }))
@@ -25,7 +27,8 @@ const WHERE: Record<"text1" | "text2" | "text3" | "alert", string[] | null> = {
   text1: null, text2: null, text3: null, alert: ["ground", "card", "side", "raised"],
 };
 
-test("text contrast meets WCAG AA (4.5:1) on every surface, in both themes", () => {
+test("text contrast meets WCAG AA (4.5:1) on every surface, in every theme", () => {
+  assert.ok(THEMES.length >= 7, "light, dark and more (owner, 10-02)");
   for (const t of THEMES) {
     for (const k of ["text1", "text2", "text3", "alert"] as const) {
       const w = worst(SURFACES[t][k], t, WHERE[k]);
@@ -42,14 +45,15 @@ test("text contrast meets WCAG AA (4.5:1) on every surface, in both themes", () 
   for (const t of THEMES) assert.ok(worst(SURFACES[t].quiet, t).ratio < AA, `control: ${t} quiet should fail as text`);
 });
 
-test("every orb hue reads as text in both themes; Ash keeps his azure", () => {
+test("every orb hue reads as text in every theme; Ash keeps his azure", () => {
   assert.equal(HUES.length, 24, "a lot of choices (owner, 10-01)");
   assert.equal(new Set(HUES.map((h) => h.name)).size, HUES.length);
   assert.equal(hex(HUES[0]!.dark), hex(AZURE), "azure is chartlive's #5EB3DE");
   for (const h of HUES) {
     for (const t of THEMES) {
-      const w = worst(h[t], t);
-      assert.ok(w.ratio >= AA, `${h.name} in ${t} ${hex(h[t])} is ${w.ratio.toFixed(2)}:1 on ${w.on}`);
+      const c = h[baseOf(t)]; // a theme wears its base's colour of each hue
+      const w = worst(c, t);
+      assert.ok(w.ratio >= AA, `${h.name} in ${t} ${hex(c)} is ${w.ratio.toFixed(2)}:1 on ${w.on}`);
     }
   }
 });
@@ -59,7 +63,7 @@ test("the hues are one family: the same lightness in the dark, evenly round the 
   const L = dark.map((c) => c.L);
   assert.ok(Math.max(...L) - Math.min(...L) < 0.02, `dark lightness spread ${(Math.max(...L) - Math.min(...L)).toFixed(3)}`);
   HUES.forEach((h, i) => assert.equal(Math.round((h.angle - HUES[0]!.angle + 360) % 360), Math.round(i * HUE_STEP)));
-  for (const t of THEMES) {
+  for (const t of BASES) {
     for (let i = 0; i < HUES.length; i++) {
       const a = rgbToOklch(HUES[i]![t]);
       const b = rgbToOklch(HUES[(i + 1) % HUES.length]![t]);

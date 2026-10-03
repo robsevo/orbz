@@ -65,7 +65,7 @@ export function taskOf(orb: string, items: { source: string; data: Record<string
   const d = first?.data ?? {};
   const trigger =
     typeof d.schedule === "string" ? `schedule:${d.schedule}` : typeof d.trigger === "string" ? `trigger:${d.trigger}` : first?.source === "turn" ? "session" : "chat";
-  const fields = Object.keys(d).filter((k) => !["schedule", "due", "missed", "trigger", "event", "at", "team", "resume"].includes(k)).sort();
+  const fields = Object.keys(d).filter((k) => !["schedule", "due", "missed", "trigger", "event", "at", "outside", "team", "resume"].includes(k)).sort();
   return { trigger, fields, task: `${orb}|${trigger}|{${fields.join(",")}}` };
 }
 

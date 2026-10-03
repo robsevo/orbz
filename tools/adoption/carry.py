@@ -45,6 +45,8 @@ MODULES = [
     "learner_model", "practice_card",
     # the day
     "day_verbs", "briefs", "proactive", "whenparse",
+    # the day itself (PLAN 4.5): its calendar is what the home hands in (eds.py, Orbs' own)
+    "day", "dayplan", "reminders",
     # safety + honesty
     "oneway", "redact", "secretscan", "write_guard",
     # chat
@@ -54,6 +56,7 @@ MODULES = [
 ]
 
 SUITES = [
+    "test_day", "test_dayplan", "test_reminders", "test_proactive",
     "test_speakable", "test_articles", "test_narration_glitches", "test_phrasing",
     "test_learning", "test_learn_gate", "test_learn_ledger", "test_belief_use", "test_memindex",
     "test_skill_draft", "test_skill_lifecycle", "test_skill_usage",
@@ -71,10 +74,10 @@ SUITES = [
 # winplace), so it comes with the row that rewires it.
 LATER = {
     "speech": "4.3", "listen": "4.3", "sayloop": "4.3",
-    "adapters": "not carried: Ash's legacy file-slot transport; its approval rule (may_approve: only an explicit act of the person, never text) is the home's card channel (1.6)",
+    "adapters": "not carried: Ash's legacy file-slot transport; its approval rule (may_approve: only an explicit act of the person, never text) is the home's card channel (1.6). The journal the day keeps promises in is Orbs' own adapters.py",
     "learn_review": "3.5", "voice_distill": "3.5", "prefs_model": "3.5", "retrieve": "3.5",
     "lesson": "4.4", "lesson_demos": "4.4", "lessonturn": "4.4", "teachcanvas": "4.4", "tutor": "4.4",
-    "day": "4.5", "dayplan": "4.5", "reminders": "4.5", "summarize": "4.5",
+    "summarize": "4.5 (with the documents it reads: docread and retrieve are not carried)",
     "pagecheck": "4.1",
 }
 
@@ -108,16 +111,25 @@ GIT_FIXTURES = [
     ("f7a1726", "orb/daemon/ashd.py"),
     # test_mic_stall reads HEAD, the commit before Ash's uncommitted stall fix
     ("b015e3f", "orb/daemon/micaudio.py"),
+    # DY.30 and DP.6/7 read HEAD, the commits before Ash's uncommitted day and dayplan edits
+    ("9fe64ce", "orb/daemon/day.py"),
+    ("2d6023c", "orb/daemon/dayplan.py"),
 ]
 
 # Binary files carried as they are (path under kit/ash = path under Ash's daemon directory).
 BINARIES = ["wakeword/model_out/hey_ash.onnx"]  # Ash's trained "hey ash" (PLAN 4.3 keeps it)
 
 # Carried from elsewhere in Ash's repo (name in kit/ash -> path under ~/ash/app).
-OTHER_SOURCES = {"release_gate.py": "tools/release_gate.py"}
+OTHER_SOURCES = {
+    "release_gate.py": "tools/release_gate.py",
+    # the WMO table the day's weather words are PARSED from (day._wmo): the panel's own file
+    "weather.2.js": "orb/shell/panels/weather.2.js",
+}
 
 # Files in kit/ash written for Orbs, not carried (carry.py leaves them alone).
-OURS = {"carried_git.py"}
+# eds.py: your calendar and list as the home hands them in (PLAN 4.5), in place of Ash's EDS;
+# eds_sandbox.py: nothing to sweep (the kit's calendar cannot be written); adapters.py: the journal.
+OURS = {"carried_git.py", "eds.py", "eds_sandbox.py", "adapters.py"}
 
 # (file, the exact text, its replacement, why). Applied in order; every anchor must be found.
 PATCHES: list[tuple[str, str, str, str]] = [
@@ -334,6 +346,42 @@ PATCHES: list[tuple[str, str, str, str]] = [
      'ok(code.count("t.name]") == 1,\n'
      '   "WG.2 a carried suite is still invoked directly somewhere, bypassing the guard")',
      "the kit's runner is kit/tests/run.py; it must wrap every carried suite in the guard"),
+    # the day (PLAN 4.5): its weather table, its calendar, and the controls that read Ash's history
+    ("day.py",
+     '_WMO_JS = Path(__file__).resolve().parents[1]/"shell"/"panels"/"weather.2.js"',
+     '_WMO_JS = Path(__file__).resolve().parent/"weather.2.js"',
+     "the panel's WMO table is carried beside the day (weather.2.js), so the word said and the "
+     "table stay one file"),
+    ("test_day.py", "eds_sandbox.guard(__name__)\n",
+     "eds_sandbox.guard(__name__)\n"
+     "# Orbs: the kit's calendar is what the home hands in; the suite starts from an empty one\n"
+     "eds.handed([], [])\n",
+     "Ash's suite starts from the real calendar; the kit's is the home's hand-off (eds.py)"),
+    ("test_day.py",
+     '_real = eds.SYSTEM_PYTHON\neds.SYSTEM_PYTHON = "/nonexistent/python"',
+     '_real = eds.FEED\neds.FEED = None  # Orbs: nothing handed in is the kit\'s unreachable calendar',
+     "DY.4 breaks the calendar the kit's way: the home handed nothing in (Ash's broke the system "
+     "Python his EDS child runs on)"),
+    ("test_day.py", "    eds.SYSTEM_PYTHON = _real\n", "    eds.FEED = _real\n", "DY.4's restore, the same way"),
+    ("test_day.py",
+     '_a2 = sourceof.turn_source(HERE)  # the turn as it runs: _handle with verbs.dispatch\'s body in place (18.1)\n'
+     'ok("note_promise" in _a2, "DY.6 and ashd listens for them")\n',
+     '',
+     "DY.6's last check reads ashd's turn; the home's runs listen for promises in 4.5"),
+    ("test_day.py",
+     '    _src30 = _sp30.run(["git", "-C", str(HERE.parents[1]), "show", "HEAD:orb/daemon/day.py"],\n'
+     '                       capture_output=True, text=True).stdout',
+     '    _src30 = __import__("carried_git").show("9fe64ce:orb/daemon/day.py").stdout',
+     "DY.30 read Ash's HEAD, the commit before his uncommitted edit; the kit pins that commit"),
+    ("test_day.py", "_saved_events = day.events_in_window\n_saved_eds_events = eds.events\n",
+     "far = int(NOW) + 45 * 86400  # Orbs: DY.2, which defined it, is cut\n"
+     "_saved_events = day.events_in_window\n_saved_eds_events = eds.events\n",
+     "MV.5 uses DY.2's `far`, and DY.2 is cut below"),
+    ("test_dayplan.py",
+     '_old_src = _sp.run(["git", "-C", str(HERE.parents[1]), "show", "HEAD:orb/daemon/dayplan.py"],\n'
+     '                   capture_output=True, text=True).stdout',
+     '_old_src = __import__("carried_git").show("2d6023c:orb/daemon/dayplan.py").stdout',
+     "DP.6/7 read Ash's HEAD, the commit before his uncommitted edit; the kit pins that commit"),
 ]
 
 # (file, first line cut, first line kept after the cut, why it is Ash's wiring rather than
@@ -386,6 +434,27 @@ CUTS: list[tuple[str, str, str, str, str]] = [
     ("test_write_guard.py", "# (f) the writers really stamp", "if FAIL:",
      "WG.12f: Ash's live writers (ashd, wake, browser, tutor, seatbroker) stamp what they write",
      "— (the writers are Ash's daemon)"),
+    # the day (PLAN 4.5)
+    ("test_day.py", "# ── DY.2", "far = int(NOW) + 45 * 86400  # Orbs",
+     "DY.2-3 and MV.0-4 book, move and remove a fixture event in the real calendar; Orbs reads "
+     "your calendars by their ICS address and never writes them (the kit's eds refuses)",
+     "4.2 (writing a calendar, when CalDAV comes)"),
+    ("test_day.py", "# ── DY.5", "# ── DY.6  a promise",
+     "DY.5: ashd calls the day behind its calendar leg", "4.5 (the home calls the kit's day tools)"),
+    ("test_day.py", "# ── DY.6d", "# ── DB  travel",
+     "DY.6d: where the promise offer sits in Ashd._handle", "4.5 (the home's runs)"),
+    ("test_day.py", "# DB.7", "# ── DB.8",
+     "DB.7 reads eds_child.py, the child process Ash reads EDS through", "— (Orbs has no EDS)"),
+    ("test_day.py", "# ── CS.4", "# --- DY.9",
+     "CS.4: the seam between the day and Ash's microphone loop", "4.3 (the voice turn)"),
+    ("test_day.py", "# --- DY.9", "# ── DY.10",
+     "DY.9: ashd calls the brief and asks proactive's gate first", "4.5 (the home's brief asks the gate)"),
+    ("test_reminders.py", '_a = __import__("sourceof").daemon_source(HERE)', "eds.todos = _real_todos",
+     "RM.5's second half: Ash's daemon loop fires reminders, at most once a minute",
+     "2.11 (the home's notices bring a reminder up once)"),
+    ("test_proactive.py", "# ── PR.5", "if FAIL:",
+     "PR.5 reads ashd asking the gate; PR.6 reads Ash's baseline module (not carried)",
+     "4.5 (the home's brief asks the gate)"),
 ]
 
 # Ash's live paths, which must never be a carried module's default (rule 7). Docstrings and

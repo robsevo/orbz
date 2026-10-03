@@ -56,6 +56,30 @@ async def main():
                 ok(good.get("ok") is True and bad.get("ok") is False and bad.get("klass") == "negative" and "capture" in bad.get("reason", ""),
                    f"SV.6 a lesson goes through Ash's learn_gate: a durable one passes, a negative one is refused with what to capture instead ({good}, {bad})")
 
+                # the day (PLAN 4.5): Ash's day on what the home hands in, read only
+                import time as _t
+                now = _t.mktime((2026, 10, 5, 8, 0, 0, 0, 0, -1))  # a Monday, 08:00 here
+                at = lambda h, m=0: int(_t.mktime((2026, 10, 5, h, m, 0, 0, 0, -1)))
+                ev = lambda name, a, b, place="": {"summary": name, "start": a, "end": b, "location": place, "uid": name, "calendar": "Work"}
+                events = [ev("Standup", at(9), at(9, 30), "Office"), ev("Dentist", at(9, 35), at(10), "Smile Clinic"),
+                          ev("Lunch", at(12), at(13)), ev("Call with Sam", at(12, 30), at(13)), ev("Gym", at(18), at(19)),
+                          {**ev("Half term", at(0), at(0) + 86400), "all_day": True}]
+                todos = [{"summary": "pay the rent", "due": at(17), "uid": "notice:1"}]
+                r = await s.call_tool("day_brief", {"events": events, "todos": todos, "now": now})
+                said = (r.structured_content or {}).get("said", "")
+                ok("tandup" in said and "rent" in said, f"SV.7 the morning brief says the day and the list it was handed: {said!r}")
+                r = await s.call_tool("day_clashes", {"events": events, "now": now})
+                got = sorted((c["kind"], c["first"], c["second"]) for c in (r.structured_content or {}).get("result", []))
+                ok(got == [("overlap", "Lunch", "Call with Sam"), ("travel", "Standup", "Dentist")],
+                   f"SV.8 clashes: two that overlap, two too close to get between (the place changes); the holiday clashes with nothing: {got}")
+                r = await s.call_tool("day_clashes", {"events": [ev("Standup", at(9), at(9, 30)), ev("Gym", at(18), at(19))], "now": now})
+                ok((r.structured_content or {}).get("result") == [], "SV.8 CONTROL: a day with room in it clashes nowhere")
+                r = await s.call_tool("day_answer", {"text": "book lunch with Sam tomorrow at 1", "events": events, "todos": todos, "now": now})
+                ok((r.structured_content or {}).get("kind") == "read_only", f"SV.9 a booking is never made here: {r.structured_content}")
+                r = await s.call_tool("day_answer", {"text": "what's next", "events": events, "todos": todos, "now": now})
+                ok((r.structured_content or {}).get("kind") == "say" and "tandup" in (r.structured_content or {}).get("said", ""),
+                   f"SV.9 and a question about the day is answered from it: {r.structured_content}")
+
                 r = await s.call_tool("no_such_tool", {})
                 ok(r.is_error, "SV.5 CONTROL: an unknown tool is an error, so SV.1-SV.4 are not "
                                "passing on a server that answers everything")

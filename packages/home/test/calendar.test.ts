@@ -31,7 +31,7 @@ test("a fixture month: bills and reminders on their days, every schedule's runs 
   const h = await month(t);
   const oct = calendarOf(h.home, "2026-10-01", "2026-10-31");
   const of = (title: string) => oct.filter((e) => e.title === title);
-  assert.deepEqual(of("Rent").map((e) => [e.kind, e.day, e.time, e.kind !== "schedule" && e.amount]), [["bill", "2026-10-06", null, "$1,200"]]);
+  assert.deepEqual(of("Rent").map((e) => [e.kind, e.day, e.time, (e.kind === "bill" || e.kind === "reminder") && e.amount]), [["bill", "2026-10-06", null, "$1,200"]]);
   assert.deepEqual(of("Dentist").map((e) => [e.kind, e.day, e.time]), [["reminder", "2026-10-14", "15:00"]]);
   assert.equal(of("Phone").length, 0, "November's bill is not in October");
   assert.equal(of("Morning digest").length, 31, "every day of October, at 07:30");

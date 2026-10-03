@@ -11,7 +11,7 @@ import { after, before, test } from "node:test";
 import { build } from "vite";
 import type { Browser } from "playwright-core";
 import { findChrome, launch, measure, serveDir, SIZES } from "./harness.ts";
-import { HUES, SURFACES } from "../src/design/tokens.ts";
+import { baseOf, HUES, SURFACES, THEMES, type ThemeId } from "../src/design/tokens.ts";
 
 const groundOf = (t: "dark" | "light"): string => `rgb(${SURFACES[t].ground.join(", ")})`;
 
@@ -67,7 +67,7 @@ for (const theme of ["dark", "light"] as const) {
   }
 }
 
-test("controls: a planted too-wide row, a 9 px label, a lone last item and a one-word last line are each caught", { skip }, async () => {
+test("controls: a planted too-wide row, a 9 px label, a lone last item, a one-word last line, an unreadable line and a word cut in two are each caught", { skip }, async () => {
   const page = await open("dark", "phone");
   try {
     assert.deepEqual(await measure(page), [], "control's baseline: the page is clean before the plant");
@@ -80,6 +80,11 @@ test("controls: a planted too-wide row, a 9 px label, a lone last item and a one
       tiny.textContent = "a planted label";
       tiny.style.fontSize = "9px";
       document.querySelector("section")!.append(tiny);
+      // text the ground swallows: a grey on the dark ground, far under AA
+      const faint = document.createElement("p");
+      faint.textContent = "a planted line nobody can read";
+      faint.style.cssText = "color:rgb(40, 40, 44);font:400 14px/20px sans-serif;margin:0";
+      document.querySelector("section")!.append(faint);
     });
     await page.evaluate(() => {
       // a grid of five in two columns (the fifth alone), and a title squeezed so its last word is alone
@@ -93,6 +98,11 @@ test("controls: a planted too-wide row, a 9 px label, a lone last item and a one
       title.style.cssText = "width:max-content;font:700 20px/24px sans-serif;text-wrap:wrap;margin:0";
       document.querySelector("section")!.append(title);
       title.style.width = `${title.getBoundingClientRect().width - 12}px`;
+      // a column too narrow for its words (the notice of 10-02): "promotion" cut "promotio / n"
+      const squeezed = document.createElement("span");
+      squeezed.textContent = "ready for promotion";
+      squeezed.style.cssText = "display:block;width:52px;overflow-wrap:anywhere;font:400 12px/17px sans-serif";
+      document.querySelector("section")!.append(squeezed);
     });
     const kinds = new Set((await measure(page)).map((f) => f.kind));
     assert.ok(kinds.has("spill"), "the wide row reaches outside the window");
@@ -100,6 +110,56 @@ test("controls: a planted too-wide row, a 9 px label, a lone last item and a one
     assert.ok(kinds.has("minfont"), "the 9 px label is under the floor");
     assert.ok(kinds.has("orphan"), "the fifth item alone on its row is an orphan");
     assert.ok(kinds.has("widow"), "a title ending on one word alone is a widow");
+    assert.ok(kinds.has("contrast"), "a line the ground swallows is under AA");
+    assert.ok(kinds.has("broken"), "a word cut across two lines is a column too narrow for it");
+  } finally {
+    await page.close();
+  }
+});
+
+// the themes besides light and dark (owner, 10-02): each on the design system's page, its own ground,
+// every orb name in its base's colour, and the checks clean (contrast read off what is really behind)
+for (const t of (Object.keys(THEMES) as ThemeId[]).filter((x) => x !== "dark" && x !== "light")) {
+  test(`the ${t} theme: its own ground, every name in its colour, nothing unreadable or spilling`, { skip }, async () => {
+    const system = baseOf(t) === "dark" ? "light" : "dark"; // the system says the other way: the choice wins
+    const page = await browser.newPage({ viewport: SIZES.phone, colorScheme: system });
+    try {
+      await page.goto(`${site.url}/specimen.html`);
+      await page.waitForSelector("main");
+      await page.evaluate((x) => (document.documentElement.dataset.theme = x), t);
+      await page.evaluate(() => document.fonts.ready);
+      // a button's colour eases to the new theme: read it once it has arrived
+      await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished.catch(() => {}))));
+      assert.equal(await page.evaluate(() => getComputedStyle(document.body).backgroundColor), `rgb(${SURFACES[t].ground.join(", ")})`);
+      assert.equal(await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme), baseOf(t));
+      const shown = await page.evaluate(() => [...document.querySelectorAll("[data-orb]")].map((el) => [el.getAttribute("data-orb"), getComputedStyle(el).color]));
+      const want = Object.fromEntries(HUES.map((h) => [h.name, `rgb(${h[baseOf(t)].join(", ")})`]));
+      assert.ok(shown.length >= 12, "control: the names are on the page");
+      for (const [name, color] of shown) assert.equal(color, want[name!], `${name} in ${t}`);
+      assert.deepEqual(await measure(page), []);
+    } finally {
+      await page.close();
+    }
+  });
+}
+
+test("Settings' theme: chosen, worn at once, kept on a reload; System gives it back to the device", { skip }, async () => {
+  const page = await browser.newPage({ viewport: SIZES.phone, colorScheme: "dark" });
+  try {
+    await page.goto(`${site.url}/orbs.html?splash=0&intro=0#/settings`);
+    const midnight = page.locator('button[data-theme-choice="midnight"]');
+    await midnight.click();
+    const ground = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+    assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), "midnight");
+    assert.equal(await ground(), `rgb(${SURFACES.midnight.ground.join(", ")})`);
+    assert.equal(await midnight.getAttribute("aria-pressed"), "true");
+    assert.deepEqual(await measure(page), [], "Settings in Midnight: nothing unreadable or spilling");
+    await page.reload();
+    await page.locator('button[data-theme-choice="midnight"]').waitFor();
+    assert.equal(await ground(), `rgb(${SURFACES.midnight.ground.join(", ")})`, "kept on this device");
+    await page.locator('button[data-theme-choice="system"]').click();
+    assert.equal(await page.evaluate(() => document.documentElement.dataset.theme ?? null), null);
+    assert.equal(await ground(), `rgb(${SURFACES.dark.ground.join(", ")})`, "the device's own again");
   } finally {
     await page.close();
   }

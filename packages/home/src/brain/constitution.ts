@@ -18,11 +18,11 @@
 /** Every specialty and its family, as the app has them (packages/app/src/orb/spec.ts); a test
  * holds the two together. */
 export const SPECIALTY_FAMILIES = {
-  general: "build", frontend: "build", backend: "build", fullstack: "build", mobile: "build", devops: "build", testing: "build",
+  general: "build", frontend: "build", backend: "build", fullstack: "build", mobile: "build", devops: "build", testing: "build", qa: "build",
   security: "build", data: "build", ai: "build", games: "build", automation: "build",
   planning: "think", lead: "think", product: "think", research: "think", factcheck: "think", analyst: "think", architect: "think",
   design: "make", writing: "make", editing: "make", marketing: "make", social: "make", video: "make",
-  accountant: "business", office: "business", sales: "business", support: "business", people: "business", operations: "business", paperwork: "business",
+  accountant: "business", office: "business", sales: "business", support: "business", people: "business", operations: "business", paperwork: "business", investor: "business", crypto: "business",
   assistant: "life", tutor: "life", coach: "life", dietitian: "life", trainer: "life", health: "life", chef: "life", travel: "life",
   money: "life", home: "life", events: "life", career: "life", language: "life",
 } as const;
@@ -48,7 +48,7 @@ export const SECTION_MAP: Record<string, Placement> = {
   refusal_handling: morals("what to help with and what to refuse; Orbs' floor is code (rule 9)"),
   research_framing: morals("how to treat sensitive subjects"),
   communication: core,
-  financial_advice: work([], ["accountant", "money", "analyst", "operations"]),
+  financial_advice: work([], ["accountant", "money", "analyst", "operations", "investor", "crypto"]),
   tone_and_formatting: core,
   user_wellbeing: work(["life"], ["support", "people"]),
   evenhandedness: morals("contested political and moral questions"),

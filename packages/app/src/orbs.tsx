@@ -32,6 +32,10 @@ import { DEMO_CREW } from "./orb/demo.ts";
 import { NEWBORN } from "./onboarding/story.ts";
 import type { Gesture, OrbState } from "./orb/life.ts";
 import { useMood, useMoods, WORN } from "./orb/useMood.ts";
+import { preview, stopPreview } from "./orb/preview.ts";
+import { applyTheme, savedTheme } from "./ui/theme.ts";
+
+applyTheme(savedTheme(), false); // before the first paint: the theme you chose, never a flash of another
 import {
   ASH, EYES, FAMILIES, FINISHES, GLASSES, HATS, orbName, PERSONALITIES, REPLIES, SHAPES, sheetOf, speaks, SPECIALTIES, surprise, voice, VOICES, withPersonality,
   type Character, type EyesName, type Family, type FinishName, type GlassesName, type HatName, type PersonalityName, type Replies, type ShapeName, type SpecialtyName,
@@ -319,6 +323,7 @@ function Tabs({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
 
 function Creator({ me, edit, replies, setReplies }: { me: Character; edit: (p: Partial<Character>) => void; replies: Replies; setReplies: (r: Replies) => void }) {
   const [tab, setTab] = useState<Tab>("Personality");
+  useEffect(() => stopPreview, []); // a voice still talking when the creator closes stops with it
   const hues = HUES.map((h) => h.name);
   const dice: Record<Tab, () => void> = {
     Personality: () => edit(withPersonality(me, pick(Object.keys(PERSONALITIES) as PersonalityName[]))),
@@ -412,7 +417,15 @@ function Creator({ me, edit, replies, setReplies }: { me: Character; edit: (p: P
               <Head>{title}</Head>
               <Balanced min={128} gap={6}>
                 {vs.map((v) => (
-                  <button key={v.id} onClick={() => edit({ voice: v.id })} aria-pressed={me.voice === v.id} title={v.accent} style={{ ...s.chip, ...chosen(me.voice === v.id), display: "grid", textAlign: "left", borderRadius: 12, padding: "6px 12px" }}>
+                  <button
+                    key={v.id}
+                    data-voice={v.id}
+                    onClick={() => {
+                      edit({ voice: v.id });
+                      preview(v.id, P.speed); // heard as he will speak: his personality's pace
+                    }}
+                    aria-pressed={me.voice === v.id}
+                    title={v.accent} style={{ ...s.chip, ...chosen(me.voice === v.id), display: "grid", textAlign: "left", borderRadius: 12, padding: "6px 12px" }}>
                     <span>{v.label}</span>
                     <span style={{ font: "400 11px/14px var(--font)", color: "var(--text-3)" }}>{v.accent}</span>
                   </button>
@@ -740,6 +753,7 @@ function App() {
         <Onboarding
           office={office}
           person={person}
+          home={home}
           onDone={(p, then) => {
             keep(p);
             setIntro(false);
@@ -797,7 +811,8 @@ function App() {
                 </span>
                 <span style={{ display: "grid", minWidth: 0 }}>
                   <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
-                  <span style={{ font: "400 11px/14px var(--font)", color: moods[idOf(c.name)] === "waiting" ? "var(--alert)" : "var(--text-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {/* on the chosen row's wash the quiet grey falls under AA in light: there it is the reading grey */}
+                  <span style={{ font: "400 11px/14px var(--font)", color: moods[idOf(c.name)] === "waiting" ? "var(--alert)" : room === "office" && !making && c.name === me.name ? "var(--text-2)" : "var(--text-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {moods[idOf(c.name)] && moods[idOf(c.name)] !== "idle" ? WORN[moods[idOf(c.name)]!].words : SPECIALTIES[c.specialty].label}
                   </span>
                 </span>

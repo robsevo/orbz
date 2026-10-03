@@ -67,7 +67,7 @@ test("a session is a device: listed by name, kept across a restart, revoked at i
   assert.deepEqual((await call2("GET", "/devices", { token: true })).json.devices, []);
 });
 
-test("the second door: HTTPS on its own names only; a rebound name, plain HTTP and the token are refused", async (t) => {
+test("the second door: HTTPS on its own names only; a rebound name, plain HTTP and the token are refused; no program connector through it", async (t) => {
   const dir = tempDir(t);
   execFileSync("openssl", ["req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:prime256v1", "-nodes", "-days", "1", "-subj", "/CN=orbs.test", "-keyout", join(dir, "key.pem"), "-out", join(dir, "cert.pem")], { stdio: "ignore" });
   const h = home(t);
@@ -93,6 +93,9 @@ test("the second door: HTTPS on its own names only; a rebound name, plain HTTP a
   assert.match(paired.setCookie, /HttpOnly; SameSite=Strict; Path=\/; Max-Age=\d+; Secure/);
   const cookie = paired.setCookie.split(";")[0]!;
   assert.equal((await call("GET", "/status", { headers: { cookie } })).status, 200, "a phone, paired through the second door");
+  const program = await call("POST", "/connectors", { headers: { cookie, "x-orbs": "1" }, body: { name: "shell", spec: { command: "sh", args: ["-c", "echo hi"] } } });
+  assert.equal(program.status, 403, "a connector that runs a program on the box is never added from another device");
+  assert.deepEqual((await call("GET", "/connectors", { headers: { cookie } })).json.connectors, [], "nothing was added");
   const plain = await new Promise<string>((ok) => {
     const r = httpRequest({ host: "127.0.0.1", port, path: "/status", headers: { host: `orbs.test:${port}`, cookie } }, (res) => ok(`answered ${res.statusCode}`));
     r.on("error", (e) => ok(`refused: ${e.message}`));

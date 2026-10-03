@@ -201,8 +201,11 @@ export class Triggers {
     const conversation = triggerConversation(t.id);
     const data = e.data ? `\n\nWhat happened (event data):\n${JSON.stringify(e.data, null, 1).slice(0, DATA_CHARS)}` : "";
     const late = this.#clock.now() - e.at;
-    this.#inbox.enqueue(t.orb, conversation, "trigger", `[Trigger: ${t.name}] ${t.instruction}\n\n${e.summary}${data}`, {
-      data: { trigger: t.id, event: e.id, at: e.at },
+    // what happened is from outside (a sender's subject, a feed's title, a webhook's body): the loop
+    // fences it from `outside` on as data, and marks the turn, so it can never pose as your word
+    const head = `[Trigger: ${t.name}] ${t.instruction}\n\n`;
+    this.#inbox.enqueue(t.orb, conversation, "trigger", `${head}${e.summary}${data}`, {
+      data: { trigger: t.id, event: e.id, at: e.at, outside: head.length },
       fresh: true,
     });
     this.#events.append("trigger.fired", { trigger: t.id, event: e.id, at: e.at, late_ms: late }, { orb: t.orb, conversation });

@@ -5,7 +5,7 @@ anything in `kit/ash/` by hand: a change is a patch or a cut in `carry.py`, so t
 differences cannot go stale. `--check` fails when a file here differs from what the script
 carries.
 
-40 modules and 37 suites. Paths are the kit's own: state under `ORBS_KIT_STATE`
+43 modules and 41 suites. Paths are the kit's own: state under `ORBS_KIT_STATE`
 (`<data>/kit`), the brain under `ORBS_BRAIN` (`<data>/brain`), never `~/ash`.
 
 | File | Ash version | Ash sha256 | Kit sha256 | Differences |
@@ -14,7 +14,9 @@ carries.
 | `briefs.py` | 6f21053 + uncommitted edits | `3ba9d9735e53` | `3ba9d9735e53` | unchanged |
 | `chatstore.py` | uncommitted in Ash | `c60d5fc73224` | `c60d5fc73224` | unchanged |
 | `common.py` | d25cdbf | `11a8be942d33` | `11a8be942d33` | unchanged |
+| `day.py` | 9fe64ce + uncommitted edits | `53c1641bbcb9` | `271049dca155` | the panel's WMO table is carried beside the day (weather.2.js), so the word said and the table stay one file |
 | `day_verbs.py` | b8edafd + uncommitted edits | `6294e2352830` | `6294e2352830` | unchanged |
+| `dayplan.py` | 2d6023c + uncommitted edits | `e4850e9fa842` | `e4850e9fa842` | unchanged |
 | `learn_gate.py` | 2d6023c | `32e4335cbf78` | `32e4335cbf78` | unchanged |
 | `learn_ledger.py` | 6f21053 | `6eef4532a170` | `408dd1777c2c` | same root as statepaths.brain(): the Orbs brain, never ~/ash/brain |
 | `learner_model.py` | 2d6023c | `f0566cdee3c6` | `f0566cdee3c6` | unchanged |
@@ -30,6 +32,7 @@ carries.
 | `ran_everything.py` | 4c22df3 + uncommitted edits | `a4ce56f7b6b1` | `a4ce56f7b6b1` | unchanged |
 | `redact.py` | 2d6023c | `d75d6aa9f93b` | `d75d6aa9f93b` | unchanged |
 | `release_gate.py` | e98ab57 | `1bf065f9080b` | `1bf065f9080b` | unchanged |
+| `reminders.py` | 2d6023c | `6dba65e3f4a1` | `6dba65e3f4a1` | unchanged |
 | `runtime.py` | 6f21053 | `714a0533ddc1` | `256e760268ca` | the Journal's connection is shared by threads; on Python 3.13 that raised 'bad parameter or other API misuse' and lost messages (T.7). Every statement now runs under one lock; (the same fix: the connection goes through the lock); (the same fix) |
 | `secretscan.py` | 92feeea | `4f1915f07d35` | `2b38d42d3b4c` | secretscan scans the Orbs repo, where the planted-key suites live in kit/ash; test_desk_redaction.py is not carried (its desk module is Ash's), so it is not a declared fixture; release_gate.py is carried beside secretscan.py in the kit, not in a tools/ directory; without a .git (an install, not a checkout) the root is three up from kit/ash/secretscan.py; Ash's fallback counted Ash's layout |
 | `sessionlog.py` | uncommitted in Ash | `f323ea06cc8a` | `f323ea06cc8a` | unchanged |
@@ -49,8 +52,10 @@ carries.
 | `test_belief_use.py` | 6f21053 | `a9ff7f3f48c7` | `0a702cffde4e` | **cut** BU.5-6 test Ash's belief-use.sh CLI hook and its installer (Orbs: 1.5 (the agent loop's tool hooks)) |
 | `test_chatstore.py` | uncommitted in Ash | `2be30e0686bd` | `6002d926a9e1` | **cut** CS.6's last check: ashd.main enables the store (Orbs: 2.4 (the chat app enables it)) |
 | `test_common.py` | 6f21053 | `fd8c7c38645c` | `c1d2ce3df150` | the kit's state root is ~/.orbs/kit (see statepaths.py); **cut** C.3: Ash's terminal.py must not import ashd (Ash's own process split) (Orbs: — (Orbs has no ashd)) |
+| `test_day.py` | e179049 + uncommitted edits | `6cef0b58f36b` | `55ad2720ac40` | Ash's suite starts from the real calendar; the kit's is the home's hand-off (eds.py); DY.4 breaks the calendar the kit's way: the home handed nothing in (Ash's broke the system Python his EDS child runs on); DY.4's restore, the same way; DY.6's last check reads ashd's turn; the home's runs listen for promises in 4.5; DY.30 read Ash's HEAD, the commit before his uncommitted edit; the kit pins that commit; MV.5 uses DY.2's `far`, and DY.2 is cut below; **cut** DY.2-3 and MV.0-4 book, move and remove a fixture event in the real calendar; Orbs reads your calendars by their ICS address and never writes them (the kit's eds refuses) (Orbs: 4.2 (writing a calendar, when CalDAV comes)); **cut** DY.5: ashd calls the day behind its calendar leg (Orbs: 4.5 (the home calls the kit's day tools)); **cut** DY.6d: where the promise offer sits in Ashd._handle (Orbs: 4.5 (the home's runs)); **cut** DB.7 reads eds_child.py, the child process Ash reads EDS through (Orbs: — (Orbs has no EDS)); **cut** CS.4: the seam between the day and Ash's microphone loop (Orbs: 4.3 (the voice turn)); **cut** DY.9: ashd calls the brief and asks proactive's gate first (Orbs: 4.5 (the home's brief asks the gate)) |
 | `test_day_verbs.py` | 2d6023c + uncommitted edits | `812124a3bd56` | `812124a3bd56` | unchanged |
 | `test_day_verbs_calendar.py` | e0b67f7 | `2c433d1d51f3` | `2552c7975f20` | DV.0's pre-fix day_verbs.py comes from fixtures/git |
+| `test_dayplan.py` | b75d08d + uncommitted edits | `e1c9aa942a8f` | `163903136861` | DP.6/7 read Ash's HEAD, the commit before his uncommitted edit; the kit pins that commit |
 | `test_learn_gate.py` | 0d445c4 | `9fa9e494117c` | `da23adf124f7` | **cut** LG.3 runs the gate inside voice_distill.propose(), which is not carried yet (Orbs: 3.5 (carries voice_distill and restores LG.3)) |
 | `test_learn_ledger.py` | 2d6023c | `81bd7d0ceedd` | `81bd7d0ceedd` | unchanged |
 | `test_learner_model.py` | 2d6023c | `1c07fa54e8ef` | `1c07fa54e8ef` | unchanged |
@@ -64,9 +69,11 @@ carries.
 | `test_oneway.py` | e179049 | `fa27090e9ae2` | `cff46beb158d` | **cut** OW.4-OW.5r: the switch is gated at Ash's terminal chokepoint and opened, tainted and reopened by ashd and turncontext (Orbs: 1.6 (the same checks against the home's chokepoint, through MCP)) |
 | `test_phrasing.py` | 2d6023c | `ff03a7ca16bd` | `ff03a7ca16bd` | unchanged |
 | `test_practice_card.py` | e4a669a | `699e8cdbd078` | `699e8cdbd078` | unchanged |
+| `test_proactive.py` | e179049 | `17b0f42d9894` | `fa3b8371d291` | **cut** PR.5 reads ashd asking the gate; PR.6 reads Ash's baseline module (not carried) (Orbs: 4.5 (the home's brief asks the gate)) |
 | `test_reasoning_not_spoken.py` | 499f274 | `6cc43f568778` | `d00befac51e7` | RN.0's pre-fix speakable.py comes from fixtures/git; RN.4's pre-fix ask path (then in ashd.py) comes from fixtures/git |
 | `test_redact.py` | e179049 | `b39ae89048b1` | `27e9ade8980d` | **cut** E.4: redact is wired into ashd's heard/typed log lines (Orbs: 1.6 (redaction at the MCP boundary)) |
 | `test_remind_me.py` | b8edafd | `6802b0203e5d` | `aaa2445536ea` | RM.0's pre-fix table and parser come from fixtures/git |
+| `test_reminders.py` | e179049 | `7acef58d77c5` | `6aab7c56111a` | **cut** RM.5's second half: Ash's daemon loop fires reminders, at most once a minute (Orbs: 2.11 (the home's notices bring a reminder up once)) |
 | `test_runtime.py` | 2d6023c | `2cd23f9d9ef9` | `2cd23f9d9ef9` | unchanged |
 | `test_secretscan.py` | e4a669a | `0fb53912a189` | `728b5ba30178` | the fixture's path in the Orbs repo; a path in the Orbs repo; the exempt list is exactly the kit's two detection suites |
 | `test_skill_draft.py` | 6f21053 | `8771de20f900` | `8771de20f900` | unchanged |
@@ -85,6 +92,7 @@ carries.
 | `voice.py` | 077c8f5 + uncommitted edits | `527d9e05c364` | `527d9e05c364` | unchanged |
 | `voiceturn.py` | 22a7391 | `57896d049d60` | `57896d049d60` | unchanged |
 | `wake.py` | 6f21053 | `33b17cd460c9` | `33b17cd460c9` | unchanged |
+| `weather.2.js` | 4f5fd95 | `b8fee3a166ac` | `b8fee3a166ac` | unchanged |
 | `whenparse.py` | b8edafd | `a432ffec02bf` | `debdff9f83b7` | the zone is the machine's (the home passes ORBS_TZ); US/Eastern stays only as the default the carried suites are written against |
 | `write_guard.py` | aa59ea7 | `6047503e2fee` | `0e9d4171b68e` | the guard keeps every Ash path (so a kit suite that reaches ~/ash is caught: rule 7) and also watches the Orbs data directory |
 | `writer_stamp.py` | 76a785d | `66c5ae00171c` | `66c5ae00171c` | unchanged |
@@ -107,6 +115,8 @@ carries.
 - `fixtures/git/f7a1726/orb/daemon/speakable.py` (`git show f7a1726:orb/daemon/speakable.py` in Ash)
 - `fixtures/git/f7a1726/orb/daemon/ashd.py` (`git show f7a1726:orb/daemon/ashd.py` in Ash)
 - `fixtures/git/b015e3f/orb/daemon/micaudio.py` (`git show b015e3f:orb/daemon/micaudio.py` in Ash)
+- `fixtures/git/9fe64ce/orb/daemon/day.py` (`git show 9fe64ce:orb/daemon/day.py` in Ash)
+- `fixtures/git/2d6023c/orb/daemon/dayplan.py` (`git show 2d6023c:orb/daemon/dayplan.py` in Ash)
 
 ## Binary files carried as they are
 

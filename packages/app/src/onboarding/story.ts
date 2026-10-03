@@ -22,6 +22,7 @@ export type Beat =
   | { kind: "say"; who: string; text: string }
   | { kind: "ask-name" }
   | { kind: "ceo" }
+  | { kind: "brains" }
   | { kind: "hire" };
 
 export const STORY: readonly Beat[] = [
@@ -36,6 +37,10 @@ export const STORY: readonly Beat[] = [
   { kind: "say", who: "new", text: "Congratulations, boss. You're the CEO. And I'm your first hire." },
   { kind: "say", who: "new", text: "Here's how it works. You hand me work, I do it, and anything that matters waits for your OK." },
   { kind: "say", who: "new", text: "And every night I practise, so I get quicker at the things you ask for most. You can hire more of us whenever you like." },
+  // the brains (owner, 10-02: "after asking name and showing CEO badge, ask user to sign into chatgpt
+  // and input gemini api key and if they want to add a local coder, then go to create orb screen")
+  { kind: "say", who: "new", text: "First, though, I need a brain to think with. Give me one or two, and I'll use the first that can answer." },
+  { kind: "brains" },
   { kind: "say", who: "new", text: "One problem: I don't have a name yet. Or a look. Or a thing I'm good at. Will you make me?" },
   { kind: "hire" },
 ];
@@ -48,9 +53,12 @@ export function storyFor(names: readonly string[]): Beat[] {
 /** A line with the person in it. */
 export const line = (text: string, p: Pick<Person, "name"> | null): string => text.replaceAll("{name}", p?.name ?? "boss");
 
-/** The first beat a skip lands on: the name, if we have none yet, else the hire. */
+/** The first beat a skip lands on: the name, if we have none yet, else the brains (setting up, not
+ * story: skipping the story never skips choosing what he thinks with), else the hire. */
 export function skipTo(person: Pick<Person, "name"> | null, story: readonly Beat[] = STORY): number {
-  return person ? story.findIndex((b) => b.kind === "hire") : story.findIndex((b) => b.kind === "ask-name");
+  if (!person) return story.findIndex((b) => b.kind === "ask-name");
+  const brains = story.findIndex((b) => b.kind === "brains");
+  return brains >= 0 ? brains : story.findIndex((b) => b.kind === "hire");
 }
 
 /** What a name has to be: something to call you, short enough for a nameplate. */

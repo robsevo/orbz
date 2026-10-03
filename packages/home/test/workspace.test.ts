@@ -5,12 +5,14 @@
 //   - Nothing outside it is read or listed: "..", an absolute path, a link that leads out (a link
 //     that stays inside is followed).
 //   - An orb that is not in the office, or a file that is not there, is a 404.
+//   - A file you give him (PLAN 2.4) is kept in from-you/, never over another, under its own plain
+//     name; one too big, or a from-you/ that leads out of his workspace, is refused.
 import assert from "node:assert/strict";
-import { mkdirSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { serve } from "../src/api.ts";
-import { READ_CAP, workspaceOf } from "../src/workspace.ts";
+import { READ_CAP, safeName, UPLOAD_CAP, workspaceOf } from "../src/workspace.ts";
 import { agentHome, tempDir } from "./helpers.ts";
 
 test("his workspace through the door: folders and files, text, a cap, and nothing outside it", async (t) => {
@@ -60,4 +62,36 @@ test("his workspace through the door: folders and files, text, a cap, and nothin
   assert.equal((await get("/orbs/nobody/workspace")).status, 404);
   home.inbox.addOrb("milo", "Milo", "research");
   assert.deepEqual((await json("/orbs/milo/workspace")).entries, [], "an orb who has made nothing yet: an empty computer");
+});
+
+test("a file you give him from a chat: kept in from-you, never over another, under a plain name; too big, or out of his workspace, refused", async (t) => {
+  const { home, dataDir } = await agentHome(t, []);
+  home.inbox.addOrb("hazel", "Hazel", "data");
+  const door = await serve(home, { port: 0 });
+  t.after(() => door.close());
+  const give = async (name: string, bytes: Uint8Array, orb = "hazel") => {
+    const r = await fetch(`http://127.0.0.1:${door.port}/orbs/${orb}/workspace/files?name=${encodeURIComponent(name)}`, {
+      method: "POST", headers: { authorization: `Bearer ${door.token}`, "content-type": "application/octet-stream" }, body: bytes,
+    });
+    return { status: r.status, json: (await r.json()) as { path?: string; error?: string } };
+  };
+  const ws = workspaceOf(dataDir, "hazel");
+  const csv = new TextEncoder().encode("month,total\nJan,12\n");
+  assert.deepEqual((await give("Q1 sales.csv", csv)).json, { path: "from-you/Q1 sales.csv" });
+  assert.equal(readFileSync(join(ws, "from-you", "Q1 sales.csv"), "utf8"), "month,total\nJan,12\n", "byte for byte");
+  assert.deepEqual((await give("Q1 sales.csv", new TextEncoder().encode("again"))).json, { path: "from-you/Q1 sales (2).csv" }, "never over the first");
+  assert.equal(readFileSync(join(ws, "from-you", "Q1 sales.csv"), "utf8"), "month,total\nJan,12\n");
+  assert.deepEqual((await give("../../etc/passwd", csv)).json, { path: "from-you/passwd" }, "only its own name: no way up");
+  assert.deepEqual((await give(".bashrc", csv)).json, { path: "from-you/bashrc" }, "never hidden");
+  assert.equal(safeName("a\u0000b<c>.txt"), "ab_c_.txt");
+  assert.equal((await give("big.bin", new Uint8Array(UPLOAD_CAP + 1))).status, 413);
+  assert.equal((await give("x.txt", csv, "nobody")).status, 404);
+  assert.equal((await give("", csv)).status, 400);
+  // from-you a link out of his workspace: refused, nothing written outside
+  const other = tempDir(t);
+  home.inbox.addOrb("milo", "Milo", "data");
+  mkdirSync(workspaceOf(dataDir, "milo"), { recursive: true });
+  symlinkSync(other, join(workspaceOf(dataDir, "milo"), "from-you"));
+  assert.equal((await give("x.txt", csv, "milo")).status, 403);
+  assert.deepEqual(readdirSync(other), []);
 });

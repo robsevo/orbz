@@ -139,6 +139,24 @@ export class Guard {
     return { ...r, content: "(The page was read, but its text is withheld: the kit that fences untrusted text is not running.)" };
   }
 
+  /** What a trigger brought (a sender's subject, a feed's title), fenced as data by Ash's
+   * oneway.quote, or withheld, as a tool's untrusted answer is. `fence` names the fence: a value
+   * the text never saw, so it cannot close it. */
+  async fence(fence: string, text: string): Promise<string> {
+    try {
+      const fenced = (await this.#o.kit?.call("oneway_quote", { turn: fence, text })) as string | undefined;
+      if (typeof fenced === "string") return fenced;
+    } catch {
+      // fall through: withheld
+    }
+    return "(Something happened, but what it says is withheld: the kit that fences outside text is not running.)";
+  }
+
+  /** A turn that began with outside words: acting outward in it needs a fresh yes. */
+  mark(turn: string, source: string, detail: string): void {
+    this.#o.turns.taint(turn, { source, detail });
+  }
+
   async #oneway(turn: string, action: string): Promise<{ allowed: boolean; why: string }> {
     const s = this.#o.turns.get(turn);
     if (!s.taints.length) return { allowed: true, why: "" };

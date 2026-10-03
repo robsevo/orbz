@@ -66,6 +66,12 @@ test("the pairing link opens the app on the home: your name and your first orb a
   await page.keyboard.press("Enter");
   await page.getByRole("button", { name: "Skip the story" }).click();
   assert.deepEqual(home.inbox.orbs(), [], "a fresh home's office is empty: the first orb is the one you make");
+  // the brains, on a real home: what he can think with, none of it required
+  const step = page.locator("[data-brains-step]");
+  await step.getByRole("button", { name: "Continue with ChatGPT" }).waitFor();
+  assert.equal(await step.getByLabel("Your Gemini key", { exact: true }).count(), 1);
+  await step.getByRole("button", { name: "Skip for now" }).click();
+  for (let n = 0; n < 20 && !(await page.getByRole("button", { name: "Make me" }).isVisible()); n++) await page.keyboard.press("Enter");
   await page.getByRole("button", { name: "Make me" }).click();
   await page.getByText("CEO Robin").waitFor();
   assert.equal(home.about.get().name, "Robin", "the home keeps what the office calls you");

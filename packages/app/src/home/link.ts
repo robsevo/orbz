@@ -28,7 +28,8 @@ export type LabPlan = {
 /** The calendar (PLAN 2.12): what is on a day, as the home works it out. */
 export type CalendarEntry =
   | { kind: "bill" | "reminder"; id: number; orb: string; title: string; day: string; time: string | null; amount: string | null; conversation: string | null }
-  | { kind: "schedule"; id: string; orb: string; title: string; day: string; time: string; cron: string; enabled: boolean };
+  | { kind: "schedule"; id: string; orb: string; title: string; day: string; time: string; cron: string; enabled: boolean }
+  | { kind: "event"; id: string; calendar: string; title: string; day: string; time: string | null; until: string | null; location: string | null };
 /** The notification centre (PLAN 2.11): what needs you or happened, as the home keeps it. */
 export type Notice = {
   id: number; kind: "bill" | "reminder" | "approval" | "done" | "promotion"; orb: string; conversation: string | null; card: number | null; reminder: number | null;
@@ -52,6 +53,18 @@ export type ScheduleRule = { kind: "daily"; time: string; days?: number[] } | { 
 /** A device signed in to the app, and a passkey (PLAN 2.7). */
 export type Device = { id: number; name: string; via: "pair" | "passkey"; createdAt: number; seenAt: number; current: boolean };
 export type Passkey = { id: number; name: string; createdAt: number; usedAt: number | null };
+/** Your connections (PLAN 4.2): a calendar by its address, a mail account, a connector (its secrets never come back). */
+/** The day (PLAN 4.5): the brief and what clashes, in Ash's words; or why it cannot be said now. */
+export type YourDay = { brief: string; clashes: { kind: "overlap" | "prep" | "travel"; said: string; at: number }[]; owedSaid: string | null } | { why: string };
+export type CalendarFeed = { name: string; label: string; read: number | null; why: string | null; account: string | null };
+/** Your Google and Microsoft accounts: which this home can connect to, and the ones connected. */
+export type Accounts = {
+  providers: { id: "google" | "microsoft"; title: string; what: string; ready: boolean; why: string | null }[];
+  accounts: Record<string, { provider: "google" | "microsoft"; email: string }>;
+};
+export type MailAccount = { host: string; port?: number; tls?: boolean; user: string; address?: string; oauth?: string };
+export type ConnectorSpec = { command: string; args?: string[]; env?: Record<string, string | { secret: string }> } | { url: string; headers?: Record<string, string | { secret: string }> };
+export type Connector = { name: string; state: "ready" | "failed" | "starting"; why: string | null; tools: string[]; spec: ConnectorSpec };
 /** A session (PLAN 2.9): a piece of work, with the orbs (by id) that work each tab, in turn order. */
 export type Session = { id: number; title: string; createdAt: number; brainstorm: string[]; floor: string[] };
 export const tabOf = (id: number, tab: Tab): string => `team:${id}:${tab}`;
@@ -114,6 +127,24 @@ export interface Office {
   schedulePreview(rule: ScheduleRule): Promise<{ cron: string; words: string; next: number[] }>;
   addSchedule(s: { orb: string; name: string; instruction: string; rule: ScheduleRule }): Promise<void>;
   removeSchedule(id: string): Promise<void>;
+  /** Your day (PLAN 4.5): the morning brief and what clashes, from your calendars and the orbs' list. */
+  day(): Promise<YourDay>;
+  /** Your connections (PLAN 4.2): calendars by their addresses, mail accounts, connectors. */
+  accounts(): Promise<Accounts>;
+  /** Starts a Google or Microsoft sign-in: the address to open (it comes back to the home's machine). */
+  connectAccount(provider: "google" | "microsoft"): Promise<string>;
+  disconnectAccount(name: string): Promise<void>;
+  calendars(): Promise<CalendarFeed[]>;
+  addCalendar(name: string, label: string, address: string): Promise<void>;
+  removeCalendar(name: string): Promise<void>;
+  mail(): Promise<Record<string, MailAccount>>;
+  addMail(name: string, account: MailAccount, password: string): Promise<void>;
+  removeMail(name: string): Promise<void>;
+  connectors(): Promise<Connector[]>;
+  addConnector(name: string, spec: ConnectorSpec, secrets: Record<string, string>): Promise<void>;
+  connector(name: string, act: "restart" | "remove"): Promise<void>;
+  /** Gives him a file (PLAN 2.4, attach): kept in his workspace's from-you/; the path it is at. */
+  give(c: Character, file: File): Promise<string>;
   /** His computer: a folder of his workspace (its top when empty), and a file in it. */
   files(c: Character, dir?: string): Promise<Entry[]>;
   file(c: Character, path: string): Promise<WorkFile>;
@@ -281,6 +312,45 @@ export function doorOffice(base: Character): Office {
     async devices() {
       return (await call<{ devices: Device[] }>("../devices")).devices;
     },
+    async day() {
+      return call<YourDay>("../day");
+    },
+    async accounts() {
+      return call<Accounts>("../accounts");
+    },
+    async connectAccount(provider) {
+      return (await call<{ url: string }>("../accounts/connect", { method: "POST", body: JSON.stringify({ provider }) })).url;
+    },
+    async disconnectAccount(name) {
+      await call(`../accounts/${encodeURIComponent(name)}/remove`, { method: "POST" });
+    },
+    async calendars() {
+      return (await call<{ calendars: CalendarFeed[] }>("../calendars")).calendars;
+    },
+    async addCalendar(name, label, address) {
+      await call("../calendars", { method: "POST", body: JSON.stringify({ name, label, address }) });
+    },
+    async removeCalendar(name) {
+      await call(`../calendars/${encodeURIComponent(name)}/remove`, { method: "POST" });
+    },
+    async mail() {
+      return (await call<{ accounts: Record<string, MailAccount> }>("../mail")).accounts;
+    },
+    async addMail(name, account, password) {
+      await call("../mail", { method: "POST", body: JSON.stringify({ name, account, password }) });
+    },
+    async removeMail(name) {
+      await call(`../mail/${encodeURIComponent(name)}/remove`, { method: "POST" });
+    },
+    async connectors() {
+      return (await call<{ connectors: Connector[] }>("../connectors")).connectors;
+    },
+    async addConnector(name, spec, secrets) {
+      await call("../connectors", { method: "POST", body: JSON.stringify({ name, spec, secrets }) });
+    },
+    async connector(name, act) {
+      await call(`../connectors/${encodeURIComponent(name)}/${act}`, { method: "POST" });
+    },
     async signOut(id) {
       await call(`../devices/${id}/revoke`, { method: "POST" });
     },
@@ -348,6 +418,10 @@ export function doorOffice(base: Character): Office {
     },
     async removeSchedule(id) {
       await call(`../schedules/${encodeURIComponent(id)}/remove`, { method: "POST" });
+    },
+    async give(c, file) {
+      const path = `../orbs/${encodeURIComponent(idOf(c.name))}/workspace/files?name=${encodeURIComponent(file.name)}`;
+      return (await call<{ path: string }>(path, { method: "POST", body: file, headers: { "content-type": "application/octet-stream" } })).path;
     },
     async files(c, dir = "") {
       return (await call<{ entries: Entry[] }>(`../orbs/${encodeURIComponent(idOf(c.name))}/workspace?path=${encodeURIComponent(dir)}`)).entries;

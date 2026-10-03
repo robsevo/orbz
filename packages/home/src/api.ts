@@ -22,10 +22,16 @@ import { KeyRefusedError } from "./brain/brains.ts";
 import { SPECIALTY_FAMILIES, type Specialty } from "./brain/constitution.ts";
 import { cookieOf, deviceName, SESSION_COOKIE, SESSION_MS, type Sessions } from "./sessions.ts";
 import { PasskeyError, type Where } from "./passkeys.ts";
+import { ConnectorError, type Spec } from "./connectors/connectors.ts";
+import type { Account } from "./connectors/mail.ts";
+import { ImapError } from "./connectors/imap.ts";
+import { CalendarError } from "./connectors/calendars.ts";
+import { AccountError } from "./connectors/accounts.ts";
 import type { Tab } from "./team.ts";
 import { standingContext } from "./agent/standing.ts";
-import { listWorkspace, MissingError, OutsideError, readWorkspace } from "./workspace.ts";
-import { calendarOf } from "./calendar.ts";
+import { listWorkspace, MissingError, OutsideError, readWorkspace, saveUpload, UPLOAD_CAP } from "./workspace.ts";
+import { calendarOf, spanOf, withEvents } from "./calendar.ts";
+import { clashWords, dayOf, owedWords } from "./day.ts";
 import { cronFor, preview, RuleError, ruleOf, wordsOf } from "./schedule-rules.ts";
 import { cronOf } from "./schedule.ts";
 import { labOf, reopen } from "./lab.ts";
@@ -201,6 +207,94 @@ async function handle(
     }
   }
   if (method === "GET" && url.pathname === "/passkeys") return { passkeys: home.passkeys.list() };
+  // the day (PLAN 4.5): the brief and what clashes, in Ash's words, from your calendars and the orbs' list
+  if (method === "GET" && url.pathname === "/day") {
+    const d = await dayOf(home, home.clock.now());
+    return "why" in d ? d : { ...d, clashes: d.clashes.map((c) => ({ ...c, said: clashWords(c) })), owedSaid: owedWords(d.owed) };
+  }
+  // your Google and Microsoft accounts (PLAN 4.2): which can be connected here, the ones that are,
+  // a sign-in started (it comes back to this machine), one disconnected with its mail and calendar
+  if (method === "GET" && url.pathname === "/accounts") return { providers: home.accounts.providers(), accounts: home.accounts.list() };
+  if (method === "POST" && url.pathname === "/accounts/connect") {
+    const b = await body(req);
+    const provider = text(b, "provider");
+    if (provider !== "google" && provider !== "microsoft") throw new HttpError(400, "an account is Google's or Microsoft's");
+    try {
+      return { url: (await home.connectAccount(provider)).url };
+    } catch (e) {
+      throw e instanceof AccountError ? new HttpError(400, e.message) : e;
+    }
+  }
+  if (method === "POST" && parts[0] === "accounts" && parts.length === 3 && parts[2] === "remove") {
+    try {
+      await home.disconnectAccount(decodeURIComponent(parts[1]!));
+    } catch (e) {
+      throw new HttpError(404, e instanceof Error ? e.message : String(e));
+    }
+    return { accounts: home.accounts.list() };
+  }
+  // your own calendars (PLAN 4.2): listed (never their addresses), subscribed to once they read as one, removed
+  if (method === "GET" && url.pathname === "/calendars") return { calendars: home.calendars.list() };
+  if (method === "POST" && url.pathname === "/calendars") {
+    const b = await body(req);
+    try {
+      await home.calendars.add(text(b, "name"), typeof b.label === "string" ? b.label : "", text(b, "address"));
+    } catch (e) {
+      throw e instanceof CalendarError ? new HttpError(400, e.message) : e;
+    }
+    return { calendars: home.calendars.list() };
+  }
+  if (method === "POST" && parts[0] === "calendars" && parts.length === 3 && parts[2] === "remove") {
+    try {
+      await home.calendars.remove(decodeURIComponent(parts[1]!));
+    } catch (e) {
+      throw new HttpError(404, e instanceof Error ? e.message : String(e));
+    }
+    return { calendars: home.calendars.list() };
+  }
+  // your mail accounts (PLAN 4.2): listed (never the password), added once signing in works, removed
+  if (method === "GET" && url.pathname === "/mail") return { accounts: home.mail.accounts() };
+  if (method === "POST" && url.pathname === "/mail") {
+    const b = await body(req);
+    try {
+      await home.mail.add(text(b, "name"), b.account as Account, text(b, "password"));
+    } catch (e) {
+      throw e instanceof ImapError ? new HttpError(400, e.message) : e;
+    }
+    return { accounts: home.mail.accounts() };
+  }
+  if (method === "POST" && parts[0] === "mail" && parts.length === 3 && parts[2] === "remove") {
+    try {
+      await home.mail.remove(decodeURIComponent(parts[1]!));
+    } catch (e) {
+      throw new HttpError(404, e instanceof Error ? e.message : String(e));
+    }
+    return { accounts: home.mail.accounts() };
+  }
+  // the person's connectors (PLAN 4.2): where each stands; one added (its secrets to the keychain), restarted, removed
+  if (method === "GET" && url.pathname === "/connectors") return { connectors: home.connectors.states() };
+  if (method === "POST" && url.pathname === "/connectors") {
+    const b = await body(req);
+    try {
+      const spec = b.spec as Spec;
+      if (!spec || typeof spec !== "object") throw new ConnectorError("a connector needs its spec: {command, args, env} or {url, headers}");
+      // a connector that runs a program runs it on this machine: added on it, never through the second door
+      if (remote && "command" in spec) throw new HttpError(403, "a connector that runs a program is added on the machine your home runs on, not from another device");
+      return { connector: await home.connectors.add(text(b, "name"), spec, (b.secrets ?? {}) as Record<string, string>) };
+    } catch (e) {
+      throw e instanceof ConnectorError ? new HttpError(400, e.message) : e;
+    }
+  }
+  if (method === "POST" && parts[0] === "connectors" && parts.length === 3 && (parts[2] === "remove" || parts[2] === "restart")) {
+    const name = decodeURIComponent(parts[1]!);
+    if (!home.connectors.specs()[name]) throw new HttpError(404, `no connector "${name}"`);
+    if (parts[2] === "remove") await home.connectors.remove(name);
+    else {
+      await home.connectors.stop(name);
+      await home.connectors.start(name);
+    }
+    return { connectors: home.connectors.states() };
+  }
   if (method === "POST" && parts[0] === "passkeys" && parts.length === 3 && parts[2] === "remove") {
     try {
       home.passkeys.remove(Number(parts[1]));
@@ -468,7 +562,11 @@ async function handle(
   // the calendar (PLAN 2.12): the days, and the person's own changes to them (an orb's go through a card)
   if (method === "GET" && url.pathname === "/calendar") {
     try {
-      return { entries: calendarOf(home, url.searchParams.get("from") ?? "", url.searchParams.get("to") ?? "") };
+      const from = url.searchParams.get("from") ?? "";
+      const to = url.searchParams.get("to") ?? "";
+      const entries = calendarOf(home, from, to); // checks the days first
+      const span = spanOf(from, to);
+      return { entries: withEvents(entries, await home.calendars.events(span.start, span.end), span) };
     } catch (e) {
       throw new HttpError(400, e instanceof Error ? e.message : String(e));
     }
@@ -527,6 +625,19 @@ async function handle(
     return { schedule: home.schedules.get(id) };
   }
   // his computer (PLAN 2.8): what he is making, his workspace's folders and files, to read
+  // a file you give him, from a chat (PLAN 2.4): kept in his workspace's from-you/, the path back
+  if (method === "POST" && parts[0] === "orbs" && parts.length === 4 && parts[2] === "workspace" && parts[3] === "files") {
+    const orb = decodeURIComponent(parts[1]!);
+    if (!home.inbox.orb(orb)) throw new HttpError(404, `no orb "${orb}"`);
+    const name = url.searchParams.get("name") ?? "";
+    if (!name.trim()) throw new HttpError(400, "a file needs its name (?name=)");
+    const bytes = await rawBody(req, UPLOAD_CAP);
+    try {
+      return { path: saveUpload(home.dataDir, orb, name, bytes) };
+    } catch (e) {
+      throw new HttpError(e instanceof OutsideError ? 403 : 400, e instanceof Error ? e.message : String(e));
+    }
+  }
   if (method === "GET" && parts[0] === "orbs" && parts.length >= 3 && parts[2] === "workspace") {
     const orb = decodeURIComponent(parts[1]!);
     if (!home.inbox.orb(orb)) throw new HttpError(404, `no orb "${orb}"`);
@@ -601,6 +712,18 @@ function stream(home: Home, req: IncomingMessage, res: ServerResponse, since: nu
     home.live.off("text", onText);
   });
   return STREAMING;
+}
+
+/** A request's bytes as they are, refused past `cap`. */
+async function rawBody(req: IncomingMessage, cap: number): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const c of req) {
+    size += (c as Buffer).length;
+    if (size > cap) throw new HttpError(413, `a file up to ${Math.round(cap / 1024 / 1024)} MB`);
+    chunks.push(c as Buffer);
+  }
+  return Buffer.concat(chunks);
 }
 
 async function body(req: IncomingMessage): Promise<Record<string, unknown>> {

@@ -16,6 +16,7 @@ import asyncio
 import json
 import os
 import sys
+import threading
 from pathlib import Path
 from typing import Any, TypedDict
 
@@ -32,6 +33,8 @@ import oneway  # noqa: E402
 import whenparse  # noqa: E402
 import write_guard  # noqa: E402
 import learn_gate  # noqa: E402
+import day  # noqa: E402
+import eds  # noqa: E402
 
 from orbs_kit import habits  # noqa: E402
 
@@ -109,6 +112,69 @@ class KitStatus(TypedDict):
 def when(text: str, now: float | None = None) -> When:
     epoch = whenparse.resolve(text, now)
     return {"epoch": epoch, "said": whenparse.describe(epoch, now) if epoch is not None else None}
+
+
+# ── the day (PLAN 4.5): Ash's day, dayplan and reminders, on what the home hands in ───────────
+# The carried modules read the calendar through `eds`, which in the kit is the home's hand-off
+# (kit/ash/eds.py): your calendars' events and the bills and reminders the orbs keep for you.
+# One module's state, so one day question at a time; handed in for the call and taken back after.
+
+_DAY = threading.Lock()
+
+
+class DayAnswer(TypedDict):
+    kind: str
+    said: str
+
+
+class Clash(TypedDict):
+    kind: str
+    first: str
+    second: str
+    at: float
+    gap_minutes: int | None
+
+
+def _with_day(events: list[dict], todos: list[dict], now: float, failed: list[dict] | None, ask):
+    with _DAY:
+        eds.handed(events, todos, failed or [], now)
+        try:
+            return ask()
+        finally:
+            eds.FEED = None
+
+
+@server.tool(description="The morning brief (Ash's day.brief): what is on today and what is still open, said once, "
+                         "from the events and the list the home hands in.")
+def day_brief(events: list[dict], todos: list[dict], now: float, failed: list[dict] | None = None) -> DayAnswer:
+    said, _ = _with_day(events, todos, now, failed, lambda: day.brief(now=now))
+    return {"kind": "say", "said": said}
+
+
+@server.tool(description="A question about the person's day in their own words ('what's next', 'am I free thursday "
+                         "afternoon'), answered by Ash's day. Reads only: a booking, a move or a cancel is never made here.")
+def day_answer(text: str, events: list[dict], todos: list[dict], now: float, failed: list[dict] | None = None) -> DayAnswer:
+    kind, said, _ = _with_day(events, todos, now, failed, lambda: day.handle(text, now=now))
+    if kind != "say":  # Orbs reads your calendars and does not change them
+        return {"kind": "read_only", "said": eds.Unavailable("", "read_only").spoken()}
+    return {"kind": kind, "said": said}
+
+
+@server.tool(description="What clashes among the events already on: two that overlap, and two too close to get from "
+                         "one to the other (Ash's day.tight: time to get ready, more to travel when the place changes). "
+                         "Day-long events never clash. Named, never refused.")
+def day_clashes(events: list[dict], now: float, days: float = 2) -> list[Clash]:
+    rows = sorted((eds._event(e) for e in events), key=lambda r: r["start"])
+    rows = [r for r in rows if not r["all_day"] and r["end"] > now and r["start"] < now + days * 86400]
+    out: list[Clash] = []
+    for i, a in enumerate(rows):
+        later = rows[i + 1:]
+        for b in later:
+            if b["start"] < a["end"]:
+                out.append({"kind": "overlap", "first": a["summary"], "second": b["summary"], "at": float(b["start"]), "gap_minutes": None})
+        for b, kind, gap in day.tight(a["start"], a["end"], rows=[b for b in later if b["start"] >= a["end"]], location=a["location"]):
+            out.append({"kind": kind, "first": a["summary"], "second": b["summary"], "at": float(b["start"]), "gap_minutes": int(gap // 60)})
+    return out
 
 
 @server.tool(description="Let a Python habit answer, if its three code checks agree (PLAN 1.4).")

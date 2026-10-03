@@ -16,7 +16,22 @@
 // lightness each hue needs to read on white.
 import { contrast, css, hex, oklch, over, parseHex, rgbToOklch, type RGB, type RGBA } from "./color.ts";
 
+/** A theme's base: which way it runs, and so which of each orb hue's two colours it wears. */
 export type Theme = "dark" | "light";
+
+/** Every theme you can choose (owner, 10-02: "different themes users can use besides light or dark"):
+ * each a whole set of surfaces on a dark or light base, held to the same contrast checks. */
+export const THEMES = {
+  dark: { label: "Dark", base: "dark" },
+  light: { label: "Light", base: "light" },
+  midnight: { label: "Midnight", base: "dark" },
+  forest: { label: "Forest", base: "dark" },
+  sand: { label: "Sand", base: "light" },
+  rose: { label: "Rose", base: "light" },
+  contrast: { label: "High contrast", base: "dark" },
+} as const satisfies Record<string, { label: string; base: Theme }>;
+export type ThemeId = keyof typeof THEMES;
+export const baseOf = (t: ThemeId): Theme => THEMES[t].base;
 
 type Surfaces = {
   ground: RGB; // the page, around the app
@@ -39,7 +54,7 @@ type Surfaces = {
   off: RGB; // asleep
 };
 
-export const SURFACES: Record<Theme, Surfaces> = {
+export const SURFACES: Record<ThemeId, Surfaces> = {
   dark: {
     ground: parseHex("#0E0E10"),
     card: parseHex("#1C1C1E"),
@@ -80,10 +95,50 @@ export const SURFACES: Record<Theme, Surfaces> = {
     busy: parseHex("#8A5A00"),
     off: parseHex("#C4182B"),
   },
+  // deep navy, the night sky over the office
+  midnight: {
+    ground: parseHex("#090D1A"), card: parseHex("#121A2E"), side: parseHex("#0E1526"), raised: parseHex("#1C2640"),
+    fill: [190, 210, 255, 0.07], fill2: [190, 210, 255, 0.13], hairline: [190, 210, 255, 0.13], sep: [190, 210, 255, 0.07],
+    shadow: [0, 0, 8, 0.45], scrim: [0, 0, 8, 0.6],
+    text1: parseHex("#F1F5FF"), text2: parseHex("#DCE3F5"), text3: parseHex("#9DABC9"), quiet: parseHex("#55617F"),
+    alert: parseHex("#D6A45E"), ok: parseHex("#3DDC84"), busy: parseHex("#FFD60A"), off: parseHex("#FF5A5F"),
+  },
+  // deep green, a plant in the corner
+  forest: {
+    ground: parseHex("#0A120E"), card: parseHex("#15201A"), side: parseHex("#101914"), raised: parseHex("#1F2D25"),
+    fill: [200, 255, 220, 0.06], fill2: [200, 255, 220, 0.12], hairline: [200, 255, 220, 0.12], sep: [200, 255, 220, 0.06],
+    shadow: [0, 6, 2, 0.42], scrim: [0, 6, 2, 0.58],
+    text1: parseHex("#F0F7F2"), text2: parseHex("#DCE8E0"), text3: parseHex("#99B0A2"), quiet: parseHex("#587063"),
+    alert: parseHex("#D2A25A"), ok: parseHex("#4ADE80"), busy: parseHex("#FACC15"), off: parseHex("#FF6B5E"),
+  },
+  // warm paper
+  sand: {
+    ground: parseHex("#EEE8DC"), card: parseHex("#FCF9F3"), side: parseHex("#F4EEE3"), raised: parseHex("#F1EADE"),
+    fill: [60, 40, 10, 0.06], fill2: [60, 40, 10, 0.1], hairline: [60, 40, 10, 0.12], sep: [60, 40, 10, 0.07],
+    shadow: [40, 25, 0, 0.12], scrim: [30, 20, 0, 0.32],
+    text1: parseHex("#2A2117"), text2: parseHex("#40352A"), text3: parseHex("#685A49"), quiet: parseHex("#B7A992"),
+    alert: parseHex("#87561A"), ok: parseHex("#2D7A32"), busy: parseHex("#865A00"), off: parseHex("#B3261E"),
+  },
+  // soft pink
+  rose: {
+    ground: parseHex("#EFE1E6"), card: parseHex("#FFF8FA"), side: parseHex("#F8ECF0"), raised: parseHex("#F5E6EB"),
+    fill: [90, 20, 45, 0.05], fill2: [90, 20, 45, 0.09], hairline: [90, 20, 45, 0.11], sep: [90, 20, 45, 0.06],
+    shadow: [60, 0, 20, 0.1], scrim: [50, 0, 20, 0.3],
+    text1: parseHex("#2B1820"), text2: parseHex("#452E38"), text3: parseHex("#6E5260"), quiet: parseHex("#C1A6B1"),
+    alert: parseHex("#8A4E1E"), ok: parseHex("#22783A"), busy: parseHex("#835700"), off: parseHex("#B4233C"),
+  },
+  // black and white, for reading most easily
+  contrast: {
+    ground: parseHex("#000000"), card: parseHex("#0A0A0A"), side: parseHex("#000000"), raised: parseHex("#1A1A1A"),
+    fill: [255, 255, 255, 0.1], fill2: [255, 255, 255, 0.18], hairline: [255, 255, 255, 0.45], sep: [255, 255, 255, 0.3],
+    shadow: [0, 0, 0, 0.6], scrim: [0, 0, 0, 0.75],
+    text1: parseHex("#FFFFFF"), text2: parseHex("#FFFFFF"), text3: parseHex("#D0D0D6"), quiet: parseHex("#6E6E76"),
+    alert: parseHex("#FFC266"), ok: parseHex("#4CFF7A"), busy: parseHex("#FFE14D"), off: parseHex("#FF6B6B"),
+  },
 };
 
 /** What text sits on: every surface, a chip's fill laid over the card included. */
-export function backgrounds(t: Theme): Record<"ground" | "card" | "side" | "raised" | "chip", RGB> {
+export function backgrounds(t: ThemeId): Record<"ground" | "card" | "side" | "raised" | "chip", RGB> {
   const s = SURFACES[t];
   return { ground: s.ground, card: s.card, side: s.side, raised: s.raised, chip: over(s.fill2, s.card) };
 }
@@ -175,11 +230,12 @@ export const MOTION = {
 
 // ── as CSS ────────────────────────────────────────────────────────────────────────────────────
 
-function themeVars(t: Theme): string {
+function themeVars(t: ThemeId): string {
   const s = SURFACES[t];
-  const v: Record<string, string> = { "--accent": hex(t === "dark" ? HUES[0]!.dark : HUES[0]!.light) }; // Ash's, where no orb is named
+  const base = baseOf(t);
+  const v: Record<string, string> = { "--accent": hex(HUES[0]![base]) }; // Ash's, where no orb is named
   for (const [k, c] of Object.entries(s)) v[`--${k.replace(/(\d)/, "-$1")}`] = css(c);
-  return Object.entries(v).map(([k, x]) => `${k}: ${x};`).join(" ") + " " + accentVars(t === "dark" ? HUES[0]!.dark : HUES[0]!.light, t);
+  return Object.entries(v).map(([k, x]) => `${k}: ${x};`).join(" ") + " " + accentVars(HUES[0]![base], base);
 }
 
 /** An orb's colour and what is made of it: the wash behind your messages, a chosen control's fill, his glow. */
@@ -211,17 +267,20 @@ function hueRules(t: Theme, scope: string): string {
   return HUES.map((h) => `${scope}[data-orb="${h.name}"] { ${accentVars(h[t], t)} }`).join(" ");
 }
 
-/** The whole stylesheet: the font, both themes (by the system setting, or `data-theme`), the base. */
+/** The whole stylesheet: the font, every theme (the system's light or dark when none is chosen, or
+ * `data-theme`), the base. */
 export function stylesheet(fontUrl = "fonts/Nunito.ttf"): string {
+  const chosen = (Object.keys(THEMES) as ThemeId[]).flatMap((t) => [
+    `:root[data-theme="${t}"] { color-scheme: ${baseOf(t)}; ${themeVars(t)} }`,
+    hueRules(baseOf(t), `:root[data-theme="${t}"] `),
+  ]);
   return [
     `@font-face { font-family: "Nunito"; src: url("${fontUrl}") format("truetype"); font-weight: 200 1000; font-display: swap; }`,
     `:root { color-scheme: dark; ${staticVars()} ${themeVars("dark")} }`,
-    `@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { color-scheme: light; ${themeVars("light")} } }`,
-    `:root[data-theme="light"] { color-scheme: light; ${themeVars("light")} }`,
-    `:root[data-theme="dark"] { color-scheme: dark; ${themeVars("dark")} }`,
+    `@media (prefers-color-scheme: light) { :root:not([data-theme]) { color-scheme: light; ${themeVars("light")} } }`,
     hueRules("dark", ""),
-    `@media (prefers-color-scheme: light) { ${hueRules("light", ':root:not([data-theme="dark"]) ')} }`,
-    hueRules("light", ':root[data-theme="light"] '),
+    `@media (prefers-color-scheme: light) { ${hueRules("light", ":root:not([data-theme]) ")} }`,
+    ...chosen,
     `*, *::before, *::after { box-sizing: border-box; }`,
     `html, body { margin: 0; background: var(--ground); color: var(--text-2); font: var(--t-body); -webkit-font-smoothing: antialiased; text-size-adjust: 100%; }`,
     `body { overflow-x: hidden; text-wrap: pretty; }`,

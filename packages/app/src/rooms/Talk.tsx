@@ -28,6 +28,8 @@ export function Talk(o: {
   send: (text: string) => Promise<void>;
   placeholder: string;
   empty: ReactNode;
+  /** A private chat lets you give him files (PLAN 2.4): each kept on the home, its path in your message. */
+  attach?: (file: File) => Promise<string>;
   onBusy?: (b: Busy) => void;
   onMessages?: (m: Message[]) => void;
 }) {
@@ -36,6 +38,8 @@ export function Talk(o: {
   const [live, setLive] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<Busy>({});
   const [draft, setDraft] = useState("");
+  const [given, setGiven] = useState<string[]>([]); // files kept for this message, by path
+  const picker = useRef<HTMLInputElement>(null);
   const [said, setSaid] = useState<string | null>(null);
   const [open, setOpen] = useState(false); // the live stream: words arrive as written only once it is open
   const end = useRef<HTMLDivElement>(null);
@@ -116,10 +120,15 @@ export function Talk(o: {
   }, [messages.length, live, card?.id]);
 
   const send = (): void => {
-    const text = draft.trim();
+    const text = [draft.trim(), ...given.map((p) => `[Attached: ${p}]`)].filter(Boolean).join("\n");
     if (!text) return;
     setDraft("");
+    setGiven([]);
     o.send(text).catch((e: Error) => setSaid(e.message));
+  };
+  const give = (files: FileList | null): void => {
+    for (const f of [...(files ?? [])]) o.attach?.(f).then((p) => setGiven((g) => [...g, p]), (e: Error) => setSaid(e.message));
+    if (picker.current) picker.current.value = "";
   };
   const answer = (choice: Choice): void => {
     if (!card) return;
@@ -190,8 +199,29 @@ export function Talk(o: {
           e.preventDefault();
           send();
         }}
-        style={{ display: "flex", gap: 8, padding: "var(--s3) var(--s5) var(--s4)", boxShadow: "0 -1px 0 var(--sep)" }}
+        style={{ display: "grid", gap: 8, padding: "var(--s3) var(--s5) var(--s4)", boxShadow: "0 -1px 0 var(--sep)" }}
       >
+        {given.length > 0 && (
+          <div data-given style={{ display: "flex", gap: 6, flexWrap: "wrap", minWidth: 0 }}>
+            {given.map((p) => (
+              <span key={p} style={{ display: "inline-flex", alignItems: "center", gap: 6, maxWidth: "100%", padding: "4px 6px 4px 10px", borderRadius: 999, background: "var(--fill)", boxShadow: "inset 0 0 0 .5px var(--hairline)", font: "600 12px/16px var(--font)", color: "var(--text-1)" }}>
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{p.replace(/^from-you\//, "")}</span>
+                <button type="button" aria-label={`Don't send ${p}`} onClick={() => setGiven((g) => g.filter((x) => x !== p))} style={{ border: 0, background: "transparent", color: "var(--text-3)", cursor: "pointer", font: "700 12px/16px var(--font)", padding: "0 4px" }}>
+                  ✕
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+        <div style={{ display: "flex", gap: 8, minWidth: 0 }}>
+        {o.attach && (
+          <>
+            <input ref={picker} type="file" multiple hidden aria-label="Files to give him" onChange={(e) => give(e.target.files)} />
+            <button type="button" onClick={() => picker.current?.click()} aria-label="Give him a file" style={{ ...button, padding: "8px 12px" }}>
+              File
+            </button>
+          </>
+        )}
         <textarea
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
@@ -206,9 +236,10 @@ export function Talk(o: {
           rows={1}
           style={{ flex: "1 1 auto", minWidth: 0, resize: "none", font: "400 15px/22px var(--font)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 14, padding: "10px 14px", outline: 0, boxShadow: "inset 0 0 0 1px var(--hairline)", maxHeight: 160 }}
         />
-        <button type="submit" data-sound="pick" disabled={!draft.trim()} style={{ ...button, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)", opacity: draft.trim() ? 1 : 0.5 }}>
+        <button type="submit" data-sound="pick" disabled={!draft.trim() && !given.length} style={{ ...button, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)", opacity: draft.trim() || given.length ? 1 : 0.5 }}>
           Send
         </button>
+        </div>
       </form>
     </div>
   );

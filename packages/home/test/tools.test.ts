@@ -51,14 +51,16 @@ test("the whole tree is killed, not just the shell, and nothing is left running"
   const ac = new AbortController();
   const ctx = ctxFor(t, ac.signal);
   const marker = join(ctx.workspace, "tree-marker");
-  const p = runTool(tool("shell"), { command: `sh -c 'sleep 2 && touch ${marker}' & wait` }, ctx);
+  // an unusual sleep, so the count below sees only this grandchild (a "sleep 2" in any loop on the
+  // machine, a watcher's included, would be counted as a stray)
+  const p = runTool(tool("shell"), { command: `sh -c 'sleep 2.37 && touch ${marker}' & wait` }, ctx);
   await new Promise((r) => setTimeout(r, 300));
   ac.abort();
   await p;
   await new Promise((r) => setTimeout(r, 2600)); // longer than the grandchild's own sleep
   assert.equal(existsSync(marker), false, "the grandchild outlived the stop");
   // the exact argv, not `pgrep -f`, whose pattern matches the checking shell's own command line
-  const strays = execFileSync("bash", ["-c", "ps -eo cmd --no-headers | grep -cx 'sleep 2' || true"], { encoding: "utf8" }).trim();
+  const strays = execFileSync("bash", ["-c", "ps -eo cmd --no-headers | grep -cx 'sleep 2.37' || true"], { encoding: "utf8" }).trim();
   assert.equal(strays, "0");
 });
 

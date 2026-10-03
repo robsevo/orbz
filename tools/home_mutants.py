@@ -5,6 +5,7 @@ must go red. The repo itself is never touched.
 
     pnpm check:controls      # runs this after tools/check_controls.py
     tools/home_mutants.py --only terminal/    # just the mutants whose file, name or suite has this text
+    tools/home_mutants.py --only home/ --part 1/2   # every second one of them, from the first
 """
 from __future__ import annotations
 
@@ -548,6 +549,191 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("the morning card counts his own brain's run as the big brain's too", "src/gym/card.ts", [
         ('(e.data.tier === "habit" || e.data.tier === "own") && typeof e.data.run', 'e.data.tier === "habit" && typeof e.data.run'),
     ], ["playbook.test.ts"]),
+    # connectors (PLAN 4.2)
+    ("a connector's tool runs without asking", "src/connectors/tools.ts", [
+        ('    decision: "ask",', '    decision: "allow",'),
+    ], ["connectors.test.ts"]),
+    ("a connector's sending tool may be 'always' allowed", "src/connectors/tools.ts", [
+        ("    floor: () => toolFloor(tool.name),", "    floor: () => toolFloor(tool.name).slice(0, 0),"),
+    ], ["connectors.test.ts"]),
+    ("a connector's answer is trusted", "src/connectors/tools.ts", [
+        ('    untrusted: "document",\n', ""),
+    ], ["connectors.test.ts"]),
+    ("a connector's secret is written into its file", "src/connectors/connectors.ts", [
+        ("    this.#save({ ...this.specs(), [name]: spec });", "    this.#save({ ...this.specs(), [name]: { ...spec, kept: secrets } as Spec });"),
+    ], ["connectors.test.ts"]),
+    ("a removed connector keeps its secret", "src/connectors/connectors.ts", [
+        ("    for (const v of Object.values(\"command\" in spec ? spec.env ?? {} : spec.headers ?? {})) if (isSecret(v)) await store.delete(", "    for (const v of Object.values(\"command\" in spec ? spec.env ?? {} : spec.headers ?? {})) if (isSecret(v) && v.secret === \"never\") await store.delete("),
+    ], ["connectors.test.ts"]),
+    ("a server that never shakes hands holds the home", "src/connectors/connectors.ts", [
+        ("      await deadline(client.connect(transport), this.#o.handshakeMs ?? HANDSHAKE_MS, `the ${name} connector`);", "      await client.connect(transport);"),
+    ], ["connectors.test.ts"]),
+    ("the floor reads nothing in a tool's name", "src/rules/floor.ts", [
+        ("  if (words.some((w) => CHANGES.test(w)) && words.some((w) => ON_CALENDAR.test(w))) hits.push(", "  if (words.length < 0) hits.push("),
+    ], ["connectors.test.ts"]),
+    # mail, no middleman (PLAN 4.2)
+    ("a mail account is kept without signing in", "src/connectors/mail.ts", [
+        ("    const c = await Imap.open({ ...a, password }, this.#o.timeoutMs ? { timeoutMs: this.#o.timeoutMs } : {}); // refused here, nothing kept", "    const c = { close() {} };"),
+    ], ["mail.test.ts"]),
+    ("a mail trigger fires on what was there", "src/connectors/mail.ts", [
+        ("          if (cursor === null || validity !== c.uidValidity) return", "          if (cursor !== null && validity !== c.uidValidity) return"),
+    ], ["mail.test.ts"]),
+    ("a draft forgets what it answers", "src/connectors/imap.ts", [
+        ("    ...(o.inReplyTo ? [`In-Reply-To: ${o.inReplyTo}`, `References: ${o.inReplyTo}`] : []),\n", ""),
+    ], ["mail.test.ts"]),
+    ("plain IMAP to anywhere", "src/connectors/imap.ts", [
+        ('    if (!tls && a.host !== "127.0.0.1" && a.host !== "localhost") throw', "    if (!tls && a.host.length < 0) throw"),
+    ], ["mail.test.ts"]),
+    ("a mail's words are trusted", "src/connectors/mail.ts", [
+        ('      untrusted: "mail",\n', ""),
+    ], ["mail.test.ts"]),
+    # replies you owe (PLAN 4.5)
+    ("a newsletter is a reply you owe", "src/connectors/mail.ts", [
+        ("          if (h.automated || NO_REPLY.test(from) || mine.has(from)) continue;", "          if (NO_REPLY.test(from) || mine.has(from)) continue;"),
+    ], ["mail.test.ts"]),
+    ("a no-reply sender is owed a reply", "src/connectors/mail.ts", [
+        ("          if (h.automated || NO_REPLY.test(from) || mine.has(from)) continue;", "          if (h.automated || mine.has(from)) continue;"),
+    ], ["mail.test.ts"]),
+    ("your own mail is a reply you owe", "src/connectors/mail.ts", [
+        ("          if (h.automated || NO_REPLY.test(from) || mine.has(from)) continue;", "          if (h.automated || NO_REPLY.test(from)) continue;"),
+    ], ["mail.test.ts"]),
+    ("a reply already sent is still owed", "src/connectors/imap.ts", [
+        ("UID SEARCH UNANSWERED SINCE ${d.getDate()}", "UID SEARCH SINCE ${d.getDate()}"),
+    ], ["mail.test.ts"]),
+    ("the day leaves the replies you owe out", "src/day.ts", [
+        ("    const owed = h.mail && Object.keys(h.mail.accounts()).length ? (await h.mail.owed(now)).owed : [];", "    const owed: Owed[] = [];"),
+    ], ["day.test.ts"]),
+    # the day (PLAN 4.5): Ash's carried day on what the home hands in
+    ("the day leaves the orbs' bills off its list", "src/day.ts", [
+        ('    .flatMap((e) => (e.kind === "bill" || e.kind === "reminder" ? [e] : []))', "    .flatMap((e) => (e.kind === \"bill\" && e.kind !== \"bill\" ? [e] : []))"),
+    ], ["day.test.ts"]),
+    ("the day names no clash", "src/day.ts", [
+        ("      clashes: clashes.map(", "      clashes: clashes.slice(0, 0).map("),
+    ], ["day.test.ts"]),
+    ("the day hands the kit tomorrow, not today", "src/day.ts", [
+        ("  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();", "  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).getTime();"),
+    ], ["day.test.ts"]),
+    # a trigger's event is from outside (a subject line, a feed's title)
+    ("a trigger's event reaches the model unfenced", "src/agent/loop.ts", [
+        ("item.text.slice(0, outside) + (await this.#o.guard.fence(`${ctx.conversation}:${randomUUID()}`, item.text.slice(outside)))", "item.text"),
+    ], ["mail.test.ts"]),
+    ("a trigger's turn is not marked as outside", "src/agent/loop.ts", [
+        ('      if (outside !== null) this.#o.guard.mark(`${ctx.conversation}#${asked.id}`, "trigger", String(item.data.trigger ?? ""));\n', ""),
+    ], ["mail.test.ts"]),
+    ("a trigger says nothing of where its event starts", "src/triggers.ts", [
+        ("      data: { trigger: t.id, event: e.id, at: e.at, outside: head.length },", "      data: { trigger: t.id, event: e.id, at: e.at },"),
+    ], ["mail.test.ts"]),
+    ("where a trigger's event starts is taken for one of its fields", "src/gym/finder.ts", [
+        ('"at", "outside", "team"', '"at", "team"'),
+    ], ["finder.test.ts"]),
+    ("a trade on a connector does not ask", "src/rules/floor.ts", [
+        ("|order|sell|trade|swap|withdraw|deposit|stake|unstake|bridge)$/],", "|order)$/],"),
+    ], ["connectors.test.ts"]),
+    ("an order on an exchange does not ask", "src/rules/floor.ts", [
+        ("  /\\b(binance|kraken|robinhood|etoro|alpaca|bybit|okx|kucoin|bitstamp|bitfinex|uniswap)\\b/i,\n  /\\b(sell|trade|swap|withdraw|stake|unstake)\\b/i,\n", ""),
+    ], ["connectors.test.ts"]),
+    # your Google and Microsoft accounts (PLAN 4.2)
+    ("a sign-in that comes back with another state is taken", "src/connectors/accounts.ts", [
+        ('      if (q.get("state") !== state) {', '      if (q.get("state") !== state && q.get("state") === "never") {'),
+    ], ["accounts.test.ts"]),
+    ("the code is exchanged without its verifier", "src/connectors/accounts.ts", [
+        ('{ grant_type: "authorization_code", code, code_verifier: verifier, redirect_uri: redirectUri, scope: p.mailScope }', '{ grant_type: "authorization_code", code, redirect_uri: redirectUri, scope: p.mailScope }'),
+    ], ["accounts.test.ts"]),
+    ("Gmail's drafts go to a new folder called Drafts", "src/connectors/imap.ts", [
+        ('      if (m && /\\\\Drafts\\b/i.test(m[1]!)) return', '      if (m && m[1] === "never") return'),
+    ], ["accounts.test.ts"]),
+    ("cancelled Google events are on the calendar", "src/connectors/accounts.ts", [
+        ('        if (e.status === "cancelled" || !e.start) continue;', '        if (!e.start) continue;'),
+    ], ["accounts.test.ts"]),
+    ("a calendar Google hides is read too", "src/connectors/accounts.ts", [
+        (".filter((c) => c.selected || c.primary);", ".filter((c) => c.id !== \"\");"),
+    ], ["accounts.test.ts"]),
+    ("a Teams meeting's time is read as the home's own", "src/connectors/accounts.ts", [
+        ("      const utc = (s: string): number => Date.parse(/[zZ]|[+-]\\d\\d:\\d\\d$/.test(s) ? s : `${s}Z`);", "      const utc = (s: string): number => new Date(s.replace(/\\.\\d+$/, \"\")).getTime();"),
+    ], ["accounts.test.ts"]),
+    ("Microsoft's new refresh token is thrown away", "src/connectors/accounts.ts", [
+        ("    if (t.refresh_token && t.refresh_token !== refresh) await store.set(`account:${name}:refresh`, t.refresh_token); // Microsoft rolls it\n", ""),
+    ], ["accounts.test.ts"]),
+    ("disconnecting leaves the mail behind", "src/home.ts", [
+        ("    if (this.mail.accounts()[name]?.oauth === name) await this.mail.remove(name);\n", ""),
+    ], ["accounts.test.ts"]),
+    ("a provider with no app registered starts a sign-in anyway", "src/connectors/accounts.ts", [
+        ("    if (!client) throw new AccountError(`this home has no ${p.title} app registered yet (docs/accounts.md)`);\n    this.#signIn?.cancel", "    this.#signIn?.cancel"),
+    ], ["accounts.test.ts"]),
+    # your own calendars, by their ICS addresses (PLAN 4.2)
+    ("a recurrence keeps the home's clock, not its own zone's", "src/connectors/ics.ts", [
+        ("  const at = (y: number, mo: number, d: number): number => instant(y, mo, d, h, mi, sec, start.zone);", "  const at = (y: number, mo: number, d: number): number => new Date(y, mo, d, new Date(start.t).getHours(), new Date(start.t).getMinutes(), sec).getTime();"),
+    ], ["calendars.test.ts"]),
+    ("a moved meeting is at its old time too", "src/connectors/ics.ts", [
+        ('series ? (replaced.get(ps.find((p) => p.name === "UID")?.value ?? "") ?? new Set()) : new Set()', "new Set()"),
+    ], ["calendars.test.ts"]),
+    ("a called-off meeting is still on", "src/connectors/ics.ts", [
+        ('    if (/^CANCELLED$/i.test(ps.find((p) => p.name === "STATUS")?.value ?? "")) continue;', '    if (ps.length < 0) continue;'),
+    ], ["calendars.test.ts"]),
+    ("the second Tuesday is read as the same date each month", "src/connectors/ics.ts", [
+        ('    else if (r.FREQ === "MONTHLY" && (nthDays.length || monthDays.length)) {', '    else if (r.FREQ === "MONTHLY" && nthDays.length < 0) {'),
+    ], ["calendars.test.ts"]),
+    ("Outlook's zone names are read as the home's time", "src/connectors/ics.ts", [
+        ("params.TZID ? (WINDOWS[params.TZID] ?? params.TZID) : null", "params.TZID ? params.TZID : null"),
+    ], ["calendars.test.ts"]),
+    ("a rule the reader does not know is guessed at", "src/connectors/ics.ts", [
+        ("  if (Object.keys(r).some((k) => !READ_PARTS.has(k)) || (r.BYDAY && r.FREQ === \"YEARLY\") ||", "  if ("),
+    ], ["calendars.test.ts"]),
+    ("a daily rule's weekdays are not read", "src/connectors/ics.ts", [
+        (".filter(() => !byDay.length || byDay.includes(new Date(Date.UTC(Y, M, D + step * interval)).getUTCDay()))", ""),
+    ], ["calendars.test.ts"]),
+    ("a holiday is only on its first day", "src/calendar.ts", [
+        ("    if (!e.allDay) return [one(e.start)];", "    if (e.allDay || !e.allDay) return [one(e.start)];"),
+    ], ["calendars.test.ts"]),
+    ("a taken-out day still happens", "src/connectors/ics.ts", [
+        ("t < to && !skip.has(t) ?", "t < to ?"),
+    ], ["calendars.test.ts"]),
+    ("a monthly event on the 31st lands on the 1st", "src/connectors/ics.ts", [
+        ("} else if (r.FREQ === \"MONTHLY\") candidates = lands(Y, M + step * interval, D) ? [at(Y, M + step * interval, D)] : [];", "} else if (r.FREQ === \"MONTHLY\") candidates = [at(Y, M + step * interval, D)];"),
+    ], ["calendars.test.ts"]),
+    ("folded lines are not joined", "src/connectors/ics.ts", [
+        ('  const lines = text.replace(/\\r?\\n[ \\t]/g, "").split(/\\r?\\n/);', '  const lines = text.split(/\\r?\\n/);'),
+    ], ["calendars.test.ts"]),
+    ("a page is taken for a calendar", "src/connectors/calendars.ts", [
+        ("    if (!/BEGIN:VCALENDAR/i.test(text)) throw", "    if (text.length < 0) throw"),
+    ], ["calendars.test.ts"]),
+    ("a calendar's address is kept in its file", "src/connectors/calendars.ts", [
+        ("    this.#save({ ...this.#specs(), [name]: { label: label.trim().slice(0, 60) || name } });", "    this.#save({ ...this.#specs(), [name]: { label: label.trim().slice(0, 60) || name, url } as { label: string } });"),
+    ], ["calendars.test.ts"]),
+    ("a calendar's reason names its secret", "src/connectors/calendars.ts", [
+        ("    if (!r.ok) throw new CalendarError(hide(r.reason ?? `the calendar's address answered ${r.status ?? \"nothing\"}`, url));", "    if (!r.ok) throw new CalendarError(`${r.reason ?? \"no answer\"} from ${url}`);"),
+    ], ["calendars.test.ts"]),
+    ("a calendar is never read again", "src/connectors/calendars.ts", [
+        ("      if (!k || this.#o.now() - k.at >= REFRESH_MS) {", "      if (!k) {"),
+    ], ["calendars.test.ts"]),
+    ("a failing calendar loses its events", "src/connectors/calendars.ts", [
+        ('              return { text: last?.text ?? "", at:', '              return { text: "", at:'),
+    ], ["calendars.test.ts"]),
+    ("your calendar's events are left off the calendar", "src/api.ts", [
+        ("      return { entries: withEvents(entries, await home.calendars.events(span.start, span.end), span) };", "      return { entries: withEvents(entries, [], span) };"),
+    ], ["calendars.test.ts"]),
+    ("a calendar's words are trusted", "src/connectors/calendars.ts", [
+        ('      untrusted: "calendar",\n', ""),
+    ], ["calendars.test.ts"]),
+    ("a phone adds a connector that runs a program on the box", "src/api.ts", [
+        ('      if (remote && "command" in spec) throw', '      if (remote && "command" in spec && remote.length < 0) throw'),
+    ], ["devices.test.ts"]),
+    ("a mail account is kept as given, unchecked", "src/connectors/mail.ts", [
+        ("    const a = accountOf(given);\n    const c = await Imap.open({ ...a, password },", "    const a = given;\n    const c = await Imap.open({ ...a, password },"),
+    ], ["mail.test.ts"]),
+    # a file you give him (PLAN 2.4, attach)
+    ("a file you give him overwrites the one before", "src/workspace.ts", [
+        ('      writeFileSync(at, bytes, { flag: "wx" }); // never over one that is there', '      writeFileSync(at, bytes, { flag: "w" }); // never over one that is there'),
+    ], ["workspace.test.ts"]),
+    ("a file's name keeps its way up", "src/workspace.ts", [
+        ("  const last = name.split(/[/\\\\]/).pop() ?? \"\";", "  const last = name;"),
+    ], ["workspace.test.ts"]),
+    ("a hidden name stays hidden", "src/workspace.ts", [
+        ('.replace(/^[. ]+/, "")', ""),
+    ], ["workspace.test.ts"]),
+    ("a file you give him has no size limit", "src/api.ts", [
+        ("    if (size > cap) throw new HttpError(413,", "    if (size > cap * 1000) throw new HttpError(413,"),
+    ], ["workspace.test.ts"]),
     # the schedule editor's rules (PLAN 2.4)
     ("a schedule may run every 5 minutes, or unevenly", "src/schedule-rules.ts", [
         ("export const EVERY_MINUTES = [15, 20, 30] as const;", "export const EVERY_MINUTES = [5, 15, 20, 30, 45] as const;"),
@@ -775,6 +961,9 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("a card already waiting is not his mood when the page opens", "src/orb/useMood.ts", [
         ('    for (const n of ns) if (n.kind === "approval" && n.card !== null) machines.get(n.orb)?.hear(', '    for (const n of ns) if (n.kind === "never" && n.card !== null) machines.get(n.orb)?.hear('),
     ], ["notices.test.ts"]),
+    ("your message never says what you gave him", "src/rooms/Talk.tsx", [
+        ("...given.map((p) => `[Attached: ${p}]`)", "...given.map(() => \"\")"),
+    ], ["attach.test.ts"]),
     # the schedule editor (PLAN 2.4)
     ("the editor's preview is not the home's", "src/rooms/ScheduleEditor.tsx", [
         ("      o.home.schedulePreview(rule).then(", '      Promise.resolve({ words: "Every day at 09:00", next: [] as number[] }).then('),
@@ -798,6 +987,69 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("a phone's QR code is of another link", "src/rooms/Devices.tsx", [
         ("<QrCode text={link} size={200}", "<QrCode text={`${link}x`} size={200}"),
     ], ["devices.test.ts"]),
+    # your connections in Settings (PLAN 4.2)
+    ("Settings shows no connections", "src/rooms/Settings.tsx", [
+        ("      {o.home && <Connections home={o.home} />}", "      {o.home && null}"),
+    ], ["connections.test.ts"]),
+    ("a connector's secret goes in its spec, not the keychain", "src/rooms/Connections.tsx", [
+        ("{ spec: { command, args, env: { [m[1]!]: { secret: m[1]!.toLowerCase() } } }, secrets: { [m[1]!.toLowerCase()]: m[2]! } }", "{ spec: { command, args, env: { [m[1]!]: m[2]! } }, secrets: {} }"),
+    ], ["connections.test.ts"]),
+    ("a mail server on this machine is asked for TLS", "src/rooms/Connections.tsx", [
+        ("...(/^(127\\.0\\.0\\.1|localhost|::1)$/.test(host) && { tls: false })", "...(host === \"\" && { tls: false })"),
+    ], ["connections.test.ts"]),
+    ("a calendar's address stays on the page once it is kept", "src/rooms/Connections.tsx", [
+        ("() => setCal({ label: \"\", address: \"\" })", "() => setCal((c) => ({ ...c, label: \"\" }))"),
+    ], ["connections.test.ts"]),
+    ("your calendar's events can be moved like his reminders", "src/rooms/Calendar.tsx", [
+        ('                {e.kind !== "event" && <span style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>', '                {<span style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>'),
+    ], ["connections.test.ts"]),
+    ("a catalog program floats to its latest release", "src/home/catalog.ts", [
+        ("npx -y @modelcontextprotocol/server-filesystem@2026.8.31 /path", "npx -y @modelcontextprotocol/server-filesystem /path"),
+    ], ["catalog.test.ts"]),
+    ("the pin check passes anything", "src/home/catalog.ts", [
+        ("  if (!pkg) return false;", "  if (pkg !== undefined || !pkg) return true;"),
+    ], ["catalog.test.ts"]),
+    ("Notifications never shows your day", "src/rooms/Notices.tsx", [
+        ('      {today && "brief" in today && <YourDayCard day={today} go={o.go} />}', '      {today && "brief" in today && null}'),
+    ], ["connections.test.ts"]),
+    # the opening story's music (owner, 10-02)
+    ("the music plays out of key", "src/ui/music.ts", [
+        ("  { root: 34, tones: [58, 62, 65] }, // B flat", "  { root: 34, tones: [58, 61, 65] }, // B flat"),
+    ], ["music.test.ts"]),
+    ("the music never loops", "src/ui/music.ts", [
+        ("  const looped = n < INTRO_BARS ? n : INTRO_BARS + ((n - INTRO_BARS) % LOOP_BARS);", "  const looped = n;"),
+    ], ["music.test.ts"]),
+    ("the music plays with the sounds off", "src/ui/music.ts", [
+        ("  if (running || !soundsOn()) return;", "  if (running) return;"),
+    ], ["onboarding.test.ts"]),
+    ("the music plays on after the story", "src/onboarding/Onboarding.tsx", [
+        ("    stopMusic();\n    onDone(", "    onDone("),
+        ("  useEffect(() => () => stopMusic(), []); // the story over: it fades out\n", ""),
+    ], ["onboarding.test.ts"]),
+    # themes besides light and dark (owner, 10-02)
+    ("a chosen theme is overridden by the system's", "src/design/tokens.ts", [
+        ("    `@media (prefers-color-scheme: light) { :root:not([data-theme]) { color-scheme: light; ${themeVars(\"light\")} } }`,\n", ""),
+        ("    ...chosen,", "    ...chosen,\n    `@media (prefers-color-scheme: light) { :root:not([data-theme=\"dark\"]) { color-scheme: light; ${themeVars(\"light\")} } }`,"),
+    ], ["render.test.ts"]),
+    ("a theme wears the other base's hues", "src/design/tokens.ts", [
+        ("    hueRules(baseOf(t), `:root[data-theme=\"${t}\"] `),", "    hueRules(baseOf(t) === \"dark\" ? \"light\" : \"dark\", `:root[data-theme=\"${t}\"] `),"),
+    ], ["render.test.ts"]),
+    ("the theme you chose is forgotten on a reload", "src/orbs.tsx", [
+        ("applyTheme(savedTheme(), false);", "applyTheme(null, false);"),
+    ], ["render.test.ts"]),
+    # a voice heard before it is chosen (owner, 10-02)
+    ("pressing a voice plays nothing", "src/orbs.tsx", [
+        ("                      preview(v.id, P.speed); // heard as he will speak: his personality's pace\n", ""),
+    ], ["voice-preview.test.ts"]),
+    ("a voice is previewed at the wrong pace", "src/orb/preview.ts", [
+        ("  a.playbackRate = speed;", "  a.playbackRate = 1;"),
+    ], ["voice-preview.test.ts"]),
+    ("two previews talk over each other", "src/orb/preview.ts", [
+        ("export function preview(id: string, speed = 1): void {\n  playing?.pause();", "export function preview(id: string, speed = 1): void {"),
+    ], ["voice-preview.test.ts"]),
+    ("the samples are looked for in the wrong place", "src/orb/preview.ts", [
+        ("export const sampleOf = (id: string): string => `voices/${id}.mp3`;", "export const sampleOf = (id: string): string => `voice/${id}.mp3`;"),
+    ], ["voice-preview.test.ts"]),
     ("the build writes no manifest", "vite.config.ts", [
         ('      this.emitFile({ type: "asset", fileName: "manifest.webmanifest", source: `${JSON.stringify(manifest, null, 1)}\\n` });', "      void manifest;"),
     ], ["install.test.ts"]),
@@ -821,12 +1073,15 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ("dark: i === 0 ? AZURE : oklch(a.L, a.C, angle)", "dark: oklch(a.L, a.C, angle + 4)"),
     ], ["design.test.ts"]),
     ("an orb's colour does not follow the light theme", "src/design/tokens.ts", [
-        ("    hueRules(\"light\", ':root[data-theme=\"light\"] '),\n", ""),
-        ("    `@media (prefers-color-scheme: light) { ${hueRules(\"light\", ':root:not([data-theme=\"dark\"]) ')} }`,\n", ""),
+        ("    `@media (prefers-color-scheme: light) { ${hueRules(\"light\", \":root:not([data-theme]) \")} }`,\n", ""),
+        ("    hueRules(baseOf(t), `:root[data-theme=\"${t}\"] `),\n", ""),
     ], ["render.test.ts"]),
     ("the smallest type falls under the floor", "src/design/tokens.ts", [
         ("  caption2: [11, 13, 400],", "  caption2: [9, 13, 400],"),
     ], ["design.test.ts", "render.test.ts"]),
+    ("the harness sees no contrast", "test/harness.ts", [
+        ("      if (ratio < need - 0.01) out.push(", "      if (ratio < 0) out.push("),
+    ], ["render.test.ts"]),
     ("the harness does not see a spill", "test/harness.ts", [
         ("      if (!inScroller && (r.left < -1 || r.right > vw + 1)) out.push(", "      if (false) out.push("),
     ], ["render.test.ts"]),
@@ -926,7 +1181,13 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ('    return v && typeof v.name === "string" && v.name ? v : null;', "    return v && false ? v : null;"),
     ], ["onboarding.test.ts", "nav.test.ts"]),
     ("skipping the story skips the name", "src/onboarding/story.ts", [
-        ('  return person ? story.findIndex((b) => b.kind === "hire") : story.findIndex((b) => b.kind === "ask-name");', '  return story.findIndex((b) => b.kind === "hire");'),
+        ('  if (!person) return story.findIndex((b) => b.kind === "ask-name");\n', ''),
+    ], ["onboarding.test.ts"]),
+    ("skipping the story skips the brains", "src/onboarding/story.ts", [
+        ('  return brains >= 0 ? brains : story.findIndex((b) => b.kind === "hire");', '  return story.findIndex((b) => b.kind === "hire");'),
+    ], ["onboarding.test.ts"]),
+    ("the first open never asks what he thinks with", "src/onboarding/story.ts", [
+        ('  { kind: "brains" },\n', ''),
     ], ["onboarding.test.ts"]),
     ("a press does not finish the line", "src/onboarding/Onboarding.tsx", [
         ("      if (typer.current) clearInterval(typer.current);\n", ""),
@@ -1180,6 +1441,10 @@ def main() -> int:
         if not planted:
             print(f"no mutant matches --only {only!r}")
             return 1
+    if "--part" in sys.argv:
+        # one share of the list, so a long run can go as several jobs, each under the 2-hour ceiling
+        k, n = (int(x) for x in sys.argv[sys.argv.index("--part") + 1].split("/"))
+        planted = planted[k - 1::n]
     suites = sorted({s for *_, ss in planted for s in ss})
     with tempfile.TemporaryDirectory(prefix="orbs-mutants-") as td:
         tmp = Path(td)

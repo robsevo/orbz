@@ -4,11 +4,15 @@
 // home's (PLAN 1.11), and are chosen here once the app talks to it (2.4); until then it says so.
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { REPLIES, type Replies } from "../orb/spec.ts";
-import { OneLine } from "../ui/Balanced.tsx";
+import { Balanced, OneLine } from "../ui/Balanced.tsx";
+import { applyTheme, savedTheme } from "../ui/theme.ts";
+import { baseOf, HUES, SURFACES, THEMES, type ThemeId } from "../design/tokens.ts";
+import { hex } from "../design/color.ts";
 import { checkName, type Person } from "../onboarding/story.ts";
 import type { Office } from "../home/link.ts";
 import { Devices } from "./Devices.tsx";
 import { Brains } from "./Brains.tsx";
+import { Connections } from "./Connections.tsx";
 
 const panel: CSSProperties = { display: "grid", gap: "var(--s3)", padding: "var(--s4)", borderRadius: 18, background: "var(--fill)", boxShadow: "inset 0 0 0 .5px var(--hairline)", minWidth: 0 };
 const head: CSSProperties = { font: "700 11px/16px var(--font)", letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)", margin: 0 };
@@ -45,6 +49,11 @@ export function Settings(o: {
     setDraft(o.person?.name ?? ""); // the home's "about you" can arrive after the room opens
   }, [o.person?.name]);
   const [said, setSaid] = useState<{ ok: boolean; text: string } | null>(null);
+  const [theme, setTheme] = useState<ThemeId | null>(savedTheme);
+  const wear = (t: ThemeId | null): void => {
+    applyTheme(t);
+    setTheme(t);
+  };
   const save = (): void => {
     const r = checkName(draft);
     if (!r.ok) return setSaid({ ok: false, text: r.why });
@@ -71,6 +80,22 @@ export function Settings(o: {
         <button onClick={o.replayIntro} style={{ ...button, justifySelf: "start" }}>
           Play the opening story again
         </button>
+      </Panel>
+      <Panel title="Theme">
+        <Balanced min={118} gap={8}>
+          {([null, ...(Object.keys(THEMES) as ThemeId[])] as (ThemeId | null)[]).map((t) => (
+            <button key={t ?? "system"} data-theme-choice={t ?? "system"} aria-pressed={theme === t} onClick={() => wear(t)} style={{ ...chip(theme === t), display: "flex", alignItems: "center", gap: 8, justifyContent: "flex-start" }}>
+              {/* the theme in small: its page, its card and Ash's azure as it wears it */}
+              <span aria-hidden style={{ display: "flex", flex: "0 0 auto", borderRadius: 8, overflow: "hidden", boxShadow: "inset 0 0 0 1px var(--hairline)" }}>
+                {(t ? [SURFACES[t].ground, SURFACES[t].card, HUES[0]![baseOf(t)]] : [SURFACES.dark.card, SURFACES.light.card, HUES[0]!.dark]).map((c, k) => (
+                  <i key={k} style={{ width: 12, height: 22, background: hex(c) }} />
+                ))}
+              </span>
+              <span>{t ? THEMES[t].label : "System"}</span>
+            </button>
+          ))}
+        </Balanced>
+        <span style={{ font: "400 12px/17px var(--font)", color: "var(--text-3)" }}>System follows this device's light or dark. Your choice is kept on this device.</span>
       </Panel>
       <Panel title="Sounds">
         <OneLine style={{ justifyContent: "flex-start" }}>
@@ -108,6 +133,7 @@ export function Settings(o: {
           </span>
         </Panel>
       )}
+      {o.home && <Connections home={o.home} />}
       {o.home && <Devices home={o.home} />}
     </div>
   );

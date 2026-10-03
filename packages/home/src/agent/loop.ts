@@ -16,6 +16,7 @@
 // names the transport's cause (Ash's stop-turn lessons). Every step is a `trace.step` event,
 // complete enough to replay the run (trace.ts).
 import { workspaceOf } from "../workspace.ts";
+import { randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type { Clock } from "../clock.ts";
@@ -76,6 +77,8 @@ export type AgentOptions = {
     find: (orb: string, task: string) => Promoted | null;
     step: (h: Promoted, input: Case["input"], done: CaseStep[]) => ReturnType<StepFn>;
   };
+  /** Tools that come and go (PLAN 4.2: the person's connectors, as their servers are up). */
+  extraTools?: () => ToolDef[];
   /** His plan templates (PLAN 3.2). */
   templates?: (orb: string) => { title: string; body: string }[];
   /** Sets him a job on a schedule (PLAN 2.4). */
@@ -111,12 +114,21 @@ export const PLAN_ANSWERS = {
 const est = (text: string): number => Math.ceil(text.length / 4) + 4;
 
 export class AgentRunner implements Runner {
-  readonly #o: Required<Omit<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned" | "searchKey" | "remind" | "reminders" | "moveReminder" | "lessonGate" | "learn" | "habits" | "own" | "templates" | "schedule">> & Pick<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned" | "searchKey" | "remind" | "reminders" | "moveReminder" | "lessonGate" | "learn" | "habits" | "own" | "templates" | "schedule">;
+  readonly #o: Required<Omit<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned" | "searchKey" | "remind" | "reminders" | "moveReminder" | "lessonGate" | "learn" | "habits" | "own" | "templates" | "schedule" | "extraTools">> & Pick<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned" | "searchKey" | "remind" | "reminders" | "moveReminder" | "lessonGate" | "learn" | "habits" | "own" | "templates" | "schedule" | "extraTools">;
   readonly #tools: Map<string, ToolDef>;
 
   constructor(opts: AgentOptions) {
     this.#o = { tools: TOOLS, maxSteps: 50, compactAtTokens: 100_000, keepRecentTokens: 20_000, passWaitMs: 1000, ...opts };
     this.#tools = new Map(this.#o.tools.map((t) => [t.name, t]));
+  }
+
+  /** Its own tools and, as they are up now, the person's connectors' (PLAN 4.2). */
+  #all(): ToolDef[] {
+    return [...this.#o.tools, ...(this.#o.extraTools?.() ?? [])];
+  }
+
+  #tool(name: string): ToolDef | undefined {
+    return this.#tools.get(name) ?? this.#o.extraTools?.().find((t) => t.name === name);
   }
 
   workspace(orb: string): string {
@@ -169,7 +181,11 @@ export class AgentRunner implements Runner {
         conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "clear", run: ctx.run, meta: { fresh: true } });
       }
       freshened = true;
-      conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "user", run: ctx.run, content: item.text, meta: { item: item.id, source: item.source } });
+      // a trigger's event is from outside (triggers.ts says where it starts): fenced as data, and its turn marked
+      const outside = item.source === "trigger" && typeof item.data.outside === "number" ? item.data.outside : null;
+      const content = outside === null ? item.text : item.text.slice(0, outside) + (await this.#o.guard.fence(`${ctx.conversation}:${randomUUID()}`, item.text.slice(outside)));
+      const asked = conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "user", run: ctx.run, content, meta: { item: item.id, source: item.source } });
+      if (outside !== null) this.#o.guard.mark(`${ctx.conversation}#${asked.id}`, "trigger", String(item.data.trigger ?? ""));
     }
     // Something to answer: the person's message, tool results, or calls a stop left unanswered.
     // A card still waiting (the home died after it opened) keeps waiting: nothing is asked again.
@@ -224,7 +240,7 @@ export class AgentRunner implements Runner {
       ctx.activity("Thinking");
       const r = await streamChat(
         ep,
-        { messages, tools: toolSpecs(this.#o.tools) },
+        { messages, tools: toolSpecs(this.#all()) },
         { signal: ctx.signal, onText: (delta) => this.#o.onText?.({ orb: ctx.orb, conversation: ctx.conversation, run: ctx.run, delta }) },
       );
       if (r.promptTokens || r.completionTokens || r.costUsd) {
@@ -398,7 +414,7 @@ export class AgentRunner implements Runner {
     for (let i = from; i < calls.length; i++) {
       if (ctx.signal.aborted) return "stopped";
       const call = calls[i]!;
-      const def = this.#tools.get(call.name);
+      const def = this.#tool(call.name);
       const args = parseArgs(call);
       let result: ToolResult;
       if (!def) result = { content: `There is no tool called ${call.name}.`, isError: true };
@@ -459,7 +475,7 @@ export class AgentRunner implements Runner {
     else if (card.status === "answered") result = { content: `The person answered: ${card.answer ?? ""}` };
     else if (card.status === "denied") result = { content: DENIED };
     else {
-      const def = this.#tools.get(card.tool);
+      const def = this.#tool(card.tool);
       if (!def) result = { content: `There is no tool called ${card.tool}.`, isError: true };
       else {
         this.#o.guard.approved(at.turn, def); // a fresh yes, for this act, this turn

@@ -1,7 +1,8 @@
 // An orb's workspace, as the app shows it (PLAN 2.8, his computer): the files he is making, read
 // through the door. Read only, and only inside it: the tools' own guard (tools.ts inWorkspace)
-// refuses "..", an absolute path, and a link that leads out.
-import { closeSync, lstatSync, openSync, readdirSync, readSync, statSync } from "node:fs";
+// refuses "..", an absolute path, and a link that leads out. The one way in is a file you give
+// him from a chat (PLAN 2.4), kept in `from-you/` under a plain name, never over another.
+import { closeSync, lstatSync, mkdirSync, openSync, readdirSync, readSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { inWorkspace } from "./agent/tools.ts";
 
@@ -80,4 +81,40 @@ export function readWorkspace(dataDir: string, orb: string, path: string): WorkF
   }
   const binary = buf.subarray(0, 8192).includes(0);
   return { path, size: s.size, mtime: s.mtimeMs, text: binary ? null : buf.toString("utf8"), truncated: s.size > READ_CAP };
+}
+
+/** A file you give him, from a chat (PLAN 2.4's composer: attach): at most this big. */
+export const UPLOAD_CAP = 10 * 1024 * 1024;
+/** Where what you give him goes, in his workspace. */
+export const FROM_YOU = "from-you";
+
+/** A file's name as he keeps it: its own last part, plain characters, never hidden or empty. */
+export function safeName(name: string): string {
+  const last = name.split(/[/\\]/).pop() ?? "";
+  const plain = last.replace(/[\u0000-\u001f\u007f]/g, "").replace(/[^\p{L}\p{N} ._()-]/gu, "_").replace(/^[. ]+/, "").trim().slice(0, 100);
+  return plain || "file";
+}
+
+/** Keeps a file you gave him in `from-you/`, never over another (a second report.csv is "report (2).csv"). */
+export function saveUpload(dataDir: string, orb: string, name: string, bytes: Uint8Array): string {
+  if (bytes.length > UPLOAD_CAP) throw new Error(`a file up to ${UPLOAD_CAP / 1024 / 1024} MB`);
+  const root = workspaceOf(dataDir, orb);
+  const dir = inWorkspace(root, FROM_YOU);
+  if (!dir) throw new OutsideError(FROM_YOU);
+  mkdirSync(dir, { recursive: true });
+  const file = safeName(name);
+  const dot = file.lastIndexOf(".");
+  const [stem, ext] = dot > 0 ? [file.slice(0, dot), file.slice(dot)] : [file, ""];
+  for (let n = 1; n < 1000; n++) {
+    const rel = `${FROM_YOU}/${n === 1 ? file : `${stem} (${n})${ext}`}`;
+    const at = inWorkspace(root, rel);
+    if (!at) throw new OutsideError(rel);
+    try {
+      writeFileSync(at, bytes, { flag: "wx" }); // never over one that is there
+      return rel;
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
+    }
+  }
+  throw new Error(`too many files named ${file}`);
 }

@@ -407,6 +407,9 @@ export const SPECIALTIES = {
   mobile: { family: "build", label: "Mobile", title: "App Maker", focus: "phone apps: screens, gestures, offline, stores", lean: [3, 5, 2, 4, 2, 2, 1, 2], hat: "antenna", glasses: "none" },
   devops: { family: "build", label: "DevOps", title: "Ops Keeper", focus: "builds, deploys, servers and keeping things up", lean: [3, 5, 3, 1, 2, 2, 2, 1], hat: "hard hat", glasses: "goggles" },
   testing: { family: "build", label: "Testing", title: "Bug Hunter", focus: "tests that can fail, and finding what breaks", lean: [3, 4, 3, 1, 2, 4, 1, 1], hat: "none", glasses: "big round" },
+  // owner, 10-02: "a quality assurance persona also". Beside the Bug Hunter's tests: is it what was
+  // asked, every time, before it ships
+  qa: { family: "build", label: "QA", title: "QA Lead", focus: "quality before it ships: test plans, checking it against what was asked, release checklists, clear bug reports", lean: [4, 3, 3, 3, 3, 5, 1, 3], hat: "cap", glasses: "monocle" },
   security: { family: "build", label: "Security", title: "Guardian", focus: "keeping secrets secret and doors shut", lean: [3, 4, 2, 1, 2, 4, 2, 2], hat: "none", glasses: "aviators" },
   data: { family: "build", label: "Data", title: "Data Wrangler", focus: "data: cleaning, queries, charts and what they mean", lean: [3, 3, 5, 2, 2, 3, 2, 1], hat: "none", glasses: "round" },
   ai: { family: "build", label: "AI", title: "AI Builder", focus: "models, prompts, evals and the pipes between them", lean: [3, 4, 4, 1, 2, 4, 1, 1], hat: "none", glasses: "visor" },
@@ -434,6 +437,10 @@ export const SPECIALTIES = {
   support: { family: "business", label: "Support", title: "Support Hero", focus: "answering customers kindly and fixing what they hit", lean: [3, 2, 1, 1, 4, 2, 1, 5], hat: "headset", glasses: "none" },
   people: { family: "business", label: "People", title: "People Partner", focus: "hiring, onboarding and looking after the team", lean: [4, 1, 1, 1, 4, 2, 2, 5], hat: "flower crown", glasses: "none" },
   operations: { family: "business", label: "Operations", title: "Operations Manager", focus: "keeping the business running: suppliers, orders, processes", lean: [5, 1, 3, 1, 3, 2, 4, 3], hat: "cap", glasses: "square" },
+  // owner, 10-02: "an investor persona, for crypto also". Research and watching, never a trade of his own:
+  // a buy, a sell, a swap or a withdrawal is the floor's money category, so it always asks (rule 9)
+  investor: { family: "business", label: "Investing", title: "Investor", focus: "markets and your portfolio: research, watchlists, earnings, what moved and why", lean: [4, 1, 5, 1, 3, 5, 5, 2], hat: "top hat", glasses: "monocle", limits: "Not a licensed financial adviser: he researches and keeps watch; every buy and sell is yours to make." },
+  crypto: { family: "business", label: "Crypto", title: "Crypto Analyst", focus: "coins, tokens and wallets: prices, on-chain activity, the projects behind them", lean: [3, 2, 5, 1, 2, 5, 5, 1], hat: "antenna", glasses: "visor", limits: "Not a financial adviser, and crypto swings hard: he never holds your keys or moves your funds, and every trade is yours." },
   paperwork: { family: "business", label: "Paperwork", title: "Paperwork Pro", focus: "contracts, forms and the fine print, read carefully", lean: [4, 1, 2, 1, 5, 4, 3, 2], hat: "none", glasses: "half-rims", limits: "Not a lawyer: he reads closely and says what to ask one." },
   // life
   assistant: { family: "life", label: "Assistant", title: "Assistant", focus: "the inbox, the calendar, trips and errands", lean: [5, 1, 2, 1, 4, 2, 2, 4], hat: "bow", glasses: "none" },

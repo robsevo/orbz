@@ -10,6 +10,8 @@
 //   orphan    a row of items (a grid, a wrapped list) whose last row holds one item alone (owner,
 //             10-01: "i hate when like just 1 item is lingering in a table or header")
 //   widow     a title or a line of text whose last line is one word on its own
+//   contrast  text under WCAG AA against what it really sits on (4.5:1, or 3:1 when large: 24 px,
+//             or 18.66 px bold); text over a gradient or a picture cannot be judged so, and is not
 //
 // Ash's tools/panel_render.mjs is the model; this is our own code.
 import { existsSync, globSync, readFileSync } from "node:fs";
@@ -18,7 +20,7 @@ import { homedir } from "node:os";
 import { extname, join, normalize } from "node:path";
 import { chromium, type Browser, type Page } from "playwright-core";
 
-export type Finding = { kind: "hscroll" | "spill" | "overflow" | "minfont" | "orphan" | "widow"; what: string };
+export type Finding = { kind: "hscroll" | "spill" | "overflow" | "minfont" | "orphan" | "widow" | "contrast" | "broken"; what: string };
 export const SIZES = { phone: { width: 390, height: 844 }, desk: { width: 1280, height: 900 } } as const;
 
 /** A Chromium to drive: $ORBS_CHROME, Playwright's own, a cached one, or Chrome itself. */
@@ -77,7 +79,7 @@ export async function measure(page: Page): Promise<Finding[]> {
     ),
   );
   return page.evaluate((MIN) => {
-    const out: { kind: "hscroll" | "spill" | "overflow" | "minfont" | "orphan" | "widow"; what: string }[] = [];
+    const out: { kind: "hscroll" | "spill" | "overflow" | "minfont" | "orphan" | "widow" | "contrast" | "broken"; what: string }[] = [];
     const name = (el: Element): string => {
       const t = (el.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 40);
       return `<${el.tagName.toLowerCase()}${el.id ? `#${el.id}` : ""}>${t ? ` "${t}"` : ""}`;
@@ -119,12 +121,57 @@ export async function measure(page: Page): Promise<Finding[]> {
         out.push({ kind: "overflow", what: `${name(el)}: ${el.scrollWidth}px of content in ${el.clientWidth}px` });
       }
     }
+    // contrast (WCAG 2): a colour over the backgrounds under it, composited from the first opaque one up
+    type C = [number, number, number, number];
+    const rgba = (v: string): C | null => {
+      const m = /^rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\)$/.exec(v);
+      return m ? [Number(m[1]), Number(m[2]), Number(m[3]), m[4] === undefined ? 1 : Number(m[4])] : null;
+    };
+    const over = (top: C, under: C): C => [0, 1, 2].map((i) => top[i]! * top[3] + under[i]! * (1 - top[3])).concat(1) as C;
+    const lum = (c: C): number => {
+      const f = (v: number): number => ((v /= 255) <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+      return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]);
+    };
+    const groundUnder = (el: Element): C | null => {
+      const layers: C[] = [];
+      for (let p: Element | null = el; p; p = p.parentElement) {
+        const st = getComputedStyle(p);
+        if (st.backgroundImage !== "none") return null; // a gradient or a picture: not judged by a colour
+        const c = rgba(st.backgroundColor);
+        if (c && c[3] > 0) {
+          layers.push(c);
+          if (c[3] >= 1) break;
+        }
+      }
+      return layers.reverse().reduce<C>((under, l) => over(l, under), [255, 255, 255, 1]);
+    };
+    const judged = new Set<Element>();
+    const contrast = (el: Element): void => {
+      if (judged.has(el) || el.closest("svg, canvas, button:disabled, [aria-disabled='true']")) return;
+      judged.add(el);
+      const st = getComputedStyle(el);
+      let alpha = 1;
+      for (let p: Element | null = el; p; p = p.parentElement) alpha *= Number(getComputedStyle(p).opacity);
+      const fg = rgba(st.color);
+      if (!fg || fg[3] === 0 || alpha < 0.2 || st.visibility === "hidden") return; // see-through text, or text fading in or out
+      const bg = groundUnder(el);
+      if (!bg) return;
+      const text = over([fg[0], fg[1], fg[2], fg[3] * alpha], bg);
+      const [a, b] = [lum(text), lum(bg)];
+      const ratio = (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+      const px = Number.parseFloat(st.fontSize);
+      // a decorative mark (hidden from screen readers, no word in it) is an icon: WCAG 1.4.11's 3:1
+      const icon = el.closest("[aria-hidden='true']") !== null && !/[\p{L}\p{N}]{2,}/u.test(el.textContent ?? "");
+      const need = icon || px >= 24 || (px >= 18.66 && Number(st.fontWeight) >= 700) ? 3 : 4.5;
+      if (ratio < need - 0.01) out.push({ kind: "contrast", what: `${name(el)}: ${ratio.toFixed(2)}:1 where it needs ${need}:1` });
+    };
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     const words = new Map<Element, { tops: Map<number, number>; n: number }>();
     for (let n = walker.nextNode(); n; n = walker.nextNode()) {
       if (!n.textContent?.trim() || !n.parentElement) continue;
       const px = Number.parseFloat(getComputedStyle(n.parentElement).fontSize);
       if (px < MIN) out.push({ kind: "minfont", what: `${name(n.parentElement)} is ${px}px` });
+      if ((n.parentElement as HTMLElement).offsetParent !== null || getComputedStyle(n.parentElement).position === "fixed") contrast(n.parentElement);
       // where each word sits, line by line, for the widow check (by the block the text flows in)
       let block: Element = n.parentElement;
       while (getComputedStyle(block).display === "inline" && block.parentElement) block = block.parentElement;
@@ -136,8 +183,20 @@ export async function measure(page: Page): Promise<Finding[]> {
         const r = document.createRange();
         r.setStart(n, m.index);
         r.setEnd(n, m.index + m[0].length);
-        const rect = r.getClientRects()[0];
+        const rect = [...r.getClientRects()].filter((x) => x.width > 0)[0];
         if (!rect) continue;
+        // a word split across lines: its column is too narrow for it (owner, 10-02: "the container is
+        // elongated on mobile", a notice's words cut "promotio / n"). An address or a link may break,
+        // and a hyphenated word may wrap at its hyphen ("on- / chain"): each part must stay whole.
+        for (const part of m[0].matchAll(/[^-‐–—]+/gu)) {
+          const bare = part[0].replace(/^[^\p{L}\d]+|[^\p{L}\d]+$/gu, "");
+          if (bare.length < 2 || bare.length > 20 || !/^[\p{L}\d'’]+$/u.test(bare)) continue;
+          const pr = document.createRange();
+          pr.setStart(n, m.index + part.index);
+          pr.setEnd(n, m.index + part.index + part[0].length);
+          const tops = new Set([...pr.getClientRects()].filter((x) => x.width > 0).map((x) => Math.round(x.top / 4)));
+          if (tops.size > 1) out.push({ kind: "broken", what: `${name(block)} breaks "${bare}" across lines` });
+        }
         const top = Math.round(rect.top / 4) * 4; // a line, give or take a sub-pixel
         entry.tops.set(top, (entry.tops.get(top) ?? 0) + 1);
         entry.n++;
