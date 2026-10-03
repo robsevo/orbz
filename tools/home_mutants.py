@@ -234,8 +234,8 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ('    if (!completed) return fail("the reply ended before it completed", null);\n', ""),
     ], ["chatgpt.test.ts"]),
     ("the keychain is handed the secret on its command line", "src/chatgpt/store.ts", [
-        ('const r = await run(this.#tool, ["store", `--label=Orbs: ChatGPT sign-in`, "service", SERVICE, "key", key], value);',
-         'const r = await run(this.#tool, ["store", `--label=Orbs: ChatGPT sign-in`, "service", SERVICE, "key", key, value], value);'),
+        ('const r = await run(this.#tool, ["store", `--label=Orbz: ChatGPT sign-in`, "service", SERVICE, "key", key], value);',
+         'const r = await run(this.#tool, ["store", `--label=Orbz: ChatGPT sign-in`, "service", SERVICE, "key", key, value], value);'),
     ], ["chatgpt.test.ts"]),
     # the brain order (PLAN 1.11)
     ("Gemini is asked before ChatGPT", "src/brain/brains.ts", [

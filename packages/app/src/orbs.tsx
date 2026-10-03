@@ -785,7 +785,7 @@ function App() {
         {/* on a phone: Back, the name, and the menu, which slides in */}
         <div className="orbs-topbar" style={{ display: "none", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "var(--s3) var(--s4) 0" }}>
           {backButton({ padding: "6px 12px" })}
-          <span style={{ font: "700 12px/20px var(--font)", letterSpacing: ".12em", color: "var(--text-3)" }}>ORBS</span>
+          <span style={{ font: "700 12px/20px var(--font)", letterSpacing: ".12em", color: "var(--text-3)" }}>ORBZ</span>
           <button aria-label="Menu" aria-expanded={menu} onClick={() => setMenu(true)} style={{ ...s.btn, padding: "6px 12px", font: "800 16px/20px var(--font)" }}>
             ☰
           </button>
@@ -794,7 +794,7 @@ function App() {
         <aside className="orbs-side" data-open={menu} style={s.side}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 var(--s2)", font: "700 12px/20px var(--font)", letterSpacing: ".12em", color: "var(--text-3)" }}>
             <i aria-hidden data-orb={me.hue} style={{ width: 9, height: 9, borderRadius: "50%", background: "radial-gradient(circle at 35% 30%, var(--text-1) 0%, var(--accent) 60%)", boxShadow: "0 0 8px var(--accent-glow)" }} />
-            ORBS
+            ORBZ
           </div>
           {person && (
             <div style={{ padding: "0 var(--s2)", font: "600 13px/18px var(--font)", color: "var(--text-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>

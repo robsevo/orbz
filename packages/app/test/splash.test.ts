@@ -70,7 +70,7 @@ test("it shows when the app opens, the office waking, and leaves once the waking
     await page.waitForFunction(() => (globalThis as { __splash?: { gone?: number } }).__splash?.gone !== undefined, null, { timeout: 30_000 });
     const { leaving, phases, text, orbs } = await page.evaluate(() => (globalThis as { __splash?: { leaving: number; phases: string[]; text: string; orbs: number } }).__splash!);
     const woke = await page.evaluate(() => performance.getEntriesByName("orbs-splash-wake")[0]!.startTime);
-    assert.match(text, /ORBS[\s\S]*\d+ orbs in the office/, "the wordmark and its facts");
+    assert.match(text, /ORBZ[\s\S]*\d+ orbs in the office/, "the wordmark and its facts");
     assert.ok(orbs >= 5, `the orbs, popping in (${orbs})`);
     // from when its waking starts (the splash's own mark) to when it starts to leave: a slow
     // renderer stretches everything around that, never that, so a splash that skipped its waking
