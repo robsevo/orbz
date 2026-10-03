@@ -306,6 +306,32 @@ const MIGRATIONS: string[] = [
   );
   ALTER TABLE board ADD COLUMN review TEXT;
   `,
+  // v13 (PLAN 5.8): the recruiter: the positions you are hiring for, who applied (a seed the app's
+  // dice make a whole orb of), and what was said in an interview
+  `
+  CREATE TABLE positions (
+    specialty TEXT PRIMARY KEY,
+    opened_at INTEGER NOT NULL
+  );
+  CREATE TABLE applicants (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    specialty  TEXT    NOT NULL,
+    seed       INTEGER NOT NULL,
+    day        TEXT    NOT NULL,
+    created_at INTEGER NOT NULL,
+    state      TEXT    NOT NULL CHECK (state IN ('waiting', 'hired', 'passed', 'gone')),
+    orb        TEXT,
+    settled_at INTEGER
+  );
+  CREATE INDEX applicants_by_day ON applicants (specialty, day);
+  CREATE TABLE interviews (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    applicant INTEGER NOT NULL,
+    role      TEXT    NOT NULL CHECK (role IN ('you', 'orb')),
+    text      TEXT    NOT NULL,
+    at        INTEGER NOT NULL
+  );
+  `,
 ];
 
 /** The home's data is the person's: the folder is theirs alone (0700) and so is the database

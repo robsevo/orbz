@@ -34,8 +34,9 @@ import { computerTools, type PageCheck } from "./computer/tools.ts";
 import { Vault } from "./computer/vault.ts";
 import { defaultStore, type SecretStore } from "./chatgpt/store.ts";
 import type { Undo } from "./gym/card.ts";
-import { type Level, levelOf, nextFor, tenureOf } from "./gym/levels.ts";
+import { type Level, LEVELS, levelOf, nextFor, tenureOf } from "./gym/levels.ts";
 import { orgTools } from "./org.ts";
+import { interviewSystem, Recruiter, RecruiterError } from "./recruiter.ts";
 import { habitsOf, shareHabit } from "./gym/share.ts";
 import { parse as parsePlan } from "./plans/format.ts";
 import { SPECIALTY_FAMILIES } from "./brain/constitution.ts";
@@ -184,6 +185,8 @@ export class Home {
   readonly vault: Vault;
   /** Sessions (PLAN 2.9): a Brainstorm and a Floor, the orbs chosen for each taking their turns. */
   readonly team: Team;
+  /** The recruiter (PLAN 5.8): the positions you are hiring for, and who applied. */
+  readonly recruiter: Recruiter;
   /** XP from graded evidence only (PLAN 3.6): the ledger, in the event log. */
   readonly xp: Xp;
   /** The gym's night (PLAN 3.2): habits (with the kit, proved in its sandbox), the own brain's
@@ -416,6 +419,7 @@ export class Home {
           }),
         });
     this.inbox = new Inboxes(db, this.events, this.clock, opts.runner ?? this.agent!, opts.graceMs);
+    this.recruiter = new Recruiter(db, this.events, this.clock);
     this.team = new Team({ db, events: this.events, clock: this.clock, inbox: this.inbox, conversations: this.conversations, level: (orb) => levelOf(this.events, orb) });
     this.xp = new Xp(this.events, { planOrb: (plan) => this.plans.get(plan)?.orb ?? null });
     this.gym = new Gym({
@@ -617,6 +621,59 @@ export class Home {
     const res = await chat(ep, [...(r.system ? [{ role: "system" as const, content: r.system }] : []), ...r.messages], { maxTokens: Math.min(8000, r.maxTokens) });
     this.spend.record({ tier: "big", model: ep.model, costUsd: res.costUsd, costSource: res.costSource, promptTokens: res.promptTokens, completionTokens: res.completionTokens });
     return { model: ep.model, text: res.text };
+  }
+
+  /** The recruiter's room (PLAN 5.8): the positions you are hiring for, who applied for them (each a
+   * seed, today's made if they are not yet), the level each would start at (the Senior when no orb of
+   * that kind is in the office), and the orbs you let go who apply again for their old kind of work,
+   * with their record: the most qualified first (level, then XP). */
+  recruiting(): {
+    positions: string[];
+    applicants: { id: number; specialty: string; seed: number; day: string; startsAs: Level }[];
+    returning: { id: string; name: string; specialty: string; level: Level; xp: number; born: number; hired: number; left: number | null; now: number }[];
+  } {
+    const now = this.clock.now();
+    const positions = this.recruiter.positions();
+    const office = this.inbox.orbs();
+    const startsAs = (s: string): Level => (office.some((o) => o.specialty === s) ? "Junior" : "Senior");
+    const returning = this.inbox
+      .orbs({ all: true })
+      .filter((o) => o.letGoAt !== null && positions.includes(o.specialty))
+      .map((o) => ({ id: o.id, name: o.name, specialty: o.specialty, level: levelOf(this.events, o.id), xp: this.xp.of(o.id, now).total, ...tenureOf(this.events, o), now }))
+      .sort((a, b) => LEVELS.indexOf(b.level) - LEVELS.indexOf(a.level) || b.xp - a.xp);
+    return { positions, applicants: this.recruiter.applicants().map((a) => ({ ...a, startsAs: startsAs(a.specialty) })), returning };
+  }
+
+  /** An interview (PLAN 5.8; owner: "add the interview part for fun"): your words to an applicant, his
+   * answer as himself (who the app's dice made him: name, kind of work, manner), from the brain, with
+   * no tools; both kept for his first chat if you hire him. The brain is asked only here. */
+  async interview(applicant: number, who: { name: string; title: string; focus: string; tone: string }, text: string): Promise<string> {
+    this.recruiter.waiting(applicant);
+    const said = text.trim();
+    if (!said) throw new RecruiterError("say something first");
+    if (said.length > 2000) throw new RecruiterError("an interview question is a line or two");
+    this.spend.check();
+    const ep = this.brains.chain.current()?.ep ?? null;
+    if (!ep) throw new RecruiterError("no brain is set up to answer for an applicant");
+    const before = this.recruiter.interview(applicant).map((m) => ({ role: m.role === "you" ? ("user" as const) : ("assistant" as const), content: m.text }));
+    const res = await chat(ep, [{ role: "system", content: interviewSystem(who) }, ...before, { role: "user", content: said }], { maxTokens: 300 });
+    this.spend.record({ tier: "big", model: ep.model, costUsd: res.costUsd, costSource: res.costSource, promptTokens: res.promptTokens, completionTokens: res.completionTokens });
+    const answer = res.text.trim() || "…";
+    this.recruiter.say(applicant, "you", said);
+    this.recruiter.say(applicant, "orb", answer);
+    return answer;
+  }
+
+  /** Hires an applicant as he applied (the app's dice made him from his seed): into the office, his
+   * interview his first chat with you. */
+  hireApplicant(applicant: number, orb: { id: string; name: string; look: Record<string, unknown> }): ReturnType<Inboxes["addOrb"]> {
+    const a = this.recruiter.waiting(applicant);
+    const made = this.inbox.addOrb(orb.id, orb.name, a.specialty, orb.look);
+    this.recruiter.hired(applicant, made.id);
+    for (const m of this.recruiter.interview(applicant)) {
+      this.conversations.add({ conversation: `chat:${made.id}`, orb: made.id, role: m.role === "you" ? "user" : "assistant", content: m.text, meta: { interview: true } });
+    }
+    return made;
   }
 
   /** Lets an orb go (PLAN 5.5), his habits handed to another orb first if you say so: copied, so they

@@ -37,6 +37,7 @@ import { span } from "./orb/age.ts";
 import { Radar } from "./ui/Radar.tsx";
 import { OrgRoom } from "./rooms/Org.tsx";
 import { CareerRoom } from "./rooms/Career.tsx";
+import { RecruiterRoom } from "./rooms/Recruiter.tsx";
 import { applyTheme, savedTheme } from "./ui/theme.ts";
 
 applyTheme(savedTheme(), false); // before the first paint: the theme you chose, never a flash of another
@@ -578,9 +579,9 @@ function App() {
     if (home) home.setName(p).catch((e: Error) => setSaid(e.message));
     else savePerson(p);
   };
-  const [room, setRoom] = useState<"office" | "settings" | "chat" | "sessions" | "notices" | "calendar" | "lab" | "org" | "career">(() => {
+  const [room, setRoom] = useState<"office" | "settings" | "chat" | "sessions" | "notices" | "calendar" | "lab" | "org" | "career" | "recruiter">(() => {
     const r = parseRoute(location.hash).room;
-    return r === "settings" || r === "chat" || r === "sessions" || r === "notices" || r === "calendar" || r === "lab" || r === "org" || r === "career" ? r : "office";
+    return r === "settings" || r === "chat" || r === "sessions" || r === "notices" || r === "calendar" || r === "lab" || r === "org" || r === "career" || r === "recruiter" ? r : "office";
   });
   // whose career page is open (PLAN 5.6)
   const [careerOf, setCareerOf] = useState<string | null>(() => {
@@ -683,13 +684,14 @@ function App() {
   // where you are is an address (ui/nav.ts): going somewhere adds it to the history, so the side
   // menu's Back and the browser's Back are the same Back
   const routeOf = (): Route =>
-    room === "settings" ? { room: "settings" } : room === "notices" ? { room: "notices" } : room === "calendar" ? { room: "calendar" } : room === "lab" ? { room: "lab" } : room === "org" ? { room: "org" } : room === "career" && careerOf ? { room: "career", orb: careerOf } : room === "sessions" ? { room: "sessions", ...inSession } : room === "chat" && talking ? { room: "chat", orb: talking } : view.kind === "new" ? { room: "new" } : { room: "office", orb: view.name };
+    room === "settings" ? { room: "settings" } : room === "notices" ? { room: "notices" } : room === "calendar" ? { room: "calendar" } : room === "lab" ? { room: "lab" } : room === "org" ? { room: "org" } : room === "recruiter" ? { room: "recruiter" } : room === "career" && careerOf ? { room: "career", orb: careerOf } : room === "sessions" ? { room: "sessions", ...inSession } : room === "chat" && talking ? { room: "chat", orb: talking } : view.kind === "new" ? { room: "new" } : { room: "office", orb: view.name };
   const show = (r: Route): void => {
     if (r.room === "settings") setRoom("settings");
     else if (r.room === "notices") setRoom("notices");
     else if (r.room === "calendar") setRoom("calendar");
     else if (r.room === "lab") setRoom("lab");
     else if (r.room === "org") setRoom("org");
+    else if (r.room === "recruiter") setRoom("recruiter");
     else if (r.room === "career") {
       setRoom("career");
       setCareerOf(r.orb);
@@ -808,6 +810,7 @@ function App() {
             {navItem("Calendar", room === "calendar", { room: "calendar" }, "▤")}
             {navItem("The lab", room === "lab", { room: "lab" }, "✦")}
             {navItem("Org chart", room === "org", { room: "org" }, "◇")}
+            {navItem("Recruiter", room === "recruiter", { room: "recruiter" }, "✚")}
             {navItem("Settings", room === "settings", { room: "settings" }, "⚙")}
           </nav>
           <div style={{ ...s.head, margin: "var(--s3) var(--s2) var(--s1)" }}>The office</div>
@@ -837,7 +840,9 @@ function App() {
           </div>
         </aside>
 
-        {room === "org" ? (
+        {room === "recruiter" ? (
+          <RecruiterRoom home={home} office={office} hired={() => void home?.orbs().then((o) => o && setOffice(o))} />
+        ) : room === "org" ? (
           <OrgRoom home={home} office={office} open={(c) => go({ room: "career", orb: c.name })} rehired={() => void home?.orbs().then((o) => o && setOffice(o))} />
         ) : room === "career" ? (
           <CareerRoom home={home} orb={office.find((c) => c.name === careerOf) ?? office[0] ?? ASH} />

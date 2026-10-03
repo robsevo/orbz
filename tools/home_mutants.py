@@ -1196,6 +1196,46 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("an orb is never told that no orb is a he or a she", "src/agent/standing.ts", [
         ("    NO_HE_OR_SHE,\n", ""),
     ], ["voice.test.ts"]),
+    # the recruiter: positions, applicants, an interview, hire and pass (PLAN 5.8)
+    ("an unticked position's applicants stay in sight", 'src/recruiter.ts', [
+        ('      .filter((r) => open.has(r.specialty))', '      .filter(() => true)'),
+    ], ['recruiter.test.ts']),
+    ('every look brings new applicants', 'src/recruiter.ts', [
+        ("        if (today > 0) continue; // today's came already\n", ''),
+    ], ['recruiter.test.ts']),
+    ('applicants never take other jobs', 'src/recruiter.ts', [
+        ('now - WAIT_DAYS * DAY_MS', 'now - 1000 * DAY_MS'),
+    ], ['recruiter.test.ts']),
+    ('applicants pile up without end', 'src/recruiter.ts', [
+        ('Math.min(PER_DAY, MOST - waiting)', 'PER_DAY'),
+    ], ['recruiter.test.ts']),
+    ('an applicant is told it may use tools', 'src/recruiter.ts', [
+        ('    "You have no tools and no computer yet: you can only talk. Do not offer to do work before you are hired, and never claim to have done something.",\n', ''),
+    ], ['recruiter.test.ts']),
+    ('an interview forgets what was said', 'src/home.ts', [
+        ('[{ role: "system", content: interviewSystem(who) }, ...before, { role: "user", content: said }]', '[{ role: "system", content: interviewSystem(who) }, { role: "user", content: said }]'),
+    ], ['recruiter.test.ts']),
+    ('an interview costs nothing', 'src/home.ts', [
+        ('    this.spend.record({ tier: "big", model: ep.model, costUsd: res.costUsd, costSource: res.costSource, promptTokens: res.promptTokens, completionTokens: res.completionTokens });\n    const answer = res.text.trim() || "…";', '    const answer = res.text.trim() || "…";'),
+    ], ['recruiter.test.ts']),
+    ("a hired orb's interview is lost", 'src/home.ts', [
+        ('    for (const m of this.recruiter.interview(applicant)) {', '    for (const m of this.recruiter.interview(applicant).slice(0, 0)) {'),
+    ], ['recruiter.test.ts']),
+    ('the first of a kind would start a Junior', 'src/home.ts', [
+        ('const startsAs = (s: string): Level => (office.some((o) => o.specialty === s) ? "Junior" : "Senior");', 'const startsAs = (s: string): Level => "Junior";'),
+    ], ['recruiter.test.ts']),
+    ('the least qualified applies first', 'src/home.ts', [
+        ('.sort((a, b) => LEVELS.indexOf(b.level) - LEVELS.indexOf(a.level) || b.xp - a.xp);', '.sort((a, b) => LEVELS.indexOf(a.level) - LEVELS.indexOf(b.level) || a.xp - b.xp);'),
+    ], ['recruiter.test.ts']),
+    ('a let-go orb of any kind applies again', 'src/home.ts', [
+        ('.filter((o) => o.letGoAt !== null && positions.includes(o.specialty))', '.filter((o) => o.letGoAt !== null)'),
+    ], ['recruiter.test.ts']),
+    ('a hired applicant can be hired again', 'src/recruiter.ts', [
+        ('"SELECT id, specialty, seed, day, created_at FROM applicants WHERE id = ? AND state = \'waiting\'"', '"SELECT id, specialty, seed, day, created_at FROM applicants WHERE id = ?"'),
+    ], ['recruiter.test.ts']),
+    ('a hired applicant comes without its look', 'src/home.ts', [
+        ('const made = this.inbox.addOrb(orb.id, orb.name, a.specialty, orb.look);', 'const made = this.inbox.addOrb(orb.id, orb.name, a.specialty, {});'),
+    ], ['recruiter.test.ts']),
 ]
 
 # the app (PLAN 2.x): paths are inside packages/app
@@ -1763,6 +1803,28 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ('he does not lean in when called', 'src/rooms/Chat.tsx', [
         ('          onCue={(c) => setCue((g) => ({ name: c, n: (g?.n ?? 0) + 1 }))}', '          onCue={() => undefined}'),
     ], ['voice.test.ts']),
+    # the recruiter's room (PLAN 5.8)
+    ('a tick opens no position', 'src/rooms/Recruiter.tsx', [
+        ('onClick={() => tick(k)}', 'onClick={() => undefined}'),
+    ], ['recruiter-view.test.ts']),
+    ('an applicant is drawn from another seed', 'src/rooms/Recruiter.tsx', [
+        ('const c = applicant(a.seed, k as Kind, taken);', 'const c = applicant(a.seed + 1, k as Kind, taken);'),
+    ], ['recruiter-view.test.ts']),
+    ('Hire does nothing', 'src/rooms/Recruiter.tsx', [
+        ('onClick={() => void home.hireApplicant(a.id, c).then(hired, (e: Error) => setSaid(e.message))}', 'onClick={() => undefined}'),
+    ], ['recruiter-view.test.ts']),
+    ('Pass does nothing', 'src/rooms/Recruiter.tsx', [
+        ('onClick={() => void home.passApplicant(a.id).catch((e: Error) => setSaid(e.message))}', 'onClick={() => undefined}'),
+    ], ['recruiter-view.test.ts']),
+    ("an interview's answer is never shown", 'src/rooms/Recruiter.tsx', [
+        ('(answer) => setLines((l) => [...l, { role: "orb", text: answer, at: Date.now() }]),', '() => undefined,'),
+    ], ['recruiter-view.test.ts']),
+    ('Rehire from the recruiter does nothing', 'src/rooms/Recruiter.tsx', [
+        ('onClick={() => void home.rehire(r.id).then(hired, (e: Error) => setSaid(e.message))}', 'onClick={() => undefined}'),
+    ], ['recruiter-view.test.ts']),
+    ("a hired applicant's look is never sent", 'src/home/link.ts', [
+        ('await call(`../applicants/${applicant}/hire`, { method: "POST", body: JSON.stringify({ id, name, look }) });', 'await call(`../applicants/${applicant}/hire`, { method: "POST", body: JSON.stringify({ id, name, look: {} }) });'),
+    ], ['recruiter-view.test.ts']),
 ]
 
 # the `orbs` terminal (PLAN 1.9): paths are inside packages/terminal

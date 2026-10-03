@@ -3,7 +3,7 @@
 // what it calls you, and every orb made or let go are the home's. A page opened anywhere else (the
 // dev server, the render checks' scratch server) has no home behind it, and the app works on its
 // own there, as a preview: the same screens, kept in the browser.
-import { sane, type Character } from "../orb/spec.ts";
+import { PERSONALITIES, sane, SPECIALTIES, type Character } from "../orb/spec.ts";
 import type { Person } from "../onboarding/story.ts";
 
 export type HomeOrb = { id: string; name: string; specialty: string; look: Record<string, unknown> };
@@ -64,6 +64,15 @@ export type CareerState = Standing & {
   performance: { suggest: string; why: string } | null;
 };
 
+/** The recruiter (PLAN 5.8): the positions you are hiring for, who applied (a seed each, made whole
+ * by the app's dice: spec.ts `applicant`), and the orbs you let go who apply again, with their record. */
+export type RecruiterState = {
+  positions: string[];
+  applicants: { id: number; specialty: string; seed: number; day: string; startsAs: string }[];
+  returning: { id: string; name: string; specialty: string; level: string; xp: number; born: number; hired: number; left: number | null; now: number }[];
+};
+export type InterviewLine = { role: "you" | "orb"; text: string; at: number };
+
 export type Standing = {
   level: string;
   xp: number;
@@ -117,6 +126,14 @@ export interface Office {
   /** Brings back an orb you let go (PLAN 5.5), with everything he had and what he learned away. */
   rehire(id: string): Promise<void>;
   org(): Promise<OrgState>;
+  /** The recruiter (PLAN 5.8): who applied; a position ticked or unticked; an interview (the brain
+   * answers as the applicant, with no tools); hire (as applied, the interview the first chat) or pass. */
+  recruiting(): Promise<RecruiterState>;
+  setPosition(specialty: string, open: boolean): Promise<string[]>;
+  interviewOf(applicant: number): Promise<InterviewLine[]>;
+  interview(applicant: number, c: Character, text: string): Promise<string>;
+  hireApplicant(applicant: number, c: Character): Promise<void>;
+  passApplicant(applicant: number): Promise<void>;
   career(c: Character): Promise<CareerState>;
   me(): Promise<Person | null>;
   setName(p: Person): Promise<void>;
@@ -351,6 +368,26 @@ export function doorOffice(base: Character): Office {
     },
     async org() {
       return call<OrgState>("../org");
+    },
+    async recruiting() {
+      return call<RecruiterState>("../recruiter");
+    },
+    async setPosition(specialty, open) {
+      return (await call<{ positions: string[] }>(`../recruiter/positions/${encodeURIComponent(specialty)}`, { method: "PUT", body: JSON.stringify({ open }) })).positions;
+    },
+    async interviewOf(applicant) {
+      return (await call<{ said: InterviewLine[] }>(`../applicants/${applicant}/interview`)).said;
+    },
+    async interview(applicant, c, text) {
+      const who = { name: c.name, title: SPECIALTIES[c.specialty].title, focus: SPECIALTIES[c.specialty].focus, tone: PERSONALITIES[c.personality].tone };
+      return (await call<{ answer: string }>(`../applicants/${applicant}/interview`, { method: "POST", body: JSON.stringify({ text, ...who }) })).answer;
+    },
+    async hireApplicant(applicant, c) {
+      const { id, name, look } = toHome(c);
+      await call(`../applicants/${applicant}/hire`, { method: "POST", body: JSON.stringify({ id, name, look }) });
+    },
+    async passApplicant(applicant) {
+      await call(`../applicants/${applicant}/pass`, { method: "POST" });
     },
     async career(c) {
       return call<CareerState>(`../orbs/${encodeURIComponent(idOf(c.name))}/career`);

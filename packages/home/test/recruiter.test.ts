@@ -1,0 +1,109 @@
+// PLAN 5.8_t, the recruiter, on a real home:
+//   - only the positions you tick get applicants; one day's are the same however often you look (and
+//     on any device: the home keeps the seeds); the next day brings more, never past MOST waiting;
+//   - a week unanswered, an applicant takes another job; Pass sends one on;
+//   - an interview: the brain answers as the applicant, told it can only talk, asked only when you
+//     speak, its cost recorded; hired, the interview is the new orb's first chat;
+//   - the orbs you let go apply again for an open position, the most qualified first;
+//   - the door's routes.
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { FakeClock } from "../src/clock.ts";
+import { MOST, PER_DAY, WAIT_DAYS } from "../src/recruiter.ts";
+import { levelOf } from "../src/gym/levels.ts";
+import { serve } from "../src/api.ts";
+import { agentHome } from "./helpers.ts";
+
+const DAY = 86_400_000;
+
+test("only ticked positions get applicants; a day's are the same however often you look; more come each day, a week and they are gone", async (t) => {
+  const clock = new FakeClock(new Date(2026, 9, 3, 9, 0).getTime());
+  const { home } = await agentHome(t, [], { clock });
+  assert.deepEqual(home.recruiting().applicants, [], "no position ticked: no one applies");
+  home.recruiter.setPosition("frontend", true);
+  const first = home.recruiting().applicants;
+  assert.equal(first.length, PER_DAY);
+  assert.ok(first.every((a) => a.specialty === "frontend" && a.startsAs === "Senior"), "the first of a kind would start as the Senior");
+  assert.deepEqual(home.recruiting().applicants, first, "looking again the same day: the same applicants");
+  assert.throws(() => home.recruiter.setPosition("wizardry", true), /not a kind of work/);
+  home.inbox.addOrb("ada", "Ada", "frontend");
+  assert.ok(home.recruiting().applicants.every((a) => a.startsAs === "Junior"), "with a frontend orb in the office: a Junior");
+
+  clock.suspend(DAY);
+  const second = home.recruiting().applicants;
+  assert.equal(second.length, 2 * PER_DAY, "the next day, more");
+  assert.notDeepEqual(second.slice(PER_DAY).map((a) => a.seed), first.map((a) => a.seed), "new people");
+  for (let i = 0; i < 6; i++) {
+    clock.suspend(DAY);
+    home.recruiting();
+  }
+  assert.ok(home.recruiting().applicants.length <= MOST, "never more than MOST waiting");
+  assert.ok(!home.recruiting().applicants.some((a) => first.some((f) => f.id === a.id)), `a week unanswered (${WAIT_DAYS} days), the first ones took other jobs`);
+
+  // unticked, the position's applicants are out of sight
+  home.recruiter.setPosition("frontend", false);
+  assert.deepEqual(home.recruiting().applicants, []);
+});
+
+test("Pass sends an applicant on; an interview answers as the applicant, with no tools, and hired, it is the first chat", async (t) => {
+  const { home, model } = await agentHome(t, []);
+  home.recruiter.setPosition("writing", true);
+  const [a, b] = home.recruiting().applicants;
+  home.recruiter.pass(a!.id);
+  assert.deepEqual(home.recruiting().applicants.map((x) => x.id), [b!.id], "passed: gone");
+  assert.throws(() => home.recruiter.pass(a!.id), /no one by that number is waiting/);
+
+  model.replies.push("Words are my favourite tools.", "Tuesdays, mostly.");
+  const who = { name: "Wren", title: "Wordsmith", focus: "docs, posts, emails and clear words", tone: "bright and warm" };
+  assert.equal(model.said.length, 0, "no brain is asked while no one interviews");
+  assert.equal(await home.interview(b!.id, who, "Why writing?"), "Words are my favourite tools.");
+  assert.equal(await home.interview(b!.id, who, "When are you at your best?"), "Tuesdays, mostly.");
+  const second = model.said[1]!.map((m) => String((m as { content?: unknown }).content));
+  assert.match(second[0]!, /You are Wren, an orb .* applying for a job as a Wordsmith/);
+  assert.match(second[0]!, /no tools/, "told it can only talk");
+  assert.deepEqual(second.slice(1), ["Why writing?", "Words are my favourite tools.", "When are you at your best?"], "the interview so far goes with each question");
+  assert.equal(home.events.ofType("brain.spend").length, 2, "its cost is recorded, once a question");
+  await assert.rejects(home.interview(b!.id, who, "   "), /say something first/);
+
+  const shown = home.recruiting().applicants.find((x) => x.id === b!.id)!.startsAs;
+  assert.equal(shown, "Senior", "no writer in the office: the first of a kind starts as the Senior");
+  const hired = home.hireApplicant(b!.id, { id: "wren", name: "Wren", look: { hue: "rose", shape: "drop" } });
+  assert.equal(hired.specialty, "writing", "as applied: the position's kind of work");
+  assert.deepEqual(hired.look, { hue: "rose", shape: "drop" }, "as the dice made it");
+  assert.equal(levelOf(home.events, "wren"), shown, "at the level the recruiter showed");
+  assert.deepEqual(home.conversations.history("chat:wren").map((m) => [m.role, m.content]), [
+    ["user", "Why writing?"], ["assistant", "Words are my favourite tools."], ["user", "When are you at your best?"], ["assistant", "Tuesdays, mostly."],
+  ], "the interview is Wren's first chat");
+  assert.throws(() => home.hireApplicant(b!.id, { id: "wren2", name: "Wren", look: {} }), /no one by that number is waiting/, "hired once");
+});
+
+test("the orbs you let go apply again for an open position, the most qualified first; the door", async (t) => {
+  const { home, model } = await agentHome(t, []);
+  home.inbox.addOrb("ada", "Ada", "data");
+  home.inbox.addOrb("bo", "Bo", "data");
+  home.events.append("orb.promoted", { from: "Junior", to: "Mid" }, { orb: "bo" });
+  home.inbox.letGo("ada");
+  home.inbox.letGo("bo");
+  assert.deepEqual(home.recruiting().returning, [], "no position open: no one applies again");
+  home.recruiter.setPosition("data", true);
+  const back = home.recruiting().returning;
+  assert.deepEqual(back.map((r) => [r.id, r.level]), [["ada", "Senior"], ["bo", "Mid"]], "the most qualified first");
+
+  const d = await serve(home, { port: 0 });
+  t.after(() => d.close());
+  const call = async (method: string, path: string, body?: unknown) => {
+    const r = await fetch(`http://127.0.0.1:${d.port}${path}`, { method, headers: { authorization: `Bearer ${d.token}`, "content-type": "application/json" }, ...(body !== undefined && { body: JSON.stringify(body) }) });
+    return { status: r.status, json: (await r.json()) as Record<string, unknown> };
+  };
+  assert.deepEqual((await call("PUT", "/recruiter/positions/design", { open: true })).json.positions, ["data", "design"]);
+  const state = (await call("GET", "/recruiter")).json as { applicants: { id: number; specialty: string }[] };
+  const one = state.applicants.find((a) => a.specialty === "design")!;
+  model.replies.push("Colour is how I think.");
+  const asked = await call("POST", `/applicants/${one.id}/interview`, { text: "Why design?", name: "Iris", title: "Designer", focus: "looks", tone: "calm" });
+  assert.equal(asked.json.answer, "Colour is how I think.");
+  assert.deepEqual(((await call("GET", `/applicants/${one.id}/interview`)).json.said as { role: string }[]).map((l) => l.role), ["you", "orb"]);
+  assert.equal((await call("POST", `/applicants/${one.id}/hire`, { id: "iris", name: "Iris", look: {} })).status, 200);
+  assert.equal(home.inbox.orb("iris")?.specialty, "design");
+  assert.equal((await call("POST", `/applicants/${one.id}/pass`)).status, 409, "hired already: no one by that number is waiting");
+  assert.equal((await call("PUT", "/recruiter/positions/wizardry", { open: true })).status, 400);
+});

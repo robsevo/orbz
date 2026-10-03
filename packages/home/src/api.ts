@@ -20,6 +20,7 @@ import type { Home } from "./home.ts";
 import { UnknownOrbError } from "./inbox.ts";
 import { KeyRefusedError } from "./brain/brains.ts";
 import { SPECIALTY_FAMILIES, type Specialty } from "./brain/constitution.ts";
+import { SpendCapError } from "./brain/spend.ts";
 import { cookieOf, deviceName, SESSION_COOKIE, SESSION_MS, type Sessions } from "./sessions.ts";
 import { PasskeyError, type Where } from "./passkeys.ts";
 import { ConnectorError, type Spec } from "./connectors/connectors.ts";
@@ -467,6 +468,40 @@ async function handle(
     try {
       return home.letGo(orb, url.searchParams.get("handTo") ?? undefined);
     } catch (e) {
+      throw new HttpError(409, e instanceof Error ? e.message : String(e));
+    }
+  }
+  // the recruiter (PLAN 5.8): the positions you are hiring for, who applied, an interview, hire or pass
+  if (method === "GET" && url.pathname === "/recruiter") return home.recruiting();
+  if (method === "PUT" && parts[0] === "recruiter" && parts[1] === "positions" && parts.length === 3) {
+    const b = await body(req);
+    try {
+      return { positions: home.recruiter.setPosition(decodeURIComponent(parts[2]!), b.open === true) };
+    } catch (e) {
+      throw new HttpError(400, e instanceof Error ? e.message : String(e));
+    }
+  }
+  if (parts[0] === "applicants" && parts.length === 3 && /^\d+$/.test(parts[1]!)) {
+    const id = Number(parts[1]);
+    try {
+      if (method === "GET" && parts[2] === "interview") return { said: home.recruiter.interview(id) };
+      if (method === "POST" && parts[2] === "interview") {
+        const b = await body(req);
+        const who = { name: text(b, "name").slice(0, 40), title: text(b, "title").slice(0, 60), focus: text(b, "focus").slice(0, 200), tone: text(b, "tone").slice(0, 200) };
+        return { answer: await home.interview(id, who, text(b, "text")) };
+      }
+      if (method === "POST" && parts[2] === "hire") {
+        const b = await body(req);
+        const look = b.look && typeof b.look === "object" && !Array.isArray(b.look) ? (b.look as Record<string, unknown>) : {};
+        return { orb: home.hireApplicant(id, { id: text(b, "id"), name: text(b, "name"), look }) };
+      }
+      if (method === "POST" && parts[2] === "pass") {
+        home.recruiter.pass(id);
+        return { passed: id };
+      }
+    } catch (e) {
+      if (e instanceof HttpError) throw e;
+      if (e instanceof SpendCapError) throw new HttpError(402, e.message);
       throw new HttpError(409, e instanceof Error ? e.message : String(e));
     }
   }

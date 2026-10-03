@@ -621,6 +621,24 @@ export function sane(c: Partial<Character> & { name: string }, base: Character):
   };
 }
 
+/** An applicant (PLAN 5.8): a new orb by the dice from the home's seed, for the position applied
+ * for, the hat and glasses leaning to it as a creator's would. The same seed makes the same orb on
+ * every device; a name someone already has (`taken`) is rolled again from the seed, the same way. */
+export function applicant(seed: number, specialty: SpecialtyName, taken: (name: string) => boolean = () => false): Character {
+  const c = surprise(seed);
+  const S = SPECIALTIES[specialty];
+  let name = c.name;
+  for (let i = 1; i <= 40 && taken(name); i++) name = orbName(rng(seed + i));
+  return { ...c, name, specialty, hat: seed % 2 ? S.hat : c.hat, glasses: seed % 3 ? S.glasses : c.glasses };
+}
+
+/** What an application says, written by code from who the orb is, so an applicant costs nothing:
+ * "Pip hums while the tests run, and would love to take on interfaces for you." */
+export function applicationNote(c: Character): string {
+  const focus = SPECIALTIES[c.specialty].focus.split(/[:;]/)[0]!.trim();
+  return `${c.name} ${sheetOf(c).quirk}, and would love to take on ${focus} for you.`;
+}
+
 export function surprise(seed: number): Character {
   let x = Math.abs(Math.floor(seed)) % 233280;
   const r = (): number => (x = (x * 9301 + 49297) % 233280) / 233280;
