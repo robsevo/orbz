@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { ReadBuffer, serializeMessage } from "@modelcontextprotocol/sdk/shared/stdio.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
-import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
+import { CreateMessageRequestSchema, type JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
 import type { Clock } from "./clock.ts";
 import type { EventLog } from "./events.ts";
 
@@ -57,6 +57,10 @@ export type KitOptions = {
   callTimeoutMs?: number;
   /** Node's spawn; handed in so a test can deliver both endings of one process (supervise.js). */
   spawn?: typeof spawn;
+  /** A model call one of the kit's tools asks of the home while it runs (MCP sampling: a lesson's
+   * plan and its judge, PLAN 4.4), answered by the home's brain order; without it such a request
+   * is refused. */
+  sample?: (r: { system: string | null; messages: { role: "user" | "assistant"; content: string }[]; maxTokens: number }) => Promise<{ model: string; text: string }>;
 };
 
 type Generation = {
@@ -70,7 +74,7 @@ type Generation = {
 };
 
 export class Kit {
-  readonly #o: Required<Omit<KitOptions, "env" | "command">> & { env: Record<string, string>; command: string | null };
+  readonly #o: Required<Omit<KitOptions, "env" | "command" | "sample">> & { env: Record<string, string>; command: string | null; sample?: KitOptions["sample"] };
   #gen: Generation | null = null;
   #restarts: number[] = [];
   /** `starting` until the MCP handshake is answered; `up` only after it. */
@@ -121,13 +125,14 @@ export class Kit {
     await g.ready;
   }
 
-  /** Calls one of the kit's tools and returns its structured result (or its text). */
-  async call(tool: string, args: Record<string, unknown> = {}): Promise<unknown> {
+  /** Calls one of the kit's tools and returns its structured result (or its text). A tool that asks
+   * the home's brain while it runs (a lesson) can be given longer than the usual deadline. */
+  async call(tool: string, args: Record<string, unknown> = {}, o: { timeoutMs?: number } = {}): Promise<unknown> {
     const g = await this.#live();
     let res: Awaited<ReturnType<Client["callTool"]>>;
     try {
       res = await Promise.race([
-        g.client.callTool({ name: tool, arguments: args }, undefined, { timeout: this.#o.callTimeoutMs }),
+        g.client.callTool({ name: tool, arguments: args }, undefined, { timeout: o.timeoutMs ?? this.#o.callTimeoutMs }),
         g.onDeath.then((why): never => {
           throw new KitDiedError(tool, why);
         }),
@@ -187,7 +192,16 @@ export class Kit {
     const onDeath = new Promise<string>((r) => (markDead = r));
     const child = this.#o.spawn(this.#o.command!, this.#o.args, { cwd: this.#o.cwd, env, stdio: ["pipe", "pipe", "pipe"] });
     const transport = new ChildTransport(child);
-    const client = new Client({ name: "orbs-home", version: "0.0.0" });
+    const client = new Client({ name: "orbs-home", version: "0.0.0" }, { capabilities: { sampling: {} } });
+    // a tool's model call (PLAN 4.4): the home's brain answers it, or it is refused plainly
+    client.setRequestHandler(CreateMessageRequestSchema, async (req) => {
+      if (!this.#o.sample) throw new Error("the home answers no model calls for the kit here");
+      const words = (c: unknown): string =>
+        (Array.isArray(c) ? c : [c]).map((b) => (b && typeof b === "object" && (b as { type?: unknown }).type === "text" ? String((b as { text?: unknown }).text ?? "") : "")).join("");
+      const p = req.params;
+      const r = await this.#o.sample({ system: p.systemPrompt ?? null, messages: p.messages.map((m) => ({ role: m.role, content: words(m.content) })), maxTokens: p.maxTokens });
+      return { role: "assistant" as const, content: { type: "text" as const, text: r.text }, model: r.model };
+    });
     const g: Generation = { n, child, client, ready: Promise.resolve(), died: null, onDeath, stderr: [] };
     this.#gen = g;
 

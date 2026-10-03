@@ -1025,6 +1025,25 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("the office learns from work of any age", "src/gym/night.ts", [
         ("    const found = findHotPaths(events, { since: clock.now() - WINDOW_DAYS * DAY_MS })", "    const found = findHotPaths(events, { since: 0 })"),
     ], ["night.test.ts"]),
+    # lessons on his own canvas: planned in the kit, judged with what it shows (PLAN 4.4)
+    ('a lesson goes on past its last step', 'src/lessons.ts', [
+        ('    if (c.step >= c.lesson.steps.length) {', '    if (false) {'),
+    ], ['lesson.test.ts']),
+    ('an unjudged answer counts as right', 'src/lessons.ts', [
+        ('    return { correct: j.correct, say: j.say };', '    return { correct: j.correct ?? true, say: j.say };'),
+    ], ['lesson.test.ts']),
+    ("the kit's model calls go unanswered", 'src/kit.ts', [
+        ('      if (!this.#o.sample) throw new Error("the home answers no model calls for the kit here");', '      throw new Error("the home answers no model calls for the kit here");'),
+    ], ['lesson.test.ts']),
+    ('the canvas runs any script', 'src/api.ts', [
+        ('script-src ${hashes.join(" ") || "\'none\'"}', "script-src 'unsafe-inline'"),
+    ], ['lesson.test.ts']),
+    ('anyone may frame the canvas', 'src/api.ts', [
+        ("frame-ancestors 'self'; base-uri 'none'; form-action 'none'", "frame-ancestors *; base-uri 'none'; form-action 'none'"),
+    ], ['lesson.test.ts']),
+    ('an unjudged answer notes something about you', 'src/lessons.ts', [
+        ('    if (j.correct !== null) {', '    if (true) {'),
+    ], ['lesson.test.ts']),
     # his voice and his ears, through the door (PLAN 4.3)
     ('a recording of any size is heard', 'src/api.ts', [
         ('const VOICE_CAP = 5 * 1024 * 1024;', 'const VOICE_CAP = 5 * 1024 * 1024 * 1024;'),
@@ -1518,6 +1537,16 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("every new orb starts the Senior on his sheet", "src/orbs.tsx", [
         ("  const startsAs = (making ? !office.some((o) => o.specialty === me.specialty)", "  const startsAs = (making ? true"),
     ], ["creator.test.ts"]),
+    # his lesson in the Lesson tab (PLAN 4.4)
+    ('the canvas plays no step', 'src/rooms/Lesson.tsx', [
+        ('          if (fn) await fn(...args);', '          if (false && fn) await fn(...args);'),
+    ], ['lesson-view.test.ts']),
+    ("Ash's names for the canvas's calls are not read", 'src/rooms/Lesson.tsx', [
+        ('          const fn = t[ALIAS[name] ?? name];', '          const fn = t[name];'),
+    ], ['lesson-view.test.ts']),
+    ('the Lesson tab does not open when a lesson begins', 'src/rooms/Computer.tsx', [
+        ('        if (open && l) setTab("Lesson");\n', ''),
+    ], ['lesson-view.test.ts']),
     # his voice and his ears in the app (PLAN 4.3)
     ("a slow answer cuts the start of your turn", "src/orb/ears.ts", [
         ("            turnFrom = cutAt - clip.length; // the call and what follows it are one turn, however slow the answer", "            turnFrom = total - clip.length;"),

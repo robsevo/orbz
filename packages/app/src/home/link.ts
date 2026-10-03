@@ -39,6 +39,11 @@ export type Notice = {
 export type Undo = { kind: "lesson"; orb: string; line: string; index: number } | { kind: "habit"; orb: string; habit: string; version: number };
 export type MorningCard = { day: string; orbs: { orb: string; habits: number; own: number; big: number; costUsd: number; tokens: number; learned: string[]; promoted: string[]; undo: Undo[] }[] };
 /** Where an orb stands (PLAN 3.8), and what the next level needs. */
+/** A lesson on his canvas (PLAN 4.4): its steps (each its words, its drawing, its question) and the
+ * step it is on, 1-based. */
+export type LessonStep = { text: string; do: unknown[][]; question: string; hint: string };
+export type LessonState = { id: number; topic: string; title: string; kind: string; steps: LessonStep[]; step: number };
+
 export type Standing = {
   level: string;
   xp: number;
@@ -182,6 +187,14 @@ export interface Office {
   finished(c: Character, audio: Blob): Promise<{ finished: boolean; p: number }>;
   /** Ends his run now (the conversation's Stop). */
   stop(c: Character): Promise<void>;
+  /** His lesson (PLAN 4.4): the one he is giving now, or null; the canvas's address; your answer
+   * (judged with what the canvas shows), "tell me", next and stop. */
+  lesson(c: Character): Promise<LessonState | null>;
+  lessonCanvasUrl(): string;
+  lessonAnswer(c: Character, answer: string, facts: Record<string, unknown>): Promise<{ correct: boolean | null; say: string }>;
+  lessonExplain(c: Character, facts: Record<string, unknown>): Promise<string>;
+  lessonNext(c: Character): Promise<LessonState | null>;
+  lessonStop(c: Character): Promise<void>;
   /** The passwords you save for your orbs' browsers (PLAN 4.1): listed, never shown back. */
   vault(): Promise<VaultEntry[]>;
   savePassword(site: string, username: string, password: string): Promise<VaultEntry[]>;
@@ -510,6 +523,24 @@ export function doorOffice(base: Character): Office {
     },
     async stop(c) {
       await call(`../orbs/${encodeURIComponent(idOf(c.name))}/stop`, { method: "POST" });
+    },
+    async lesson(c) {
+      return (await call<{ lesson: LessonState | null }>(`../orbs/${encodeURIComponent(idOf(c.name))}/lesson`)).lesson;
+    },
+    lessonCanvasUrl() {
+      return "../lesson/canvas.html";
+    },
+    async lessonAnswer(c, answer, facts) {
+      return call<{ correct: boolean | null; say: string }>(`../orbs/${encodeURIComponent(idOf(c.name))}/lesson/answer`, { method: "POST", body: JSON.stringify({ answer, facts }) });
+    },
+    async lessonExplain(c, facts) {
+      return (await call<{ say: string }>(`../orbs/${encodeURIComponent(idOf(c.name))}/lesson/explain`, { method: "POST", body: JSON.stringify({ facts }) })).say;
+    },
+    async lessonNext(c) {
+      return (await call<{ lesson: LessonState | null }>(`../orbs/${encodeURIComponent(idOf(c.name))}/lesson/next`, { method: "POST" })).lesson;
+    },
+    async lessonStop(c) {
+      await call(`../orbs/${encodeURIComponent(idOf(c.name))}/lesson/stop`, { method: "POST" });
     },
     async vault() {
       return (await call<{ entries: VaultEntry[] }>("../vault")).entries;

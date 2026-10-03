@@ -23,7 +23,8 @@ from typing import Any, TypedDict
 KIT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(KIT / "ash"))
 
-from mcp.server.mcpserver import MCPServer  # noqa: E402
+from mcp.server.mcpserver import Context, MCPServer  # noqa: E402
+import mcp.types as mcp_types  # noqa: E402
 
 import redact  # noqa: E402
 import secretscan  # noqa: E402
@@ -32,6 +33,7 @@ import statepaths  # noqa: E402
 import oneway  # noqa: E402
 import whenparse  # noqa: E402
 import write_guard  # noqa: E402
+import seatbroker  # noqa: E402  (Orbs' own: a lesson's model calls go to the home)
 import learn_gate  # noqa: E402
 import day  # noqa: E402
 import eds  # noqa: E402
@@ -39,6 +41,7 @@ import eds  # noqa: E402
 from orbs_kit import habits  # noqa: E402
 from orbs_kit import pages  # noqa: E402
 from orbs_kit import voicebox  # noqa: E402
+from orbs_kit import lessons  # noqa: E402
 
 VERSION = "0.0.0"
 
@@ -347,6 +350,81 @@ async def voice_woken(audio: str, name: str) -> Woken:
 @server.tool(description="Whether the person sounds finished or only paused (Smart Turn v3.2, Ash's 0.97).")
 async def voice_finished(audio: str) -> Finished:
     return await asyncio.to_thread(_voice_call, voicebox.finished, audio)
+
+
+# ── lessons (PLAN 4.4): Ash's lesson.py plans once; its model calls are the home's brain order ──
+# A lesson's model calls (draw_plan, judge) come back to the home over MCP sampling for the length
+# of the tool's call: seatbroker.py (Orbs' own) hands them to ASK_HOME, set here, one lesson at a time.
+
+_lesson_lock = threading.Lock()
+
+
+def _asking_home(ctx: Context, loop: asyncio.AbstractEventLoop):
+    """The home's brain, asked from the lesson's worker thread: (messages, max_tokens, timeout) -> (served, text)."""
+    def ask(messages: list[dict], max_tokens: int, timeout: float) -> tuple[str, str]:
+        system = "\n\n".join(str(m.get("content") or "") for m in messages if m.get("role") == "system")
+        said = [mcp_types.SamplingMessage(role="assistant" if m.get("role") == "assistant" else "user",
+                                          content=mcp_types.TextContent(type="text", text=str(m.get("content") or "")))
+                for m in messages if m.get("role") != "system"]
+        fut = asyncio.run_coroutine_threadsafe(
+            ctx.session.create_message(said, max_tokens=max_tokens, system_prompt=system or None, related_request_id=ctx.request_id), loop)
+        r = fut.result(timeout=timeout + 5)
+        content = r.content
+        text = content.text if getattr(content, "type", "") == "text" else ""
+        return str(r.model or "home"), text
+    return ask
+
+
+def _with_home(ctx: Context, loop: asyncio.AbstractEventLoop, fn):
+    with _lesson_lock:
+        seatbroker.ASK_HOME = _asking_home(ctx, loop)
+        try:
+            return fn()
+        finally:
+            seatbroker.ASK_HOME = None
+
+
+class Planned(TypedDict):
+    kind: str
+    title: str
+    steps: list[dict]
+    why: str
+
+
+class Judged(TypedDict):
+    correct: bool | None
+    say: str
+    told: str
+
+
+class Observed(TypedDict):
+    ok: bool
+    reason: str
+
+
+@server.tool(description="A lesson for a topic (PLAN 4.4, Ash's lesson.py): his scripted union-find lesson, or steps "
+             "drawn for the canvas (the model asked once, through the home); a page or a file has no canvas steps here.")
+async def lesson_plan(topic: str, ctx: Context) -> Planned:
+    loop = asyncio.get_running_loop()
+    return await asyncio.to_thread(_with_home, ctx, loop, lambda: lessons.plan(topic))
+
+
+@server.tool(description="Ash's judge on one answer, told the step and what the canvas shows now. correct is null when "
+             "it could not judge: then the hint is said, never praise.")
+async def lesson_judge(topic: str, step: dict, answer: str, facts: dict, ctx: Context) -> Judged:
+    loop = asyncio.get_running_loop()
+    return await asyncio.to_thread(_with_home, ctx, loop, lambda: lessons.judge(topic, step, answer, facts))
+
+
+@server.tool(description="A scripted step's answer, read off the canvas (no model): for 'tell me'.")
+async def lesson_explain(index: int, facts: dict) -> str:
+    return await asyncio.to_thread(lessons.explain, index, facts)
+
+
+@server.tool(description="Whether a lesson may note this about the person (Ash's learner_model: an allowlisted kind, "
+             "never a judgement of them).")
+async def lesson_observe(kind: str, text: str) -> Observed:
+    return lessons.observe(kind, text)
 
 
 def main() -> None:

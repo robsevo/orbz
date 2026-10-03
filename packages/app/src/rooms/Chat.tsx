@@ -42,7 +42,7 @@ export function Chat({ orb, home, person, replies = "speak" }: { orb: Character;
       <div className={computer ? "orbs-beside" : undefined} style={{ display: "grid", gap: "var(--s4)", minWidth: 0, paddingTop: computer ? "var(--s4)" : 0 }}>
         {computer && (
           <div style={{ padding: "0 var(--s5)", minWidth: 0 }}>
-            <Computer home={home} orb={orb} messages={messages} busy={how} />
+            <Computer home={home} orb={orb} messages={messages} busy={how} replies={replies} />
           </div>
         )}
         <Talk

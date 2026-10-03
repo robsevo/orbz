@@ -33,10 +33,14 @@ export type FakeModel = {
   keys: string[];
   /** GET /models refuses with this status (a bad key). */
   modelsStatus?: number;
+  /** The requests not streamed (a summary; a lesson's plan or its judge, asked by the kit through
+   * the home), and the words each is answered with, in turn (SUMMARY-OF-MIDDLE once none are left). */
+  said: Record<string, unknown>[][];
+  replies: string[];
 };
 
 export async function fakeModel(t: TestContext, script: Turn[] = []): Promise<FakeModel> {
-  const fm: FakeModel = { url: "", agent: [], summaries: 0, script, models: [], keys: [] };
+  const fm: FakeModel = { url: "", agent: [], summaries: 0, script, models: [], keys: [], said: [], replies: [] };
   const sse = (o: unknown): string => `data: ${JSON.stringify(o)}\n\n`;
   let ids = 0;
   const server = createServer((req, res) => {
@@ -53,8 +57,10 @@ export async function fakeModel(t: TestContext, script: Turn[] = []): Promise<Fa
       const msgs = body.messages ?? [];
       if (!body.stream) {
         if (msgs.length === 1 && /^Summarise/.test(String(msgs[0]?.content ?? ""))) fm.summaries++;
+        fm.said.push(msgs as Record<string, unknown>[]);
+        const content = fm.replies.shift() ?? "SUMMARY-OF-MIDDLE";
         res.writeHead(200, { "content-type": "application/json" });
-        res.end(JSON.stringify({ choices: [{ message: { content: "SUMMARY-OF-MIDDLE" }, finish_reason: "stop" }], usage: { prompt_tokens: 50, completion_tokens: 5 } }));
+        res.end(JSON.stringify({ choices: [{ message: { content }, finish_reason: "stop" }], usage: { prompt_tokens: 50, completion_tokens: 5 } }));
         return;
       }
       fm.agent.push(msgs as Record<string, unknown>[]);

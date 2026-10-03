@@ -125,7 +125,10 @@ eq(_own, [],
    f"LF.4 no module defines its own `log` — D25 split it out so there would be one, and a "
    f"second one writes lines with no component, session or turn: {_own}")
 
-# (cut in the Orbs kit: see kit/ash/CARRIED.md)
+_lesson = (HERE/"lesson.py").read_text()
+ok('"[lesson]' in _lesson or "'[lesson]" in _lesson or "[lesson]" in _lesson,
+   "LF.4 CONTROL: lesson.py, the one exception, tags its own lines — so the check above is "
+   "an exemption with a reason rather than a module that slipped through")
 
 if FAIL:
     print(f"✗ {len(FAIL)} failure(s):\n")

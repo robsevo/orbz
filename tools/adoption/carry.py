@@ -41,8 +41,8 @@ MODULES = [
     # learning
     "learning", "learn_gate", "learn_ledger", "belief_use", "memindex", "skill_draft",
     "skill_lifecycle", "skill_usage",
-    # lessons
-    "learner_model", "practice_card",
+    # lessons (PLAN 4.4): the plan once, code runs the steps; the canvas is shown by the app, not Ash's Chrome
+    "learner_model", "practice_card", "lesson", "lesson_demos", "teachcanvas",
     # the day
     "day_verbs", "briefs", "proactive", "whenparse",
     # the day itself (PLAN 4.5): its calendar is what the home hands in (eds.py, Orbs' own)
@@ -62,7 +62,7 @@ SUITES = [
     "test_speakable", "test_articles", "test_narration_glitches", "test_phrasing",
     "test_learning", "test_learn_gate", "test_learn_ledger", "test_belief_use", "test_memindex",
     "test_skill_draft", "test_skill_lifecycle", "test_skill_usage",
-    "test_learner_model", "test_practice_card",
+    "test_learner_model", "test_practice_card", "test_teachcanvas", "test_lesson_route",
     "test_day_verbs", "test_day_verbs_calendar", "test_remind_me", "test_whenparse",
     "test_oneway", "test_redact", "test_secretscan", "test_write_guard", "test_pagecheck",
     "test_chatstore", "test_statepaths", "test_common", "test_runtime", "test_log_fields",
@@ -78,7 +78,8 @@ LATER = {
     "speech": "4.3", "listen": "4.3", "sayloop": "4.3",
     "adapters": "not carried: Ash's legacy file-slot transport; its approval rule (may_approve: only an explicit act of the person, never text) is the home's card channel (1.6). The journal the day keeps promises in is Orbs' own adapters.py",
     "learn_review": "3.5", "voice_distill": "3.5", "prefs_model": "3.5", "retrieve": "3.5",
-    "lesson": "4.4", "lesson_demos": "4.4", "lessonturn": "4.4", "teachcanvas": "4.4", "tutor": "4.4",
+    "lessonturn": "not carried: Ash's lesson turn inside his daemon; in Orbs the home runs a lesson's steps (PLAN 4.4)",
+    "tutor": "not carried: Ash's step panel on his desktop; in Orbs the lesson is in the app's Computer tab (PLAN 4.4)",
     "summarize": "4.5 (with the documents it reads: docread and retrieve are not carried)",
 }
 
@@ -94,6 +95,14 @@ DROPPED = {
                          "turn, which Orbs rebuilds in the voice turn (PLAN 4.3)",
     "test_unattended_free": "it walks Ash's seat broker for paid calls from unattended loops; in Orbs "
                             "the spend cap and free-by-default seats are the brain ladder's (PLAN 1.4)",
+    "test_lesson_next": "it imports ashd and tests what a bare \"next\" means to Ash's daemon in a lesson; in "
+                        "Orbs the home runs the steps and Next is the app's (PLAN 4.4)",
+    "test_lesson_seats": "it walks Ash's seat broker and ~/ash/brain/litellm.yaml for a lesson's seats; in Orbs "
+                         "a lesson asks the home's brain order (kit/ash/seatbroker.py, Orbs' own)",
+    "test_lesson_turn": "it lifts stop_lesson and _lesson_watch out of ashd.py and drives Ash's tutor and "
+                        "adapters: the daemon's lesson turn, which the home's step loop replaces (PLAN 4.4)",
+    "test_lesson_log": "it reads ashd.py (through sourceof) for where Ash's daemon writes a lesson's log; Orbs "
+                       "keeps a lesson in the home's own event log",
 }
 
 # Old versions of files that suites read from Ash's git history as their planted-defect controls
@@ -125,6 +134,8 @@ OTHER_SOURCES = {
     "release_gate.py": "tools/release_gate.py",
     # the WMO table the day's weather words are PARSED from (day._wmo): the panel's own file
     "weather.2.js": "orb/shell/panels/weather.2.js",
+    # the lesson's canvas (PLAN 4.4): served by the home's door and shown in the app's Computer tab
+    "teach/canvas.html": "orb/daemon/teach/canvas.html",
 }
 
 # Files in kit/ash written for Orbs, not carried (carry.py leaves them alone).
@@ -132,10 +143,105 @@ OTHER_SOURCES = {
 # eds_sandbox.py: nothing to sweep (the kit's calendar cannot be written); adapters.py: the journal.
 # browser.py, browserservice.py: the browser pagecheck asks (PLAN 4.1), in place of Ash's: a headless
 # Chromium of the checking process's own, never the person's Chrome nor a fixed port.
-OURS = {"carried_git.py", "eds.py", "eds_sandbox.py", "adapters.py", "browser.py", "browserservice.py"}
+# seatbroker.py: a lesson's model calls (PLAN 4.4), handed to the home's brain order, in place of Ash's
+# seat broker and his router.
+OURS = {"carried_git.py", "eds.py", "eds_sandbox.py", "adapters.py", "browser.py", "browserservice.py", "seatbroker.py"}
 
 # (file, the exact text, its replacement, why). Applied in order; every anchor must be found.
 PATCHES: list[tuple[str, str, str, str]] = [
+    # ── lessons (PLAN 4.4) ──────────────────────────────────────────────────────────────────────
+    ("lesson.py",
+     "import tutor      # noqa: E402\n",
+     "",
+     "Ash's step panel on his desktop is not carried: in Orbs a lesson is in the app's Computer tab and the "
+     "home runs its steps (seats() reads tutor.CFG inside a try and gets no seat of its own)"),
+    ("lesson.py",
+     '    if src:\n        import show\n        page = show.code_page(src)\n        if page:\n            log(f"teaching from his own file: {src}")\n            return page.as_uri()',
+     '    if src:\n        log(f"teaching from his own file: {src}")\n        return src.as_uri()',
+     "a file is taught as itself: Orbs has no ashshow page cache, and the Computer tab reads a file by its kind (PLAN 2.8)"),
+    ("lesson.py",
+     "    import show\n    page = show.code_page(src)\n    return page.as_uri() if page else None",
+     "    return src.as_uri()",
+     "the same: a file is taught as itself"),
+    ("lesson.py",
+     '        for base in (_HERE, _HERE.parent/"shell", _Path.home()):',
+     "        for base in (_HERE,):",
+     "a lesson reads only the kit's own files: never the person's home (a file it read would go to a model)"),
+    ("lesson.py",
+     '            correct = bool(out.get("correct"))',
+     '            correct = out.get("correct") is True',
+     "a judge that answers {\"correct\": \"false\"} did not say correct: bool(\"false\") is True, and the answer was praised"),
+    ("lesson_demos.py",
+     "import deskgeom   # noqa: E402\nimport tutor      # noqa: E402\n",
+     "",
+     "Ash's desktop geometry and step panel are not carried; only his desktop loops use them, and none runs here"),
+    ("lesson_demos.py",
+     'PAGE_RECT = deskgeom.region("recorded_work")   # the recorded screen below the top bar (9.1)\n_RX, _RY, _RW, _RH = deskgeom.region("recorded")',
+     'PAGE_RECT = None\n_RX, _RY, _RW, _RH = 0, 0, 1920, 1080',
+     "the canvas fills its own frame in the app; Ash's window places are his desktop's"),
+    ("teachcanvas.py",
+     '    groups = (f or {}).get("groups") or []\n    if not groups:\n        return "nothing on screen yet"',
+     '    groups = (f or {}).get("groups") or []\n'
+     '    # Orbs (PLAN 4.4_t): the caption and the cells are on the screen too. The app captions every step\n'
+     '    # with its own words, so every step changes what the judge is told\n'
+     '    caption = str((f or {}).get("caption") or "").strip()\n'
+     '    cells = (f or {}).get("cells") or []\n'
+     '    said = ([f\'the caption reads "{caption}"\'] if caption else []) + ([f"cells: {\', \'.join(str(c) for c in cells)}"] if cells else [])\n'
+     '    if not groups:\n        return "; ".join(said) if said else "nothing on screen yet"',
+     "the judge is told the caption and the cells too: a step that only asks a question (IsSameSet) changed nothing he was told"),
+    ("teachcanvas.py",
+     '        out += "; arrows: " + ", ".join(f"{c}->{p}" for c, p in pairs)\n    return out',
+     '        out += "; arrows: " + ", ".join(f"{c}->{p}" for c, p in pairs)\n    return "; ".join([out, *said])',
+     "the same: the caption and the cells, after the groups and arrows"),
+    ("test_teachcanvas.py",
+     '    for name in ("google-chrome-stable", "google-chrome", "chromium"):\n        p = shutil.which(name)\n        if p:\n            return p\n    return None',
+     '    return __import__("browser").chrome_bin()',
+     "the kit's own Chromium finder ($ORBS_CHROME, the PATH, Playwright's), as pagecheck uses"),
+    ("test_teachcanvas.py",
+     '        print("\\nlive: no chrome on this box, skipped")\n        return',
+     '        check("live: a Chromium to draw the canvas in", False, "none found: set ORBS_CHROME")\n        return',
+     "no browser is a failure here, not a pass: the row's main check would otherwise pass without running"),
+    ("test_teachcanvas.py",
+     "PORT = 9333              # not 9222: the user's own Chrome lives there",
+     "import socket as _socket  # Orbs: a port the system picks, never a fixed one (the person's Chrome, Ash's)\n"
+     "with _socket.socket() as _s:\n    _s.bind((\"127.0.0.1\", 0))\n    PORT = _s.getsockname()[1]",
+     "the kit's browsers never take a fixed port"),
+    ("test_teachcanvas.py",
+     '        except Exception as e:\n            steps = None\n            print(f"    (lesson_demos not importable here: {e})")',
+     '        except Exception as e:\n            steps = None\n            check("T.20 the scripted lesson imports", False, e)',
+     "lesson_demos is carried: if it cannot be imported, T.20-T.22 must fail, never skip"),
+    ("test_teachcanvas.py",
+     '            for st in steps:\n                for op in st["do"]:',
+     '            for st in steps:\n                tc.caption(ws, st["text"])  # Orbs: the app captions each step with its words\n                for op in st["do"]:',
+     "each step on its caption, as Orbs' step loop shows it"),
+    ("test_teachcanvas.py",
+     '            check("T.21 the drawing moves through the lesson", len(set(seen)) >= 4, seen)',
+     '            check("T.21 every step changes what the judge is told", all(a != b for a, b in zip(seen, seen[1:])), seen)',
+     "PLAN 4.4_t: EVERY step changes what the judge is told (Ash asked for 4 of 6)"),
+    ("test_lesson_route.py",
+     '                ("walk me through launch.py", "launch.py")):',
+     '                ("walk me through phrasing.py", "phrasing.py")):',
+     "launch.py is Ash's and not in the kit: phrasing.py is a carried file of the same kind"),
+    ("test_lesson_route.py",
+     'NAMED = "walk me through launch.py"',
+     'NAMED = "walk me through phrasing.py"',
+     "the same"),
+    ("test_lesson_route.py",
+     '    check("R.6 a request naming a local file beats an attached page",\n          r.kind == "local" and getattr(r.payload, "name", "") == "launch.py", r)',
+     '    check("R.6 a request naming a local file beats an attached page",\n          r.kind == "local" and getattr(r.payload, "name", "") == "phrasing.py", r)',
+     "the same"),
+    ("test_lesson_route.py",
+     '    check("R.7 a named local file beats a drawable plan",\n          r.kind == "local" and getattr(r.payload, "name", "") == "launch.py", r)',
+     '    check("R.7 a named local file beats a drawable plan",\n          r.kind == "local" and getattr(r.payload, "name", "") == "phrasing.py", r)',
+     "the same"),
+    ("teach/canvas.html",
+     "    --bg:#08080B;\n    --ink:#E0E0E4;          /* node labels, caption                       */\n    --steel:#8C9DAF;        /* structure: edges, rings, secondary type    */\n    --steel-dim:#4A525C;",
+     "    --bg:#0E0E10;\n    --ink:#F5F5F7;          /* node labels, caption                       */\n    --steel:#98A3AF;        /* structure: edges, rings, secondary type    */\n    --steel-dim:#5F6A77;",
+     "the house theme (PLAN 4.4): Orbs' dark surfaces (packages/app/src/design/tokens.ts), not Ash's"),
+    ("teach/canvas.html",
+     "    --warn:#C2603F;\n    --node:#101216;\n    --glass:rgba(140,157,175,.07);\n    --edge:rgba(140,157,175,.18);",
+     "    --warn:#FF453A;\n    --node:#1C1C1E;\n    --glass:rgba(255,255,255,.06);\n    --edge:rgba(255,255,255,.12);",
+     "the same: Orbs' card, fill, hairline and alert"),
     ("statepaths.py",
      '    override = os.environ.get("ASH_STATE_HOME")\n    return Path(override) if override else Path.home()/"ash/voice"',
      '    override = os.environ.get("ORBS_KIT_STATE") or os.environ.get("ASH_STATE_HOME")\n'
@@ -390,6 +496,8 @@ PATCHES: list[tuple[str, str, str, str]] = [
 # (file, first line cut, first line kept after the cut, why it is Ash's wiring rather than
 # the module, the Orbs row that owns the same guarantee). Lines are matched by their start.
 CUTS: list[tuple[str, str, str, str, str]] = [
+    ("test_teachcanvas.py", "    import show", '    f = {"n": 3,',
+     "T.0: Ash's show.classify opens the canvas in his Chrome", "4.4 (the home's door serves the canvas; its own test)"),
     ("test_belief_use.py", 'print("── BU.5', 'print("── BU.0',
      "BU.5-6 test Ash's belief-use.sh CLI hook and its installer", "1.5 (the agent loop's tool hooks)"),
     ("test_chatstore.py", 'asrc = (HERE/"ashd.py").read_text()', 'print("── CS.7',
@@ -401,8 +509,6 @@ CUTS: list[tuple[str, str, str, str, str]] = [
      "3.5 (carries voice_distill and restores LG.3)"),
     ("test_log_fields.py", "# ── LF.3", "# ── LF.4",
      "LF.3: ashd binds the fields where its turn begins", "1.5 (the home's runs carry their ids)"),
-    ("test_log_fields.py", '_lesson = (HERE/"lesson.py").read_text()', "if FAIL:",
-     "LF.4's control reads lesson.py, which is not carried yet", "4.4 (carries lesson.py)"),
     ("test_redact.py", "# ── E.4", "# ── E.5",
      "E.4: redact is wired into ashd's heard/typed log lines", "1.6 (redaction at the MCP boundary)"),
     ("test_statepaths.py", "# ── SP.5", "# ── SP.6",
@@ -537,7 +643,7 @@ def carry() -> dict[str, str]:
 
 def manifest(files: dict[str, str]) -> str:
     rows = []
-    for name in sorted(n for n in files if "/" not in n):
+    for name in sorted(n for n in files if "/" not in n or n in OTHER_SOURCES):
         src = (ASH_REPO / source_rel(name)).read_text()
         changed = [why for f, _, _, why in PATCHES if f == name] + \
                   [f"**cut** {why} (Orbs: {row})" for f, _, _, why, row in CUTS if f == name]

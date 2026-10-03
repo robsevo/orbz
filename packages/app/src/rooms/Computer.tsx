@@ -14,26 +14,39 @@
 // Every number in it is read from his files and his run: none is typed.
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Orb } from "../orb/Orb.tsx";
-import type { Character } from "../orb/spec.ts";
+import { PERSONALITIES, type Character, type Replies, speaks } from "../orb/spec.ts";
 import type { Gesture } from "../orb/life.ts";
-import { type ComputerState, type Hands, idOf, type Entry, type Message, type Office, type WorkFile } from "../home/link.ts";
+import { type ComputerState, type Hands, idOf, type Entry, type LessonState, type Message, type Office, type WorkFile } from "../home/link.ts";
+import { LessonView } from "./Lesson.tsx";
 import { play } from "../ui/sound.ts";
 import { OneLine } from "../ui/Balanced.tsx";
 import { ACT_WORDS, actsOf, chartOf, docBlocks, filesOf, icsEvents, kindOf, parseCsv, type Act, type Kind } from "./work.ts";
 
-type Tab = "Work" | "Browser" | "Files" | "Terminal" | "Activity";
+type Tab = "Work" | "Browser" | "Files" | "Terminal" | "Activity" | "Lesson";
 const TABS: Tab[] = ["Work", "Browser", "Files", "Terminal", "Activity"];
 const MARK: Record<Kind | "folder", string> = { dataset: "▦", ui: "◧", dashboard: "▥", doc: "▤", calendar: "☷", code: "‹›", folder: "▸" };
 const KIND_WORDS: Record<Kind, string> = { dataset: "Dataset", ui: "Page", dashboard: "Dashboard", doc: "Document", calendar: "Calendar", code: "Code" };
 const mono: CSSProperties = { font: "500 12px/18px var(--mono)", color: "var(--text-2)", whiteSpace: "pre-wrap", overflowWrap: "anywhere", margin: 0 };
 const hhmm = (t: number): string => new Date(t).toTimeString().slice(0, 5);
 
-export function Computer(o: { home: Office; orb: Character; messages: Message[]; busy?: "thinking" | "speaking"; big?: boolean }) {
+export function Computer(o: { home: Office; orb: Character; messages: Message[]; busy?: "thinking" | "speaking"; big?: boolean; replies?: Replies }) {
   const id = idOf(o.orb.name);
   const acts = actsOf(o.messages, id);
   const latest = acts[acts.length - 1];
   const written = filesOf(acts.filter((a) => a.tool === "write_file"));
   const [tab, setTab] = useState<Tab>("Work");
+  // his lesson (PLAN 4.4): a sixth tab while he is giving one, opened when it begins
+  const [lesson, setLesson] = useState<LessonState | null>(null);
+  useEffect(() => {
+    const load = (open: boolean): void =>
+      void o.home.lesson(o.orb).then((l) => {
+        setLesson(l);
+        if (open && l) setTab("Lesson");
+      }, () => setLesson(null));
+    load(false);
+    return o.home.watch({ event: (e) => void (e.orb === id && e.type.startsWith("lesson.") && load(e.type === "lesson.started")) });
+  }, [o.home, id]);
+  const tabs: Tab[] = lesson ? [...TABS, "Lesson"] : TABS;
   const [chosen, setChosen] = useState<string | null>(null);
   const open = chosen ?? written[written.length - 1] ?? null;
   // the step that last touched the open file: a new one reloads it
@@ -122,7 +135,7 @@ export function Computer(o: { home: Office; orb: Character; messages: Message[];
       {/* five tabs: on a phone the row scrolls with a fade, never wider than his panel */}
       <div role="tablist" aria-label={`${o.orb.name}'s computer`} style={{ padding: "6px 8px 0", boxShadow: "inset 0 -1px 0 var(--sep)", minWidth: 0 }}>
         <OneLine gap={2} style={{ justifyContent: "flex-start" }}>
-          {TABS.map((t) => (
+          {tabs.map((t) => (
             <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)} style={{ flex: "0 0 auto", whiteSpace: "nowrap", font: "700 12px/16px var(--font)", border: 0, background: "transparent", padding: "8px 10px", cursor: "pointer", color: tab === t ? "var(--text-1)" : "var(--text-3)", boxShadow: tab === t ? "inset 0 -2px 0 var(--accent)" : "none", minHeight: 32 }}>
               {t}
             </button>
@@ -146,6 +159,7 @@ export function Computer(o: { home: Office; orb: Character; messages: Message[];
         )}
         {tab === "Terminal" && <Terminal home={o.home} orb={o.orb} acts={acts.filter((a) => a.tool === "shell" || a.tool === "shell_output")} live={liveOut} yours={cstate?.takenOver ?? false} />}
         {tab === "Activity" && <Activity acts={acts} />}
+        {tab === "Lesson" && lesson && <LessonView home={o.home} orb={o.orb} lesson={lesson} voice={{ speed: PERSONALITIES[o.orb.personality].speed, speaks: speaks(o.orb, o.replies ?? "text") }} />}
         {said && <span role="alert" style={{ font: "500 12px/16px var(--font)", color: "var(--alert)" }}>{said}</span>}
         {at && (
           <div data-cursor aria-hidden style={{ position: "absolute", left: 0, top: 0, width: 32, transform: `translate(${at.x - 16}px, ${at.y - 15}px)`, transition: "transform 460ms var(--m-spring)", pointerEvents: "none", filter: "drop-shadow(0 3px 6px var(--shadow))" }}>

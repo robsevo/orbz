@@ -5,7 +5,7 @@ anything in `kit/ash/` by hand: a change is a patch or a cut in `carry.py`, so t
 differences cannot go stale. `--check` fails when a file here differs from what the script
 carries.
 
-45 modules and 42 suites. Paths are the kit's own: state under `ORBS_KIT_STATE`
+48 modules and 44 suites. Paths are the kit's own: state under `ORBS_KIT_STATE`
 (`<data>/kit`), the brain under `ORBS_BRAIN` (`<data>/brain`), never `~/ash`.
 
 | File | Ash version | Ash sha256 | Kit sha256 | Differences |
@@ -21,6 +21,8 @@ carries.
 | `learn_ledger.py` | 6f21053 | `6eef4532a170` | `408dd1777c2c` | same root as statepaths.brain(): the Orbs brain, never ~/ash/brain |
 | `learner_model.py` | 2d6023c | `f0566cdee3c6` | `f0566cdee3c6` | unchanged |
 | `learning.py` | 6f21053 | `46bc9c9c6b10` | `46bc9c9c6b10` | unchanged |
+| `lesson.py` | d771f05 | `1f47bd6c29f9` | `ddf277f7f21e` | Ash's step panel on his desktop is not carried: in Orbs a lesson is in the app's Computer tab and the home runs its steps (seats() reads tutor.CFG inside a try and gets no seat of its own); a file is taught as itself: Orbs has no ashshow page cache, and the Computer tab reads a file by its kind (PLAN 2.8); the same: a file is taught as itself; a lesson reads only the kit's own files: never the person's home (a file it read would go to a model); a judge that answers {"correct": "false"} did not say correct: bool("false") is True, and the answer was praised |
+| `lesson_demos.py` | bb4261c | `2fbc5d9395a9` | `0aa61e56b4d1` | Ash's desktop geometry and step panel are not carried; only his desktop loops use them, and none runs here; the canvas fills its own frame in the app; Ash's window places are his desktop's |
 | `lexicon.py` | 2d6023c | `05811107662f` | `05811107662f` | unchanged |
 | `memindex.py` | 6f21053 | `8fdc79f86ba0` | `a18990932d21` | same root as statepaths.brain() |
 | `micaudio.py` | b015e3f + uncommitted edits | `f4b61bf23c64` | `f4b61bf23c64` | unchanged |
@@ -49,6 +51,8 @@ carries.
 | `statepaths.py` | 6f21053 | `715a4ab77c77` | `1b37b165aee3` | the kit's state lives in the Orbs data directory (the home sets ORBS_KIT_STATE); never Ash's live ~/ash/voice. ASH_STATE_HOME still works, because the carried suites use it; the owner's brain for Orbs is <data>/brain, never ~/ash/brain |
 | `stt.py` | d1c1eb2 | `3aa0acee91ec` | `3aa0acee91ec` | unchanged |
 | `taskshape.py` | cf6156c | `54f0ed950709` | `54f0ed950709` | unchanged |
+| `teach/canvas.html` | 2d6023c | `715141a7fcf6` | `819cfbee7fc6` | the house theme (PLAN 4.4): Orbs' dark surfaces (packages/app/src/design/tokens.ts), not Ash's; the same: Orbs' card, fill, hairline and alert |
+| `teachcanvas.py` | 2d6023c | `0641d3c8dc6f` | `7488ba7b9a25` | the judge is told the caption and the cells too: a step that only asks a question (IsSameSet) changed nothing he was told; the same: the caption and the cells, after the groups and arrows |
 | `test_ad_voice.py` | 077c8f5 | `d04010c261b3` | `0834bb8fb52a` | AV.0's pre-fix voice.py comes from fixtures/git |
 | `test_articles.py` | 978ab8a | `cf96d346061e` | `14f5f1ef9778` | AR.0's pre-fix speakable.py comes from fixtures/git (the kit has no Ash history) |
 | `test_belief_use.py` | 6f21053 | `a9ff7f3f48c7` | `0a702cffde4e` | **cut** BU.5-6 test Ash's belief-use.sh CLI hook and its installer (Orbs: 1.5 (the agent loop's tool hooks)) |
@@ -62,7 +66,8 @@ carries.
 | `test_learn_ledger.py` | 2d6023c | `81bd7d0ceedd` | `81bd7d0ceedd` | unchanged |
 | `test_learner_model.py` | 2d6023c | `1c07fa54e8ef` | `1c07fa54e8ef` | unchanged |
 | `test_learning.py` | 99391e7 | `fe4390273fff` | `fe4390273fff` | unchanged |
-| `test_log_fields.py` | 2d6023c | `25eb1663b7e6` | `7ad19516ac2f` | **cut** LF.3: ashd binds the fields where its turn begins (Orbs: 1.5 (the home's runs carry their ids)); **cut** LF.4's control reads lesson.py, which is not carried yet (Orbs: 4.4 (carries lesson.py)) |
+| `test_lesson_route.py` | e4a669a | `e2a9c042a0f1` | `ad155699883d` | launch.py is Ash's and not in the kit: phrasing.py is a carried file of the same kind; the same; the same; the same |
+| `test_log_fields.py` | 2d6023c | `25eb1663b7e6` | `a619319d13cd` | **cut** LF.3: ashd binds the fields where its turn begins (Orbs: 1.5 (the home's runs carry their ids)) |
 | `test_memindex.py` | 6f21053 | `39b539a6e0cd` | `02d4f08e1dfa` | MI.6's agreement with voice_distill.INDEX waits for voice_distill (PLAN 3.5); MI.6's own checks and MI.7 stay; **cut** MI.5 checks one of Ash's proposal documents (Orbs: — (Ash's docs)) |
 | `test_mic_fallback.py` | a930685 | `affb65f2d79f` | `affb65f2d79f` | unchanged |
 | `test_mic_stall.py` | uncommitted in Ash | `9ce5555d7cd7` | `ef5544176aa1` | MS.0 read Ash's HEAD, the commit before its uncommitted stall fix; the kit pins that commit; **cut** MS.4: ashd asks mic_frames for keep_alive (Orbs: 4.3) |
@@ -86,6 +91,7 @@ carries.
 | `test_spoken_sounds.py` | 5b300da | `7e88adc7fbd0` | `7e88adc7fbd0` | unchanged |
 | `test_statepaths.py` | 6f21053 | `a2386d0d0661` | `efa1c2eabf8c` | the kit's brain root is ~/.orbs/brain; the kit carries a third of Ash's daemon, so fewer modules use statepaths than Ash's 20+; **cut** SP.5 tests Ash's tools/inventory.py (Orbs: — (Ash's tooling)) |
 | `test_stt.py` | e179049 | `1dfa681661b2` | `690c0ac63cfb` | **cut** ST.3: the daemon calls the loader where it always did (Orbs: 4.3) |
+| `test_teachcanvas.py` | 2d6023c | `cc13ba09b8a1` | `c6f64a9f48f6` | the kit's own Chromium finder ($ORBS_CHROME, the PATH, Playwright's), as pagecheck uses; no browser is a failure here, not a pass: the row's main check would otherwise pass without running; the kit's browsers never take a fixed port; lesson_demos is carried: if it cannot be imported, T.20-T.22 must fail, never skip; each step on its caption, as Orbs' step loop shows it; PLAN 4.4_t: EVERY step changes what the judge is told (Ash asked for 4 of 6); **cut** T.0: Ash's show.classify opens the canvas in his Chrome (Orbs: 4.4 (the home's door serves the canvas; its own test)) |
 | `test_voice_policy.py` | e179049 | `ec12620f92ab` | `4243afd30c97` | **cut** VP.7: ashd builds its Voice through the policy (Orbs: 4.3 (the voice turn builds it the same way)); **cut** VP.3-4 check the owner's live ~/ash/voice/voice.json against the policy (Orbs: 4.3 (each orb's voice config, through the same policy)) |
 | `test_voiceturn.py` | cf6156c | `fe24341614bb` | `fe24341614bb` | unchanged |
 | `test_wake_state.py` | e179049 | `8c9a9f286188` | `df16f1435006` | the kit has no ashd.py; K.3, which read it, is cut below; **cut** K.3: ashd's write_state is the owner, and atomic (Orbs: — (ashd's own state file)); **cut** K.5: Ash's orb page reads the schema wake.py writes (Orbs: 2.3 (the living orb reads the home's state)) |
@@ -106,6 +112,10 @@ carries.
 - `test_comma_beats.py`: red in Ash's own environment on 2026-10-01: CB.1 (no pause mid-sentence) failed 5 of 6 runs there and 6 of 6 in the kit, on the same sentence, the pause after a different word each time (Ash's voice.py has uncommitted edits). A suite red at its source would make the gate a coin flip; it returns with the voice in PLAN 4.3
 - `test_quick_answer.py`: it lifts the quick-answer methods out of ashd.py and runs them: the daemon's turn, which Orbs rebuilds in the voice turn (PLAN 4.3)
 - `test_unattended_free.py`: it walks Ash's seat broker for paid calls from unattended loops; in Orbs the spend cap and free-by-default seats are the brain ladder's (PLAN 1.4)
+- `test_lesson_next.py`: it imports ashd and tests what a bare "next" means to Ash's daemon in a lesson; in Orbs the home runs the steps and Next is the app's (PLAN 4.4)
+- `test_lesson_seats.py`: it walks Ash's seat broker and ~/ash/brain/litellm.yaml for a lesson's seats; in Orbs a lesson asks the home's brain order (kit/ash/seatbroker.py, Orbs' own)
+- `test_lesson_turn.py`: it lifts stop_lesson and _lesson_watch out of ashd.py and drives Ash's tutor and adapters: the daemon's lesson turn, which the home's step loop replaces (PLAN 4.4)
+- `test_lesson_log.py`: it reads ashd.py (through sourceof) for where Ash's daemon writes a lesson's log; Orbs keeps a lesson in the home's own event log
 
 ## Old versions carried for the controls
 

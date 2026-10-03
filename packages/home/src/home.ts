@@ -54,6 +54,8 @@ import { Guard, Turns } from "./rules/guard.ts";
 import { ModelMatcher, Rules, type Matcher } from "./rules/rules.ts";
 import { planTool, Plans } from "./plans/plans.ts";
 import { Board, boardTools } from "./plans/board.ts";
+import { Lessons, lessonTools } from "./lessons.ts";
+import { chat } from "./brain/openai.ts";
 import { TOOLS } from "./agent/tools.ts";
 import { Loops, type LoopsOptions } from "./loops.ts";
 import { cronOf, Schedules } from "./schedule.ts";
@@ -187,6 +189,8 @@ export class Home {
   readonly plans: Plans;
   /** Approved plans' rows, ticked only with proof (PLAN 1.8). */
   readonly board: Board;
+  /** Lessons on an orb's own canvas (PLAN 4.4). */
+  readonly lessons: Lessons;
   readonly guard: Guard;
   readonly #background = new Background();
   readonly #db: DatabaseSync;
@@ -213,7 +217,7 @@ export class Home {
     this.brains = new Brains({ dataDir: this.dataDir, presetKey: big, chatgpt: () => this.chatgpt.endpoint(), clock: () => this.clock.now(), ...opts.brains });
     const brainsReady = Promise.all([chatgptReady, this.brains.load().catch(() => {})]).then(() => {}); // nor one with no Gemini key
     this.kit = opts.kit
-      ? new Kit({ ...(opts.kit === true ? {} : opts.kit), events: this.events, clock: this.clock, dataDir: this.dataDir })
+      ? new Kit({ ...(opts.kit === true ? {} : opts.kit), events: this.events, clock: this.clock, dataDir: this.dataDir, sample: (r) => this.#sample(r) })
       : null;
     this.rules = new Rules(db, this.events, this.clock);
     this.about = new About(db, this.events, this.clock);
@@ -252,6 +256,7 @@ export class Home {
     const kit = this.kit;
     this.plans = new Plans(db, this.events, this.clock);
     this.board = new Board(db, this.events, this.clock);
+    this.lessons = new Lessons(this.events, () => (this.kit ? (tool, args, o) => this.kit!.call(tool, args, o) : null));
     const post = (ctx: { orb: string; conversation: string }, text: string): void => {
       this.conversations.add({ conversation: ctx.conversation, orb: ctx.orb, role: "notice", content: text, meta: { board: true } });
     };
@@ -273,6 +278,7 @@ export class Home {
     const tools = agentOpts.tools ?? [
       ...TOOLS, planTool(this.plans, (workspace) => [workspace]), ...boardTools(this.board, post, pageCheck),
       ...computerTools(this.computers, this.vault, pageCheck),
+      ...lessonTools(this.lessons),
     ];
     this.agent = opts.runner
       ? null
@@ -554,6 +560,16 @@ export class Home {
     if (this.mail.accounts()[name]?.oauth === name) await this.mail.remove(name);
     if (this.calendars.list().some((c) => c.name === name && c.account === name)) await this.calendars.remove(name);
     await this.accounts.remove(name);
+  }
+
+  /** A model call the kit asks while one of its tools runs (a lesson's plan and its judge, PLAN
+   * 4.4): the brain order's current brain answers it, spent like any other call. */
+  async #sample(r: { system: string | null; messages: { role: "user" | "assistant"; content: string }[]; maxTokens: number }): Promise<{ model: string; text: string }> {
+    const ep = this.brains.chain.current()?.ep ?? null;
+    if (!ep) throw new Error("no brain is set up to answer it");
+    const res = await chat(ep, [...(r.system ? [{ role: "system" as const, content: r.system }] : []), ...r.messages], { maxTokens: Math.min(8000, r.maxTokens) });
+    this.spend.record({ tier: "big", model: ep.model, costUsd: res.costUsd, costSource: res.costSource, promptTokens: res.promptTokens, completionTokens: res.completionTokens });
+    return { model: ep.model, text: res.text };
   }
 
   /** His sandbox (PLAN 4.6): his workspace and a home of his own, nothing else of anyone's. Null

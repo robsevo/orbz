@@ -1,0 +1,703 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Ash — Teaching Canvas</title>
+<!--
+  The canvas Ash teaches on.
+
+  He used to drive visualgo.net. It works, but it is someone else's page: the pacing is
+  theirs, the framing is theirs, half the screen is chrome he cannot move, and a lesson
+  recorded off it looks like a screen-share of a website rather than something he made.
+  This is his own surface, so the timing, the type and the layout are all his.
+
+  Everything here is one file with no dependencies and no build step, because it is opened
+  as a file:// URL by a Python driver over CDP and has to work with nothing installed.
+
+  DRIVING IT. Every operation returns a promise that resolves when its animation has
+  finished, so the driver can await a step instead of sleeping and hoping:
+
+      await teach.makeSet(8)
+      await teach.union(0, 1)
+      await teach.find(0)
+      teach.facts()                what is true on screen right now, for the answer judge
+
+  LAYOUT. Designed against a 1920x1080 recording. Everything is drawn inside the glass card
+  at y 40-740. The foot of the screen is left empty on purpose: the tutor STRIP sits at
+  x 1460-1880 / y 928-1032 and the orb's own SAY box at x 840-1177 / y 888-1048, and a lesson
+  that draws underneath either of them is a lesson where the important thing is behind a
+  window. (The strip used to be a 780x460 dialog in the lower left, which covered the very
+  thing it was explaining — 2026-09-19.)
+-->
+<style>
+  /* SAME ROOM AS HIS CHARTS (user, 2026-09-19: "beautiful charts! tutorials have to be in
+     that theme and style too"). Near-black ground, one glass card, his azure for whatever is
+     live, amber kept for the one structural thing that is special (a root), cool grey for
+     everything else. The chartlive template is the reference. */
+  :root{
+    --bg:#0E0E10;
+    --ink:#F5F5F7;          /* node labels, caption                       */
+    --steel:#98A3AF;        /* structure: edges, rings, secondary type    */
+    --steel-dim:#5F6A77;
+    --lit:#5EB3DE;          /* the thing being talked about — his azure   */
+    --lit-soft:#93CAE5;
+    --deep:#307EA6;
+    --amb:#BF8B49;          /* roots, and only roots                      */
+    --warn:#FF453A;
+    --node:#1C1C1E;
+    --glass:rgba(255,255,255,.06);
+    --edge:rgba(255,255,255,.12);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;background:var(--bg);overflow:hidden}
+  body{
+    font:400 16px/1.4 ui-monospace,"DejaVu Sans Mono",monospace;
+    color:var(--steel);
+    /* a very slight lift in the middle so a flat black frame does not read as "off" */
+    background:radial-gradient(120% 80% at 50% 38%, #0E1014 0%, #08090B 62%, #060607 100%);
+  }
+  svg{display:block;width:100vw;height:100vh}
+  text{user-select:none}
+
+  /* Type. The caption is the line the viewer actually reads, so it is the biggest thing
+     on the page and it is NOT monospace — a long sentence in a mono face is slower to
+     read, and the caption is prose, not data. */
+  .caption{font:400 40px/1.45 ui-sans-serif,-apple-system,"Segoe UI",Inter,"Noto Sans",sans-serif;
+           fill:var(--ink)}
+  .caption .em{fill:var(--lit)}
+  .title{font:500 25px/1 ui-sans-serif,-apple-system,"Segoe UI",Inter,sans-serif;
+         fill:#BCCAD8;letter-spacing:-.01em}
+  .nlabel{font:400 44px/1 ui-monospace,monospace;fill:var(--ink);text-anchor:middle;
+          dominant-baseline:central}
+  .badge{font:400 20px/1 ui-monospace,monospace;fill:var(--amb);text-anchor:middle;
+         letter-spacing:.06em}
+  .callout{font:400 24px/1.35 ui-monospace,monospace;fill:var(--lit)}
+  .tag{font:400 14px/1 ui-monospace,monospace;fill:var(--steel);letter-spacing:.18em;
+       text-anchor:middle}
+  .cell-v{font:400 27px/1 ui-monospace,monospace;fill:var(--ink);text-anchor:middle;
+          font-variant-numeric:tabular-nums;
+          dominant-baseline:central}
+  .cell-i{font:400 14px/1 ui-monospace,monospace;fill:var(--steel-dim);text-anchor:middle}
+</style>
+</head>
+<body>
+<svg id="stage" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid meet">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7"
+            orient="auto-start-reverse">
+      <path d="M0,1 L9,5 L0,9 z" fill="#8C9DAF"/>
+    </marker>
+    <marker id="arrow-lit" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7"
+            orient="auto-start-reverse">
+      <path d="M0,1 L9,5 L0,9 z" fill="#5EB3DE"/>
+    </marker>
+    <filter id="glow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="7" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <!-- One glass card, like the one his charts sit in. Everything a lesson draws lives
+       inside it: the band (y 180-520), the callouts, and the caption at y 660. -->
+  <rect x="64" y="40" width="1792" height="700" rx="30"
+        fill="rgba(140,157,175,.07)" stroke="rgba(140,157,175,.18)" stroke-width="1.5"/>
+  <g id="l-edge"></g>
+  <g id="l-node"></g>
+  <g id="l-mark"></g>
+  <g id="l-text"></g>
+</svg>
+
+<script>
+"use strict";
+(function () {
+
+// ---------------------------------------------------------------- the basics
+const SVGNS = "http://www.w3.org/2000/svg";
+const L = {edge: g("l-edge"), node: g("l-node"), mark: g("l-mark"), text: g("l-text")};
+function g(id) { return document.getElementById(id); }
+function el(name, attrs, parent) {
+  const n = document.createElementNS(SVGNS, name);
+  for (const k in (attrs || {})) n.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(n);
+  return n;
+}
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+// Easing. Everything that MOVES uses inOutCubic; anything that appears or lands uses
+// outBack, which overshoots a hair and settles — that tiny overshoot is most of what
+// separates an animation that looks designed from one that looks like a CSS default.
+const ease = {
+  linear: t => t,
+  inOut: t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2,
+  out:   t => 1 - Math.pow(1 - t, 3),
+  back:  t => { const c = 1.7; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); },
+};
+
+// Animation speed is one global multiplier so a lesson can be slowed down for a recording
+// without every duration in the file being edited.
+let RATE = 1.0;
+
+function animate(ms, step, easing) {
+  const e = easing || ease.inOut;
+  return new Promise(resolve => {
+    const dur = Math.max(1, ms / RATE);
+    const t0 = performance.now();
+    (function frame(now) {
+      const t = clamp((now - t0) / dur, 0, 1);
+      step(e(t), t);
+      if (t < 1) requestAnimationFrame(frame); else resolve();
+    })(t0);
+  });
+}
+const wait = ms => new Promise(r => setTimeout(r, Math.max(0, ms / RATE)));
+
+// ---------------------------------------------------------------- the model
+// One flat store of nodes and links. Union-find is a forest, a linked list is a chain and
+// a binary tree is a tree; all three are nodes with parents, so all three lay out with the
+// same code and only the operations on top differ.
+const S = {
+  nodes: new Map(),     // id -> {id, label, x, y, tx, ty, r, rank, size, cls}
+  parent: new Map(),    // id -> parent id (absent = root)
+  cells: [],            // the array family
+  title: "",
+  caption: "",
+};
+
+// The full-width band a lesson may draw in. It stops at y 700 because everything below
+// belongs to other windows: the tutor panel at x 48-828 / y 720-1040 and the orb's SAY box
+// at x 840-1177 / y 888-1048. The empty lower third of a bare screenshot is not wasted
+// frame — it is where the question the viewer is answering will be.
+// Inside the glass card (x 64-1856, y 40-740) with room for a node's radius at each edge:
+// at right 1810 the last circle of a row of eight hung over the card's border.
+const BAND = {top: 210, bottom: 540, left: 180, right: 1740};
+const CAPTION_Y = 660;
+const NODE_R = 54;          // the most a node is ever drawn at
+let R = NODE_R;             // what it is drawn at now — layout() decides
+
+// ---------------------------------------------------------------- layout
+// Reingold-Tilford, cut down: leaves take the next free column, a parent centres over its
+// children, and each root's subtree is placed to the right of the last one. Good enough for
+// the sizes a lesson ever shows, and it means the tree re-shapes itself when a union changes
+// who is whose parent instead of jumping.
+function layout() {
+  const kids = new Map();
+  for (const id of S.nodes.keys()) kids.set(id, []);
+  for (const [c, p] of S.parent) if (kids.has(p)) kids.get(p).push(c);
+  for (const list of kids.values()) list.sort((a, b) => order(a) - order(b));
+
+  const roots = [...S.nodes.keys()].filter(id => !S.parent.has(id)).sort((a, b) => order(a) - order(b));
+  let col = 0;
+  const depthOf = new Map();
+  const colOf = new Map();
+
+  function walk(id, depth) {
+    depthOf.set(id, depth);
+    const ch = kids.get(id) || [];
+    if (!ch.length) { colOf.set(id, col++); return; }
+    for (const c of ch) walk(c, depth + 1);
+    colOf.set(id, (colOf.get(ch[0]) + colOf.get(ch[ch.length - 1])) / 2);
+  }
+  for (const r of roots) { walk(r, 0); col += 0.6; }        // a gap between separate trees
+
+  const cols = Math.max(col - 0.6, 1);
+  const maxDepth = Math.max(...[...depthOf.values()], 0);
+  const spanX = BAND.right - BAND.left;
+  const stepX = cols > 1 ? Math.min(spanX / (cols - 1), 210) : 0;
+  const usedX = stepX * (cols - 1);
+  const x0 = BAND.left + (spanX - usedX) / 2;
+  const stepY = maxDepth > 0 ? Math.min((BAND.bottom - BAND.top) / maxDepth, 160) : 0;
+  // Shrink the circles when the shape is tight. A four-deep chain gets 113px per level,
+  // and a 54px radius leaves 5px of gap between one circle and the next — the arrow
+  // between them is then five pixels long, which is to say the lesson about what points
+  // at what draws no visible arrows at all.
+  const byX = stepX > 0 ? stepX / 2.5 : NODE_R;
+  const byY = stepY > 0 ? stepY / 2.9 : NODE_R;
+  R = clamp(Math.round(Math.min(NODE_R, byX, byY)), 24, NODE_R);
+  // Centre what is drawn inside the band rather than hanging it from the top: a row of
+  // singletons pinned to BAND.top sits in the roof of the frame with a hole under it.
+  const y0 = BAND.top + ((BAND.bottom - BAND.top) - stepY * maxDepth) / 2;
+
+  for (const [id, n] of S.nodes) {
+    n.tx = x0 + stepX * (colOf.get(id) ?? 0);
+    n.ty = y0 + stepY * (depthOf.get(id) ?? 0);
+  }
+}
+function order(id) { const n = S.nodes.get(id); return n ? n.ord : 0; }
+
+// Move every node from where it is to where layout() says it belongs. Edges follow every
+// frame, so the whole forest re-shapes as one piece.
+function settle(ms) {
+  const moving = [...S.nodes.values()].filter(n => Math.abs(n.x - n.tx) > 0.5 || Math.abs(n.y - n.ty) > 0.5);
+  if (!moving.length) { drawEdges(); return Promise.resolve(); }
+  const from = moving.map(n => ({n, x: n.x, y: n.y}));
+  return animate(ms === undefined ? 620 : ms, t => {
+    for (const f of from) {
+      f.n.x = f.x + (f.n.tx - f.x) * t;
+      f.n.y = f.y + (f.n.ty - f.y) * t;
+    }
+    drawNodes(); drawEdges();
+  });
+}
+
+// ---------------------------------------------------------------- drawing
+function drawNodes() {
+  for (const n of S.nodes.values()) {
+    if (!n.gfx) {
+      const grp = el("g", {}, L.node);
+      n.gfx = {
+        grp,
+        halo:   el("circle", {r: R, fill: "none", stroke: "#BCCAD8", "stroke-width": 2,
+                              opacity: 0, filter: "url(#glow)"}, grp),
+        circle: el("circle", {r: R, fill: "var(--node)", stroke: "#8C9DAF",
+                              "stroke-width": 2}, grp),
+        label:  el("text", {class: "nlabel"}, grp),
+        badge:  el("text", {class: "badge"}, grp),
+      };
+    }
+    const {circle, label, badge, halo, grp} = n.gfx;
+    grp.setAttribute("transform", `translate(${n.x.toFixed(2)} ${n.y.toFixed(2)})`);
+    grp.setAttribute("opacity", n.opacity == null ? 1 : n.opacity);
+    // A ROOT ONLY COUNTS WHEN IT STANDS FOR SOMEBODY. Every item starts as its own root, so
+    // colouring "is a root" painted all eight circles amber and the first frame of every
+    // lesson read as one flat warm row with no accent in it at all — the opposite of what
+    // the colour is for. Amber marks a root that has a group under it; a singleton is just
+    // an item. (2026-09-19, off a still of the first step.)
+    const isRoot = !S.parent.has(n.id);
+    const leads = isRoot && [...S.parent.values()].some(v => v === n.id);
+    circle.setAttribute("stroke", n.lit ? "#5EB3DE" : (leads ? "#BF8B49" : "#8C9DAF"));
+    circle.setAttribute("stroke-width", n.lit || leads ? 3 : 2);
+    circle.setAttribute("r", R * (n.scale == null ? 1 : n.scale));
+    halo.setAttribute("opacity", n.halo == null ? 0 : n.halo);
+    halo.setAttribute("r", R * (1 + 0.35 * (n.halo == null ? 0 : n.halo)));
+    label.textContent = n.label;
+    label.setAttribute("font-size", Math.round(R * 0.82));
+    // Only a root carries rank and size: that is the whole point of the labels, and putting
+    // them on every circle is what makes a union-find drawing unreadable.
+    badge.textContent = isRoot && n.showBadge && n.size > 1 ? `r:${n.rank}  s:${n.size}` : "";
+    badge.setAttribute("y", -R - 18);
+  }
+}
+
+function edgePath(c, p) {
+  // Stop the line at each circle's edge rather than its centre, so the arrowhead lands on
+  // the rim and nothing is drawn underneath a node.
+  const dx = p.x - c.x, dy = p.y - c.y;
+  const d = Math.hypot(dx, dy) || 1;
+  const ux = dx / d, uy = dy / d;
+  const r = R + 3;
+  return `M${(c.x + ux * r).toFixed(2)},${(c.y + uy * r).toFixed(2)} ` +
+         `L${(p.x - ux * r).toFixed(2)},${(p.y - uy * r).toFixed(2)}`;
+}
+
+const edgeGfx = new Map();
+function drawEdges() {
+  const live = new Set();
+  for (const [c, p] of S.parent) {
+    const cn = S.nodes.get(c), pn = S.nodes.get(p);
+    if (!cn || !pn) continue;
+    const key = c + ">" + p;
+    live.add(key);
+    let e = edgeGfx.get(key);
+    if (!e) {
+      e = el("path", {fill: "none", stroke: "#8C9DAF", "stroke-width": 2.5,
+                      "marker-end": "url(#arrow)", opacity: 1}, L.edge);
+      edgeGfx.set(key, e);
+    }
+    e.setAttribute("d", edgePath(cn, pn));
+    const lit = cn.litEdge;
+    e.setAttribute("stroke", lit ? "#5EB3DE" : "#8C9DAF");
+    e.setAttribute("stroke-width", lit ? 4 : 2.5);
+    e.setAttribute("marker-end", lit ? "url(#arrow-lit)" : "url(#arrow)");
+  }
+  for (const [key, e] of edgeGfx) if (!live.has(key)) { e.remove(); edgeGfx.delete(key); }
+}
+
+// ---------------------------------------------------------------- prose
+let capGfx = null;
+function setCaption(text) {
+  if (!capGfx) capGfx = el("text", {class: "caption", x: 960, y: CAPTION_Y,
+                                    "text-anchor": "middle", opacity: 0}, L.text);
+  S.caption = text || "";
+  // Wrap by measuring, because SVG will not: a caption that runs off the frame is the one
+  // thing on this page the viewer definitely needed to read.
+  const words = String(text || "").split(/\s+/).filter(Boolean);
+  const lines = [];
+  let line = "";
+  const probe = el("text", {class: "caption", opacity: 0}, L.text);
+  for (const w of words) {
+    probe.textContent = line ? line + " " + w : w;
+    if (probe.getComputedTextLength() > 1520 && line) { lines.push(line); line = w; }
+    else line = probe.textContent;
+  }
+  if (line) lines.push(line);
+  probe.remove();
+  capGfx.textContent = "";
+  lines.forEach((ln, i) => {
+    const t = el("tspan", {x: 960, dy: i === 0 ? 0 : 54}, capGfx);
+    t.textContent = ln;
+  });
+  capGfx.setAttribute("y", CAPTION_Y - (lines.length - 1) * 27);
+  return animate(280, t => capGfx.setAttribute("opacity", t), ease.out);
+}
+
+let titleGfx = null;
+function setTitle(text) {
+  if (!titleGfx) titleGfx = el("text", {class: "title", x: 110, y: 110}, L.text);
+  titleGfx.textContent = text || "";
+  S.title = text || "";
+}
+
+// ---------------------------------------------------------------- emphasis
+async function pulse(ids, times) {
+  const ns = ids.map(i => S.nodes.get(i)).filter(Boolean);
+  if (!ns.length) return;
+  for (let k = 0; k < (times || 2); k++) {
+    await animate(300, t => { for (const n of ns) { n.halo = t; } drawNodes(); }, ease.out);
+    await animate(300, t => { for (const n of ns) { n.halo = 1 - t; } drawNodes(); }, ease.inOut);
+  }
+  for (const n of ns) n.halo = 0;
+  drawNodes();
+}
+
+function light(ids, on) {
+  for (const n of S.nodes.values()) if (ids.includes(n.id)) n.lit = !!on;
+  drawNodes();
+}
+
+// A dot that travels an edge. This is what makes a find() read as CLIMBING rather than as
+// two circles changing colour.
+async function travel(fromId, toId, ms) {
+  const a = S.nodes.get(fromId), b = S.nodes.get(toId);
+  if (!a || !b) return;
+  const dot = el("circle", {r: 9, fill: "#5EB3DE", filter: "url(#glow)"}, L.mark);
+  await animate(ms || 520, t => {
+    dot.setAttribute("cx", a.x + (b.x - a.x) * t);
+    dot.setAttribute("cy", a.y + (b.y - a.y) * t);
+  }, ease.inOut);
+  await animate(180, t => dot.setAttribute("opacity", 1 - t), ease.out);
+  dot.remove();
+}
+
+let calloutGfx = null;
+async function callout(id, text) {
+  clearCallout();
+  const n = S.nodes.get(id);
+  if (!n) return;
+  // Beside the node, on whichever side has room, at the node's own height. The first
+  // version put it 130px above, which on a vertical chain is exactly where the next
+  // circle is — the label landed on top of the thing it was pointing away from.
+  const probe = el("text", {class: "callout", opacity: 0}, L.text);
+  probe.textContent = text;
+  const w = probe.getComputedTextLength();
+  probe.remove();
+  const plate = w + 30, gap = 34;
+  const right = n.x + R + gap + plate < BAND.right + 60;
+  const px = right ? n.x + R + gap : n.x - R - gap - plate;
+  const grp = el("g", {opacity: 0}, L.mark);
+  el("path", {d: `M${n.x + (right ? R + 4 : -R - 4)},${n.y} L${right ? px : px + plate},${n.y}`,
+              stroke: "#BCCAD8", "stroke-width": 1.5, fill: "none",
+              "stroke-dasharray": "5 5"}, grp);
+  el("rect", {x: px, y: n.y - 26, width: plate, height: 52, rx: 9,
+              fill: "rgba(16,18,22,.94)", stroke: "rgba(140,157,175,.28)"}, grp);
+  const t = el("text", {class: "callout", x: px + 15, y: n.y + 8}, grp);
+  t.textContent = text;
+  calloutGfx = grp;
+  await animate(260, k => grp.setAttribute("opacity", k), ease.out);
+}
+function clearCallout() { if (calloutGfx) { calloutGfx.remove(); calloutGfx = null; } }
+
+// ---------------------------------------------------------------- union-find
+function findRoot(x) { let r = x; while (S.parent.has(r)) r = S.parent.get(r); return r; }
+function pathTo(x) { const p = [x]; let r = x; while (S.parent.has(r)) { r = S.parent.get(r); p.push(r); } return p; }
+
+async function makeSet(n) {
+  reset();
+  for (let i = 0; i < n; i++) {
+    S.nodes.set(i, {id: i, ord: i, label: String(i), x: 960, y: BAND.top, tx: 0, ty: 0,
+                    rank: 0, size: 1, showBadge: true, opacity: 0, scale: 0.6});
+  }
+  layout();
+  for (const nd of S.nodes.values()) { nd.x = nd.tx; nd.y = nd.ty; }
+  drawNodes();
+  // Stagger the entrance. Everything appearing at once reads as a page load; 45 ms apart
+  // reads as being laid out for you.
+  const list = [...S.nodes.values()];
+  await Promise.all(list.map((nd, i) => (async () => {
+    await wait(i * 45);
+    await animate(340, t => { nd.opacity = t; nd.scale = 0.6 + 0.4 * t; drawNodes(); }, ease.back);
+    nd.opacity = 1; nd.scale = 1;
+  })()));
+  drawNodes();
+}
+
+async function union(a, b) {
+  light([a, b], true);
+  await pulse([a, b], 1);
+  const ra = findRoot(a), rb = findRoot(b);
+  if (ra !== rb) {
+    // Show the climb to each root first, so "we link the ROOTS" is something the viewer
+    // watched happen rather than something the caption asserted.
+    if (ra !== a) { await climb(a); }
+    if (rb !== b) { await climb(b); }
+    let hi = ra, lo = rb;
+    if (S.nodes.get(ra).rank < S.nodes.get(rb).rank) { hi = rb; lo = ra; }
+    else if (S.nodes.get(ra).rank === S.nodes.get(rb).rank) { S.nodes.get(hi).rank += 1; }
+    S.nodes.get(hi).size += S.nodes.get(lo).size;
+    S.parent.set(lo, hi);
+    await travel(lo, hi, 460);
+    layout();
+    await settle(680);
+    await pulse([hi], 1);
+  }
+  light([a, b], false);
+  clearLitEdges();
+  drawNodes(); drawEdges();
+}
+
+// Build a deliberate chain: chain([3,2,1,0]) makes 3 -> 2 -> 1 -> 0.
+//
+// This exists because union by rank does its job too well to teach with. Four unions leave
+// every node a direct child of the root, so a find() has nothing to compress and the frame
+// before and the frame after are identical — which is exactly what a lesson about path
+// compression must not look like. A chain is the shape the algorithm is protecting you
+// FROM, so it is the shape worth drawing before showing the fix.
+async function chain(ids) {
+  for (let i = 0; i < ids.length - 1; i++) {
+    const c = ids[i], p = ids[i + 1];
+    if (!S.nodes.has(c) || !S.nodes.has(p)) continue;
+    S.parent.set(c, p);
+    S.nodes.get(c).lit = true;
+    drawNodes();
+    layout();
+    await settle(420);
+    await travel(c, p, 320);
+    S.nodes.get(c).lit = false;
+  }
+  // Sizes and ranks have to match the drawing, because facts() is what the judge is told.
+  const root = ids[ids.length - 1];
+  for (const id of ids) { const n = S.nodes.get(id); if (n) { n.size = 1; n.rank = 0; } }
+  const rn = S.nodes.get(root);
+  if (rn) { rn.size = ids.length; rn.rank = ids.length - 1; }
+  drawNodes(); drawEdges();
+}
+
+async function climb(x) {
+  const p = pathTo(x);
+  for (let i = 0; i < p.length - 1; i++) {
+    S.nodes.get(p[i]).litEdge = true;
+    drawEdges();
+    await travel(p[i], p[i + 1], 420);
+  }
+  return p;
+}
+
+async function find(x) {
+  light([x], true);
+  const p = await climb(x);
+  const root = p[p.length - 1];
+  await pulse([root], 1);
+  // Path compression, shown as what it is: the old arrow lets go and a new one is drawn
+  // straight to the root. Nodes that already pointed at the root are left alone.
+  const moved = p.slice(0, -1).filter(id => S.parent.get(id) !== root);
+  for (const id of moved) S.parent.set(id, root);
+  if (moved.length) {
+    clearLitEdges();
+    layout();
+    await settle(720);
+    await pulse(moved, 1);
+  }
+  light([x], false);
+  clearLitEdges();
+  drawNodes(); drawEdges();
+  return root;
+}
+
+async function same(a, b) {
+  light([a, b], true);
+  const ra = findRoot(a), rb = findRoot(b);
+  await climb(a);
+  await climb(b);
+  const verdict = ra === rb;
+  await callout(ra, verdict ? `same root: ${ra}` : `roots ${ra} and ${rb}`);
+  await pulse(verdict ? [ra] : [ra, rb], 2);
+  await wait(500);
+  clearCallout();
+  light([a, b], false);
+  clearLitEdges();
+  drawNodes(); drawEdges();
+  return verdict;
+}
+
+function clearLitEdges() { for (const n of S.nodes.values()) n.litEdge = false; }
+
+// ---------------------------------------------------------------- arrays
+// The second family: a row of cells, for anything taught on a sequence — sorting, binary
+// search, two pointers. Same animation core, so it costs very little to have both.
+async function cells(values, opts) {
+  clearCells();
+  const o = opts || {};
+  const n = values.length;
+  const w = clamp(Math.floor(1500 / Math.max(n, 1)), 54, 128);
+  const gap = Math.max(8, Math.round(w * 0.14));
+  const total = n * w + (n - 1) * gap;
+  const x0 = 960 - total / 2;
+  const y = o.y || 300;
+  S.cells = values.map((v, i) => {
+    const grp = el("g", {opacity: 0}, L.node);
+    const x = x0 + i * (w + gap);
+    el("rect", {x: 0, y: 0, width: w, height: w, rx: 10, fill: "var(--node)",
+                stroke: "#8C9DAF", "stroke-width": 2}, grp);
+    const tv = el("text", {class: "cell-v", x: w / 2, y: w / 2}, grp);
+    tv.textContent = String(v);
+    const ti = el("text", {class: "cell-i", x: w / 2, y: w + 26}, grp);
+    ti.textContent = String(i);
+    grp.setAttribute("transform", `translate(${x} ${y})`);
+    return {i, v, x, y, w, grp, rect: grp.firstChild, text: tv};
+  });
+  await Promise.all(S.cells.map((c, i) => (async () => {
+    await wait(i * 38);
+    await animate(300, t => c.grp.setAttribute("opacity", t), ease.out);
+    c.grp.setAttribute("opacity", 1);
+  })()));
+}
+
+function cellColour(i, colour) {
+  const c = S.cells[i];
+  if (!c) return;
+  c.rect.setAttribute("stroke", colour || "#8C9DAF");
+  c.rect.setAttribute("stroke-width", colour ? 3.5 : 2);
+}
+
+async function compare(i, j) {
+  cellColour(i, "#5EB3DE"); cellColour(j, "#5EB3DE");
+  await wait(520);
+  const out = S.cells[i] && S.cells[j] ? S.cells[i].v - S.cells[j].v : 0;
+  cellColour(i, null); cellColour(j, null);
+  return out;
+}
+
+async function swap(i, j) {
+  const a = S.cells[i], b = S.cells[j];
+  if (!a || !b) return;
+  cellColour(i, "#BF8B49"); cellColour(j, "#BF8B49");
+  const ax = a.x, bx = b.x, lift = 74;
+  await animate(560, t => {
+    const arc = Math.sin(Math.PI * t) * lift;
+    a.grp.setAttribute("transform", `translate(${ax + (bx - ax) * t} ${a.y - arc})`);
+    b.grp.setAttribute("transform", `translate(${bx + (ax - bx) * t} ${b.y + arc})`);
+  }, ease.inOut);
+  a.x = bx; b.x = ax;
+  a.grp.setAttribute("transform", `translate(${a.x} ${a.y})`);
+  b.grp.setAttribute("transform", `translate(${b.x} ${b.y})`);
+  S.cells[i] = b; S.cells[j] = a;
+  S.cells[i].i = i; S.cells[j].i = j;
+  cellColour(i, null); cellColour(j, null);
+}
+
+// ---- what a SEARCH needs that a sort does not -------------------------------
+// A lesson on binary search is entirely about the half you just threw away, and there was
+// no way to draw that: the canvas could compare and swap cells and nothing else, so every
+// topic that was not union-find got taught by pointing at somebody's web page instead —
+// "it didnt show me anything visually" (user, 2026-09-19). These three are the vocabulary
+// for a window narrowing: dim what is out, name where the edges are, ring what was found.
+async function span(lo, hi) {
+  await Promise.all(S.cells.map((c, i) => (async () => {
+    const out = i < lo || i > hi;
+    const to = out ? 0.22 : 1;
+    const from = Number(c.grp.getAttribute("opacity") || 1);
+    if (Math.abs(from - to) < 0.01) return;
+    await animate(420, t => c.grp.setAttribute("opacity", from + (to - from) * t), ease.inOut);
+    c.grp.setAttribute("opacity", to);
+  })()));
+}
+
+const markGfx = new Map();
+async function marks(list) {
+  for (const [k, g] of markGfx) { g.remove(); markGfx.delete(k); }
+  for (const [i, name] of (list || [])) {
+    const c = S.cells[i];
+    if (!c) continue;
+    const grp = el("g", {opacity: 0, transform: `translate(${c.x + c.w / 2} ${c.y + c.w + 44})`}, L.mark);
+    el("path", {d: "M0,-16 L11,2 L-11,2 Z", fill: "#5EB3DE"}, grp);
+    const t = el("text", {class: "tag", y: 30, fill: "#5EB3DE"}, grp);
+    t.textContent = String(name).toUpperCase();
+    markGfx.set(String(i) + name, grp);
+    animate(300, v => grp.setAttribute("opacity", v), ease.out);
+  }
+  await wait(320);
+}
+
+async function found(i) {
+  const c = S.cells[i];
+  if (!c) return;
+  cellColour(i, "#5EB3DE");
+  c.rect.setAttribute("fill", "rgba(94,179,222,.16)");
+  for (let k = 0; k < 2; k++) {
+    await animate(260, t => c.grp.setAttribute("opacity", 1 - 0.45 * Math.sin(Math.PI * t)), ease.inOut);
+  }
+  c.grp.setAttribute("opacity", 1);
+}
+
+function clearCells() {
+  for (const [k, g] of markGfx) { g.remove(); markGfx.delete(k); }
+  for (const c of S.cells) c.grp.remove();
+  S.cells = [];
+}
+
+// ---------------------------------------------------------------- housekeeping
+function reset() {
+  for (const n of S.nodes.values()) if (n.gfx) n.gfx.grp.remove();
+  S.nodes.clear(); S.parent.clear();
+  for (const e of edgeGfx.values()) e.remove();
+  edgeGfx.clear();
+  clearCells(); clearCallout();
+  L.mark.textContent = "";
+}
+
+// What is actually true on screen. The answer judge cannot see the page, so it is handed
+// this — the same numbers a viewer reads off the drawing, and nothing the drawing does not
+// show.
+function facts() {
+  const groups = new Map();
+  for (const id of S.nodes.keys()) {
+    const r = findRoot(id);
+    if (!groups.has(r)) groups.set(r, []);
+    groups.get(r).push(id);
+  }
+  return {
+    n: S.nodes.size,
+    groups: [...groups.entries()].map(([root, members]) => ({
+      root, members, rank: S.nodes.get(root).rank, size: S.nodes.get(root).size,
+    })),
+    parent: Object.fromEntries(S.parent),
+    caption: S.caption,
+    cells: S.cells.map(c => c.v),
+  };
+}
+
+function describe() {
+  const f = facts();
+  if (!f.n) return "nothing on screen yet";
+  const parts = f.groups.map(gr =>
+    gr.members.length === 1 ? `${gr.root} on its own`
+      : `{${gr.members.join(", ")}} under root ${gr.root} (rank ${gr.rank}, size ${gr.size})`);
+  return `${f.groups.length} group${f.groups.length === 1 ? "" : "s"}: ${parts.join("; ")}`;
+}
+
+window.teach = {
+  ready: true,
+  reset, facts, describe,
+  title: setTitle,
+  caption: setCaption,
+  rate: r => { RATE = clamp(Number(r) || 1, 0.25, 4); return RATE; },
+  makeSet, union, find, same, chain, pulse, callout, clearCallout,
+  light: (ids, on) => light([].concat(ids), on),
+  cells, compare, swap, span, marks, found,
+  // handy when framing a shot by hand
+  band: () => BAND,
+};
+
+setTitle("");
+})();
+</script>
+</body>
+</html>

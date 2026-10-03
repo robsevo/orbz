@@ -10,7 +10,7 @@
 // answers only to those names (a rebound hostname is refused), never takes the loopback token
 // (that stays for local tools), and lets in only a session: a pairing link (a QR code on a phone)
 // or a passkey, each a device that can be revoked.
-import { randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { existsSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { createServer as createTlsServer } from "node:https";
@@ -29,6 +29,8 @@ import { CalendarError } from "./connectors/calendars.ts";
 import { AccountError } from "./connectors/accounts.ts";
 import { ComputerError, type Hands, type Screen } from "./computer/browser.ts";
 import { VaultError } from "./computer/vault.ts";
+import { LessonError } from "./lessons.ts";
+import { KIT_DIR } from "./kit.ts";
 import type { Tab } from "./team.ts";
 import { standingContext } from "./agent/standing.ts";
 import { listWorkspace, MissingError, OutsideError, readWorkspace, saveUpload, UPLOAD_CAP } from "./workspace.ts";
@@ -161,6 +163,8 @@ async function handle(
     if (url.pathname === "/" || url.pathname === "/app" || url.pathname === "/app/") return redirect(res!, "/app/orbs.html");
     return serveApp(res!, door.appDir, parts.slice(1));
   }
+  // the lesson's canvas (PLAN 4.4): a carried page with nothing secret in it, framed only by the app
+  if (method === "GET" && door && url.pathname === "/lesson/canvas.html") return serveCanvas(res!);
   // a pairing link's code, for a session
   if (method === "POST" && url.pathname === "/session" && door) {
     const id = door.sessions.redeem(text(await body(req), "code"), deviceName(req.headers["user-agent"]));
@@ -722,6 +726,36 @@ async function handle(
       return state();
     }
   }
+  // his lesson (PLAN 4.4): the one he is giving, and your hand in it
+  if (parts[0] === "orbs" && parts[2] === "lesson" && (parts.length === 3 || parts.length === 4)) {
+    const orb = decodeURIComponent(parts[1]!);
+    if (!home.inbox.orb(orb)) throw new HttpError(404, `no orb "${orb}"`);
+    const state = (): Record<string, unknown> | null => {
+      const c = home.lessons.current(orb);
+      return c ? { ...c.lesson, step: c.step } : null;
+    };
+    try {
+      if (method === "GET" && parts.length === 3) return { lesson: state() };
+      if (method === "POST" && parts[3] === "next") {
+        home.lessons.next(orb);
+        return { lesson: state() };
+      }
+      if (method === "POST" && parts[3] === "stop") {
+        home.lessons.end(orb, "stopped by you");
+        return { lesson: null };
+      }
+      if (method === "POST" && parts[3] === "answer") {
+        const b = await body(req);
+        return await home.lessons.answer(orb, text(b, "answer"), (b.facts && typeof b.facts === "object" ? b.facts : {}) as Record<string, unknown>);
+      }
+      if (method === "POST" && parts[3] === "explain") {
+        const b = await body(req);
+        return { say: await home.lessons.explain(orb, (b.facts && typeof b.facts === "object" ? b.facts : {}) as Record<string, unknown>) };
+      }
+    } catch (e) {
+      throw e instanceof LessonError ? new HttpError(409, e.message) : e;
+    }
+  }
   // his voice and his ears (PLAN 4.3): Ash's, through the kit. The page records and plays; what he
   // says and what he hears are the home's
   if (method === "POST" && parts[0] === "orbs" && parts.length === 4 && parts[2] === "voice") {
@@ -922,5 +956,24 @@ function serveApp(res: ServerResponse, dir: string, parts: string[]): typeof STR
     "referrer-policy": "no-referrer",
   });
   res.end(readFileSync(file));
+  return STREAMING;
+}
+
+/** The lesson's canvas (PLAN 4.4): Ash's teach/canvas.html, carried into the kit, served as it is with
+ * a policy of its own: its one inline script allowed by its hash (computed from the file, so a
+ * changed carry is a refused script, never a silently allowed one), framed only by the app. */
+export function serveCanvas(res: ServerResponse): typeof STREAMING {
+  const file = join(KIT_DIR, "ash", "teach", "canvas.html");
+  if (!existsSync(file)) throw new HttpError(404, "the lesson canvas is not in the kit");
+  const page = readFileSync(file, "utf8");
+  const hashes = [...page.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => `'sha256-${createHash("sha256").update(m[1]!).digest("base64")}'`);
+  res.writeHead(200, {
+    "content-type": "text/html; charset=utf-8",
+    "cache-control": "no-store",
+    "content-security-policy": `default-src 'none'; script-src ${hashes.join(" ") || "'none'"}; style-src 'unsafe-inline'; img-src data:; frame-ancestors 'self'; base-uri 'none'; form-action 'none'`,
+    "x-content-type-options": "nosniff",
+    "referrer-policy": "no-referrer",
+  });
+  res.end(page);
   return STREAMING;
 }
