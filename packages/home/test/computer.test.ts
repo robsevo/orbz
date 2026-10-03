@@ -23,7 +23,7 @@ import { web } from "./fakes/web.ts";
 
 const EXE = chromiumPath();
 if (!EXE) throw new Error("no Chromium for his browser: set ORBS_CHROME, or `npx playwright install chromium`");
-const PASSWORD = "hunter2-correct-horse";
+const PASSWORD = "hunter2-correct-horse"; // a dummy, saved and typed only on the stand-in web
 
 test("the floor reads what a click and a field commit to", () => {
   const cats = (h: { category: string }[]) => h.map((x) => x.category);

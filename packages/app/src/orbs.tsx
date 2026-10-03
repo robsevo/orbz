@@ -33,6 +33,7 @@ import { NEWBORN } from "./onboarding/story.ts";
 import type { Gesture, OrbState } from "./orb/life.ts";
 import { useMood, useMoods, WORN } from "./orb/useMood.ts";
 import { preview, stopPreview } from "./orb/preview.ts";
+import { span } from "./orb/age.ts";
 import { applyTheme, savedTheme } from "./ui/theme.ts";
 
 applyTheme(savedTheme(), false); // before the first paint: the theme you chose, never a flash of another
@@ -155,7 +156,7 @@ function Radar({ items }: { items: { name: string; value: number }[] }) {
   );
 }
 
-function Sheet({ c, onRename, replies, standing }: { c: Character; onRename?: (name: string) => void; replies: Replies; standing?: Standing | null }) {
+function Sheet({ c, onRename, replies, standing, startsAs }: { c: Character; onRename?: (name: string) => void; replies: Replies; standing?: Standing | null; startsAs?: "Junior" | "Senior" }) {
   const sh = sheetOf(c);
   const v = voice(c.voice);
   const name = { font: "800 26px/32px var(--font)", color: "var(--accent)" } satisfies CSSProperties;
@@ -181,8 +182,18 @@ function Sheet({ c, onRename, replies, standing }: { c: Character; onRename?: (n
         <span style={{ font: "400 13px/18px var(--font)", color: "var(--text-3)" }}>
           {onRename
             ? "Not in the office yet · he is fixed once you create him"
-            : `${standing?.level ?? "Junior"} · ${(standing?.xp ?? 0).toLocaleString("en-GB")} XP · ${standing?.next?.ready ? `ready for ${standing.next.to}` : "levels come from finished work you approve"}`}
+            : `${standing?.level ?? startsAs ?? "Junior"} · ${(standing?.xp ?? 0).toLocaleString("en-GB")} XP · ${standing?.next?.ready ? `ready for ${standing.next.to}` : "levels come from finished work you approve"}`}
         </span>
+        {/* the first of his kind in the office starts as the Senior (owner, 10-02), so the work has someone to lead it */}
+        {onRename && startsAs && (
+          <span style={{ font: "400 13px/18px var(--font)", color: "var(--text-3)" }}>{startsAs === "Senior" ? `Starts as the Senior: your first ${SPECIALTIES[c.specialty].title}` : "Starts as a Junior"}</span>
+        )}
+        {/* how long he has been about, and been with you (owner, 10-02): his age never restarts; his days in the company start again when he is rehired */}
+        {!onRename && standing && (
+          <span style={{ font: "400 13px/18px var(--font)", color: "var(--text-3)" }}>
+            {`Age ${span(standing.born, standing.now)} · ${standing.left === null ? `${span(standing.hired, standing.now)} in the company` : `${span(standing.hired, standing.left)} in the company, then let go`}`}
+          </span>
+        )}
       </div>
       <p style={{ margin: 0, font: "400 15px/21px var(--font)", color: "var(--text-2)" }}>{sh.bio}</p>
       {/* a role a licence stands behind says so: he is a persona that helps, never the professional */}
@@ -621,6 +632,9 @@ function App() {
   useEffect(() => play("pop"), [making ? "new" : me.name]);
 
   const taken = (name: string): boolean => office.some((c) => c.name.trim().toLowerCase() === name.trim().toLowerCase());
+  // the level he starts at (owner, 10-02): the Senior when he is the first of his kind in the office
+  // (the office is in hiring order), a Junior after; a home's word on his level comes first
+  const startsAs = (making ? !office.some((o) => o.specialty === me.specialty) : office.find((o) => o.specialty === me.specialty) === me) ? "Senior" : "Junior";
   /** A new orb by the dice, with a name nobody in the office has. */
   const fresh = (): Character => {
     let c = surprise(roll());
@@ -913,7 +927,7 @@ function App() {
           </div>
 
           <div className="orbs-pair" style={{ display: "grid", gap: "var(--s4)", padding: "0 var(--s5)", gridTemplateColumns: "minmax(0, 1fr)", alignItems: "start" }}>
-            <Sheet c={me} onRename={making ? (n) => edit({ name: n }) : undefined} replies={replies} standing={making ? null : standing} />
+            <Sheet c={me} onRename={making ? (n) => edit({ name: n }) : undefined} replies={replies} standing={making ? null : standing} startsAs={startsAs} />
             {making ? <Creator me={me} edit={edit} replies={replies} setReplies={setReplies} /> : <Card c={me} replies={replies} setReplies={setReplies} onDelete={() => remove(me.name)} onChat={() => go({ room: "chat", orb: me.name })} />}
           </div>
 

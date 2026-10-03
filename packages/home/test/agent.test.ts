@@ -196,7 +196,7 @@ test("A.7 a trace replays: its model replies and tool results reproduce the run,
     brain: { preset: { id: "r", title: "r", own: null, big: { name: "big", baseUrl: model.url, model: "m", retries: 0 }, teacher: null } },
   });
   t.after(() => replay.close());
-  replay.inbox.addOrb("juniper", "Juniper");
+  replay.inbox.addOrb("juniper", "Juniper", "general", {}, "Junior"); // a Junior, as the first home hired him
   replay.start();
   for (const input of sc.inputs.filter((i) => i.source === "chat")) replay.inbox.send("juniper", "chat:1", input.text);
   await replay.inbox.idle();

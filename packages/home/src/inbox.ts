@@ -90,7 +90,11 @@ export class Inboxes {
     this.#graceMs = graceMs;
   }
 
-  addOrb(id: string, name: string, specialty: Specialty = "general", look: Record<string, unknown> = {}): Orb {
+  /** Hires an orb. He starts as a Junior, or as the Senior when no orb of his specialty is in the
+   * office (owner, 10-02: "your first orb of that kind of employee is always the senior, or else we
+   * would never get anywhere"), so every kind of work has someone to lead it and review it
+   * (PLAN 5.4). `starts` sets it instead, for a home's tests. */
+  addOrb(id: string, name: string, specialty: Specialty = "general", look: Record<string, unknown> = {}, starts?: "Junior" | "Senior"): Orb {
     if (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(id)) throw new Error(`orb id "${id}": use 1-40 of a-z, 0-9 and -`);
     if (this.orb(id)) throw new Error(`orb "${id}" already exists`);
     if (!(specialty in SPECIALTY_FAMILIES)) throw new Error(`"${specialty}" is not a specialty`);
@@ -98,8 +102,9 @@ export class Inboxes {
     tx(this.#db, () => {
       const json = JSON.stringify(look);
       if (json.length > 8000) throw new Error("an orb's look is a few choices, not a document");
+      const first = !this.#db.prepare("SELECT 1 FROM orbs WHERE specialty = ? AND let_go_at IS NULL LIMIT 1").get(specialty);
       this.#db.prepare("INSERT INTO orbs (id, name, created_at, specialty, look) VALUES (?, ?, ?, ?, ?)").run(id, name, at, specialty, json);
-      this.#events.append("orb.added", { name, specialty }, { orb: id });
+      this.#events.append("orb.added", { name, specialty, level: starts ?? (first ? "Senior" : "Junior") }, { orb: id });
     });
     return this.orb(id)!;
   }

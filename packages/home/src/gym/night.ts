@@ -5,6 +5,9 @@
 // alone: nothing new to learn from. One with new approved runs (an ordinary run, or one a habit
 // handed to the brain and you approved, 3.3) is compiled again, as the next version, on all of them;
 // if that fails the version before it still stands, and it still hands those cases on.
+// An orb you let go still learns (owner, 10-02: "just not active in company. it can get better,
+// like an employee can"): the night looks back over HIS last WINDOW_DAYS of work, not the
+// calendar's, which would empty a fortnight after he left. His promotion waits till he is back.
 import type { Clock } from "../clock.ts";
 import type { EventLog } from "../events.ts";
 import { chat, type Endpoint } from "../brain/openai.ts";
@@ -31,6 +34,17 @@ function nightOf(at: number): number {
   const d = new Date(at);
   const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), NIGHT_HOUR).getTime();
   return at >= start ? start : new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1, NIGHT_HOUR).getTime();
+}
+
+/** Who is away, let go and not rehired, and since when. */
+function awayOf(events: EventLog): Map<string, number> {
+  const away = new Map<string, number>();
+  for (const e of [...events.ofType("orb.let_go"), ...events.ofType("orb.rehired")].sort((a, b) => a.seq - b.seq)) {
+    if (!e.orb) continue;
+    if (e.type === "orb.let_go") away.set(e.orb, e.at);
+    else away.delete(e.orb);
+  }
+  return away;
 }
 
 export type Sat = { kind: string; verdict: Verdict["verdict"]; earned: boolean };
@@ -104,7 +118,10 @@ export class Gym {
     let left = 0;
     let stopped: string | null = null;
     let noTeacher = false;
-    for (const c of findHotPaths(events, { since: clock.now() - WINDOW_DAYS * DAY_MS })) {
+    const away = awayOf(events);
+    const found = findHotPaths(events, { since: clock.now() - WINDOW_DAYS * DAY_MS }).filter((c) => !away.has(c.orb));
+    for (const [orb, left] of away) found.push(...findHotPaths(events, { since: left - WINDOW_DAYS * DAY_MS }).filter((c) => c.orb === orb));
+    for (const c of found) {
       if (!c.trigger.startsWith("schedule:") && !c.trigger.startsWith("trigger:")) continue;
       const cases = casesOf(events, c.runs);
       const version = this.#o.kit ? this.#nextVersion(c) : null;

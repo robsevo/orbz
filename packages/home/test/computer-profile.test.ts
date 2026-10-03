@@ -19,7 +19,7 @@ const EXE = chromiumPath(); // found in the real home, before it is swapped
 if (!EXE) throw new Error("no Chromium for his browser: set ORBS_CHROME, or `npx playwright install chromium`");
 const PERSON = mkdtempSync(join(tmpdir(), "orbs-person-"));
 process.env.HOME = PERSON;
-process.env.ORBS_TEST_KEY = "sk-not-real-but-shaped-5678"; // a key in the home's own environment
+process.env.ORBS_TEST_KEY = "sk-dummy-but-key-shaped-5678"; // a key in the home's own environment
 process.on("exit", () => rmSync(PERSON, { recursive: true, force: true }));
 
 /** Every file under `dir`, by its path, as a hash and a time: to prove a folder is untouched. */

@@ -15,7 +15,7 @@ import { MemoryStore } from "../src/chatgpt/store.ts";
 import { HIDDEN, hostOf, siteOf, Vault, VaultError } from "../src/computer/vault.ts";
 import { openHome } from "./helpers.ts";
 
-const PASSWORD = "hunter2-correct-horse";
+const PASSWORD = "hunter2-correct-horse"; // a dummy, saved and typed only on the stand-in web
 
 function vault(t: Parameters<typeof openHome>[0], store = new MemoryStore()) {
   const { home, dataDir, clock } = openHome(t);

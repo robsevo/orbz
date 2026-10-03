@@ -101,7 +101,8 @@ export async function agentHome(t: TestContext, script: Turn[], more: Partial<Ho
     ...rest,
   });
   t.after(() => home.close());
-  if (!home.inbox.orb("juniper")) home.inbox.addOrb("juniper", "Juniper");
+  // a Junior, what most tests are about (the first of a kind starts Senior: levels.test.ts)
+  if (!home.inbox.orb("juniper")) home.inbox.addOrb("juniper", "Juniper", "general", {}, "Junior");
   home.start();
   return { home, model, dataDir };
 }

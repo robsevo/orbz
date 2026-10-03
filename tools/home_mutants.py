@@ -997,6 +997,34 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("a row's page may be someone else's site", 'src/plans/board.ts', [
         ('      return ["localhost", "127.0.0.1", "[::1]"].includes(new URL(p).hostname) ? p : null;', '      return p;'),
     ], ['board.test.ts']),
+    # the first of a kind leads it; his age and his days in the company; let go, he still learns (owner, 10-02)
+    ("every orb starts a Junior", "src/inbox.ts", [
+        ('level: starts ?? (first ? "Senior" : "Junior")', 'level: starts ?? "Junior"'),
+    ], ["levels.test.ts"]),
+    ("every orb starts the Senior", "src/inbox.ts", [
+        ('level: starts ?? (first ? "Senior" : "Junior")', 'level: starts ?? "Senior"'),
+    ], ["levels.test.ts"]),
+    ("an orb let go still counts as one of his kind", "src/inbox.ts", [
+        ('"SELECT 1 FROM orbs WHERE specialty = ? AND let_go_at IS NULL LIMIT 1"', '"SELECT 1 FROM orbs WHERE specialty = ? LIMIT 1"'),
+    ], ["levels.test.ts"]),
+    ("the level he was hired at is forgotten", "src/gym/levels.ts", [
+        ('  return events.ofType("orb.added").find((e) => e.orb === orb)?.data.level === "Senior" ? "Senior" : "Junior";', '  return "Junior";'),
+    ], ["levels.test.ts"]),
+    ("his days in the company count from his first hire", "src/gym/levels.ts", [
+        ("hired: back?.at ?? orb.createdAt", "hired: orb.createdAt"),
+    ], ["levels.test.ts"]),
+    ("his age restarts when he is rehired", "src/gym/levels.ts", [
+        ("return { born: orb.createdAt,", "return { born: back?.at ?? orb.createdAt,"),
+    ], ["levels.test.ts"]),
+    ("an orb let go stops learning", "src/gym/night.ts", [
+        ("    for (const [orb, left] of away) found.push(", "    for (const [orb, left] of [] as [string, number][]) found.push("),
+    ], ["night.test.ts"]),
+    ("an orb let go learns on the office's window", "src/gym/night.ts", [
+        ("found.push(...findHotPaths(events, { since: left - WINDOW_DAYS * DAY_MS })", "found.push(...findHotPaths(events, { since: clock.now() - WINDOW_DAYS * DAY_MS })"),
+    ], ["night.test.ts"]),
+    ("the office learns from work of any age", "src/gym/night.ts", [
+        ("    const found = findHotPaths(events, { since: clock.now() - WINDOW_DAYS * DAY_MS })", "    const found = findHotPaths(events, { since: 0 })"),
+    ], ["night.test.ts"]),
 ]
 
 # the app (PLAN 2.x): paths are inside packages/app
@@ -1025,7 +1053,7 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ("      return watch(on);", "      return sharedStream()(on);"),
     ], ["notices.test.ts"]),
     ("his card says Junior whatever he is", "src/orbs.tsx", [
-        ('`${standing?.level ?? "Junior"} · ', '`${"Junior"} · '),
+        ('`${standing?.level ?? startsAs ?? "Junior"} · ', '`${"Junior"} · '),
     ], ["morning.test.ts"]),
     ("the side menu shows no mood", "src/orbs.tsx", [
         ('                  {moods[idOf(c.name)] && moods[idOf(c.name)] !== "idle" && (', "                  {false && ("),
@@ -1427,6 +1455,25 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ('a saved password stays in its field', 'src/rooms/Passwords.tsx', [
         ('    setPassword(""); // out of the page at once, whatever the home says\n', ''),
     ], ['browser-view.test.ts']),
+    # his age, his days in the company, and where a new orb starts (owner, 10-02)
+    ("years are never said", "src/orb/age.ts", [
+        ("  if (!years) return d;", "  if (true) return d;"),
+    ], ["age.test.ts"]),
+    ("daylight saving moves a day", "src/orb/age.ts", [
+        ("  const a = new Date(wall(from));\n  const b = wall(to);", "  const a = new Date(from);\n  const b = to;"),
+    ], ["age.test.ts"]),
+    ("a day is said before it is whole", "src/orb/age.ts", [
+        ("  const days = Math.max(0, Math.floor(", "  const days = Math.max(0, Math.round("),
+    ], ["age.test.ts"]),
+    ("his card does not say his age", "src/orbs.tsx", [
+        ("        {!onRename && standing && (", "        {false && standing && ("),
+    ], ["morning.test.ts"]),
+    ("a new orb's sheet does not say where he starts", "src/orbs.tsx", [
+        ("        {onRename && startsAs && (", "        {false && startsAs && ("),
+    ], ["creator.test.ts"]),
+    ("every new orb starts the Senior on his sheet", "src/orbs.tsx", [
+        ("  const startsAs = (making ? !office.some((o) => o.specialty === me.specialty)", "  const startsAs = (making ? true"),
+    ], ["creator.test.ts"]),
 ]
 
 # the `orbs` terminal (PLAN 1.9): paths are inside packages/terminal

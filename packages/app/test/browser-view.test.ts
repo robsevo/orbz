@@ -26,7 +26,7 @@ const LONG = { timeout: 150_000 };
 const APP = fileURLToPath(new URL("..", import.meta.url));
 const EXE = chromiumPath();
 const skip = findChrome() && EXE ? false : "no Chromium on this machine";
-const PASSWORD = "hunter2-correct-horse";
+const PASSWORD = "hunter2-correct-horse"; // a dummy, saved and typed only on the stand-in web
 let browser: Browser;
 let dist: string;
 

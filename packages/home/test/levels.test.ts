@@ -4,6 +4,10 @@
 //   - Only the next level, and only on the evidence: a regression lately, or work outside its
 //     specialty, is not evidence.
 //   - A Senior's rank never lowers the floor: sending an email still waits for your OK.
+//   - The first of his kind in the office starts as the Senior (owner, 10-02), the next a Junior;
+//     with the last of a kind let go, the next one hired leads it again; rehired, he is what he was.
+//   - His age counts from the day he was made and never restarts; his days in the company restart
+//     when he is rehired, and stand still while he is away.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { serve } from "../src/api.ts";
@@ -18,6 +22,7 @@ const BILLS = "dana|trigger:t1|read_file>remind {subject}";
 test("XP without an exam passed is not proposed; with both the night proposes it once; only your yes promotes", async (t) => {
   const clock = new FakeClock(new Date(2026, 9, 1, 9, 0).getTime());
   const { home } = await agentHome(t, [], { clock });
+  home.inbox.addOrb("lee", "Lee", "data"); // Lee came first, so leads data work: Dana starts a Junior
   home.inbox.addOrb("dana", "Dana", "data");
   for (let day = 0; day < 3; day++) {
     approved(home.events, "dana", ["Rent", "Gym", "Water", "Phone", "Car"].map((s) => `${s} ${day}`), 100 + day * 10); // 100 XP a day: the cap is 150
@@ -81,4 +86,45 @@ test("a Senior's rank never lowers the floor: sending an email still waits for y
   const card = home.conversations.openCard("chat:juniper");
   assert.ok(card, "a card, whatever the rank");
   assert.deepEqual(card!.meta.floor, [{ category: "messaging", why: "messaging someone always asks" }]);
+});
+
+test("the first of his kind starts as the Senior, the next a Junior; with the last of a kind let go, the next leads it again", async (t) => {
+  const { home } = await agentHome(t, []);
+  home.inbox.addOrb("ada", "Ada", "frontend");
+  home.inbox.addOrb("bea", "Bea", "frontend");
+  home.inbox.addOrb("cy", "Cy", "writing");
+  assert.deepEqual(["ada", "bea", "cy"].map((o) => levelOf(home.events, o)), ["Senior", "Junior", "Senior"], "Ada leads frontend work, and Cy, the first writer, writing");
+  home.inbox.letGo("ada");
+  home.inbox.addOrb("dee", "Dee", "frontend");
+  assert.equal(levelOf(home.events, "dee"), "Junior", "Bea is still in the office: frontend has someone");
+  home.inbox.letGo("bea");
+  home.inbox.letGo("dee");
+  home.inbox.addOrb("eli", "Eli", "frontend");
+  assert.equal(levelOf(home.events, "eli"), "Senior", "nobody of his kind in the office: Eli leads it");
+  home.inbox.rehire("bea");
+  home.inbox.rehire("ada");
+  assert.deepEqual([levelOf(home.events, "bea"), levelOf(home.events, "ada")], ["Junior", "Senior"], "rehired, each is what he was");
+  const next = nextFor(home.events, "ada", { specialty: "frontend", now: home.clock.now() })!;
+  assert.equal(next.to, "Staff", "a Senior's next level is Staff, on the same evidence as anyone's");
+});
+
+test("his age never restarts; his days in the company restart when he is rehired, and stand still while he is away", async (t) => {
+  const DAY = 86_400_000;
+  const clock = new FakeClock(new Date(2026, 9, 1, 9, 0).getTime());
+  const made = clock.now();
+  const { home } = await agentHome(t, [], { clock });
+  home.inbox.addOrb("ada", "Ada", "frontend");
+  const door = await serve(home, { port: 0 });
+  t.after(() => door.close());
+  const level = async () =>
+    (await (await fetch(`http://127.0.0.1:${door.port}/orbs/ada/level`, { headers: { authorization: `Bearer ${door.token}` } })).json()) as { born: number; hired: number; left: number | null; now: number };
+  clock.suspend(40 * DAY);
+  home.inbox.letGo("ada");
+  clock.suspend(10 * DAY);
+  const away = await level();
+  assert.deepEqual([away.born, away.hired, away.left, away.now], [made, made, made + 40 * DAY, made + 50 * DAY], "away: 50 days old, 40 days in the company");
+  home.inbox.rehire("ada");
+  clock.suspend(5 * DAY);
+  const back = await level();
+  assert.deepEqual([back.born, back.hired, back.left, back.now], [made, made + 50 * DAY, null, made + 55 * DAY], "back: 55 days old, 5 days in the company");
 });

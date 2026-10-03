@@ -6,9 +6,11 @@
 //     tests: the recompile must pass it too, and when it fails the version before still stands.
 //   - From 03:00, once a night; nights slept through run once, on waking; no teacher, it says so
 //     and tries again the next night. The home's tick runs it, and closing the home waits for it.
+//   - An orb let go still learns (owner, 10-02): weeks after he left, his last fortnight's work is
+//     still his to learn from, while an office orb's work that old has left the window.
 import assert from "node:assert/strict";
 import { test, type TestContext } from "node:test";
-import { FakeClock, realClock } from "../src/clock.ts";
+import { type Clock, FakeClock, realClock } from "../src/clock.ts";
 import { openDb } from "../src/db.ts";
 import { EventLog } from "../src/events.ts";
 import { Kit } from "../src/kit.ts";
@@ -22,10 +24,10 @@ import { openHome, tempDir } from "./helpers.ts";
 const LONG = { timeout: 120_000 };
 const TASK = "ada|trigger:t1|{subject}";
 
-async function gym(t: TestContext, teacherSays: string[]) {
+async function gym(t: TestContext, teacherSays: string[], clock: Clock = realClock) {
   const dataDir = tempDir(t);
   const db = openDb(dataDir);
-  const events = new EventLog(db, realClock);
+  const events = new EventLog(db, clock);
   const kit = new Kit({ events, clock: realClock, dataDir });
   t.after(async () => {
     await kit.close();
@@ -34,7 +36,7 @@ async function gym(t: TestContext, teacherSays: string[]) {
   await kit.start();
   const teacher = await fakeBrain(t, teacherSays.map((text) => ({ text, litellmCost: 0.002 })));
   const g = new Gym({
-    events, clock: realClock, dataDir, kit: (tool, args) => kit.call(tool, args), spend: new Spend(events, realClock, null),
+    events, clock, dataDir, kit: (tool, args) => kit.call(tool, args), spend: new Spend(events, clock, null),
     teacher: () => ({ name: "teacher", baseUrl: teacher.baseUrl, model: "teacher-model", retries: 0 }),
   });
   return { events, g, teacher, dataDir };
@@ -87,6 +89,19 @@ test("a case a habit handed on is in the next night's tests; a recompile that fa
   assert.equal(promotedFor(events, dataDir, "ada", TASK)?.version, 1, "the version before still stands");
   await g.night();
   assert.equal(teacher.requests.length, 2, "tried on those runs already: not again until there is something new");
+});
+
+test("an orb let go still learns: three weeks after he left, his last fortnight's work gets its habit; an office orb's that old does not", LONG, async (t) => {
+  const clock = new FakeClock(new Date(2026, 9, 1, 9, 0).getTime());
+  const { events, g, teacher } = await gym(t, [reply(GOOD)], clock);
+  approved(events, "ada");
+  approved(events, "bo", ["Rent", "Gym", "Water"], 301); // the same work, by an orb still in the office
+  events.append("orb.let_go", { name: "Ada" }, { orb: "ada" });
+  clock.suspend(21 * 86_400_000);
+  const night = await g.night();
+  if (/no habit sandbox/.test(night.compiled[0]?.why ?? "")) return t.diagnostic("no habit sandbox on this machine");
+  assert.deepEqual(night.compiled.map((c) => [c.key, c.promoted]), [["ada|trigger:t1|read_file>remind {subject}", true]], "Ada, away three weeks, learns from her last fortnight; Bo's three-week-old runs have left the office's window");
+  assert.equal(teacher.requests.length, 1);
 });
 
 test("from 03:00, once a night; nights slept through run once; no teacher, it says so and tries the next night", async (t) => {

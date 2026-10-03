@@ -182,3 +182,28 @@ test("frames in any colour too; the card says both, and the office keeps them", 
   await page.getByRole("heading", { name: "Pip" }).waitFor();
   assert.match(await page.locator("main").innerText(), /Beanie, coral[\s\S]*Round, honey frames/, "the office keeps it");
 });
+
+test("the first of his kind starts as the Senior, the next of that kind a Junior (owner, 10-02); it fits at both sizes", { skip }, async () => {
+  const page = await open("desk");
+  const pick = async (title: string): Promise<void> => {
+    await page.getByRole("tab", { name: "Specialty" }).click();
+    await page.getByRole("button", { name: new RegExp(`^${title}`) }).click();
+  };
+  await page.getByRole("button", { name: "New orb" }).first().click();
+  await pick("Frontend Builder");
+  await page.getByText("Starts as the Senior: your first Frontend Builder", { exact: true }).waitFor();
+  await page.getByRole("textbox", { name: "Name" }).fill("Pip");
+  await page.getByRole("button", { name: "Create Pip" }).click();
+  await page.getByRole("heading", { name: "Pip" }).waitFor();
+  assert.match(await page.locator("main").innerText(), /Senior · 0 XP/, "and his card says so");
+  await page.getByRole("button", { name: "New orb" }).first().click();
+  await pick("Frontend Builder");
+  await page.getByText("Starts as a Junior", { exact: true }).waitFor();
+  assert.deepEqual(await measure(page), [], "nothing spills at desk size");
+  await page.setViewportSize(SIZES.phone);
+  assert.deepEqual(await measure(page), [], "nor at phone size");
+  await pick("All-Rounder");
+  await page.getByText("Starts as the Senior: your first All-Rounder", { exact: true }).waitFor();
+  assert.deepEqual(await measure(page), [], "the Senior's line fits a phone too");
+  await page.close();
+});

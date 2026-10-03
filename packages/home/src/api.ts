@@ -38,7 +38,7 @@ import { cronFor, preview, RuleError, ruleOf, wordsOf } from "./schedule-rules.t
 import { cronOf } from "./schedule.ts";
 import { labOf, reopen } from "./lab.ts";
 import { morningCard } from "./gym/card.ts";
-import { levelOf, nextFor } from "./gym/levels.ts";
+import { levelOf, nextFor, tenureOf } from "./gym/levels.ts";
 import { findHotPaths } from "./gym/finder.ts";
 import { nichesOf, radarOf } from "./gym/specialty.ts";
 import { version } from "./version.ts";
@@ -527,7 +527,9 @@ async function handle(
     const orb = decodeURIComponent(parts[1]!);
     const who = home.inbox.orb(orb);
     if (!who) throw new HttpError(404, `no orb "${orb}"`);
-    return { level: levelOf(home.events, orb), xp: home.xp.of(orb, home.clock.now()).total, next: nextFor(home.events, orb, { specialty: who.specialty, now: home.clock.now() }) };
+    const now = home.clock.now();
+    // with his age and his days in the company, counted where you read them (owner, 10-02)
+    return { level: levelOf(home.events, orb), xp: home.xp.of(orb, now).total, next: nextFor(home.events, orb, { specialty: who.specialty, now }), ...tenureOf(home.events, who), now };
   }
   if (method === "POST" && parts[0] === "orbs" && parts.length === 3 && (parts[2] === "promote" || parts[2] === "decline-promotion")) {
     const orb = decodeURIComponent(parts[1]!);

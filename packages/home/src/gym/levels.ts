@@ -35,10 +35,20 @@ export const AREAS_OF: Partial<Record<Specialty, Area[]>> = {
   tutor: ["teaching"], language: ["teaching"], coach: ["teaching"],
 };
 
-/** An orb's level now: the last promotion you said yes to. */
+/** An orb's level now: the last promotion you said yes to, else the level he was hired at (the first
+ * of his kind in the office starts Senior, inbox.ts). */
 export function levelOf(events: EventLog, orb: string): Level {
   const last = events.ofType("orb.promoted").findLast((e) => e.orb === orb);
-  return last ? (String(last.data.to) as Level) : "Junior";
+  if (last) return String(last.data.to) as Level;
+  return events.ofType("orb.added").find((e) => e.orb === orb)?.data.level === "Senior" ? "Senior" : "Junior";
+}
+
+/** When he was made, when he joined the company this time (his latest hire or rehire), and when he
+ * left, if he is away. His age never restarts; his days in the company do (owner, 10-02: "they can
+ * get fired and re hired for whatever reason"). */
+export function tenureOf(events: EventLog, orb: { id: string; createdAt: number; letGoAt: number | null }): { born: number; hired: number; left: number | null } {
+  const back = events.ofType("orb.rehired").findLast((e) => e.orb === orb.id);
+  return { born: orb.createdAt, hired: back?.at ?? orb.createdAt, left: orb.letGoAt };
 }
 
 export type Evidence = {

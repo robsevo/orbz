@@ -43,6 +43,12 @@ export type Standing = {
   level: string;
   xp: number;
   next: { from: string; to: string; ready: boolean; missing: string[]; evidence: { xp: { has: number; needs: number }; tasks: { has: string[]; needs: number } } } | null;
+  /** When he was made, when he joined this time (his latest hire or rehire), when he left if he is
+   * away, and the home's now: his age and his days in the company (owner, 10-02). */
+  born: number;
+  hired: number;
+  left: number | null;
+  now: number;
 };
 /** The brain order (PLAN 1.11), as the home has it: each brain's state, and ChatGPT's own. */
 export type BrainState = { id: "chatgpt" | "gemini" | "key" | "local"; label: string; state: "ready" | "resting" | "absent"; why: string | null; until: number | null; setup: string };

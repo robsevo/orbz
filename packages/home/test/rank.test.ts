@@ -47,15 +47,13 @@ async function asks(t: Parameters<typeof agentHome>[0], o: { command: string; se
   const carded: string[] = [];
   for (const [orb, name, specialty] of [["ada", "Ada", "frontend"], ["wren", "Wren", "writing"]] as const) {
     const { home } = await agentHome(t, [{ calls: [{ name: "shell", args: { command: o.command } }] }, { chunks: ["done"] }]);
-    home.inbox.addOrb(orb, name, specialty);
+    // each is alone in his home, the first of his kind: a senior by that (owner, 10-02), a junior hired as one
+    if (o.senior.includes(orb)) home.inbox.addOrb(orb, name, specialty);
+    else home.inbox.addOrb(orb, name, specialty, {}, "Junior");
     if (o.setup) {
       const ws = home.agent!.workspace(orb);
       mkdirSync(ws, { recursive: true });
       o.setup(ws);
-    }
-    if (o.senior.includes(orb)) {
-      home.events.append("orb.promoted", { from: "Junior", to: "Mid" }, { orb });
-      home.events.append("orb.promoted", { from: "Mid", to: "Senior" }, { orb });
     }
     const shellDef = TOOLS.find((d) => d.name === "shell")!;
     if (o.rule) home.rules.add({ orb, text: `ask: ${o.command}`, decision: "ask", action: shellDef.describe({ command: o.command }), source: "owner" });

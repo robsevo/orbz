@@ -43,7 +43,7 @@ test("the morning card: yesterday's split, its cost, what he learned and the nig
   const h = Home.open({ dataDir: data, protect: [], spendCapUsd: null, clock });
   t.after(() => h.close());
   h.about.setName("Robin");
-  h.inbox.addOrb("dana", "Dana", "data", { shape: "bean", eyes: "classic", hue: "teal" });
+  h.inbox.addOrb("dana", "Dana", "data", { shape: "bean", eyes: "classic", hue: "teal" }, "Junior"); // hired a Junior, so her promotion is to Mid
   for (let day = 0; day < 3; day++) {
     approved(h.events, "dana", ["Rent", "Gym", "Water", "Phone", "Car"].map((s) => `${s} ${day}`), 100 + day * 10);
     if (day < 2) clock.suspend(86_400_000);
@@ -92,6 +92,10 @@ test("the morning card: yesterday's split, its cost, what he learned and the nig
   assert.equal(levelOf(h.events, "dana"), "Mid");
   await desk.goto(desk.url().replace(/#.*$/, "#/office/Dana"));
   await desk.getByText(/^Mid · 33\d XP · /).waitFor({ timeout: 20_000 }); // her card says where she stands, from the home
+  await desk.getByText("Age 3 days · 3 days in the company", { exact: true }).waitFor({ timeout: 20_000 }); // made on the 29th, read on the 2nd
+  await phone.goto(phone.url().replace(/#.*$/, "#/office/Dana"));
+  await phone.getByText("Age 3 days · 3 days in the company", { exact: true }).waitFor({ timeout: 20_000 });
+  assert.deepEqual(await measure(phone), [], "her card's lines fit a phone");
   await desk.goto(desk.url().replace(/#.*$/, "#/notices"));
   await card.waitFor({ timeout: 20_000 });
 
