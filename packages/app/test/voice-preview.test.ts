@@ -73,6 +73,9 @@ test("pressing a voice plays it at his pace; the next press stops it; Silent pla
     await page.getByRole("button", { name: "New orb" }).first().click();
     await page.getByRole("button", { name: /^Dapper/ }).click();
     await page.getByRole("tab", { name: "Voice" }).click();
+    // only graded voices are offered (owner, 10-03): no D or F voice, not Whisper (af_nicole), none called female or male
+    for (const gone of ["am_adam", "am_santa", "af_jessica", "bm_lewis", "af_nicole"]) assert.equal(await page.locator(`button[data-voice="${gone}"]`).count(), 0, `${gone} is not offered`);
+    assert.doesNotMatch(await page.locator("body").innerText(), /\b(fe)?male\b/i, "no voice is called female or male");
     const fable = page.locator('button[data-voice="bm_fable"]').first();
     const served = page.waitForResponse((r) => r.url().endsWith("/voices/bm_fable.mp3"));
     await fable.click();

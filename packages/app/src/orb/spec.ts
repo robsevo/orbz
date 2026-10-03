@@ -307,6 +307,16 @@ const KOKORO = [
   "jf_alpha", "jf_gongitsune", "jf_nezumi", "jf_tebukuro", "jm_kumo", "pf_dora", "pm_alex", "pm_santa",
   "zf_xiaobei", "zf_xiaoni", "zf_xiaoxiao", "zf_xiaoyi", "zm_yunjian", "zm_yunxi", "zm_yunxia", "zm_yunyang",
 ] as const;
+/** Kokoro's own grade for each English voice (hexgrad/Kokoro-82M VOICES.md: how clean its reference
+ * recording was, and how much of it the model heard). The creator offers C- and better (owner, 10-03:
+ * "i find they sounded a bit robotic before"); the rest stay speakable, for an orb made with one. */
+export const GRADES: Record<string, string> = {
+  af_heart: "A", af_bella: "A-", af_nicole: "B-", bf_emma: "B-",
+  af_aoede: "C+", af_kore: "C+", af_sarah: "C+", am_fenrir: "C+", am_michael: "C+", am_puck: "C+",
+  af_alloy: "C", af_nova: "C", bf_isabella: "C", bm_fable: "C", bm_george: "C", af_sky: "C-",
+  bm_lewis: "D+", af_jessica: "D", af_river: "D", am_echo: "D", am_eric: "D", am_liam: "D", am_onyx: "D",
+  bf_alice: "D", bf_lily: "D", bm_daniel: "D", am_santa: "D-", am_adam: "F+",
+};
 const LANG: Record<string, string> = { a: "American", b: "British", e: "Spanish", f: "French", h: "Hindi", i: "Italian", j: "Japanese", p: "Portuguese", z: "Mandarin" };
 
 // Every voice has a name of ours (owner, 2026-10-01: "we dont want to copy the names of other
@@ -327,18 +337,21 @@ export const VOICES: Voice[] = [
   { id: "ash", label: "Classic", accent: "a warm blend (Ash's)", english: true, kokoro: "ash" },
   ...KOKORO.map((k, i) => {
     const lang = LANG[k[0]!]!;
-    const sex = k[1] === "f" ? "female" : "male";
     const nth = KOKORO.filter((x) => x.slice(0, 2) === k.slice(0, 2)).indexOf(k) + 1;
     void i;
     // a voice in another language is named from that language (its n-th name, women's first then men's)
     const native = NATIVE[k[0]!] ?? [];
     const women = KOKORO.filter((x) => x[0] === k[0] && x[1] === "f").length;
     const name = native[(k[1] === "f" ? 0 : women) + nth - 1] ?? `${lang} ${nth}`;
-    return { id: k, label: OUR_NAMES[k] ?? name, accent: `${lang} ${sex}`, english: k[0] === "a" || k[0] === "b", kokoro: k, nth };
+    return { id: k, label: OUR_NAMES[k] ?? name, accent: lang, english: k[0] === "a" || k[0] === "b", kokoro: k, nth };
   }),
   { id: "silent", label: "Silent", accent: "text only, always", english: true, kokoro: null },
 ];
 export const voice = (id: string): Voice => VOICES.find((v) => v.id === id) ?? VOICES[0]!;
+/** Whether the creator offers a voice: Classic, Silent, a voice in another language, or an English
+ * one Kokoro grades C- or better (GRADES), but not Whisper, which whispers (owner, 10-03: "take out
+ * the whisper"). */
+export const offered = (v: Voice): boolean => !/^[DF]/.test(GRADES[v.id] ?? "") && v.id !== "af_nicole";
 
 /** How replies arrive, for every orb at once (Ash's own three): spoken and shown, shown, or neither aloud. */
 export const REPLIES = { speak: "Speak & show", text: "Text only", silent: "Silent" } as const;
@@ -364,19 +377,19 @@ export type Personality = {
 
 export const PERSONALITIES = {
   steady: { label: "Steady", blurb: "Calm and capable; does the job, says what was done", tone: "calm, plain, kind; short sentences", voices: ["ash", "bm_george", "am_michael"], speed: 1, fidgets: ["look", "nod", "jelly"], every: [7, 12], breath: 1, sway: 1, goo: 0.55, eyes: "classic" },
-  cheerful: { label: "Cheerful", blurb: "Bubbly, quick to cheer you on", tone: "bright and warm, a little exclamation now and then", voices: ["af_bella", "af_nova", "af_jessica", "am_puck"], speed: 1.06, fidgets: ["hop", "wiggle", "jelly", "hop", "wink"], every: [3, 6], breath: 1.2, sway: 1.5, goo: 0.75, eyes: "big" },
-  sleepy: { label: "Sleepy", blurb: "Slow, soft, always half a nap away", tone: "slow, soft, gentle; never in a hurry", voices: ["af_sky", "af_river", "bm_lewis"], speed: 0.9, fidgets: ["doze", "nod", "doze"], every: [6, 10], breath: 0.7, sway: 0.7, goo: 0.65, eyes: "droopy" },
-  curious: { label: "Curious", blurb: "Notices everything, asks good questions", tone: "eager and inquisitive; asks one good question", voices: ["am_puck", "af_kore", "bf_lily"], speed: 1.04, fidgets: ["look", "look", "hop", "nod"], every: [3, 6], breath: 1.1, sway: 1.2, goo: 0.6, eyes: "big" },
-  shy: { label: "Shy", blurb: "Quiet, careful, gets there", tone: "quiet and careful; gentle, never pushy", voices: ["af_nicole", "bf_alice", "af_aoede"], speed: 0.95, fidgets: ["look", "squish"], every: [6, 10], breath: 0.9, sway: 0.6, goo: 0.6, eyes: "droopy" },
-  grumpy: { label: "Grumpy", blurb: "Grumbles, then does it perfectly", tone: "dry, a little grumbly, secretly fond of you", voices: ["am_onyx", "bm_daniel", "am_fenrir"], speed: 0.97, fidgets: ["pout", "look", "nod"], every: [8, 12], breath: 0.9, sway: 0.8, goo: 0.4, eyes: "beans" },
+  cheerful: { label: "Cheerful", blurb: "Bubbly, quick to cheer you on", tone: "bright and warm, a little exclamation now and then", voices: ["af_bella", "af_nova", "am_puck"], speed: 1.06, fidgets: ["hop", "wiggle", "jelly", "hop", "wink"], every: [3, 6], breath: 1.2, sway: 1.5, goo: 0.75, eyes: "big" },
+  sleepy: { label: "Sleepy", blurb: "Slow, soft, always half a nap away", tone: "slow, soft, gentle; never in a hurry", voices: ["af_sky", "af_heart", "bm_fable"], speed: 0.9, fidgets: ["doze", "nod", "doze"], every: [6, 10], breath: 0.7, sway: 0.7, goo: 0.65, eyes: "droopy" },
+  curious: { label: "Curious", blurb: "Notices everything, asks good questions", tone: "eager and inquisitive; asks one good question", voices: ["am_puck", "af_kore", "af_sarah"], speed: 1.04, fidgets: ["look", "look", "hop", "nod"], every: [3, 6], breath: 1.1, sway: 1.2, goo: 0.6, eyes: "big" },
+  shy: { label: "Shy", blurb: "Quiet, careful, gets there", tone: "quiet and careful; gentle, never pushy", voices: ["af_aoede", "bf_isabella", "af_sarah"], speed: 0.95, fidgets: ["look", "squish"], every: [6, 10], breath: 0.9, sway: 0.6, goo: 0.6, eyes: "droopy" },
+  grumpy: { label: "Grumpy", blurb: "Grumbles, then does it perfectly", tone: "dry, a little grumbly, secretly fond of you", voices: ["am_fenrir", "bm_george", "am_michael"], speed: 0.97, fidgets: ["pout", "look", "nod"], every: [8, 12], breath: 0.9, sway: 0.8, goo: 0.4, eyes: "beans" },
   dapper: { label: "Dapper", blurb: "Proper, polished, a touch formal", tone: "polished and courteous; a touch formal", voices: ["bm_fable", "bm_george", "bf_emma"], speed: 0.98, fidgets: ["nod", "look"], every: [8, 12], breath: 0.9, sway: 0.7, goo: 0.3, eyes: "ovals" },
-  dreamy: { label: "Dreamy", blurb: "Floaty and imaginative", tone: "airy and imaginative; paints a picture", voices: ["af_sky", "af_aoede", "bf_isabella"], speed: 0.95, fidgets: ["jelly", "look", "doze"], every: [6, 10], breath: 0.85, sway: 1.1, goo: 0.9, eyes: "huge" },
-  brave: { label: "Brave", blurb: "Up for anything, first to try", tone: "confident and direct; up for it", voices: ["am_adam", "am_fenrir", "af_kore"], speed: 1.02, fidgets: ["hop", "nod"], every: [5, 8], breath: 1.05, sway: 1.1, goo: 0.45, eyes: "wide" },
-  silly: { label: "Silly", blurb: "Goofy, playful, gets a laugh", tone: "playful and goofy; a joke when it helps", voices: ["am_puck", "af_jessica", "am_santa"], speed: 1.08, fidgets: ["wiggle", "hop", "squish", "jelly", "wink"], every: [2.5, 5], breath: 1.25, sway: 1.7, goo: 0.85, eyes: "big" },
+  dreamy: { label: "Dreamy", blurb: "Floaty and imaginative", tone: "airy and imaginative; paints a picture", voices: ["af_aoede", "af_sky", "bf_isabella"], speed: 0.95, fidgets: ["jelly", "look", "doze"], every: [6, 10], breath: 0.85, sway: 1.1, goo: 0.9, eyes: "huge" },
+  brave: { label: "Brave", blurb: "Up for anything, first to try", tone: "confident and direct; up for it", voices: ["am_fenrir", "af_kore", "am_michael"], speed: 1.02, fidgets: ["hop", "nod"], every: [5, 8], breath: 1.05, sway: 1.1, goo: 0.45, eyes: "wide" },
+  silly: { label: "Silly", blurb: "Goofy, playful, gets a laugh", tone: "playful and goofy; a joke when it helps", voices: ["am_puck", "af_nova", "af_bella"], speed: 1.08, fidgets: ["wiggle", "hop", "squish", "jelly", "wink"], every: [2.5, 5], breath: 1.25, sway: 1.7, goo: 0.85, eyes: "big" },
   wise: { label: "Wise", blurb: "Unhurried, thoughtful, a good explainer", tone: "thoughtful and unhurried; explains well", voices: ["bm_george", "am_michael", "bf_emma"], speed: 0.92, fidgets: ["nod", "look"], every: [9, 14], breath: 0.8, sway: 0.6, goo: 0.35, eyes: "close" },
-  sassy: { label: "Sassy", blurb: "Quick wit, big opinions", tone: "witty and frank; a bit of sass", voices: ["af_nova", "bf_lily", "af_alloy"], speed: 1.05, fidgets: ["wiggle", "look", "pout", "wink"], every: [4, 7], breath: 1.1, sway: 1.4, goo: 0.6, eyes: "ovals" },
-  cozy: { label: "Cozy", blurb: "Warm as a blanket", tone: "warm and homely; reassuring", voices: ["af_heart", "af_river", "am_liam"], speed: 0.96, fidgets: ["jelly", "doze", "nod"], every: [6, 10], breath: 0.85, sway: 0.9, goo: 0.8, eyes: "classic" },
-  techy: { label: "Techy", blurb: "Precise, nerdy, loves a good detail", tone: "precise and nerdy; gets the details right", voices: ["am_echo", "af_alloy", "am_eric"], speed: 1.03, fidgets: ["look", "nod", "wiggle"], every: [5, 9], breath: 1, sway: 0.9, goo: 0.45, eyes: "dots" },
+  sassy: { label: "Sassy", blurb: "Quick wit, big opinions", tone: "witty and frank; a bit of sass", voices: ["af_nova", "af_alloy", "bf_emma"], speed: 1.05, fidgets: ["wiggle", "look", "pout", "wink"], every: [4, 7], breath: 1.1, sway: 1.4, goo: 0.6, eyes: "ovals" },
+  cozy: { label: "Cozy", blurb: "Warm as a blanket", tone: "warm and homely; reassuring", voices: ["af_heart", "af_bella", "bm_fable"], speed: 0.96, fidgets: ["jelly", "doze", "nod"], every: [6, 10], breath: 0.85, sway: 0.9, goo: 0.8, eyes: "classic" },
+  techy: { label: "Techy", blurb: "Precise, nerdy, loves a good detail", tone: "precise and nerdy; gets the details right", voices: ["af_alloy", "am_michael", "af_sarah"], speed: 1.03, fidgets: ["look", "nod", "wiggle"], every: [5, 9], breath: 1, sway: 0.9, goo: 0.45, eyes: "dots" },
   quiet: { label: "Quiet", blurb: "Says it in writing; never speaks aloud", tone: "brief and calm", voices: ["silent"], speed: 1, fidgets: ["look"], every: [10, 15], breath: 0.85, sway: 0.6, goo: 0.5, eyes: "tiny" },
 } satisfies Record<string, Personality>;
 export type PersonalityName = keyof typeof PERSONALITIES;

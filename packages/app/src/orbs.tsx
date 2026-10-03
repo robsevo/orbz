@@ -42,7 +42,7 @@ import { applyTheme, savedTheme } from "./ui/theme.ts";
 
 applyTheme(savedTheme(), false); // before the first paint: the theme you chose, never a flash of another
 import {
-  ASH, EYES, FAMILIES, FINISHES, GLASSES, HATS, orbName, PERSONALITIES, REPLIES, SHAPES, sheetOf, speaks, SPECIALTIES, surprise, voice, VOICES, withPersonality,
+  ASH, EYES, FAMILIES, FINISHES, GLASSES, HATS, offered, orbName, PERSONALITIES, REPLIES, SHAPES, sheetOf, speaks, SPECIALTIES, surprise, voice, VOICES, withPersonality,
   type Character, type EyesName, type Family, type FinishName, type GlassesName, type HatName, type PersonalityName, type Replies, type ShapeName, type SpecialtyName,
 } from "./orb/spec.ts";
 
@@ -318,13 +318,13 @@ function Creator({ me, edit, replies, setReplies }: { me: Character; edit: (p: P
     Hat: () => edit({ hat: pick(Object.keys(HATS) as HatName[]), hatHue: Math.random() < 0.35 ? pick(hues) : null }),
     Glasses: () => edit({ glasses: pick(Object.keys(GLASSES) as GlassesName[]), glassesHue: Math.random() < 0.35 ? pick(hues) : null }),
     Colour: () => edit({ hue: pick(hues), hue2: Math.random() < 0.25 ? pick(hues) : null, finish: Math.random() < 0.7 ? "glass" : pick(Object.keys(FINISHES) as FinishName[]) }),
-    Voice: () => edit({ voice: pick(VOICES.filter((v) => v.english && v.id !== "ash" && v.id !== "silent").map((v) => v.id)) }),
+    Voice: () => edit({ voice: pick(VOICES.filter((v) => v.english && offered(v) && v.id !== "ash" && v.id !== "silent").map((v) => v.id)) }),
   };
   const P = PERSONALITIES[me.personality];
   const voiceGroups: [string, typeof VOICES][] = [
     [`Suits a ${P.label.toLowerCase()} orb`, VOICES.filter((v) => (P.voices as readonly string[]).includes(v.id))],
-    ["American", VOICES.filter((v) => v.accent.startsWith("American"))],
-    ["British", VOICES.filter((v) => v.accent.startsWith("British"))],
+    ["American", VOICES.filter((v) => v.accent === "American" && offered(v))],
+    ["British", VOICES.filter((v) => v.accent === "British" && offered(v))],
     ["In their own language (English for these comes with the voice row)", VOICES.filter((v) => !v.english)],
     ["Classic, or none", VOICES.filter((v) => v.id === "silent" || v.id === "ash")],
   ];

@@ -6,7 +6,7 @@ import { test } from "node:test";
 import { HUES } from "../src/design/tokens.ts";
 import { ORB_FS } from "../src/orb/glsl.ts";
 import {
-  ASH, EYES, FAMILIES, FINISHES, GLASSES, hatFit, HATS, isShades, lookOf, NOT_OURS, outline, PEOPLE_NAMES, PERSONALITIES, sane, SHAPES, sheetOf, SPECIALTIES, surprise, VOICES, wearing, withPersonality,
+  ASH, EYES, FAMILIES, FINISHES, GLASSES, GRADES, hatFit, HATS, isShades, lookOf, NOT_OURS, offered, outline, PEOPLE_NAMES, PERSONALITIES, sane, SHAPES, sheetOf, SPECIALTIES, surprise, voice, VOICES, wearing, withPersonality,
   type Family, type GlassesName, type HatName, type PersonalityName, type ShapeName, type SpecialtyName,
 } from "../src/orb/spec.ts";
 
@@ -169,4 +169,18 @@ test("eye styles are shapes, never expressions: a wink, a happy face and a doze 
   for (const gone of ["wink", "happy", "sleepy", "ash"]) assert.ok(!(gone in EYES), `"${gone}" is not a style (owner, 10-01: plain names, and he must look alive)`);
   assert.ok("classic" in EYES, "Ash's own eyes, by a plain name");
   assert.ok(Object.values(PERSONALITIES).some((p) => (p.fidgets as readonly string[]).includes("wink")), "and some orbs wink, now and then");
+});
+
+test("the creator offers no voice Kokoro grades D or F; every personality speaks with offered ones; no voice is female or male", () => {
+  for (const v of VOICES) {
+    assert.doesNotMatch(v.accent, /female|male/, `${v.id}'s description says nothing of female or male: ${v.accent}`);
+    if (/^[DF]/.test(GRADES[v.id] ?? "")) assert.equal(offered(v), false, `${v.id} (graded ${GRADES[v.id]}) is not offered`);
+  }
+  for (const v of VOICES.filter((x) => x.english && x.kokoro && x.id !== "ash")) assert.ok(v.id in GRADES, `${v.id} has Kokoro's grade, so it is not offered ungraded`);
+  for (const [p, P] of Object.entries(PERSONALITIES)) {
+    for (const id of P.voices) assert.ok(id === "ash" || offered(voice(id)), `${p} speaks with ${id}, an offered voice`);
+  }
+  for (let seed = 1; seed <= 200; seed++) assert.ok(offered(voice(surprise(seed).voice)), `surprise(${seed}) speaks with an offered voice`);
+  assert.equal(offered(voice("af_nicole")), false, "Whisper is not offered: it whispers (owner, 10-03)");
+  assert.equal(sane({ ...ASH, name: "Rex", personality: "brave", voice: "am_adam" }, ASH).voice, "am_adam", "an orb made with a voice no longer offered keeps it");
 });

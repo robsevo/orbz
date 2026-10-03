@@ -1825,6 +1825,22 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("a hired applicant's look is never sent", 'src/home/link.ts', [
         ('await call(`../applicants/${applicant}/hire`, { method: "POST", body: JSON.stringify({ id, name, look }) });', 'await call(`../applicants/${applicant}/hire`, { method: "POST", body: JSON.stringify({ id, name, look: {} }) });'),
     ], ['recruiter-view.test.ts']),
+    # the voices: only the good ones, not Whisper, none female or male (10-03)
+    ('a voice graded D or F is offered again', 'src/orb/spec.ts', [
+        ('export const offered = (v: Voice): boolean => !/^[DF]/.test(GRADES[v.id] ?? "") && v.id !== "af_nicole";', 'export const offered = (v: Voice): boolean => v.id !== "af_nicole";'),
+    ], ['spec.test.ts']),
+    ('Whisper is offered again', 'src/orb/spec.ts', [
+        ('export const offered = (v: Voice): boolean => !/^[DF]/.test(GRADES[v.id] ?? "") && v.id !== "af_nicole";', 'export const offered = (v: Voice): boolean => !/^[DF]/.test(GRADES[v.id] ?? "");'),
+    ], ['spec.test.ts']),
+    ('a voice is called female or male again', 'src/orb/spec.ts', [
+        ('accent: lang, english:', 'accent: `${lang} ${k[1] === "f" ? "female" : "male"}`, english:'),
+    ], ['spec.test.ts']),
+    ('a brave orb starts on a voice graded F', 'src/orb/spec.ts', [
+        ('voices: ["am_fenrir", "af_kore", "am_michael"]', 'voices: ["am_adam", "am_fenrir", "af_kore"]'),
+    ], ['spec.test.ts']),
+    ("the creator's American voices include the weak ones", 'src/orbs.tsx', [
+        ('["American", VOICES.filter((v) => v.accent === "American" && offered(v))],', '["American", VOICES.filter((v) => v.accent === "American")],'),
+    ], ['voice-preview.test.ts']),
 ]
 
 # the `orbs` terminal (PLAN 1.9): paths are inside packages/terminal
