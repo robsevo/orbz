@@ -10,6 +10,9 @@
 //   the orb's own "done" ticks nothing    no tool sets a box; a command that cannot fail is refused
 //   a feature never outranks its test     both move together, [~] and [x]
 //   ticks survive a restart               they are rows, not memory
+//   a junior's row is reviewed           (PLAN 5.4) its test passing makes it wait for a Senior's
+//                                         review (or yours); only an approval ticks it
+//   an agreed change adds rows            (PLAN 5.1) a new feature row and its test, both [ ]
 //   a visual row also needs pagecheck     (PLAN 4.1) it names the page it builds when it starts,
 //                                         and is ticked only when its test AND Ash's pagecheck
 //                                         (through the kit) both pass: a page that only serves,
@@ -22,8 +25,28 @@ import type { Box } from "./format.ts";
 import { parse } from "./format.ts";
 import { inWorkspace, runCommand, type ToolContext, type ToolDef } from "../agent/tools.ts";
 import type { PageCheck } from "../computer/tools.ts";
+import { LEVELS, type Level } from "../gym/levels.ts";
+import { parseTabConversation } from "../team.ts";
 
-export type BoardRow = { plan: number; row: string; test: boolean; box: Box; command: string | null; evidence: string | null; updatedAt: number; visual: boolean; page: string | null };
+/** Whose rows are reviewed before they are ticked, and who may review (PLAN 5.4): in a team (a
+ * session's tab) only; an orb working alone with you ticks his own on the home's run. */
+const REVIEWED: Level[] = ["Junior"];
+const REVIEWS = (l: Level): boolean => LEVELS.indexOf(l) >= LEVELS.indexOf("Senior");
+
+/** Who may review a junior's row (PLAN 5.4): a Senior or above, of the author's own specialty when
+ * the office has one (owner, 10-02: "your first orb of that kind of employee is always the senior"),
+ * else any Senior; never the author. Null when `who` may; else why not. */
+export function reviewerProblem(who: string, author: string, office: { id: string; name: string; specialty: string; level: Level }[]): string | null {
+  if (who === author) return "a row is reviewed by someone else: not by the orb whose row it is";
+  const me = office.find((o) => o.id === who);
+  const them = office.find((o) => o.id === author);
+  if (!me || !REVIEWS(me.level)) return `reviews are a Senior's: you are ${me ? `a ${me.level}` : "not in the office"}`;
+  const ofKind = office.filter((o) => o.id !== author && o.specialty === them?.specialty && REVIEWS(o.level));
+  if (them && ofKind.length && me.specialty !== them.specialty) return `${them.name}'s row is ${them.specialty} work: ${ofKind.map((o) => o.name).join(" or ")} reviews it, the Senior of its kind`;
+  return null;
+}
+
+export type BoardRow = { plan: number; row: string; test: boolean; box: Box; command: string | null; evidence: string | null; updatedAt: number; visual: boolean; page: string | null; review: string | null };
 
 /** Commands that report success without testing anything. */
 const CANNOT_FAIL = /^\s*(true|:|exit\s+0|echo\b.*|printf\b.*|test\s+1\s*(-eq|=)\s*1|\[\s*1\s*(-eq|=)\s*1\s*\]|sleep\s+\d+)\s*;?\s*$/i;
@@ -36,7 +59,7 @@ export class BoardError extends Error {
   }
 }
 
-type Row = { plan: number; row: string; test: number; box: Box; command: string | null; evidence: string | null; updated_at: number; visual: number; page: string | null };
+type Row = { plan: number; row: string; test: number; box: Box; command: string | null; evidence: string | null; updated_at: number; visual: number; page: string | null; review: string | null };
 
 /** The page a visual row builds, as the orb names it: a file of its workspace, or its own page
  * served on this machine. Null when it is neither. */
@@ -78,7 +101,7 @@ export class Board {
   rows(plan: number): BoardRow[] {
     return (this.#db.prepare("SELECT * FROM board WHERE plan = ? ORDER BY rowid").all(plan) as Row[]).map((r) => ({
       plan: r.plan, row: r.row, test: r.test === 1, box: r.box, command: r.command, evidence: r.evidence, updatedAt: r.updated_at,
-      visual: r.visual === 1, page: r.page,
+      visual: r.visual === 1, page: r.page, review: r.review,
     }));
   }
 
@@ -125,6 +148,47 @@ export class Board {
     return this.rows(plan);
   }
 
+  /** An agreed change (PLAN 5.1): a new feature row and its test row, both [ ]. */
+  add(plan: number, row: string, text: string, test: string): BoardRow[] {
+    const rows = this.rows(plan);
+    if (!rows.length) throw new BoardError(`plan ${plan} has no board`);
+    if (rows.some((r) => r.row === row)) throw new BoardError(`row ${row} is on the board already`);
+    const now = this.#clock.now();
+    tx(this.#db, () => {
+      const ins = this.#db.prepare("INSERT INTO board (plan, row, test, box, visual, updated_at) VALUES (?, ?, ?, ?, ?, ?)");
+      ins.run(plan, row, 0, "[ ]", VISUAL.test(text) ? 1 : 0, now);
+      ins.run(plan, `${row}_t`, 1, "[ ]", VISUAL.test(`${text} ${test}`) ? 1 : 0, now);
+      this.#events.append("board.amended", { plan, row });
+    });
+    return this.rows(plan);
+  }
+
+  /** A junior's row passed its test (PLAN 5.4): it waits for a review, its evidence kept. */
+  awaitReview(plan: number, row: string, by: string, evidence: string): BoardRow[] {
+    this.#feature(plan, row);
+    tx(this.#db, () => {
+      this.#db.prepare("UPDATE board SET box = '[~]', evidence = ?, review = ?, updated_at = ? WHERE plan = ? AND row IN (?, ?)").run(evidence.slice(0, 4000), `waiting:${by}`, this.#clock.now(), plan, row, `${row}_t`);
+      this.#events.append("board.review_asked", { plan, row, by });
+    });
+    return this.rows(plan);
+  }
+
+  /** A review (PLAN 5.4): approved, the row is [x]; with changes, it stays [~] and says what. Only a
+   * row waiting for one, and never by the orb whose row it is. */
+  review(plan: number, row: string, reviewer: string, approve: boolean, note: string): BoardRow[] {
+    const f = this.#feature(plan, row);
+    if (!f.review?.startsWith("waiting:")) throw new BoardError(`row ${row} is not waiting for a review`);
+    if (f.review === `waiting:${reviewer}`) throw new BoardError(`row ${row} is yours: another must review it`);
+    const said = `${approve ? "approved" : "changes asked"} by ${reviewer}${note.trim() ? `: ${note.trim()}` : ""}`;
+    tx(this.#db, () => {
+      this.#db
+        .prepare("UPDATE board SET box = ?, review = ?, evidence = ?, updated_at = ? WHERE plan = ? AND row IN (?, ?)")
+        .run(approve ? "[x]" : "[~]", approve ? `approved:${reviewer}` : `changes:${reviewer}`, `${f.evidence ?? ""}\n\nreview: ${said}`.slice(-4000), this.#clock.now(), plan, row, `${row}_t`);
+      this.#events.append(approve ? "board.ticked" : "board.review_changes", { plan, row, reviewer });
+    });
+    return this.rows(plan);
+  }
+
   #feature(plan: number, row: string): BoardRow {
     const f = this.rows(plan).find((r) => r.row === row && !r.test);
     if (!f) throw new BoardError(`plan ${plan} has no feature row ${row} (an approved plan's board, by its numbers)`);
@@ -141,7 +205,13 @@ const tail = (s: string): string => (s.length > 1200 ? `…${s.slice(-1200)}` : 
 
 /** The orb's two tools for a board. Neither sets a box: start_row commits a test, check_row has the
  * home run it. `shown` posts the result where the person sees it. */
-export function boardTools(board: Board, shown: (ctx: ToolContext, text: string) => void, pageCheck: PageCheck | null = null): ToolDef[] {
+export function boardTools(
+  board: Board,
+  shown: (ctx: ToolContext, text: string) => void,
+  pageCheck: PageCheck | null = null,
+  o: { levelOf?: (orb: string) => Level; reviewer?: (who: string, author: string) => string | null } = {},
+): ToolDef[] {
+  const levelOf = o.levelOf ?? ((): Level => "Mid");
   const n = (a: Record<string, unknown>): number => Number(a.plan);
   const r = (a: Record<string, unknown>): string => String(a.row ?? "");
   return [
@@ -215,10 +285,41 @@ export function boardTools(board: Board, shown: (ctx: ToolContext, text: string)
           evidence = `${res.content}\n\npagecheck ${page}:\n${v.report}`;
           why = passed ? `the home ran \`${cmd}\` and pagecheck saw ${page} render, styled` : `the home ran \`${cmd}\` and it passed, but pagecheck says ${page} is not done (${v.verdict})`;
         }
+        if (passed && REVIEWED.includes(levelOf(ctx.orb)) && parseTabConversation(ctx.conversation)) {
+          // a junior's row: its test passed, and a senior (or you) reviews it before it is ticked
+          board.awaitReview(n(a), r(a), ctx.orb, evidence);
+          const said = `Row ${r(a)} passed (${why}) and waits for a review: by the Senior of its kind, or by you.\n${tail(evidence)}`;
+          shown(ctx, said);
+          return { content: said };
+        }
         board.record(n(a), r(a), passed, evidence);
         const said = passed ? `Row ${r(a)} is done [x]: ${why}.\n${tail(evidence)}` : `Row ${r(a)} stays [~]: ${why}.\n${tail(evidence)}`;
         shown(ctx, said);
         return { content: said, isError: !passed };
+      },
+    },
+    {
+      name: "review_row",
+      label: "Reviewing a row",
+      description: "Review a junior's row that passed its test and waits for a review: approve it (it is ticked [x]) or ask for changes (it stays [~], with your note). A Senior reviews: the Senior of the junior's own kind when the office has one.",
+      parameters: {
+        type: "object",
+        properties: { plan: { type: "number" }, row: { type: "string" }, approve: { type: "boolean" }, note: { type: "string" } },
+        required: ["plan", "row", "approve"],
+        additionalProperties: false,
+      },
+      describe: (a) => `${a.approve ? "approve" : "ask for changes on"} row ${r(a)} of plan ${n(a)}`,
+      decision: "allow",
+      async run(a, ctx) {
+        const waiting = board.rows(n(a)).find((x) => x.row === r(a) && !x.test)?.review;
+        const author = waiting?.startsWith("waiting:") ? waiting.slice("waiting:".length) : null;
+        const why = author ? (o.reviewer ? o.reviewer(ctx.orb, author) : REVIEWS(levelOf(ctx.orb)) ? null : `reviews are a Senior's: you are a ${levelOf(ctx.orb)}`) : null;
+        if (why) return { content: `Not reviewed: ${why}.`, isError: true };
+        const rows = board.review(n(a), r(a), ctx.orb, Boolean(a.approve), String(a.note ?? ""));
+        const f = rows.find((x) => x.row === r(a) && !x.test)!;
+        const said = a.approve ? `Row ${r(a)} is done [x], reviewed.` : `Row ${r(a)} stays [~]: changes asked${a.note ? `: ${String(a.note)}` : ""}.`;
+        shown(ctx, said);
+        return { content: `${said} (${f.box})` };
       },
     },
   ];

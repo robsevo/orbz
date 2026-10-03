@@ -10,12 +10,18 @@
 // conversation.ts `toModel`). A turn waits while an orb waits on your OK, and the next one starts
 // when his has ended. A turn is an inbox item of its own ("turn"): one at a time per orb, stopped
 // and paused like any other work.
+//
+// The team (PLAN 5.1, 5.4): a tab has a LEAD, who speaks first (the Chief if he works it, else its
+// most senior orb, the first of them on a tie). "@Hazel" in what you say gives the turn to the orbs
+// named, and only them. An orb can ask another of the tab (`ask`): a turn of its own for him, the
+// request in the tab for everyone to see, and how many hands deep it is (team-tools.ts caps it).
 import type { DatabaseSync } from "node:sqlite";
 import type { Clock } from "./clock.ts";
 import type { EventLog } from "./events.ts";
 import type { Inboxes } from "./inbox.ts";
 import type { Conversations } from "./agent/conversation.ts";
 import type { TeamTurn } from "./agent/standing.ts";
+import { LEVELS, type Level } from "./gym/levels.ts";
 
 export type Tab = "brainstorm" | "floor";
 export const TABS: readonly Tab[] = ["brainstorm", "floor"];
@@ -37,7 +43,10 @@ export class Team {
   readonly #rounds = new Map<string, string[]>();
   readonly #stop: () => void;
 
-  constructor(o: { db: DatabaseSync; events: EventLog; clock: Clock; inbox: Inboxes; conversations: Conversations }) {
+  readonly #level: (orb: string) => Level;
+
+  constructor(o: { db: DatabaseSync; events: EventLog; clock: Clock; inbox: Inboxes; conversations: Conversations; level?: (orb: string) => Level }) {
+    this.#level = o.level ?? (() => "Junior");
     this.#db = o.db;
     this.#events = o.events;
     this.#clock = o.clock;
@@ -99,17 +108,47 @@ export class Team {
     return seen;
   }
 
-  /** The person says something in a tab: it is put there once, and each of its orbs takes a turn. */
+  /** Who leads a tab (PLAN 5.4): the Chief if he works it, else its most senior orb (the first of
+   * them, in turn order, on a tie). */
+  lead(id: number, tab: Tab): string | null {
+    const members = this.get(id)?.[tab] ?? [];
+    let best: string | null = null;
+    for (const m of members) if (best === null || LEVELS.indexOf(this.#level(m)) > LEVELS.indexOf(this.#level(best))) best = m;
+    return best;
+  }
+
+  /** The person says something in a tab: it is put there once, and its orbs take their turns, the
+   * lead first; "@Name" gives the turn to the orbs named, and only to them. */
   say(id: number, tab: Tab, text: string): { conversation: string; turns: string[] } {
     const s = this.get(id);
     if (!s) throw new Error(`no session ${id}`);
     const members = s[tab];
     if (!members.length) throw new Error(`no orb works this session's ${tab} yet: bring one in`);
     const conversation = tabConversation(id, tab);
-    this.#conv.add({ conversation, orb: members[0]!, role: "user", content: text, meta: { from: "person", session: id, tab } });
-    this.#rounds.set(conversation, [...members]);
+    const named = members.filter((m) => {
+      const name = (this.#inbox.orb(m)?.name ?? m).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      return new RegExp(`(^|\\s)@${name}\\b`, "i").test(text);
+    });
+    const lead = this.lead(id, tab);
+    const order = named.length ? named : [...members];
+    const turns = lead && order.includes(lead) ? [lead, ...order.filter((m) => m !== lead)] : order;
+    this.#conv.add({ conversation, orb: turns[0]!, role: "user", content: text, meta: { from: "person", session: id, tab, ...(named.length && { to: named }) } });
+    this.#rounds.set(conversation, [...turns]);
     this.#next(conversation);
-    return { conversation, turns: members };
+    return { conversation, turns };
+  }
+
+  /** One orb asks another of the tab (PLAN 5.1): the request is in the tab, from him, for all to
+   * see, and the asked orb gets a turn of his own, `depth` hands deep. */
+  ask(id: number, tab: Tab, from: string, to: string, request: string, depth: number): void {
+    const s = this.get(id);
+    if (!s || !s[tab].includes(to)) throw new Error(`${to} does not work this tab`);
+    const conversation = tabConversation(id, tab);
+    const name = (o: string): string => this.#inbox.orb(o)?.name ?? o;
+    this.#conv.add({ conversation, orb: to, role: "user", content: `[${name(from)} asks ${name(to)}]: ${request}`, meta: { from, asked: to, depth, session: id, tab } });
+    this.#events.append("session.asked", { session: id, tab, from, to, depth }, { orb: from });
+    const team: TeamTurn = { session: s.id, title: s.title, tab, with: s[tab].map(name) };
+    this.#inbox.enqueue(to, conversation, "turn", "", { data: { team, depth } });
   }
 
   #next(conversation: string): void {

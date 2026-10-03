@@ -313,7 +313,7 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ('    const attended = ctx.items.some((i) => i.source === "chat" || i.source === "turn" || typeof i.data.resume === "number");', '    const attended = ctx.items.some((i) => i.source === "chat" || typeof i.data.resume === "number");'),
     ], ["team.test.ts"]),
     ("his computer reads a file outside his workspace", "src/workspace.ts", [
-        ("  const p = inWorkspace(workspaceOf(dataDir, orb), path);\n  if (!p) throw new OutsideError(path);", "  const p = join(workspaceOf(dataDir, orb), path);"),
+        ("  const p = inWorkspace(root, path);\n  if (!p) throw new OutsideError(path);", "  const p = join(root, path);"),
     ], ["workspace.test.ts"]),
     ("his computer lists a link that leads out", "src/workspace.ts", [
         ("    const p = inWorkspace(root, rel);\n    if (!p) continue; // a link that leads out of it is not shown", "    const p = join(at, name);"),
@@ -1088,6 +1088,52 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ('his own shell runs outside his sandbox', 'src/agent/tools.ts', [
         ('      return runCommand(s(a.command), ctx.workspace, t, ctx.signal, { wrap: ctx.sandbox, onOutput: ctx.onOutput });', '      return runCommand(s(a.command), ctx.workspace, t, ctx.signal, { onOutput: ctx.onOutput });'),
     ], ['live.test.ts']),
+    # the team on its board: claims, agreed changes, asks, the lead, reviews, the chatter (PLAN 5.1, 5.2, 5.4)
+    ('two orbs hold the same row', 'src/claims.ts', [
+        ('      if (row) throw new ClaimError(', '      if (false) throw new ClaimError('),
+    ], ['team-board.test.ts']),
+    ('a folder does not hold what is in it', 'src/claims.ts', [
+        ('const meets = (a: string, b: string): boolean => a === b || a.startsWith(`${b}/`) || b.startsWith(`${a}/`);', 'const meets = (a: string, b: string): boolean => a === b;'),
+    ], ['team-board.test.ts']),
+    ('a silent claim never goes stale', 'src/claims.ts', [
+        ('stale: r.finished === null && this.#clock.now() - pulse > STALE_MS', 'stale: false'),
+    ], ['team-board.test.ts']),
+    ('the log does not replay a recovered claim', 'src/claims.ts', [
+        ('      if (c) c.orb = String(e.data.by);', '      if (c) c.orb = c.orb;'),
+    ], ['team-board.test.ts']),
+    ('a hand-off forgets what changed', 'src/claims.ts', [
+        ('    const changed = Object.keys(after).filter((p) => before[p] !== after[p]).sort();', '    const changed: string[] = [];'),
+    ], ['team-board.test.ts']),
+    ('one orb alone changes the plan', 'src/amendments.ts', [
+        ('    if (by === a.proposer) throw new AmendmentError(', '    if (false) throw new AmendmentError('),
+    ], ['team-board.test.ts']),
+    ('a request of a request of a request goes on', 'src/team-tools.ts', [
+        ('        if (depth > DEPTH) return', '        if (false) return'),
+    ], ['team-board.test.ts']),
+    ('@mentions are not read', 'src/team.ts', [
+        ('    const order = named.length ? named : [...members];', '    const order = [...members];'),
+    ], ['team-board.test.ts']),
+    ('the lead does not speak first', 'src/team.ts', [
+        ('    const turns = lead && order.includes(lead) ? [lead, ...order.filter((m) => m !== lead)] : order;', '    const turns = order;'),
+    ], ['team-board.test.ts']),
+    ("a file another orb claimed is anyone's to write", 'src/agent/tools.ts', [
+        ("      return who ? `${s(a.path)} is ${who}'s: it is in what ${who} claimed. Ask ${who}, or claim rows of your own.` : null;", '      return null;'),
+    ], ['team-board.test.ts']),
+    ("a junior's row ticks without a review", 'src/plans/board.ts', [
+        ('        if (passed && REVIEWED.includes(levelOf(ctx.orb)) && parseTabConversation(ctx.conversation)) {', '        if (false) {'),
+    ], ['team-board.test.ts']),
+    ('a Senior of another kind reviews while his own kind has one', 'src/plans/board.ts', [
+        ('  if (them && ofKind.length && me.specialty !== them.specialty) return', '  if (false) return'),
+    ], ['team-board.test.ts']),
+    ('the chatter leaves a tick out', 'src/chatter.ts', [
+        ('          return `Row ${String(d.row)} is done [x]${d.reviewer ? `, reviewed by ${name(d.reviewer)}` : ""}.`;', '          return null;'),
+    ], ['team-board.test.ts']),
+    ("another orb's board work never reaches the others", 'src/agent/conversation.ts', [
+        ('      else if (m.role === "notice" && o.me && m.orb !== o.me && m.meta.board === true) out.push({ role: "user", content: `[Board]: ${m.content}` });\n', ''),
+    ], ['team-board.test.ts']),
+    ("a session's computer shows anyone its files", 'src/api.ts', [
+        ('      if (!s || ![...s.brainstorm, ...s.floor].includes(orb)) throw new HttpError(404,', '      if (!s) throw new HttpError(404,'),
+    ], ['team-board.test.ts']),
 ]
 
 # the app (PLAN 2.x): paths are inside packages/app
@@ -1476,7 +1522,7 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ('      play("create");\n', ""),
     ], ["computer.test.ts"]),
     ("the Floor shows no one's computer", "src/rooms/Sessions.tsx", [
-        ("            {shown && <Computer key={idOf(shown.name)} home={o.home} orb={shown} messages={messages} busy={busy[idOf(shown.name)]} big />}", "            {null}"),
+        ("            {shown && <Computer key={idOf(shown.name)} home={o.home} orb={shown} messages={messages} busy={busy[idOf(shown.name)]} big session={o.session.id} />}", "            {null}"),
     ], ["sessions.test.ts"]),
     ("the side menu does not count what waits", "src/orbs.tsx", [
         ('{navItem("Notifications", room === "notices", { room: "notices" }, "◔", notices.notices.length)}', '{navItem("Notifications", room === "notices", { room: "notices" }, "◔")}'),
@@ -1573,6 +1619,16 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ('his live screen shows only once you take over', 'src/rooms/Computer.tsx', [
         ('  const live = watching || state.takenOver; // in your hands, you see him as he is', '  const live = state.takenOver;'),
     ], ['live-view.test.ts']),
+    # the team's board on the Floor and the shared computer (PLAN 5.1)
+    ("the Floor's computer reads his own workspace, not the team's", 'src/rooms/Sessions.tsx', [
+        (' big session={o.session.id} />}', ' big />}'),
+    ], ['team-board-view.test.ts']),
+    ('the board shows no one holding a row', 'src/rooms/Board.tsx', [
+        ('                  {c && (', '                  {false && c && ('),
+    ], ['team-board-view.test.ts']),
+    ('your Approve does nothing', 'src/rooms/Board.tsx', [
+        ('onClick={() => act(home.reviewRow(p.id, r.row, true, ""))}', 'onClick={() => undefined}'),
+    ], ['team-board-view.test.ts']),
 ]
 
 # the `orbs` terminal (PLAN 1.9): paths are inside packages/terminal

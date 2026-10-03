@@ -31,6 +31,10 @@ export type ToolContext = {
   sandbox?: Wrap | null;
   /** A command's output as it comes, for his terminal on the person's screen (never stored). */
   onOutput?: (chunk: string) => void;
+  /** How many hands deep this run's request is (PLAN 5.1): an orb's ask is 1, an ask of an ask 2. */
+  depth?: number;
+  /** In a session (PLAN 5.1): who else holds `path` in the team's claims, by name, or null. */
+  heldBy?: (path: string) => string | null;
   /** The person's web-search key (Tavily), read from the keychain when a search needs it (PLAN 3.10). */
   searchKey?: () => Promise<SearchKey | null>;
   /** Puts a line in the conversation for everyone in it (a session's "✓ Agreed", PLAN 2.9). */
@@ -333,7 +337,12 @@ export const TOOLS: ToolDef[] = [
     parameters: obj({ path: { type: "string" }, content: { type: "string" } }, ["path", "content"]),
     describe: (a) => `write ${s(a.path)} in its workspace`,
     decision: "allow",
-    precheck: (a, ctx) => (inWorkspace(ctx.workspace, s(a.path)) ? null : `${s(a.path)} is outside the workspace.`),
+    precheck: (a, ctx) => {
+      if (!inWorkspace(ctx.workspace, s(a.path))) return `${s(a.path)} is outside the workspace.`;
+      // a file another orb of the session claimed is his until he hands it off (PLAN 5.1)
+      const who = ctx.heldBy?.(s(a.path));
+      return who ? `${s(a.path)} is ${who}'s: it is in what ${who} claimed. Ask ${who}, or claim rows of your own.` : null;
+    },
     async run(a, ctx) {
       const p = inWorkspace(ctx.workspace, s(a.path))!;
       mkdirSync(dirname(p), { recursive: true });

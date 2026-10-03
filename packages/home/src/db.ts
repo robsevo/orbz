@@ -275,6 +275,37 @@ const MIGRATIONS: string[] = [
   `
   ALTER TABLE board ADD COLUMN page TEXT;
   `,
+  // v12 (PLAN 5.1, 5.4): a team's claims on a plan's rows and files, the changes agreed to a plan,
+  // and a row's review
+  `
+  CREATE TABLE claims (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    session   INTEGER NOT NULL,
+    plan      INTEGER NOT NULL,
+    orb       TEXT    NOT NULL,
+    rows      TEXT    NOT NULL,
+    paths     TEXT    NOT NULL,
+    started   INTEGER NOT NULL,
+    pulse     INTEGER NOT NULL,
+    finished  INTEGER,
+    snapshot  TEXT    NOT NULL
+  );
+  CREATE INDEX claims_live ON claims (session, finished);
+  CREATE TABLE amendments (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    session     INTEGER NOT NULL,
+    plan        INTEGER NOT NULL,
+    proposer    TEXT    NOT NULL,
+    row         TEXT    NOT NULL,
+    feature     TEXT    NOT NULL,
+    description TEXT    NOT NULL,
+    test        TEXT    NOT NULL,
+    created_at  INTEGER NOT NULL,
+    agreed_by   TEXT,
+    agreed_at   INTEGER
+  );
+  ALTER TABLE board ADD COLUMN review TEXT;
+  `,
 ];
 
 /** The home's data is the person's: the folder is theirs alone (0700) and so is the database

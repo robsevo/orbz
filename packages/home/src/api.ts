@@ -31,7 +31,8 @@ import { ComputerError, type Hands, type Screen } from "./computer/browser.ts";
 import { VaultError } from "./computer/vault.ts";
 import { LessonError } from "./lessons.ts";
 import { KIT_DIR } from "./kit.ts";
-import type { Tab } from "./team.ts";
+import { parseTabConversation, type Tab } from "./team.ts";
+import { chatterOf } from "./chatter.ts";
 import { standingContext } from "./agent/standing.ts";
 import { listWorkspace, MissingError, OutsideError, readWorkspace, saveUpload, UPLOAD_CAP } from "./workspace.ts";
 import { calendarOf, spanOf, withEvents } from "./calendar.ts";
@@ -480,6 +481,25 @@ async function handle(
       if (!s) throw new HttpError(404, `no session ${parts[1]}`);
       return { session: s };
     }
+    // the team's board (PLAN 5.1, 5.2): its plans row by row, who holds what, the reviews waiting
+    // and the changes proposed, and the chatter written from it all by code
+    if (method === "GET" && parts.length === 3 && parts[2] === "board") {
+      if (!home.team.get(id)) throw new HttpError(404, `no session ${parts[1]}`);
+      const plans = home.plans.list().filter((p) => parseTabConversation(p.conversation)?.id === id);
+      const nameOf = (o: string): string => (o === "you" ? "You" : (home.inbox.orb(o)?.name ?? o));
+      return {
+        plans: plans.map((p) => ({ id: p.id, title: p.title, status: p.status, rows: home.board.rows(p.id), changes: home.amendments.list(p.id) })),
+        claims: home.claims.live(id).map((c) => ({ ...c, name: nameOf(c.orb) })),
+        chatter: chatterOf(home.events, id, { plans: plans.map((p) => p.id), nameOf }),
+      };
+    }
+    // a claim gone stale (90 minutes without a sign of him), let go by you
+    if (method === "POST" && parts.length === 5 && parts[2] === "claims" && parts[4] === "recover") {
+      return asked(() => {
+        home.claims.recover(id, Number(parts[3]), "you");
+        return { claims: home.claims.live(id) };
+      });
+    }
     const tab = parts[2] as Tab;
     if (method === "PUT" && parts.length === 3) {
       const b = await body(req);
@@ -488,6 +508,34 @@ async function handle(
     if (method === "POST" && parts.length === 4 && parts[3] === "messages") {
       const b = await body(req);
       return asked(() => home.team.say(id, tab, text(b, "text")));
+    }
+  }
+  // a change an orb proposed to a plan, seconded by you (PLAN 5.1): ✓ Agreed, and the board has its row
+  if (method === "POST" && parts[0] === "amendments" && parts.length === 3 && parts[2] === "agree") {
+    try {
+      const m = home.amendments.agree(Number(parts[1]), "you", (x) => home.board.add(x.plan, x.row, `${x.feature}: ${x.description}`, x.test));
+      const plan = home.plans.get(m.plan);
+      const by = home.inbox.orb(m.proposer)?.name ?? m.proposer;
+      if (plan) home.conversations.add({ conversation: plan.conversation, orb: "you", role: "notice", content: `✓ Agreed: row ${m.row}, ${m.feature} (proposed by ${by}, seconded by you)`, meta: { agreed: `row ${m.row}: ${m.feature}`, amendment: m.id } });
+      return { change: m };
+    } catch (e) {
+      throw new HttpError(409, e instanceof Error ? e.message : String(e));
+    }
+  }
+  // your review of a junior's row (PLAN 5.4): approved, it is ticked; or changes asked, with your note
+  if (method === "POST" && parts[0] === "plans" && parts.length === 5 && parts[2] === "rows" && parts[4] === "review") {
+    const b = await body(req);
+    const planId = Number(parts[1]);
+    const row = decodeURIComponent(parts[3]!);
+    const approve = b.approve === true;
+    const note = typeof b.note === "string" ? b.note.slice(0, 2000).trim() : "";
+    try {
+      const rows = home.board.review(planId, row, "you", approve, note);
+      const plan = home.plans.get(planId);
+      if (plan) home.conversations.add({ conversation: plan.conversation, orb: "you", role: "notice", content: approve ? `You approved row ${row}: it is done [x].` : `You asked for changes on row ${row}${note ? `: ${note}` : ""}.`, meta: { board: true } });
+      return { board: rows };
+    } catch (e) {
+      throw new HttpError(409, e instanceof Error ? e.message : String(e));
     }
   }
   // about you: what the office calls you
@@ -814,9 +862,17 @@ async function handle(
     const orb = decodeURIComponent(parts[1]!);
     if (!home.inbox.orb(orb)) throw new HttpError(404, `no orb "${orb}"`);
     const path = url.searchParams.get("path") ?? "";
+    // a session he works in (PLAN 5.1): the team's shared workspace, never one he is not part of
+    const asked = url.searchParams.get("session");
+    let root: string | undefined;
+    if (asked !== null) {
+      const s = home.team.get(Number(asked));
+      if (!s || ![...s.brainstorm, ...s.floor].includes(orb)) throw new HttpError(404, `${orb} does not work session ${asked}`);
+      root = home.sessionWorkspace(s.id);
+    }
     try {
-      if (parts.length === 3) return { entries: listWorkspace(home.dataDir, orb, path) };
-      if (parts.length === 4 && parts[3] === "file") return { file: readWorkspace(home.dataDir, orb, path) };
+      if (parts.length === 3) return { entries: listWorkspace(home.dataDir, orb, path, root) };
+      if (parts.length === 4 && parts[3] === "file") return { file: readWorkspace(home.dataDir, orb, path, root) };
     } catch (e) {
       if (e instanceof OutsideError) throw new HttpError(400, e.message);
       if (e instanceof MissingError) throw new HttpError(404, e.message);

@@ -4,6 +4,7 @@
 //   - only what came after the last /clear
 //   - from the latest compaction summary on (the summary stands in for what it covers)
 //   - notices (stopped, capped, a card was opened) are for the person, never sent
+//     (save two kinds, to the others in a session: what was agreed, and what was done on the board)
 //   - every tool result right after the call that asked for it, whatever order they were stored
 //     in, and a call whose result never came (a stop, a crash) answered "not run"
 //
@@ -177,6 +178,9 @@ export class Conversations {
       if (m.role === "user") out.push({ role: "user", content: m.content });
       // what another orb in a session agreed reaches everyone in it (his call stayed his)
       else if (m.role === "notice" && o.me && m.orb !== o.me && typeof m.meta.agreed === "string") out.push({ role: "user", content: `[Agreed]: ${m.meta.agreed}` });
+      // what another orb did on the plan's board (took rows, handed off, proposed a change, asked for
+      // a review) reaches everyone in the session, so no one works blind to it (PLAN 5.1)
+      else if (m.role === "notice" && o.me && m.orb !== o.me && m.meta.board === true) out.push({ role: "user", content: `[Board]: ${m.content}` });
       else if (m.role === "summary") out.push({ role: "system", content: `Summary of the earlier conversation:\n${m.content}` });
       else if (m.role === "assistant") {
         if (!m.toolCalls?.length) {

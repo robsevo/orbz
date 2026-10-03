@@ -41,7 +41,10 @@ import { earnedFor, promotedFor, type Promoted } from "./gym/steps.ts";
 import { templatesFor } from "./gym/templates.ts";
 import { cronFor, wordsOf } from "./schedule-rules.ts";
 import { comesUpAt, Notices } from "./notices.ts";
-import { Team } from "./team.ts";
+import { parseTabConversation, Team } from "./team.ts";
+import { Claims } from "./claims.ts";
+import { Amendments } from "./amendments.ts";
+import { teamTools } from "./team-tools.ts";
 import { Spend } from "./brain/spend.ts";
 import { type Card, Conversations } from "./agent/conversation.ts";
 import { AgentRunner, type AgentOptions } from "./agent/loop.ts";
@@ -53,7 +56,7 @@ import type { Decision, ToolDef } from "./agent/tools.ts";
 import { Guard, Turns } from "./rules/guard.ts";
 import { ModelMatcher, Rules, type Matcher } from "./rules/rules.ts";
 import { planTool, Plans } from "./plans/plans.ts";
-import { Board, boardTools } from "./plans/board.ts";
+import { Board, boardTools, reviewerProblem } from "./plans/board.ts";
 import { Lessons, lessonTools } from "./lessons.ts";
 import { chat } from "./brain/openai.ts";
 import { TOOLS } from "./agent/tools.ts";
@@ -189,6 +192,9 @@ export class Home {
   readonly plans: Plans;
   /** Approved plans' rows, ticked only with proof (PLAN 1.8). */
   readonly board: Board;
+  /** A team's claims on a plan's rows and files, and the changes agreed to a plan (PLAN 5.1). */
+  readonly claims: Claims;
+  readonly amendments: Amendments;
   /** Lessons on an orb's own canvas (PLAN 4.4). */
   readonly lessons: Lessons;
   readonly guard: Guard;
@@ -256,6 +262,8 @@ export class Home {
     const kit = this.kit;
     this.plans = new Plans(db, this.events, this.clock);
     this.board = new Board(db, this.events, this.clock);
+    this.claims = new Claims(db, this.events, this.clock, (session) => this.sessionWorkspace(session));
+    this.amendments = new Amendments(db, this.events, this.clock);
     this.lessons = new Lessons(this.events, () => (this.kit ? (tool, args, o) => this.kit!.call(tool, args, o) : null));
     const post = (ctx: { orb: string; conversation: string }, text: string): void => {
       this.conversations.add({ conversation: ctx.conversation, orb: ctx.orb, role: "notice", content: text, meta: { board: true } });
@@ -276,7 +284,17 @@ export class Home {
         }
       : null;
     const tools = agentOpts.tools ?? [
-      ...TOOLS, planTool(this.plans, (workspace) => [workspace]), ...boardTools(this.board, post, pageCheck),
+      ...TOOLS, planTool(this.plans, (workspace) => [workspace]), ...boardTools(this.board, post, pageCheck, {
+        levelOf: (orb) => levelOf(this.events, orb),
+        // who may review a junior's row (PLAN 5.4; owner 10-02: the first of a kind is the Senior)
+        reviewer: (who, author) =>
+          reviewerProblem(who, author, this.inbox.orbs().map((o) => ({ id: o.id, name: o.name, specialty: o.specialty, level: levelOf(this.events, o.id) }))),
+      }),
+      ...teamTools({
+        claims: this.claims, amendments: this.amendments, board: this.board, team: () => this.team,
+        nameOf: (orb) => this.inbox.orb(orb)?.name ?? orb,
+        idOf: (name) => this.inbox.orbs().find((o) => o.name.toLowerCase() === name.trim().toLowerCase())?.id ?? null,
+      }),
       ...computerTools(this.computers, this.vault, pageCheck),
       ...lessonTools(this.lessons),
     ];
@@ -290,7 +308,17 @@ export class Home {
           },
           tools,
           guard: this.guard,
-          sandbox: (orb) => this.sandbox(orb),
+          sandbox: (orb, workspace) => this.sandbox(orb, workspace),
+          workspaceFor: (orb, conversation) => this.workspaceFor(orb, conversation),
+          heldBy: (orb, conversation, path) => {
+            const t = parseTabConversation(conversation);
+            const c = t ? this.claims.holder(t.id, path) : null;
+            return c && c.orb !== orb ? (this.inbox.orb(c.orb)?.name ?? c.orb) : null;
+          },
+          pulse: (orb, conversation) => {
+            const t = parseTabConversation(conversation);
+            if (t) this.claims.pulse(t.id, orb);
+          },
           onTerminal: (e) => this.live.emit("terminal", e), // his terminal, live, on the person's screen
           ...(kit && {
             redact: async (text: string) => {
@@ -370,7 +398,7 @@ export class Home {
           }),
         });
     this.inbox = new Inboxes(db, this.events, this.clock, opts.runner ?? this.agent!, opts.graceMs);
-    this.team = new Team({ db, events: this.events, clock: this.clock, inbox: this.inbox, conversations: this.conversations });
+    this.team = new Team({ db, events: this.events, clock: this.clock, inbox: this.inbox, conversations: this.conversations, level: (orb) => levelOf(this.events, orb) });
     this.xp = new Xp(this.events, { planOrb: (plan) => this.plans.get(plan)?.orb ?? null });
     this.gym = new Gym({
       events: this.events, clock: this.clock, dataDir: this.dataDir, spend: this.spend, kit: kit && ((tool, args) => kit.call(tool, args)),
@@ -572,10 +600,21 @@ export class Home {
     return { model: ep.model, text: res.text };
   }
 
+  /** A session's shared workspace (PLAN 5.1): the team's files, which claims divide among them. */
+  sessionWorkspace(session: number): string {
+    return join(this.dataDir, "sessions", String(session), "workspace");
+  }
+
+  /** Where an orb works in a conversation: a session's tabs share the team's workspace. */
+  workspaceFor(orb: string, conversation: string): string {
+    const t = parseTabConversation(conversation);
+    return t ? this.sessionWorkspace(t.id) : workspaceOf(this.dataDir, orb);
+  }
+
   /** His sandbox (PLAN 4.6): his workspace and a home of his own, nothing else of anyone's. Null
    * where none can start; the home says so once. */
-  sandbox(orb: string): Wrap | null {
-    const wrap = sandboxFor({ workspace: workspaceOf(this.dataDir, orb), home: join(this.dataDir, "orbs", orb, "shell-home"), dataDir: this.dataDir });
+  sandbox(orb: string, workspace = workspaceOf(this.dataDir, orb)): Wrap | null {
+    const wrap = sandboxFor({ workspace, home: join(this.dataDir, "orbs", orb, "shell-home"), dataDir: this.dataDir });
     if (!wrap && !this.#saidUnsandboxed) {
       this.#saidUnsandboxed = true;
       this.events.append("sandbox.unavailable", { why: process.platform === "linux" ? "bubblewrap is missing or cannot start here" : "his sandbox is bubblewrap's, on Linux" });

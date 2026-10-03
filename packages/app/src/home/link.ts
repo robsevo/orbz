@@ -44,6 +44,13 @@ export type MorningCard = { day: string; orbs: { orb: string; habits: number; ow
 export type LessonStep = { text: string; do: unknown[][]; question: string; hint: string };
 export type LessonState = { id: number; topic: string; title: string; kind: string; steps: LessonStep[]; step: number };
 
+/** A session's board (PLAN 5.1, 5.2): its plans row by row with their reviews and proposed changes,
+ * who holds what, and what happened (written by code from the board's events). */
+export type BoardRowState = { plan: number; row: string; test: boolean; box: string; command: string | null; review: string | null };
+export type Change = { id: number; plan: number; proposer: string; row: string; feature: string; description: string; test: string; agreedBy: string | null };
+export type ClaimState = { id: number; plan: number; orb: string; name: string; rows: string[]; paths: string[]; stale: boolean };
+export type SessionBoard = { plans: { id: number; title: string; status: string; rows: BoardRowState[]; changes: Change[] }[]; claims: ClaimState[]; chatter: { seq: number; at: number; text: string }[] };
+
 export type Standing = {
   level: string;
   xp: number;
@@ -165,8 +172,14 @@ export interface Office {
   /** Gives him a file (PLAN 2.4, attach): kept in his workspace's from-you/; the path it is at. */
   give(c: Character, file: File): Promise<string>;
   /** His computer: a folder of his workspace (its top when empty), and a file in it. */
-  files(c: Character, dir?: string): Promise<Entry[]>;
-  file(c: Character, path: string): Promise<WorkFile>;
+  files(c: Character, dir?: string, session?: number): Promise<Entry[]>;
+  file(c: Character, path: string, session?: number): Promise<WorkFile>;
+  /** A session's board (PLAN 5.1): read it; let a stale claim go; your review of a junior's row; your
+   * second to a proposed change. */
+  sessionBoard(session: number): Promise<SessionBoard>;
+  recoverClaim(session: number, claim: number): Promise<void>;
+  reviewRow(plan: number, row: string, approve: boolean, note: string): Promise<void>;
+  agreeChange(id: number): Promise<void>;
   /** His browser (PLAN 4.1): where it is, the still of his screen, and your hand on it. */
   computer(c: Character): Promise<ComputerState>;
   computerAct(c: Character, act: "wake" | "sleep" | "reset" | "take-over" | "hand-back"): Promise<ComputerState>;
@@ -478,11 +491,23 @@ export function doorOffice(base: Character): Office {
       const path = `../orbs/${encodeURIComponent(idOf(c.name))}/workspace/files?name=${encodeURIComponent(file.name)}`;
       return (await call<{ path: string }>(path, { method: "POST", body: file, headers: { "content-type": "application/octet-stream" } })).path;
     },
-    async files(c, dir = "") {
-      return (await call<{ entries: Entry[] }>(`../orbs/${encodeURIComponent(idOf(c.name))}/workspace?path=${encodeURIComponent(dir)}`)).entries;
+    async files(c, dir = "", session) {
+      return (await call<{ entries: Entry[] }>(`../orbs/${encodeURIComponent(idOf(c.name))}/workspace?path=${encodeURIComponent(dir)}${session === undefined ? "" : `&session=${session}`}`)).entries;
     },
-    async file(c, path) {
-      return (await call<{ file: WorkFile }>(`../orbs/${encodeURIComponent(idOf(c.name))}/workspace/file?path=${encodeURIComponent(path)}`)).file;
+    async file(c, path, session) {
+      return (await call<{ file: WorkFile }>(`../orbs/${encodeURIComponent(idOf(c.name))}/workspace/file?path=${encodeURIComponent(path)}${session === undefined ? "" : `&session=${session}`}`)).file;
+    },
+    async sessionBoard(session) {
+      return call<SessionBoard>(`../sessions/${session}/board`);
+    },
+    async recoverClaim(session, claim) {
+      await call(`../sessions/${session}/claims/${claim}/recover`, { method: "POST" });
+    },
+    async reviewRow(plan, row, approve, note) {
+      await call(`../plans/${plan}/rows/${encodeURIComponent(row)}/review`, { method: "POST", body: JSON.stringify({ approve, note }) });
+    },
+    async agreeChange(id) {
+      await call(`../amendments/${id}/agree`, { method: "POST" });
     },
     async computer(c) {
       return call<ComputerState>(`../orbs/${encodeURIComponent(idOf(c.name))}/computer`);

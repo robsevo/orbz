@@ -16,6 +16,7 @@ import { Balanced, OneLine } from "../ui/Balanced.tsx";
 import { idOf, tabOf, type Message, type Office, type Session, type Tab } from "../home/link.ts";
 import { Talk, type Busy } from "./Talk.tsx";
 import { Computer } from "./Computer.tsx";
+import { TeamBoard } from "./Board.tsx";
 import { actsOf } from "./work.ts";
 
 const button: CSSProperties = { font: "600 14px/20px var(--font)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 10, padding: "8px 14px", cursor: "pointer", boxShadow: "inset 0 0 0 .5px var(--hairline)", minHeight: 36 };
@@ -193,7 +194,10 @@ function SessionView(o: { home: Office; office: Character[]; session: Session; t
                 })}
               </OneLine>
             )}
-            {shown && <Computer key={idOf(shown.name)} home={o.home} orb={shown} messages={messages} busy={busy[idOf(shown.name)]} big />}
+            {/* the team's board (PLAN 5.1): who holds which row, the reviews waiting, the changes proposed */}
+            <TeamBoard home={o.home} session={o.session.id} office={o.office} />
+            {/* the shared computer: the session's own workspace, each orb's face on what he last touched */}
+            {shown && <Computer key={idOf(shown.name)} home={o.home} orb={shown} messages={messages} busy={busy[idOf(shown.name)]} big session={o.session.id} />}
           </div>
           {talk}
         </div>

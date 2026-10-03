@@ -80,8 +80,15 @@ export type AgentOptions = {
   };
   /** Tools that come and go (PLAN 4.2: the person's connectors, as their servers are up). */
   extraTools?: () => ToolDef[];
-  /** His sandbox (PLAN 4.6): what his commands run inside, or null where none can start. */
-  sandbox?: (orb: string) => Wrap | null;
+  /** His sandbox (PLAN 4.6): what his commands run inside (`workspace` the one he works in), or
+   * null where none can start. */
+  sandbox?: (orb: string, workspace: string) => Wrap | null;
+  /** Where he works in a conversation (PLAN 5.1): a session's tabs share the team's workspace. */
+  workspaceFor?: (orb: string, conversation: string) => string;
+  /** In a session (PLAN 5.1): who else holds a path in the team's claims (by name), and the sign of
+   * life each act of his gives, which keeps his own claim from going stale. */
+  heldBy?: (orb: string, conversation: string, path: string) => string | null;
+  pulse?: (orb: string, conversation: string) => void;
   /** A command's output as it comes, for his terminal on the person's screen (never stored). */
   onTerminal?: (e: { orb: string; conversation: string; run: number; call: string; chunk: string }) => void;
   /** His plan templates (PLAN 3.2). */
@@ -119,7 +126,7 @@ export const PLAN_ANSWERS = {
 const est = (text: string): number => Math.ceil(text.length / 4) + 4;
 
 export class AgentRunner implements Runner {
-  readonly #o: Required<Omit<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned" | "searchKey" | "remind" | "reminders" | "moveReminder" | "lessonGate" | "learn" | "habits" | "own" | "templates" | "schedule" | "extraTools" | "sandbox" | "onTerminal">> & Pick<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned" | "searchKey" | "remind" | "reminders" | "moveReminder" | "lessonGate" | "learn" | "habits" | "own" | "templates" | "schedule" | "extraTools" | "sandbox" | "onTerminal">;
+  readonly #o: Required<Omit<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned" | "searchKey" | "remind" | "reminders" | "moveReminder" | "lessonGate" | "learn" | "habits" | "own" | "templates" | "schedule" | "extraTools" | "sandbox" | "onTerminal" | "workspaceFor" | "heldBy" | "pulse">> & Pick<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned" | "searchKey" | "remind" | "reminders" | "moveReminder" | "lessonGate" | "learn" | "habits" | "own" | "templates" | "schedule" | "extraTools" | "sandbox" | "onTerminal" | "workspaceFor" | "heldBy" | "pulse">;
   readonly #tools: Map<string, ToolDef>;
 
   constructor(opts: AgentOptions) {
@@ -136,16 +143,22 @@ export class AgentRunner implements Runner {
     return this.#tools.get(name) ?? this.#o.extraTools?.().find((t) => t.name === name);
   }
 
+  /** A tool by its name: the home's own, then the person's connectors'. */
+  toolNamed(name: string): ToolDef | undefined {
+    return this.#tool(name);
+  }
+
   workspace(orb: string): string {
     return workspaceOf(this.#o.dataDir, orb);
   }
 
   async run(ctx: RunContext): Promise<RunResult> {
     const { conversations: conv, events } = this.#o;
+    const workspace = this.#o.workspaceFor?.(ctx.orb, ctx.conversation) ?? this.workspace(ctx.orb);
     const tctx: ToolContext = {
       orb: ctx.orb,
       conversation: ctx.conversation,
-      workspace: this.workspace(ctx.orb),
+      workspace,
       signal: ctx.signal,
       background: this.#o.background,
       ...(this.#o.searchKey && { searchKey: this.#o.searchKey }),
@@ -156,7 +169,10 @@ export class AgentRunner implements Runner {
       ...(this.#o.learn && { learn: (line: string) => this.#o.learn!(ctx.orb, line) }),
       ...(this.#o.templates && { templates: () => this.#o.templates!(ctx.orb) }),
       ...(this.#o.schedule && { schedule: (x) => this.#o.schedule!(ctx.orb, x) }),
-      ...(this.#o.sandbox && { sandbox: this.#o.sandbox(ctx.orb) }),
+      ...(this.#o.sandbox && { sandbox: this.#o.sandbox(ctx.orb, workspace) }),
+      ...(this.#o.heldBy && { heldBy: (p: string) => this.#o.heldBy!(ctx.orb, ctx.conversation, p) }),
+      // an ask's turn says how many hands deep it is (PLAN 5.1); the run's items carry it
+      depth: Math.max(0, ...ctx.items.map((i) => Number(i.data.depth) || 0)),
       note: (text, meta) => conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "notice", run: ctx.run, content: text, meta }),
     };
     mkdirSync(tctx.workspace, { recursive: true });
@@ -456,6 +472,7 @@ export class AgentRunner implements Runner {
         }
       }
       this.#result(msg, call, result, ctx);
+      this.#o.pulse?.(ctx.orb, ctx.conversation);
       step("tool", { call_id: call.id, name: call.name, args: await this.#safe(JSON.stringify(args)), result: await this.#safe(result.content), is_error: result.isError === true });
       if (result.stoppedByUser) return "stopped";
     }
@@ -496,6 +513,7 @@ export class AgentRunner implements Runner {
       }
     }
     this.#result(msg, call, result, ctx);
+    this.#o.pulse?.(ctx.orb, ctx.conversation);
     step("tool", { call_id: call.id, name: call.name, args: await this.#safe(JSON.stringify(args)), result: await this.#safe(result.content), is_error: result.isError === true });
     if (result.stoppedByUser) return "stopped";
     return this.#calls(msg, i + 1, ctx, tctx, step, at);

@@ -29,9 +29,9 @@ export type WorkFile = { path: string; size: number; mtime: number; text: string
 
 const join2 = (dir: string, name: string): string => (dir ? `${dir.replace(/\/+$/, "")}/${name}` : name);
 
-/** One folder of his workspace (its top when `dir` is empty): folders first, then by name. */
-export function listWorkspace(dataDir: string, orb: string, dir = ""): Entry[] {
-  const root = workspaceOf(dataDir, orb);
+/** One folder of his workspace (its top when `dir` is empty): folders first, then by name. `root` is
+ * another workspace he works in (a session's, PLAN 5.1) instead of his own. */
+export function listWorkspace(dataDir: string, orb: string, dir = "", root = workspaceOf(dataDir, orb)): Entry[] {
   const at = inWorkspace(root, dir || ".");
   if (!at) throw new OutsideError(dir);
   let names: string[];
@@ -60,9 +60,9 @@ export function listWorkspace(dataDir: string, orb: string, dir = ""): Entry[] {
 }
 
 /** One file's text, up to READ_CAP; a file that is not text (a NUL in its start) comes back without it. */
-export function readWorkspace(dataDir: string, orb: string, path: string): WorkFile {
+export function readWorkspace(dataDir: string, orb: string, path: string, root = workspaceOf(dataDir, orb)): WorkFile {
   if (!path) throw new MissingError("(no path)");
-  const p = inWorkspace(workspaceOf(dataDir, orb), path);
+  const p = inWorkspace(root, path);
   if (!p) throw new OutsideError(path);
   let s;
   try {

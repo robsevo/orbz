@@ -29,7 +29,7 @@ const KIND_WORDS: Record<Kind, string> = { dataset: "Dataset", ui: "Page", dashb
 const mono: CSSProperties = { font: "500 12px/18px var(--mono)", color: "var(--text-2)", whiteSpace: "pre-wrap", overflowWrap: "anywhere", margin: 0 };
 const hhmm = (t: number): string => new Date(t).toTimeString().slice(0, 5);
 
-export function Computer(o: { home: Office; orb: Character; messages: Message[]; busy?: "thinking" | "speaking"; big?: boolean; replies?: Replies }) {
+export function Computer(o: { home: Office; orb: Character; messages: Message[]; busy?: "thinking" | "speaking"; big?: boolean; replies?: Replies; session?: number }) {
   const id = idOf(o.orb.name);
   const acts = actsOf(o.messages, id);
   const latest = acts[acts.length - 1];
@@ -79,7 +79,7 @@ export function Computer(o: { home: Office; orb: Character; messages: Message[];
   useEffect(() => {
     if (!open) return;
     let live = true;
-    o.home.file(o.orb, open).then((f) => live && setFile(f), (e: Error) => live && setSaid(e.message));
+    o.home.file(o.orb, open, o.session).then((f) => live && setFile(f), (e: Error) => live && setSaid(e.message));
     return () => {
       live = false;
     };
@@ -88,7 +88,7 @@ export function Computer(o: { home: Office; orb: Character; messages: Message[];
   useEffect(() => {
     if (tab !== "Files") return;
     let live = true;
-    o.home.files(o.orb, dir).then((e) => live && setEntries(e), (e: Error) => live && setSaid(e.message));
+    o.home.files(o.orb, dir, o.session).then((e) => live && setEntries(e), (e: Error) => live && setSaid(e.message));
     return () => {
       live = false;
     };
