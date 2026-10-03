@@ -67,6 +67,10 @@ export type ConnectorSpec = { command: string; args?: string[]; env?: Record<str
 export type Connector = { name: string; state: "ready" | "failed" | "starting"; why: string | null; tools: string[]; spec: ConnectorSpec };
 /** A session (PLAN 2.9): a piece of work, with the orbs (by id) that work each tab, in turn order. */
 export type Session = { id: number; title: string; createdAt: number; brainstorm: string[]; floor: string[] };
+/** A password saved for the orbs' browsers (PLAN 4.1): never the password itself. */
+export type VaultEntry = { site: string; username: string; added: number };
+/** His browser (PLAN 4.1): open or not, in your hands or not, and the last still of his screen. */
+export type ComputerState = { awake: boolean; takenOver: boolean; screen: { url: string; title: string; at: number; shot: number; cursor: { x: number; y: number } | null; width: number; height: number } | null };
 export const tabOf = (id: number, tab: Tab): string => `team:${id}:${tab}`;
 
 /** What the app needs from wherever its office lives. */
@@ -148,6 +152,15 @@ export interface Office {
   /** His computer: a folder of his workspace (its top when empty), and a file in it. */
   files(c: Character, dir?: string): Promise<Entry[]>;
   file(c: Character, path: string): Promise<WorkFile>;
+  /** His browser (PLAN 4.1): where it is, the still of his screen, and your hand on it. */
+  computer(c: Character): Promise<ComputerState>;
+  computerAct(c: Character, act: "wake" | "sleep" | "reset" | "take-over" | "hand-back"): Promise<ComputerState>;
+  /** The still `shot` (each still has its own number, so a new one is never an old one cached). */
+  screenUrl(c: Character, shot: number): string;
+  /** The passwords you save for your orbs' browsers (PLAN 4.1): listed, never shown back. */
+  vault(): Promise<VaultEntry[]>;
+  savePassword(site: string, username: string, password: string): Promise<VaultEntry[]>;
+  removePassword(site: string, username: string): Promise<VaultEntry[]>;
   /** What happens as it happens: every event, and a reply's words as they stream. Returns a stop. */
   watch(on: { event?: (e: { type: string; orb: string | null; conversation: string | null; at?: number; data?: Record<string, unknown> }) => void; text?: (d: { orb: string; conversation: string; delta: string; run: number }) => void; /** the stream is open: from here on nothing is missed */ open?: () => void }): () => void;
 }
@@ -428,6 +441,24 @@ export function doorOffice(base: Character): Office {
     },
     async file(c, path) {
       return (await call<{ file: WorkFile }>(`../orbs/${encodeURIComponent(idOf(c.name))}/workspace/file?path=${encodeURIComponent(path)}`)).file;
+    },
+    async computer(c) {
+      return call<ComputerState>(`../orbs/${encodeURIComponent(idOf(c.name))}/computer`);
+    },
+    async computerAct(c, act) {
+      return call<ComputerState>(`../orbs/${encodeURIComponent(idOf(c.name))}/computer/${act}`, { method: "POST" });
+    },
+    screenUrl(c, shot) {
+      return `../orbs/${encodeURIComponent(idOf(c.name))}/screen.jpg?shot=${shot}`;
+    },
+    async vault() {
+      return (await call<{ entries: VaultEntry[] }>("../vault")).entries;
+    },
+    async savePassword(site, username, password) {
+      return (await call<{ entries: VaultEntry[] }>("../vault", { method: "POST", body: JSON.stringify({ site, username, password }) })).entries;
+    },
+    async removePassword(site, username) {
+      return (await call<{ entries: VaultEntry[] }>("../vault/remove", { method: "POST", body: JSON.stringify({ site, username }) })).entries;
     },
     watch(on) {
       // the live stream, with the session cookie (an EventSource sends it, same-origin), shared

@@ -27,6 +27,8 @@ import type { Account } from "./connectors/mail.ts";
 import { ImapError } from "./connectors/imap.ts";
 import { CalendarError } from "./connectors/calendars.ts";
 import { AccountError } from "./connectors/accounts.ts";
+import { ComputerError, type Screen } from "./computer/browser.ts";
+import { VaultError } from "./computer/vault.ts";
 import type { Tab } from "./team.ts";
 import { standingContext } from "./agent/standing.ts";
 import { listWorkspace, MissingError, OutsideError, readWorkspace, saveUpload, UPLOAD_CAP } from "./workspace.ts";
@@ -623,6 +625,62 @@ async function handle(
       throw new HttpError(400, e instanceof Error ? e.message : String(e));
     }
     return { schedule: home.schedules.get(id) };
+  }
+  // the passwords you save for your orbs' browsers (PLAN 4.1): listed by site and username, never shown back
+  if (method === "GET" && url.pathname === "/vault") return { entries: home.vault.list() };
+  if (method === "POST" && url.pathname === "/vault") {
+    const b = await body(req);
+    try {
+      const entry = await home.vault.add(text(b, "site"), text(b, "username"), text(b, "password"));
+      return { entry, entries: home.vault.list() };
+    } catch (e) {
+      throw e instanceof VaultError ? new HttpError(400, e.message) : e;
+    }
+  }
+  if (method === "POST" && url.pathname === "/vault/remove") {
+    const b = await body(req);
+    try {
+      home.vault.remove(text(b, "site"), text(b, "username"));
+    } catch (e) {
+      throw e instanceof VaultError ? new HttpError(404, e.message) : e;
+    }
+    return { entries: home.vault.list() };
+  }
+  // his computer (PLAN 4.1): whether his browser is open, the last still of his screen and where his
+  // cursor was, and the person's hand on it (wake, sleep, reset, take over, hand back)
+  if (parts[0] === "orbs" && parts.length >= 3 && (parts[2] === "computer" || parts[2] === "screen.jpg")) {
+    const orb = decodeURIComponent(parts[1]!);
+    if (!home.inbox.orb(orb)) throw new HttpError(404, `no orb "${orb}"`);
+    const { file, meta } = home.computers.screen(orb);
+    const state = () => {
+      let screen: Screen | null = null;
+      try {
+        screen = JSON.parse(readFileSync(meta, "utf8")) as Screen;
+      } catch {
+        // nothing looked at yet
+      }
+      return { awake: home.computers.awake(orb), takenOver: home.computers.takenOver(orb), screen };
+    };
+    if (method === "GET" && parts[2] === "screen.jpg" && parts.length === 3) {
+      if (!existsSync(file)) throw new HttpError(404, "he has not looked at anything yet");
+      res!.writeHead(200, { "content-type": "image/jpeg", "cache-control": "no-store", "x-content-type-options": "nosniff" });
+      res!.end(readFileSync(file));
+      return STREAMING;
+    }
+    if (method === "GET" && parts[2] === "computer" && parts.length === 3) return state();
+    if (method === "POST" && parts[2] === "computer" && parts.length === 4) {
+      try {
+        if (parts[3] === "wake") await home.computers.wake(orb);
+        else if (parts[3] === "sleep") await home.computers.sleep(orb);
+        else if (parts[3] === "reset") await home.computers.reset(orb);
+        else if (parts[3] === "take-over") home.computers.takeOver(orb);
+        else if (parts[3] === "hand-back") home.computers.handBack(orb);
+        else throw new HttpError(404, `no ${parts[3]} for his computer`);
+      } catch (e) {
+        throw e instanceof ComputerError ? new HttpError(400, e.message) : e;
+      }
+      return state();
+    }
   }
   // his computer (PLAN 2.8): what he is making, his workspace's folders and files, to read
   // a file you give him, from a chat (PLAN 2.4): kept in his workspace's from-you/, the path back

@@ -48,6 +48,9 @@ importers:
       croner:
         specifier: 10.0.1
         version: 10.0.1
+      playwright-core:
+        specifier: 1.63.0
+        version: 1.63.0
 
   packages/terminal:
     dependencies:

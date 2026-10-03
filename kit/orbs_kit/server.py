@@ -37,6 +37,7 @@ import day  # noqa: E402
 import eds  # noqa: E402
 
 from orbs_kit import habits  # noqa: E402
+from orbs_kit import pages  # noqa: E402
 
 VERSION = "0.0.0"
 
@@ -237,6 +238,21 @@ def habit_learn_steps(habit_dir: str, code: str, inputs: list[dict], version: in
 def habit_learn(habit_dir: str, code: str, approved: list[dict], version: int = 1) -> str:
     habits.save(Path(habit_dir), code, [(c["input"], c["output"]) for c in approved], version)
     return habit_dir
+
+
+class PageVerdict(TypedDict):
+    verdict: str
+    report: str
+
+
+@server.tool(description="Whether a page an orb built really renders (PLAN 4.1, Ash's pagecheck): it answered, its "
+             "stylesheet produced rules, its classes are styled, its pictures loaded, no build error covers it. A page "
+             "in a workspace (root + path) is served from it for the check; or a page on this machine (url). "
+             "pass, fail, or inconclusive (nothing could look): never a pass unseen.")
+async def page_check(url: str | None = None, root: str | None = None, path: str | None = None) -> PageVerdict:
+    # its own process and its own browser, off this loop: a slow page holds up no other call
+    r = await asyncio.to_thread(pages.check, url=url, root=root, path=path)
+    return {"verdict": r["verdict"], "report": r["report"]}
 
 
 @server.tool(description="Which kit is running, on which Python, with which state directory.")

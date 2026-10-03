@@ -10,16 +10,20 @@
 //   the orb's own "done" ticks nothing    no tool sets a box; a command that cannot fail is refused
 //   a feature never outranks its test     both move together, [~] and [x]
 //   ticks survive a restart               they are rows, not memory
-//   a visual row also needs pagecheck     (PLAN 4.1) until then it cannot be ticked at all
+//   a visual row also needs pagecheck     (PLAN 4.1) it names the page it builds when it starts,
+//                                         and is ticked only when its test AND Ash's pagecheck
+//                                         (through the kit) both pass: a page that only serves,
+//                                         unstyled, is not done
 import type { DatabaseSync } from "node:sqlite";
 import type { Clock } from "../clock.ts";
 import { tx } from "../db.ts";
 import type { EventLog } from "../events.ts";
 import type { Box } from "./format.ts";
 import { parse } from "./format.ts";
-import { runCommand, type ToolContext, type ToolDef } from "../agent/tools.ts";
+import { inWorkspace, runCommand, type ToolContext, type ToolDef } from "../agent/tools.ts";
+import type { PageCheck } from "../computer/tools.ts";
 
-export type BoardRow = { plan: number; row: string; test: boolean; box: Box; command: string | null; evidence: string | null; updatedAt: number };
+export type BoardRow = { plan: number; row: string; test: boolean; box: Box; command: string | null; evidence: string | null; updatedAt: number; visual: boolean; page: string | null };
 
 /** Commands that report success without testing anything. */
 const CANNOT_FAIL = /^\s*(true|:|exit\s+0|echo\b.*|printf\b.*|test\s+1\s*(-eq|=)\s*1|\[\s*1\s*(-eq|=)\s*1\s*\]|sleep\s+\d+)\s*;?\s*$/i;
@@ -32,7 +36,22 @@ export class BoardError extends Error {
   }
 }
 
-type Row = { plan: number; row: string; test: number; box: Box; command: string | null; evidence: string | null; updated_at: number };
+type Row = { plan: number; row: string; test: number; box: Box; command: string | null; evidence: string | null; updated_at: number; visual: number; page: string | null };
+
+/** The page a visual row builds, as the orb names it: a file of its workspace, or its own page
+ * served on this machine. Null when it is neither. */
+export function pageOf(page: string): string | null {
+  const p = page.trim();
+  if (!p) return null;
+  if (/^https?:\/\//i.test(p)) {
+    try {
+      return ["localhost", "127.0.0.1", "[::1]"].includes(new URL(p).hostname) ? p : null;
+    } catch {
+      return null;
+    }
+  }
+  return p.startsWith("/") || p.split(/[\\/]/).includes("..") ? null : p.replace(/^\.\//, "");
+}
 
 export class Board {
   readonly #db: DatabaseSync;
@@ -59,19 +78,25 @@ export class Board {
   rows(plan: number): BoardRow[] {
     return (this.#db.prepare("SELECT * FROM board WHERE plan = ? ORDER BY rowid").all(plan) as Row[]).map((r) => ({
       plan: r.plan, row: r.row, test: r.test === 1, box: r.box, command: r.command, evidence: r.evidence, updatedAt: r.updated_at,
+      visual: r.visual === 1, page: r.page,
     }));
   }
 
-  /** [ ] → [~]: the orb starts a feature, and commits to the command that will test it. */
-  start(plan: number, row: string, command: string): void {
+  /** [ ] → [~]: the orb starts a feature, and commits to the command that will test it (and, for
+   * a visual row, the page it builds, which pagecheck will look at). */
+  start(plan: number, row: string, command: string, page?: string): void {
     const f = this.#feature(plan, row);
     if (f.box === "[x]") throw new BoardError(`row ${row} is already done`);
     if (!command.trim()) throw new BoardError(`row ${row} needs the command that tests it`);
     if (CANNOT_FAIL.test(command)) throw new BoardError(`\`${command}\` cannot fail, so it proves nothing: name the command that tests row ${row}`);
+    const visual = this.#visual(plan, row);
+    const named = page === undefined || page === "" ? null : pageOf(page);
+    if (page && !named) throw new BoardError(`${page} is not a page this row can be checked on: a file in your workspace (site/index.html), or your page on this machine (http://localhost:5173/)`);
+    if (visual && !named) throw new BoardError(`row ${row} is visual: name the page it builds (page: its path in your workspace, or its address on this machine), so the home can check it really renders`);
     tx(this.#db, () => {
-      const set = this.#db.prepare("UPDATE board SET box = '[~]', command = ?, updated_at = ? WHERE plan = ? AND row IN (?, ?)");
-      set.run(command, this.#clock.now(), plan, row, `${row}_t`);
-      this.#events.append("board.started", { plan, row, command });
+      const set = this.#db.prepare("UPDATE board SET box = '[~]', command = ?, page = ?, updated_at = ? WHERE plan = ? AND row IN (?, ?)");
+      set.run(command, named, this.#clock.now(), plan, row, `${row}_t`);
+      this.#events.append("board.started", { plan, row, command, ...(named && { page: named }) });
     });
   }
 
@@ -79,8 +104,13 @@ export class Board {
   command(plan: number, row: string): string {
     const f = this.#feature(plan, row);
     if (f.box !== "[~]" || !f.command) throw new BoardError(`row ${row} has not been started, so it has no test to run`);
-    if (this.#visual(plan, row)) throw new BoardError(`row ${row} is visual: it also needs pagecheck (PLAN 4.1), so it cannot be ticked yet`);
     return f.command;
+  }
+
+  /** The page a started visual row committed to, which pagecheck must pass; null for any other row. */
+  page(plan: number, row: string): string | null {
+    const f = this.#feature(plan, row);
+    return this.#visual(plan, row) ? f.page : null;
   }
 
   /** The home ran the row's command: [x] on a pass, [~] with the evidence on a failure. */
@@ -111,7 +141,7 @@ const tail = (s: string): string => (s.length > 1200 ? `…${s.slice(-1200)}` : 
 
 /** The orb's two tools for a board. Neither sets a box: start_row commits a test, check_row has the
  * home run it. `shown` posts the result where the person sees it. */
-export function boardTools(board: Board, shown: (ctx: ToolContext, text: string) => void): ToolDef[] {
+export function boardTools(board: Board, shown: (ctx: ToolContext, text: string) => void, pageCheck: PageCheck | null = null): ToolDef[] {
   const n = (a: Record<string, unknown>): number => Number(a.plan);
   const r = (a: Record<string, unknown>): string => String(a.row ?? "");
   return [
@@ -120,19 +150,26 @@ export function boardTools(board: Board, shown: (ctx: ToolContext, text: string)
       label: "Starting a row",
       description:
         "Start a row of an approved plan ([ ] → [~]) and name the command that tests it — the one its _t row describes. " +
+        "A visual row (a page, a render) also names the page it builds, which the home checks with Ash's pagecheck. " +
         "Only the home can mark a row done: it runs that command itself (check_row).",
       parameters: {
         type: "object",
-        properties: { plan: { type: "number" }, row: { type: "string", description: "The feature row, e.g. 1.2" }, test_command: { type: "string" } },
+        properties: {
+          plan: { type: "number" },
+          row: { type: "string", description: "The feature row, e.g. 1.2" },
+          test_command: { type: "string" },
+          page: { type: "string", description: "For a visual row: the page it builds, a path in your workspace or its address on this machine (localhost)." },
+        },
         required: ["plan", "row", "test_command"],
         additionalProperties: false,
       },
-      describe: (a) => `start row ${r(a)} of plan ${n(a)}, tested by \`${String(a.test_command ?? "")}\``,
+      describe: (a) => `start row ${r(a)} of plan ${n(a)}, tested by \`${String(a.test_command ?? "")}\`${a.page ? ` and pagecheck on ${String(a.page)}` : ""}`,
       decision: "allow",
       async run(a, ctx) {
-        board.start(n(a), r(a), String(a.test_command ?? ""));
-        shown(ctx, `Row ${r(a)} started: it will be tested by \`${String(a.test_command)}\`.`);
-        return { content: `Row ${r(a)} is [~]. Build it, then call check_row; the home will run \`${String(a.test_command)}\` itself.` };
+        board.start(n(a), r(a), String(a.test_command ?? ""), typeof a.page === "string" ? a.page : undefined);
+        const page = board.page(n(a), r(a));
+        shown(ctx, `Row ${r(a)} started: it will be tested by \`${String(a.test_command)}\`${page ? `, and ${page} must pass pagecheck` : ""}.`);
+        return { content: `Row ${r(a)} is [~]. Build it, then call check_row; the home will run \`${String(a.test_command)}\` itself${page ? ` and check that ${page} really renders` : ""}.` };
       },
     },
     {
@@ -159,13 +196,27 @@ export function boardTools(board: Board, shown: (ctx: ToolContext, text: string)
       commandOf: (a) => board.command(n(a), r(a)),
       async run(a, ctx) {
         const cmd = board.command(n(a), r(a));
+        const page = board.page(n(a), r(a));
+        if (page && !pageCheck) {
+          const said = `Row ${r(a)} stays [~]: it is visual, and pagecheck runs in the kit, which is not running, so nothing can look at ${page}.`;
+          shown(ctx, said);
+          return { content: said, isError: true };
+        }
         const res = await runCommand(cmd, ctx.workspace, 600_000, ctx.signal);
         if (res.stoppedByUser) return res;
-        const passed = !res.isError;
-        board.record(n(a), r(a), passed, res.content);
-        const said = passed
-          ? `Row ${r(a)} is done [x]: the home ran \`${cmd}\` and it passed.\n${tail(res.content)}`
-          : `Row ${r(a)} stays [~]: the home ran \`${cmd}\` and it failed.\n${tail(res.content)}`;
+        let passed = !res.isError;
+        let evidence = res.content;
+        let why = passed ? `the home ran \`${cmd}\` and it passed` : `the home ran \`${cmd}\` and it failed`;
+        if (passed && page && pageCheck) {
+          // the page it committed to, looked at in a browser of the kit's own (Ash's pagecheck)
+          const target = /^https?:\/\//i.test(page) ? { url: page } : inWorkspace(ctx.workspace, page) ? { root: ctx.workspace, path: page } : null;
+          const v = target ? await pageCheck(target) : { verdict: "fail" as const, report: `${page} is outside the workspace` };
+          passed = v.verdict === "pass";
+          evidence = `${res.content}\n\npagecheck ${page}:\n${v.report}`;
+          why = passed ? `the home ran \`${cmd}\` and pagecheck saw ${page} render, styled` : `the home ran \`${cmd}\` and it passed, but pagecheck says ${page} is not done (${v.verdict})`;
+        }
+        board.record(n(a), r(a), passed, evidence);
+        const said = passed ? `Row ${r(a)} is done [x]: ${why}.\n${tail(evidence)}` : `Row ${r(a)} stays [~]: ${why}.\n${tail(evidence)}`;
         shown(ctx, said);
         return { content: said, isError: !passed };
       },

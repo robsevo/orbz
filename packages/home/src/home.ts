@@ -29,6 +29,9 @@ import { Mail, mailTools } from "./connectors/mail.ts";
 import { Calendars, calendarTools } from "./connectors/calendars.ts";
 import { Accounts, type AccountsOptions, type ProviderId } from "./connectors/accounts.ts";
 import { dayTools } from "./day.ts";
+import { Computers } from "./computer/browser.ts";
+import { computerTools, type PageCheck } from "./computer/tools.ts";
+import { Vault } from "./computer/vault.ts";
 import { defaultStore, type SecretStore } from "./chatgpt/store.ts";
 import type { Undo } from "./gym/card.ts";
 import { type Level, levelOf, nextFor } from "./gym/levels.ts";
@@ -87,6 +90,9 @@ export type HomeOptions = {
   connectors?: Partial<Pick<ConnectorsOptions, "handshakeMs" | "callMs">> & { store?: SecretStore };
   /** Your Google and Microsoft accounts (PLAN 4.2): the apps registered with them, and stand-ins for tests. */
   accounts?: Pick<AccountsOptions, "clients" | "endpoints" | "signInMs">;
+  /** His computer (PLAN 4.1): the Chromium his browser runs on, how long an unused one stays open,
+   * and where the vault's key is kept (a test's own; by default the keychain). */
+  computer?: { executable?: string | null; idleMs?: number; store?: SecretStore };
   /** Dollars a day the brains may cost, by what the providers report; null for no cap. */
   spendCapUsd?: number | null;
 };
@@ -159,6 +165,10 @@ export class Home {
   readonly calendars: Calendars;
   /** Your Google and Microsoft accounts, each connected by its own sign-in (PLAN 4.2). */
   readonly accounts: Accounts;
+  /** Each orb's computer (PLAN 4.1): his own browser, by visible text; the person can take it over. */
+  readonly computers: Computers;
+  /** The passwords you save for your orbs' browsers (PLAN 4.1), typed only on their own sites. */
+  readonly vault: Vault;
   /** Sessions (PLAN 2.9): a Brainstorm and a Floor, the orbs chosen for each taking their turns. */
   readonly team: Team;
   /** XP from graded evidence only (PLAN 3.6): the ledger, in the event log. */
@@ -215,6 +225,13 @@ export class Home {
     this.accounts = new Accounts({ dataDir: this.dataDir, events: this.events, store: secrets, now: () => this.clock.now(), ...opts.accounts });
     this.mail = new Mail({ dataDir: this.dataDir, events: this.events, store: secrets, token: (a) => this.accounts.token(a, "mail") });
     this.calendars = new Calendars({ dataDir: this.dataDir, events: this.events, store: secrets, now: () => this.clock.now(), accountEvents: (a, from, to) => this.accounts.events(a, from, to) });
+    const vaultStore = opts.computer?.store;
+    this.vault = new Vault({ dataDir: this.dataDir, events: this.events, store: vaultStore ? () => Promise.resolve(vaultStore) : secrets, now: () => this.clock.now() });
+    this.computers = new Computers({
+      dataDir: this.dataDir, events: this.events, now: () => this.clock.now(),
+      ...(opts.computer && "executable" in opts.computer && { executable: opts.computer.executable }),
+      ...(opts.computer?.idleMs && { idleMs: opts.computer.idleMs }),
+    });
     const matcherEp = opts.brain?.preset.own ?? big;
     const matcher: Matcher | null = opts.agent?.matcher !== undefined ? opts.agent.matcher : matcherEp ? new ModelMatcher(matcherEp, this.spend) : null;
     this.guard = new Guard({
@@ -236,7 +253,22 @@ export class Home {
     const { decide: _d, matcher: _m, onText: userOnText, ...agentOpts } = opts.agent ?? {};
     this.live.setMaxListeners(0);
     this.events.listen((e) => this.live.emit("event", e));
-    const tools = agentOpts.tools ?? [...TOOLS, planTool(this.plans, (workspace) => [workspace]), ...boardTools(this.board, post)];
+    // Ash's pagecheck, through the kit (PLAN 4.1): what a built page really renders; without the kit, nothing can look
+    const pageCheck: PageCheck | null = kit
+      ? async (target) => {
+          try {
+            const r = (await kit.call("page_check", target)) as { verdict?: string; report?: string };
+            const verdict = r.verdict === "pass" || r.verdict === "fail" || r.verdict === "inconclusive" ? r.verdict : "fail";
+            return { verdict, report: String(r.report ?? "") };
+          } catch (e) {
+            return { verdict: "inconclusive", report: `the kit could not run pagecheck: ${e instanceof Error ? e.message : String(e)}` };
+          }
+        }
+      : null;
+    const tools = agentOpts.tools ?? [
+      ...TOOLS, planTool(this.plans, (workspace) => [workspace]), ...boardTools(this.board, post, pageCheck),
+      ...computerTools(this.computers, this.vault, pageCheck),
+    ];
     this.agent = opts.runner
       ? null
       : new AgentRunner({
@@ -530,6 +562,7 @@ export class Home {
     this.team.close();
     this.#background.close();
     await this.connectors.close();
+    await this.computers.close();
     this.accounts.close();
     this.events.append("home.stopped", {});
     this.#db.close();

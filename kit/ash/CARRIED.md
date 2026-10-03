@@ -5,7 +5,7 @@ anything in `kit/ash/` by hand: a change is a patch or a cut in `carry.py`, so t
 differences cannot go stale. `--check` fails when a file here differs from what the script
 carries.
 
-43 modules and 41 suites. Paths are the kit's own: state under `ORBS_KIT_STATE`
+45 modules and 42 suites. Paths are the kit's own: state under `ORBS_KIT_STATE`
 (`<data>/kit`), the brain under `ORBS_BRAIN` (`<data>/brain`), never `~/ash`.
 
 | File | Ash version | Ash sha256 | Kit sha256 | Differences |
@@ -25,6 +25,8 @@ carries.
 | `memindex.py` | 6f21053 | `8fdc79f86ba0` | `a18990932d21` | same root as statepaths.brain() |
 | `micaudio.py` | b015e3f + uncommitted edits | `f4b61bf23c64` | `f4b61bf23c64` | unchanged |
 | `oneway.py` | b518c5a | `08f772593d0c` | `08f772593d0c` | unchanged |
+| `pagecheck.py` | e6efaa3 | `9064df53dac1` | `9064df53dac1` | unchanged |
+| `pagepoint.py` | a43b8c3 | `cec3bc805d2b` | `cec3bc805d2b` | unchanged |
 | `pagesrc.py` | 2d6023c | `ea0ff3c84ed7` | `ea0ff3c84ed7` | unchanged |
 | `phrasing.py` | 2d6023c | `595c6709ec03` | `595c6709ec03` | unchanged |
 | `practice_card.py` | 6f21053 | `b790bc3b5f2b` | `1fa5a9fe3e95` | the night's report card is written into the kit's state, never Ash's |
@@ -67,6 +69,7 @@ carries.
 | `test_micaudio.py` | a930685 | `e02f4a7ae8a1` | `bd27c7141f9c` | the kit has no ashd.py; the groups that read it are cut below; **cut** MA.8: the names micaudio took from ashd still resolve through ashd (Orbs: 4.3 (the voice turn)); **cut** MA.0: ashd calls mic_frames with `stop` (Orbs: 4.3 (the voice turn passes stop)) |
 | `test_narration_glitches.py` | uncommitted in Ash | `249ca055c4f0` | `572d571a2590` | NG.0 read Ash's HEAD, the commit before its uncommitted fix; the kit pins that commit |
 | `test_oneway.py` | e179049 | `fa27090e9ae2` | `cff46beb158d` | **cut** OW.4-OW.5r: the switch is gated at Ash's terminal chokepoint and opened, tainted and reopened by ashd and turncontext (Orbs: 1.6 (the same checks against the home's chokepoint, through MCP)) |
+| `test_pagecheck.py` | e4a669a | `a6d09dd67bfb` | `a6d09dd67bfb` | unchanged |
 | `test_phrasing.py` | 2d6023c | `ff03a7ca16bd` | `ff03a7ca16bd` | unchanged |
 | `test_practice_card.py` | e4a669a | `699e8cdbd078` | `699e8cdbd078` | unchanged |
 | `test_proactive.py` | e179049 | `17b0f42d9894` | `fa3b8371d291` | **cut** PR.5 reads ashd asking the gate; PR.6 reads Ash's baseline module (not carried) (Orbs: 4.5 (the home's brief asks the gate)) |

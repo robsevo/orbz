@@ -65,15 +65,23 @@ test("the orb's own 'done' ticks nothing: no tool sets a box, a test that cannot
   assert.equal(writers.some((n) => /tick|set_box|mark/.test(n)), false, "there is no tool that writes a box");
 });
 
-test("starting a row moves the feature and its test together; a visual row cannot be ticked before pagecheck", async (t) => {
+test("starting a row moves the feature and its test together; a visual row names its page, and without pagecheck it is not ticked", async (t) => {
   const { home } = await approved(t, [
-    { calls: [{ name: "start_row", args: { plan: 1, row: "1.2", test_command: "test -f banner.png" } }] },
+    { calls: [{ name: "start_row", args: { plan: 1, row: "1.2", test_command: "test -f banner.html" } }] },
+    { calls: [{ name: "start_row", args: { plan: 1, row: "1.2", test_command: "test -f banner.html", page: "../banner.html" } }] },
+    { calls: [{ name: "start_row", args: { plan: 1, row: "1.2", test_command: "test -f banner.html", page: "https://example.com/" } }] },
+    { calls: [{ name: "start_row", args: { plan: 1, row: "1.2", test_command: "test -f banner.html", page: "banner.html" } }] },
+    { calls: [{ name: "write_file", args: { path: "banner.html", content: "<h1>hi</h1>" } }] },
     { calls: [{ name: "check_row", args: { plan: 1, row: "1.2" } }] },
     { chunks: ["The banner needs a render check."] },
   ]);
-  assert.deepEqual([boxes(home)["1.2"], boxes(home)["1.2_t"]], ["[~]", "[~]"], "never a feature ahead of its test");
   const results = home.conversations.list("chat:1").filter((m) => m.role === "tool").map((m) => m.content);
-  assert.ok(results.some((r) => /row 1\.2 is visual: it also needs pagecheck \(PLAN 4\.1\)/.test(r)));
+  assert.ok(results.some((r) => /row 1\.2 is visual: name the page it builds/.test(r)), "a visual row cannot start without its page");
+  assert.ok(results.some((r) => /\.\.\/banner\.html is not a page this row can be checked on/.test(r)), "nor with a page outside the workspace");
+  assert.ok(results.some((r) => /https:\/\/example\.com\/ is not a page this row can be checked on/.test(r)), "nor with someone else's page");
+  assert.deepEqual([boxes(home)["1.2"], boxes(home)["1.2_t"]], ["[~]", "[~]"], "started with its page: never a feature ahead of its test");
+  assert.equal(home.board.page(1, "1.2"), "banner.html");
+  assert.ok(results.some((r) => /Row 1\.2 stays \[~\]: it is visual, and pagecheck runs in the kit, which is not running/.test(r)), "its test would pass, but nothing looked at the page: not done");
 });
 
 test("ticks survive a restart", async (t) => {

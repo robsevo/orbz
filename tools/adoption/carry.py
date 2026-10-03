@@ -49,6 +49,8 @@ MODULES = [
     "day", "dayplan", "reminders",
     # safety + honesty
     "oneway", "redact", "secretscan", "write_guard",
+    # a built page checked before it is done (PLAN 4.1): its browser is the kit's own (browser.py, Orbs')
+    "pagecheck", "pagepoint",
     # chat
     "chatstore", "sessionlog",
     # voice (the ONNX wave: kokoro-onnx, faster-whisper, openwakeword, onnxruntime; no torch/tflite)
@@ -62,7 +64,7 @@ SUITES = [
     "test_skill_draft", "test_skill_lifecycle", "test_skill_usage",
     "test_learner_model", "test_practice_card",
     "test_day_verbs", "test_day_verbs_calendar", "test_remind_me", "test_whenparse",
-    "test_oneway", "test_redact", "test_secretscan", "test_write_guard",
+    "test_oneway", "test_redact", "test_secretscan", "test_write_guard", "test_pagecheck",
     "test_chatstore", "test_statepaths", "test_common", "test_runtime", "test_log_fields",
     "test_ad_voice", "test_stt", "test_voiceturn", "test_micaudio",
     "test_mic_fallback", "test_mic_stall", "test_voice_policy", "test_spoken_sounds",
@@ -78,7 +80,6 @@ LATER = {
     "learn_review": "3.5", "voice_distill": "3.5", "prefs_model": "3.5", "retrieve": "3.5",
     "lesson": "4.4", "lesson_demos": "4.4", "lessonturn": "4.4", "teachcanvas": "4.4", "tutor": "4.4",
     "summarize": "4.5 (with the documents it reads: docread and retrieve are not carried)",
-    "pagecheck": "4.1",
 }
 
 # Suites of carried modules that are NOT carried, because every check in them is about Ash.
@@ -129,7 +130,9 @@ OTHER_SOURCES = {
 # Files in kit/ash written for Orbs, not carried (carry.py leaves them alone).
 # eds.py: your calendar and list as the home hands them in (PLAN 4.5), in place of Ash's EDS;
 # eds_sandbox.py: nothing to sweep (the kit's calendar cannot be written); adapters.py: the journal.
-OURS = {"carried_git.py", "eds.py", "eds_sandbox.py", "adapters.py"}
+# browser.py, browserservice.py: the browser pagecheck asks (PLAN 4.1), in place of Ash's: a headless
+# Chromium of the checking process's own, never the person's Chrome nor a fixed port.
+OURS = {"carried_git.py", "eds.py", "eds_sandbox.py", "adapters.py", "browser.py", "browserservice.py"}
 
 # (file, the exact text, its replacement, why). Applied in order; every anchor must be found.
 PATCHES: list[tuple[str, str, str, str]] = [

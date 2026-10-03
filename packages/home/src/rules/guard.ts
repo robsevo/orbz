@@ -117,7 +117,8 @@ export class Guard {
     const oneway = def.act ? await this.#oneway(at.turn, def.act) : null;
     const r = def.act === "shell" ? this.#o.rankOf?.(at.orb) : null;
     const rank = r ? rankWidens({ ...r, command, background: Boolean(args.background), workspace: workspaceOf(this.#o.dataDir, at.orb) }) : null;
-    return { ...decide({ floor, rule, defaultDecision: def.decision, oneway, mode: at.mode, outward: Boolean(def.act), rank }), described };
+    const defaultDecision = def.decisionFor?.(args) ?? def.decision;
+    return { ...decide({ floor, rule, defaultDecision, oneway, mode: at.mode, outward: Boolean(def.act), rank }), described };
   }
 
   /** A card's yes for an outward action opens the switch for that action, this turn only. */

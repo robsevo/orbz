@@ -6,6 +6,7 @@ must go red. The repo itself is never touched.
     pnpm check:controls      # runs this after tools/check_controls.py
     tools/home_mutants.py --only terminal/    # just the mutants whose file, name or suite has this text
     tools/home_mutants.py --only home/ --part 1/2   # every second one of them, from the first
+    tools/home_mutants.py --only vault --only board  # those of either
 """
 from __future__ import annotations
 
@@ -161,7 +162,7 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ], ["plans.test.ts"]),
     # row by row, ticked with proof (PLAN 1.8)
     ("a failing test ticks the row", "src/plans/board.ts", [
-        ("        const passed = !res.isError;", "        const passed = true;"),
+        ("        let passed = !res.isError;", "        let passed = true;"),
     ], ["board.test.ts"]),
     ("a test that cannot fail is accepted", "src/plans/board.ts", [
         ("    if (CANNOT_FAIL.test(command)) throw", "    if (false) throw"),
@@ -171,7 +172,7 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
          '        .prepare("UPDATE board SET box = ?, evidence = ?, updated_at = ? WHERE plan = ? AND row IN (?, ?) AND test = 0")'),
     ], ["board.test.ts"]),
     ("a visual row ticks without pagecheck", "src/plans/board.ts", [
-        ("    if (this.#visual(plan, row)) throw", "    if (false) throw"),
+        ("        if (page && !pageCheck) {", "        if (false) {"),
     ], ["board.test.ts"]),
     ("one failed spawn counted as two deaths", "src/kit.ts", [
         ("      if (g.died !== null) return;\n      if (partial.trim())", "      if (partial.trim())"),
@@ -925,6 +926,77 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("researchers lose their method", "src/brain/constitution.ts", [
         ("  if (RESEARCHERS.includes(o.specialty)) parts.push(RESEARCH_METHOD);\n", ""),
     ], ["web.test.ts"]),
+    # his computer (PLAN 4.1): his own browser, its proxy, the vault, a page checked before it is done
+    ('his browser is given your home folder', 'src/computer/browser.ts', [
+        ('  return { ...env, HOME: home, XDG_CONFIG_HOME: join(home, ".config"), XDG_CACHE_HOME: join(home, ".cache"), XDG_DATA_HOME: join(home, ".local", "share") };', '  return { ...env, HOME: process.env.HOME ?? home, XDG_CONFIG_HOME: join(home, ".config"), XDG_CACHE_HOME: join(home, ".cache"), XDG_DATA_HOME: join(home, ".local", "share") };'),
+    ], ['computer-profile.test.ts']),
+    ("his browser is handed the home's whole environment", 'src/computer/browser.ts', [
+        ('  if (process.platform === "win32") return { ...(process.env as Record<string, string>) };', '  if (process.platform === "win32" || home) return { ...(process.env as Record<string, string>), HOME: home };'),
+    ], ['computer-profile.test.ts']),
+    ('reset keeps his sign-ins', 'src/computer/browser.ts', [
+        ('    rmSync(profileOf(this.#o.dataDir, orb), { recursive: true, force: true });\n', ''),
+    ], ['computer-profile.test.ts']),
+    ('his browser goes round the proxy', 'src/computer/browser.ts', [
+        ('        proxy: { server: proxy.server, bypass: "<-loopback>" },\n', ''),
+    ], ['computer.test.ts']),
+    ('taken over, he acts anyway', 'src/computer/browser.ts', [
+        ('    if (this.#taken.has(orb)) throw new ComputerError("the person has your computer right now: wait until they hand it back");\n', ''),
+    ], ['computer.test.ts']),
+    ("a field's label words are not read", 'src/computer/browser.ts', [
+        ('        return [...labels, ...by, i.getAttribute("aria-label"),', '        return [i.getAttribute("aria-label"),'),
+    ], ['computer.test.ts']),
+    ("a click's whole label is not read", 'src/computer/tools.ts', [
+        ('            covers(clickFloor(asked), clickFloor(label)) && (consents(asked) || !consents(label))', '            true'),
+    ], ['computer.test.ts']),
+    ('a risky click does not ask', 'src/computer/tools.ts', [
+        ('      floor: (a) => clickFloor(s(a.text)),\n', ''),
+    ], ['computer.test.ts']),
+    ('typing into a page needs no fresh yes', 'src/computer/tools.ts', [
+        ('      act: "send", // words leave him for a page: after reading one, a fresh yes (Ash\'s one-way switch)\n', ''),
+    ], ['computer.test.ts']),
+    ('a field named short of its label is typed into', 'src/computer/tools.ts', [
+        ('            covers(fieldFloor(field), fieldFloor(label)) ? null :', '            true ? null :'),
+    ], ['computer.test.ts']),
+    ('a page that echoes a password is read with it in', 'src/computer/tools.ts', [
+        ('  const words = async (text: string): Promise<string> => vault.scrub(text);', '  const words = async (text: string): Promise<string> => text;'),
+    ], ['computer.test.ts']),
+    ('check_page looks at the web', 'src/computer/tools.ts', [
+        ('    if (!["localhost", "127.0.0.1", "[::1]"].includes(u.hostname)) return "check_page checks a page you built: one served on this machine (localhost), or a file in your workspace";\n', ''),
+    ], ['pagecheck.test.ts']),
+    ('check_page reads outside the workspace', 'src/computer/tools.ts', [
+        ('          if (!inWorkspace(ctx.workspace, s(a.path))) return { content: `${s(a.path)} is outside your workspace.`, isError: true };\n', ''),
+    ], ['pagecheck.test.ts']),
+    ('a consent click goes without asking', 'src/rules/guard.ts', [
+        ('    const defaultDecision = def.decisionFor?.(args) ?? def.decision;', '    const defaultDecision = def.decision;'),
+    ], ['computer.test.ts']),
+    ('a password goes to any site', 'src/computer/vault.ts', [
+        ('    const here = this.#entries().filter((e) => e.site === host);', '    const here = this.#entries();'),
+    ], ['vault.test.ts', 'computer.test.ts']),
+    ('a sealed password is not bound to its entry', 'src/computer/vault.ts', [
+        ('    c.setAAD(AAD(site, username));\n', ''),
+        ('      d.setAAD(AAD(e.site, e.username));\n', ''),
+    ], ['vault.test.ts']),
+    ('a password is hidden only as written', 'src/computer/vault.ts', [
+        ('      for (const form of [p, encodeURIComponent(p), Buffer.from(p, "utf8").toString("base64")]) {', '      for (const form of [p]) {'),
+    ], ['vault.test.ts']),
+    ('the log says whose password was saved', 'src/computer/vault.ts', [
+        ('    this.#o.events.append("vault.saved", { site }); // never the username\'s password, nor the username', '    this.#o.events.append("vault.saved", { site, username });'),
+    ], ['vault.test.ts']),
+    ('the proxy lets a private address through', 'src/computer/proxy.ts', [
+        ('    const c = await checkUrl(`http://${shown}:${port}/`);\n    if (c.ok) return c;', '    const c = { ok: true as const, address: host, reason: shown };\n    if (c.ok) return c;'),
+    ], ['computer.test.ts']),
+    ('a visual row ticks on its test alone', 'src/plans/board.ts', [
+        ('          passed = v.verdict === "pass";', '          passed = true;'),
+    ], ['pagecheck.test.ts']),
+    ('a visual row starts without its page', 'src/plans/board.ts', [
+        ('    if (visual && !named) throw new BoardError(', '    if (visual && !named && false) throw new BoardError('),
+    ], ['board.test.ts']),
+    ("a row's page may be outside the workspace", 'src/plans/board.ts', [
+        ('  return p.startsWith("/") || p.split(/[\\\\/]/).includes("..") ? null : p.replace(/^\\.\\//, "");', '  return p;'),
+    ], ['board.test.ts']),
+    ("a row's page may be someone else's site", 'src/plans/board.ts', [
+        ('      return ["localhost", "127.0.0.1", "[::1]"].includes(new URL(p).hostname) ? p : null;', '      return p;'),
+    ], ['board.test.ts']),
 ]
 
 # the app (PLAN 2.x): paths are inside packages/app
@@ -1342,6 +1414,19 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("the specimen scrolls sideways on a phone", "src/specimen.tsx", [
         ('gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 420px), 1fr))"', 'gridTemplateColumns: "repeat(auto-fit, minmax(420px, 1fr))"'),
     ], ["render.test.ts"]),
+    # his computer's browser and your passwords (PLAN 4.1)
+    ('his face is not drawn on his screen', 'src/rooms/Computer.tsx', [
+        ('            {s.cursor && (', '            {false && s.cursor && ('),
+    ], ['browser-view.test.ts']),
+    ('his Browser tab keeps an old still', 'src/rooms/Computer.tsx', [
+        ('  useEffect(() => o.home.watch({ event: (e) => (e.orb === id && e.type.startsWith("computer.") ? setScreenNews((n) => n + 1) : undefined) }), [o.home, id]);\n', ''),
+    ], ['browser-view.test.ts']),
+    ('a reset in one press', 'src/rooms/Computer.tsx', [
+        ('          <button onClick={() => setAsking(true)} style={button}>', '          <button onClick={() => act("reset")} style={button}>'),
+    ], ['browser-view.test.ts']),
+    ('a saved password stays in its field', 'src/rooms/Passwords.tsx', [
+        ('    setPassword(""); // out of the page at once, whatever the home says\n', ''),
+    ], ['browser-view.test.ts']),
 ]
 
 # the `orbs` terminal (PLAN 1.9): paths are inside packages/terminal
@@ -1436,10 +1521,11 @@ def main() -> int:
     planted += [(name, f"terminal/{rel}", edits, [f"terminal/test/{s}" for s in ss]) for name, rel, edits, ss in TERMINAL_MUTANTS]
     planted += [(name, f"app/{rel}", edits, [f"app/test/{s}" for s in ss]) for name, rel, edits, ss in APP_MUTANTS]
     if "--only" in sys.argv:
-        only = sys.argv[sys.argv.index("--only") + 1]
-        planted = [m for m in planted if only in m[1] or only in m[0] or any(only in s for s in m[3])]
+        # each --only TEXT adds the mutants whose file, name or suite has TEXT in it
+        onlys = [sys.argv[i + 1] for i, a in enumerate(sys.argv[:-1]) if a == "--only"]
+        planted = [m for m in planted if any(o in m[1] or o in m[0] or any(o in s for s in m[3]) for o in onlys)]
         if not planted:
-            print(f"no mutant matches --only {only!r}")
+            print(f"no mutant matches --only {' or '.join(map(repr, onlys))}")
             return 1
     if "--part" in sys.argv:
         # one share of the list, so a long run can go as several jobs, each under the 2-hour ceiling

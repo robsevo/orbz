@@ -271,6 +271,10 @@ const MIGRATIONS: string[] = [
     used_at     INTEGER
   );
   `,
+  // v11 (PLAN 4.1): the page a visual row builds, which pagecheck must pass before it is ticked
+  `
+  ALTER TABLE board ADD COLUMN page TEXT;
+  `,
 ];
 
 /** The home's data is the person's: the folder is theirs alone (0700) and so is the database

@@ -13,6 +13,7 @@ import type { Office } from "../home/link.ts";
 import { Devices } from "./Devices.tsx";
 import { Brains } from "./Brains.tsx";
 import { Connections } from "./Connections.tsx";
+import { Passwords } from "./Passwords.tsx";
 
 const panel: CSSProperties = { display: "grid", gap: "var(--s3)", padding: "var(--s4)", borderRadius: 18, background: "var(--fill)", boxShadow: "inset 0 0 0 .5px var(--hairline)", minWidth: 0 };
 const head: CSSProperties = { font: "700 11px/16px var(--font)", letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)", margin: 0 };
@@ -134,6 +135,7 @@ export function Settings(o: {
         </Panel>
       )}
       {o.home && <Connections home={o.home} />}
+      {o.home && <Passwords home={o.home} />}
       {o.home && <Devices home={o.home} />}
     </div>
   );

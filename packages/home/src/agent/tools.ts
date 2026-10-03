@@ -3,7 +3,8 @@
 //
 //   label        present tense, for the live activity line ("Running a command")
 //   describe     the action in plain words, for an approval card and for rule matching
-//   decision     what happens when no rule says otherwise: allow, ask, or never
+//   decision     what happens when no rule says otherwise: allow, ask, or never (decisionFor: the
+//                same, read off this call's arguments: a click on "I agree" asks, on "Next" not)
 //   precheck     a refusal decided before anyone is asked (a path outside the workspace)
 //   pause        a tool that is itself a question to the person
 //
@@ -52,6 +53,8 @@ export type ToolDef = {
   parameters: Record<string, unknown>;
   describe: (args: Args) => string;
   decision: Decision;
+  /** The default for this call, when it depends on what the call says (never looser than a rule). */
+  decisionFor?: (args: Args) => Decision;
   precheck?: (args: Args, ctx: ToolContext) => string | null;
   pause?: CardKind;
   /** The outward act it performs, in the one-way switch's words (shell, open, calendar, send). */

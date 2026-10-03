@@ -4,6 +4,8 @@
 //   - Work: what he is making, shown as what it is (rooms/work.ts): a dataset as its table, a page
 //     as the page (its scripts do not run here), a dashboard's numbers as bars, a document, a
 //     calendar's events, or the code;
+//   - Browser: his own browser (PLAN 4.1): the last still of his screen, his face where he last
+//     clicked, and your hand on it (take over, hand back, reset);
 //   - Files: his workspace; Terminal: his commands and what they printed; Activity: every step;
 //   - him as the cursor: his own orb, which goes to where his last step acted and stays put
 //     otherwise, with a little hop and a chime when he finishes.
@@ -12,12 +14,13 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type 
 import { Orb } from "../orb/Orb.tsx";
 import type { Character } from "../orb/spec.ts";
 import type { Gesture } from "../orb/life.ts";
-import { idOf, type Entry, type Message, type Office, type WorkFile } from "../home/link.ts";
+import { type ComputerState, idOf, type Entry, type Message, type Office, type WorkFile } from "../home/link.ts";
 import { play } from "../ui/sound.ts";
+import { OneLine } from "../ui/Balanced.tsx";
 import { ACT_WORDS, actsOf, chartOf, docBlocks, filesOf, icsEvents, kindOf, parseCsv, type Act, type Kind } from "./work.ts";
 
-type Tab = "Work" | "Files" | "Terminal" | "Activity";
-const TABS: Tab[] = ["Work", "Files", "Terminal", "Activity"];
+type Tab = "Work" | "Browser" | "Files" | "Terminal" | "Activity";
+const TABS: Tab[] = ["Work", "Browser", "Files", "Terminal", "Activity"];
 const MARK: Record<Kind | "folder", string> = { dataset: "▦", ui: "◧", dashboard: "▥", doc: "▤", calendar: "☷", code: "‹›", folder: "▸" };
 const KIND_WORDS: Record<Kind, string> = { dataset: "Dataset", ui: "Page", dashboard: "Dashboard", doc: "Document", calendar: "Calendar", code: "Code" };
 const mono: CSSProperties = { font: "500 12px/18px var(--mono)", color: "var(--text-2)", whiteSpace: "pre-wrap", overflowWrap: "anywhere", margin: 0 };
@@ -37,6 +40,9 @@ export function Computer(o: { home: Office; orb: Character; messages: Message[];
   const [dir, setDir] = useState("");
   const [entries, setEntries] = useState<Entry[] | null>(null);
   const [said, setSaid] = useState<string | null>(null);
+  // his browser's own news (a still, a sleep, your hand on it): the Browser tab looks again
+  const [screenNews, setScreenNews] = useState(0);
+  useEffect(() => o.home.watch({ event: (e) => (e.orb === id && e.type.startsWith("computer.") ? setScreenNews((n) => n + 1) : undefined) }), [o.home, id]);
 
   useEffect(() => {
     if (!open) return;
@@ -94,15 +100,19 @@ export function Computer(o: { home: Office; orb: Character; messages: Message[];
           <span data-doing style={{ font: "500 12px/16px var(--font)", color: "var(--text-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{doing}</span>
         </div>
       </header>
-      <div role="tablist" aria-label={`${o.orb.name}'s computer`} style={{ display: "flex", gap: 2, padding: "6px 8px 0", boxShadow: "inset 0 -1px 0 var(--sep)" }}>
-        {TABS.map((t) => (
-          <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)} style={{ font: "700 12px/16px var(--font)", border: 0, background: "transparent", padding: "8px 10px", cursor: "pointer", color: tab === t ? "var(--text-1)" : "var(--text-3)", boxShadow: tab === t ? "inset 0 -2px 0 var(--accent)" : "none", minHeight: 32 }}>
-            {t}
-          </button>
-        ))}
+      {/* five tabs: on a phone the row scrolls with a fade, never wider than his panel */}
+      <div role="tablist" aria-label={`${o.orb.name}'s computer`} style={{ padding: "6px 8px 0", boxShadow: "inset 0 -1px 0 var(--sep)", minWidth: 0 }}>
+        <OneLine gap={2} style={{ justifyContent: "flex-start" }}>
+          {TABS.map((t) => (
+            <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)} style={{ flex: "0 0 auto", whiteSpace: "nowrap", font: "700 12px/16px var(--font)", border: 0, background: "transparent", padding: "8px 10px", cursor: "pointer", color: tab === t ? "var(--text-1)" : "var(--text-3)", boxShadow: tab === t ? "inset 0 -2px 0 var(--accent)" : "none", minHeight: 32 }}>
+              {t}
+            </button>
+          ))}
+        </OneLine>
       </div>
       <div ref={panel} style={{ position: "relative", minWidth: 0, minHeight: o.big ? 320 : 200, maxHeight: o.big ? 560 : 360, overflowY: "auto", padding: 12 }}>
         {tab === "Work" && <Work open={open} file={file} acts={acts} touched={lastOnOpen} />}
+        {tab === "Browser" && <Browser home={o.home} orb={o.orb} news={screenNews} />}
         {tab === "Files" && (
           <Files
             dir={dir}
@@ -272,6 +282,83 @@ function Work({ open, file, acts, touched }: { open: string | null; file: WorkFi
       })}
       {cut}
     </article>
+  );
+}
+
+/** His browser (PLAN 4.1): the last still of his screen, with his face where he last clicked;
+ * your hand on it. Driving it live from here is PLAN 4.6. */
+function Browser({ home, orb, news }: { home: Office; orb: Character; news: number }) {
+  const [state, setState] = useState<ComputerState | null>(null);
+  const [asking, setAsking] = useState(false);
+  const [said, setSaid] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    home.computer(orb).then((s) => live && setState(s), (e: Error) => live && setSaid(e.message));
+    return () => {
+      live = false;
+    };
+  }, [home, orb, news]);
+  const act = (a: "take-over" | "hand-back" | "reset"): void => {
+    setSaid(null);
+    setAsking(false);
+    home.computerAct(orb, a).then(setState, (e: Error) => setSaid(e.message));
+  };
+  if (!state) return <Quiet>Looking…</Quiet>;
+  const s = state.screen;
+  const small: CSSProperties = { font: "500 12px/16px var(--font)", color: "var(--text-3)", overflowWrap: "anywhere" };
+  const button: CSSProperties = { font: "600 12px/16px var(--font)", border: 0, borderRadius: 8, padding: "6px 10px", background: "var(--fill)", color: "var(--text-1)", cursor: "pointer", minHeight: 30 };
+  return (
+    <div data-browser style={{ display: "grid", gap: 8, minWidth: 0 }}>
+      {s ? (
+        <>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, minWidth: 0 }}>
+            <span data-address style={{ flex: "1 1 auto", minWidth: 0, font: "600 12px/16px var(--mono)", color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.url}</span>
+            <span style={{ ...small, flex: "0 0 auto" }}>{hhmm(s.at)}</span>
+          </div>
+          <div style={{ position: "relative", borderRadius: 10, overflow: "hidden", boxShadow: "inset 0 0 0 1px var(--hairline)", background: "var(--raised)" }}>
+            {/* small here: a press opens his screen at its own size */}
+            <a href={home.screenUrl(orb, s.shot)} target="_blank" rel="noopener noreferrer" aria-label={`Open ${orb.name}'s screen at full size`} style={{ display: "block" }}>
+              <img src={home.screenUrl(orb, s.shot)} alt={`${orb.name}'s screen: ${s.title || s.url}`} style={{ display: "block", width: "100%", height: "auto" }} />
+            </a>
+            {s.cursor && (
+              <div data-browser-cursor aria-hidden style={{ position: "absolute", left: `${(s.cursor.x / s.width) * 100}%`, top: `${(s.cursor.y / s.height) * 100}%`, width: 28, transform: "translate(-14px, -13px)", pointerEvents: "none", filter: "drop-shadow(0 3px 6px var(--shadow))" }}>
+                <Orb character={orb} size={28} poke={false} fidget={false} framing="portrait" />
+              </div>
+            )}
+          </div>
+        </>
+      ) : (
+        <Quiet>{state.awake ? "His browser is open, on nothing yet." : "His browser is asleep: it wakes when he opens a page."}</Quiet>
+      )}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+        {state.takenOver ? (
+          <button onClick={() => act("hand-back")} data-sound="pick" style={{ ...button, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)" }}>
+            Hand back
+          </button>
+        ) : (
+          <button onClick={() => act("take-over")} style={button}>
+            Take over
+          </button>
+        )}
+        {asking ? (
+          <>
+            <span style={small}>Sign him out of every site?</span>
+            <button onClick={() => act("reset")} style={{ ...button, color: "var(--alert)" }}>
+              Reset
+            </button>
+            <button onClick={() => setAsking(false)} style={button}>
+              Keep
+            </button>
+          </>
+        ) : (
+          <button onClick={() => setAsking(true)} style={button}>
+            Reset his browser
+          </button>
+        )}
+      </div>
+      {state.takenOver && <span style={small}>You have his computer: his browser waits until you hand it back.</span>}
+      {said && <span role="alert" style={{ font: "500 12px/16px var(--font)", color: "var(--alert)" }}>{said}</span>}
+    </div>
   );
 }
 

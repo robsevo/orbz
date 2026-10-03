@@ -39,6 +39,7 @@ export function actsOf(messages: Message[], orb: string, last = Infinity): Act[]
 export const ACT_WORDS: Record<string, string> = {
   write_file: "Wrote", read_file: "Read", list_files: "Looked in", shell: "Ran", shell_output: "Checked", stop_shell: "Stopped",
   web_search: "Searched for", web_fetch: "Read the page", ask_owner: "Asked you", propose_plan: "Proposed a plan",
+  open_page: "Opened", read_page: "Read the page", click: "Clicked", type_into: "Typed into", sign_in: "Signed in", check_page: "Checked",
 };
 
 /** The files he made or touched here, newest last, by their path. */
