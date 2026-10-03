@@ -6,9 +6,15 @@
 //   - "✓ Agreed" stands out;
 //   - what needs your OK waits on a card at the bottom until you answer it.
 // `busy` tells the room who is working, for his avatar.
+//
+// With one orb (a private chat) it can be spoken too (PLAN 4.3): his replies in his own voice, when
+// your replies are "Speak & show"; you, by pressing the microphone, or hands-free by saying his name.
+// While he speaks or works, Send is Stop: one press silences him and ends his run.
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { Character } from "../orb/spec.ts";
 import { idOf, type Card, type Choice, type Message, type Office } from "../home/link.ts";
+import { speak, speaking, stopSpeaking } from "../orb/speech.ts";
+import { type Ears, listenFor, pressToTalk } from "../orb/ears.ts";
 
 const bubble = (mine: boolean): CSSProperties => ({
   justifySelf: mine ? "end" : "start", maxWidth: "min(80%, 620px)", padding: "10px 14px", borderRadius: 18,
@@ -32,6 +38,8 @@ export function Talk(o: {
   attach?: (file: File) => Promise<string>;
   onBusy?: (b: Busy) => void;
   onMessages?: (m: Message[]) => void;
+  /** A private chat's voice (PLAN 4.3): the orb, his pace, and whether his replies are spoken. */
+  voice?: { orb: Character; speed: number; speaks: boolean };
 }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [card, setCard] = useState<Card | null>(null);
@@ -42,6 +50,11 @@ export function Talk(o: {
   const picker = useRef<HTMLInputElement>(null);
   const [said, setSaid] = useState<string | null>(null);
   const [open, setOpen] = useState(false); // the live stream: words arrive as written only once it is open
+  const [talking, setTalking] = useState(false); // he is speaking
+  const [recording, setRecording] = useState<{ stop: () => Promise<string> } | null>(null);
+  const [ears, setEars] = useState<Ears | null>(null); // hands-free, when on
+  const stopEars = useRef<(() => void) | null>(null);
+  const spokenUpTo = useRef<number | null>(null); // the newest reply already spoken (or there before you came)
   const end = useRef<HTMLDivElement>(null);
   const shownUpTo = useRef(0); // the newest message already shown
   const ended = useRef(new Set<string>()); // orbs whose run has finished: their streamed words go once its reply is in
@@ -70,6 +83,18 @@ export function Talk(o: {
     }
     setMessages(r.messages);
     o.onMessages?.(r.messages);
+    // his voice (PLAN 4.3): a new reply of his is spoken; what was there before you came is not
+    const newest = Math.max(0, ...r.messages.filter((m) => m.role === "assistant" && m.content.trim()).map((m) => m.id));
+    if (spokenUpTo.current === null) spokenUpTo.current = newest;
+    else if (o.voice?.speaks && newest > spokenUpTo.current) {
+      const reply = r.messages.find((m) => m.id === newest)!;
+      spokenUpTo.current = newest;
+      setTalking(true);
+      void speak(o.home, o.voice.orb, o.voice.speed, reply.content).then((why) => {
+        setTalking(speaking());
+        if (why) setSaid(why);
+      });
+    } else spokenUpTo.current = Math.max(spokenUpTo.current, newest);
     setCard(r.card && r.card.status === "pending" ? r.card : null);
   };
   const working = (orb: string, how: "thinking" | "speaking" | null): void =>
@@ -90,6 +115,8 @@ export function Talk(o: {
     shownUpTo.current = 0;
     ended.current.clear();
     setBusy({});
+    spokenUpTo.current = null;
+    stopSpeaking();
     void load().catch((e: Error) => setSaid(e.message));
     return o.home.watch({
       open: () => {
@@ -130,6 +157,37 @@ export function Talk(o: {
     for (const f of [...(files ?? [])]) o.attach?.(f).then((p) => setGiven((g) => [...g, p]), (e: Error) => setSaid(e.message));
     if (picker.current) picker.current.value = "";
   };
+  // one press silences him and ends his run
+  const stop = (): void => {
+    stopSpeaking();
+    setTalking(false);
+    if (o.voice) o.home.stop(o.voice.orb).catch(() => {});
+  };
+  const talk = (): void => {
+    if (!o.voice) return;
+    if (recording) {
+      const r = recording;
+      setRecording(null);
+      r.stop().then((words) => (words ? o.send(words) : undefined), (e: Error) => setSaid(e.message)).catch((e: Error) => setSaid(e.message));
+      return;
+    }
+    stopSpeaking();
+    pressToTalk(o.home, o.voice.orb).then(setRecording, (e: Error) => setSaid(e.message === "Permission denied" ? "the microphone was not allowed" : e.message));
+  };
+  const handsFree = (): void => {
+    if (!o.voice) return;
+    if (stopEars.current) {
+      stopEars.current();
+      stopEars.current = null;
+      setEars(null);
+      return;
+    }
+    listenFor(o.home, o.voice.orb, { heard: (w) => void o.send(w).catch((e: Error) => setSaid(e.message)), state: setEars, failed: setSaid }).then(
+      (end) => (stopEars.current = end),
+      (e: Error) => setSaid(e.message),
+    );
+  };
+  useEffect(() => () => stopEars.current?.(), []);
   const answer = (choice: Choice): void => {
     if (!card) return;
     o.home.answer(card.id, choice).then(load, (e: Error) => setSaid(e.message));
@@ -201,6 +259,16 @@ export function Talk(o: {
         }}
         style={{ display: "grid", gap: 8, padding: "var(--s3) var(--s5) var(--s4)", boxShadow: "0 -1px 0 var(--sep)" }}
       >
+        {o.voice && (
+          <div data-ears style={{ display: "flex", gap: 8, alignItems: "center", minWidth: 0 }}>
+            <button type="button" aria-pressed={ears !== null} onClick={handsFree} style={{ ...button, padding: "4px 10px", minHeight: 28, font: "600 12px/16px var(--font)", background: ears ? "var(--accent-fill)" : "var(--fill)", boxShadow: ears ? "inset 0 0 0 1.5px var(--accent)" : button.boxShadow }}>
+              Hands-free
+            </button>
+            <span style={{ font: "500 12px/16px var(--font)", color: "var(--text-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
+              {ears === "called" ? `${o.voice.orb.name} is listening…` : ears === "hearing" ? "Hearing you…" : ears ? `Say “hey ${o.voice.orb.name}”` : recording ? "Recording: press the microphone again to send" : ""}
+            </span>
+          </div>
+        )}
         {given.length > 0 && (
           <div data-given style={{ display: "flex", gap: 6, flexWrap: "wrap", minWidth: 0 }}>
             {given.map((p) => (
@@ -222,6 +290,18 @@ export function Talk(o: {
             </button>
           </>
         )}
+        {o.voice && (
+          <button type="button" onClick={talk} aria-pressed={recording !== null} aria-label={recording ? "Send what you said" : `Talk to ${o.voice.orb.name}`} style={{ ...button, padding: "8px 12px", background: recording ? "var(--accent-fill)" : "var(--fill)", boxShadow: recording ? "inset 0 0 0 1.5px var(--accent)" : button.boxShadow }}>
+            {/* drawn here, in the text's own colour: no glyph brings a colour of its own */}
+            <svg aria-hidden width="16" height="16" viewBox="0 0 16 16" style={{ display: "block" }}>
+              {recording ? (
+                <rect x="4" y="4" width="8" height="8" rx="2" fill="currentColor" />
+              ) : (
+                <path d="M8 1.5a2.5 2.5 0 0 1 2.5 2.5v4a2.5 2.5 0 0 1-5 0V4A2.5 2.5 0 0 1 8 1.5Zm-4.5 6.5h1a3.5 3.5 0 0 0 7 0h1a4.5 4.5 0 0 1-4 4.47V14.5h-1v-2.03A4.5 4.5 0 0 1 3.5 8Z" fill="currentColor" />
+              )}
+            </svg>
+          </button>
+        )}
         <textarea
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
@@ -236,9 +316,15 @@ export function Talk(o: {
           rows={1}
           style={{ flex: "1 1 auto", minWidth: 0, resize: "none", font: "400 15px/22px var(--font)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 14, padding: "10px 14px", outline: 0, boxShadow: "inset 0 0 0 1px var(--hairline)", maxHeight: 160 }}
         />
-        <button type="submit" data-sound="pick" disabled={!draft.trim() && !given.length} style={{ ...button, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)", opacity: draft.trim() || given.length ? 1 : 0.5 }}>
-          Send
-        </button>
+        {o.voice && (talking || Object.keys(busy).length > 0) && !draft.trim() ? (
+          <button type="button" onClick={stop} style={{ ...button, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)" }}>
+            Stop
+          </button>
+        ) : (
+          <button type="submit" data-sound="pick" disabled={!draft.trim() && !given.length} style={{ ...button, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)", opacity: draft.trim() || given.length ? 1 : 0.5 }}>
+            Send
+          </button>
+        )}
         </div>
       </form>
     </div>

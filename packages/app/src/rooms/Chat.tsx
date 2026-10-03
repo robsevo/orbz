@@ -1,15 +1,16 @@
 // A private chat with one orb (PLAN 2.10; owner, 2026-10-01: "you can also just have a single
-// private chat with one of your orbs, whether its voice or text"). Text first; his voice comes
-// with the kit's (4.3). The conversation (Talk.tsx) is his and yours only: no other orb, and no
-// session, sees it.
+// private chat with one of your orbs, whether its voice or text"). By text, or by voice (4.3): his
+// replies in his own voice at his personality's pace when your replies are "Speak & show", and you
+// by the microphone or hands-free. The conversation (Talk.tsx) is his and yours only: no other orb,
+// and no session, sees it.
 import { useState } from "react";
 import { Orb } from "../orb/Orb.tsx";
-import { SPECIALTIES, type Character } from "../orb/spec.ts";
+import { PERSONALITIES, type Replies, SPECIALTIES, speaks, type Character } from "../orb/spec.ts";
 import { chatOf, idOf, type Message, type Office } from "../home/link.ts";
 import { Talk, type Busy } from "./Talk.tsx";
 import { Computer } from "./Computer.tsx";
 
-export function Chat({ orb, home, person }: { orb: Character; home: Office | null; person: string | null }) {
+export function Chat({ orb, home, person, replies = "speak" }: { orb: Character; home: Office | null; person: string | null; replies?: Replies }) {
   const [busy, setBusy] = useState<Busy>({});
   const [messages, setMessages] = useState<Message[]>([]);
   const [computer, setComputer] = useState(true); // his computer beside the chat (PLAN 2.8), there unless you hide it
@@ -54,6 +55,7 @@ export function Chat({ orb, home, person }: { orb: Character; home: Office | nul
           empty={`Say hello to ${orb.name}${person ? `, ${person}` : ""}. Just you two: no one else sees this.`}
           onBusy={setBusy}
           onMessages={setMessages}
+          voice={{ orb, speed: PERSONALITIES[orb.personality].speed, speaks: speaks(orb, replies) }}
         />
       </div>
     </div>

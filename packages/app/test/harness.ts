@@ -41,11 +41,11 @@ export function findChrome(): string | null {
   return cands.find((p): p is string => Boolean(p) && existsSync(p!)) ?? null;
 }
 
-export async function launch(): Promise<Browser> {
+export async function launch(extra: string[] = []): Promise<Browser> {
   const exe = findChrome();
   if (!exe) throw new Error("no Chromium to render with: set ORBS_CHROME, or `npx playwright install chromium`");
   // WebGL with no GPU (a test machine, CI): Chromium's software renderer draws the orbs
-  return chromium.launch({ executablePath: exe, headless: true, args: ["--font-render-hinting=none", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"] });
+  return chromium.launch({ executablePath: exe, headless: true, args: ["--font-render-hinting=none", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist", ...extra] });
 }
 
 const TYPES: Record<string, string> = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".ttf": "font/ttf", ".svg": "image/svg+xml", ".png": "image/png", ".json": "application/json" };

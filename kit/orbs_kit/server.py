@@ -38,6 +38,7 @@ import eds  # noqa: E402
 
 from orbs_kit import habits  # noqa: E402
 from orbs_kit import pages  # noqa: E402
+from orbs_kit import voicebox  # noqa: E402
 
 VERSION = "0.0.0"
 
@@ -288,6 +289,64 @@ if os.environ.get("ORBS_KIT_TEST_TOOLS") == "1":
         print(f"a careless module printed: {text}")
         print(f"and again: {text}", flush=True)
         return text
+
+
+
+# ── voice for the app (PLAN 4.3): Ash's voice stack behind what a page needs (orbs_kit/voicebox.py)
+
+class Spoken(TypedDict):
+    wav: str
+    seconds: float
+
+
+class Heard(TypedDict):
+    text: str
+    seconds: float
+
+
+class Woken(TypedDict):
+    woken: bool
+    heard: str
+
+
+class Finished(TypedDict):
+    finished: bool
+    p: float
+
+
+def _voice_call(fn, *a):
+    """A voicebox call; a voice or a clip it cannot use is an error the home shows, not a crash."""
+    try:
+        return fn(*a)
+    except voicebox.VoiceError as e:
+        raise ValueError(str(e)) from e
+
+
+@server.tool(description="The phrases an orb will say a reply in, Ash's way: shaped for the ear (no markdown, paths or "
+             "machinery), his openers and pauses (PLAN 4.3).")
+async def voice_phrases(text: str, voice: str = "ash", speed: float = 1.0) -> list[str]:
+    return await asyncio.to_thread(_voice_call, voicebox.phrases, text, voice, speed)
+
+
+@server.tool(description="One phrase in an orb's voice (Kokoro; Classic is Ash's own blend), as a base64 WAV, 24 kHz mono.")
+async def voice_say(phrase: str, voice: str = "ash", speed: float = 1.0) -> Spoken:
+    return await asyncio.to_thread(_voice_call, voicebox.say, phrase, voice, speed)
+
+
+@server.tool(description="What the person said, in a recording a browser made (base64; webm, ogg or wav): Whisper base.en, "
+             "biased to the orb's name.")
+async def voice_hear(audio: str, name: str = "Ash") -> Heard:
+    return await asyncio.to_thread(_voice_call, voicebox.hear, audio, name)
+
+
+@server.tool(description="Whether the last moments of what the page heard were someone calling the orb: 'hey <name>'.")
+async def voice_woken(audio: str, name: str) -> Woken:
+    return await asyncio.to_thread(_voice_call, voicebox.woken, audio, name)
+
+
+@server.tool(description="Whether the person sounds finished or only paused (Smart Turn v3.2, Ash's 0.97).")
+async def voice_finished(audio: str) -> Finished:
+    return await asyncio.to_thread(_voice_call, voicebox.finished, audio)
 
 
 def main() -> None:

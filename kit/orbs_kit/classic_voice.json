@@ -1,0 +1,16 @@
+{
+  "from": "Ash's ~/ash/voice/voice.json as the owner chose it (2026-09-27 13:33): the Classic voice, read by voice.settings()",
+  "voice": "am_eric:9+af_heart:6+am_onyx:3+bm_george:12+bm_fable:6",
+  "speed": 1.04,
+  "pitch": 1.0,
+  "energy": 0.6,
+  "movement": 0.0,
+  "lang": "en-us",
+  "rasp": 0.35,
+  "g2p": "misaki",
+  "short": {
+    "speed_ratio": 0.9667,
+    "energy": 0.45,
+    "movement": 0.0
+  }
+}

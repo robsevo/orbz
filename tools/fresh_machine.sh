@@ -9,7 +9,7 @@
 # through the SDK's own client, and the carry check.
 #
 #   tools/fresh_machine.sh              needs docker and network (uv downloads Python and packages)
-#   tools/fresh_machine.sh --download   also download the 350 MB of models from upstream; by default
+#   tools/fresh_machine.sh --download   also download the 510 MB of models from upstream; by default
 #                                       they come from this machine's kit/ash/models, and either way
 #                                       each is kept only if its pinned sha256 matches
 #

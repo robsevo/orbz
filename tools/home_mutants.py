@@ -1025,6 +1025,16 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("the office learns from work of any age", "src/gym/night.ts", [
         ("    const found = findHotPaths(events, { since: clock.now() - WINDOW_DAYS * DAY_MS })", "    const found = findHotPaths(events, { since: 0 })"),
     ], ["night.test.ts"]),
+    # his voice and his ears, through the door (PLAN 4.3)
+    ('a recording of any size is heard', 'src/api.ts', [
+        ('const VOICE_CAP = 5 * 1024 * 1024;', 'const VOICE_CAP = 5 * 1024 * 1024 * 1024;'),
+    ], ['voice.test.ts']),
+    ("his ears listen for anyone's name", 'src/api.ts', [
+        ('parts[3] === "finished" ? { audio } : { audio, name: who.name }', 'parts[3] === "finished" ? { audio } : { audio, name: "Ash" }'),
+    ], ['voice.test.ts']),
+    ('a voice for an orb who is not there', 'src/api.ts', [
+        ('    const who = home.inbox.orb(orb);\n    if (!who) throw new HttpError(404, `no orb "${orb}"`);\n    const kit = home.kit;', '    const who = home.inbox.orb(orb) ?? { name: orb };\n    const kit = home.kit;'),
+    ], ['voice.test.ts']),
     # his screen and terminal live, your hands on them, his sandbox (PLAN 4.6)
     ("a page standing still stays blank until it paints", 'src/computer/browser.ts', [
         ('    if (now && w.viewers.has(frame)) frame(now);\n', ''),
@@ -1508,6 +1518,22 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("every new orb starts the Senior on his sheet", "src/orbs.tsx", [
         ("  const startsAs = (making ? !office.some((o) => o.specialty === me.specialty)", "  const startsAs = (making ? true"),
     ], ["creator.test.ts"]),
+    # his voice and his ears in the app (PLAN 4.3)
+    ("a slow answer cuts the start of your turn", "src/orb/ears.ts", [
+        ("            turnFrom = cutAt - clip.length; // the call and what follows it are one turn, however slow the answer", "            turnFrom = total - clip.length;"),
+    ], ["voice.test.ts"]),
+    ('a stop lets him finish his phrase', 'src/orb/speech.ts', [
+        ('  current.stop();\n  current = null;\n  record(', '  current = null;\n  record('),
+    ], ['voice.test.ts']),
+    ('Stop does not end his run', 'src/rooms/Talk.tsx', [
+        ('    if (o.voice) o.home.stop(o.voice.orb).catch(() => {});\n', ''),
+    ], ['voice.test.ts']),
+    ('the call stays in front of your message', 'src/orb/ears.ts', [
+        ('  return text.replace(new RegExp(', '  return text || text.replace(new RegExp('),
+    ], ['voice.test.ts']),
+    ('his name never wakes him', 'src/orb/ears.ts', [
+        ('          if (w.woken && turnFrom === null) {', '          if (false && w.woken && turnFrom === null) {'),
+    ], ['voice.test.ts']),
     # his screen live in the app, your hands and his terminal (PLAN 4.6)
     ('a press on his screen goes nowhere', 'src/rooms/Computer.tsx', [
         ('              hand({ kind: "click", x: Math.round(((e.clientX - r.left) / r.width) * width), y: Math.round(((e.clientY - r.top) / r.height) * height) });\n', ''),

@@ -173,6 +173,15 @@ export interface Office {
   hands(c: Character, h: Hands): Promise<ComputerState>;
   /** A command you type into his terminal, once you have his computer: run in his sandbox. */
   terminal(c: Character, command: string): Promise<{ output: string; failed: boolean }>;
+  /** His voice (PLAN 4.3): the phrases a reply is said in, and one phrase as WAV, at `speed`. */
+  phrasesFor(c: Character, text: string, speed: number): Promise<string[]>;
+  spoken(c: Character, phrase: string, speed: number): Promise<ArrayBuffer>;
+  /** His ears: what you said in a recording; whether it was him being called; whether you finished. */
+  hear(c: Character, audio: Blob): Promise<string>;
+  woken(c: Character, audio: Blob): Promise<{ woken: boolean; heard: string }>;
+  finished(c: Character, audio: Blob): Promise<{ finished: boolean; p: number }>;
+  /** Ends his run now (the conversation's Stop). */
+  stop(c: Character): Promise<void>;
   /** The passwords you save for your orbs' browsers (PLAN 4.1): listed, never shown back. */
   vault(): Promise<VaultEntry[]>;
   savePassword(site: string, username: string, password: string): Promise<VaultEntry[]>;
@@ -479,6 +488,28 @@ export function doorOffice(base: Character): Office {
     },
     async terminal(c, command) {
       return call<{ output: string; failed: boolean }>(`../orbs/${encodeURIComponent(idOf(c.name))}/terminal`, { method: "POST", body: JSON.stringify({ command }) });
+    },
+    async phrasesFor(c, text, speed) {
+      return (await call<{ phrases: string[] }>(`../orbs/${encodeURIComponent(idOf(c.name))}/voice/phrases`, { method: "POST", body: JSON.stringify({ text, voice: c.voice, speed }) })).phrases;
+    },
+    async spoken(c, phrase, speed) {
+      const res = await fetch(`../orbs/${encodeURIComponent(idOf(c.name))}/voice/say`, {
+        method: "POST", credentials: "same-origin", headers: { "x-orbs": "1", "content-type": "application/json" }, body: JSON.stringify({ phrase, voice: c.voice, speed }),
+      });
+      if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? `HTTP ${res.status}`);
+      return res.arrayBuffer();
+    },
+    async hear(c, audio) {
+      return (await call<{ text: string }>(`../orbs/${encodeURIComponent(idOf(c.name))}/voice/hear`, { method: "POST", body: audio, headers: { "content-type": audio.type || "application/octet-stream" } })).text;
+    },
+    async woken(c, audio) {
+      return call<{ woken: boolean; heard: string }>(`../orbs/${encodeURIComponent(idOf(c.name))}/voice/woken`, { method: "POST", body: audio, headers: { "content-type": audio.type || "application/octet-stream" } });
+    },
+    async finished(c, audio) {
+      return call<{ finished: boolean; p: number }>(`../orbs/${encodeURIComponent(idOf(c.name))}/voice/finished`, { method: "POST", body: audio, headers: { "content-type": audio.type || "application/octet-stream" } });
+    },
+    async stop(c) {
+      await call(`../orbs/${encodeURIComponent(idOf(c.name))}/stop`, { method: "POST" });
     },
     async vault() {
       return (await call<{ entries: VaultEntry[] }>("../vault")).entries;

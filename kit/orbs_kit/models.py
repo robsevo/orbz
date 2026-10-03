@@ -1,6 +1,6 @@
 """The kit's model files: fetched from where they are published, verified by hash (PLAN 1.3).
 
-They are too big for git (350 MB), so a fresh kit has none until this runs. Each file is
+They are too big for git (500 MB), so a fresh kit has none until this runs. Each file is
 downloaded from its upstream release, written beside the carried modules (kit/ash/models, where
 voice.py and turnend.py look), and kept only if its sha256 is the one pinned here — a truncated
 or substituted file is deleted, never used. `--from DIR` takes files from a local folder instead
@@ -35,6 +35,19 @@ MODELS = [
      "https://huggingface.co/pipecat-ai/smart-turn-v3/resolve/main/smart-turn-v3.2-cpu.onnx",
      "2bb026316b14a660486a75b1733cd3fbab8c2fd0314dc9af7be49f8cca967e4f", 8_679_182,
      "Smart Turn v3.2, when a person has finished speaking (BSD-2)"),
+    # the ears (PLAN 4.3): Whisper base.en as faster-whisper reads it, at one pinned revision (MIT)
+    ("whisper-base.en/model.bin", "https://huggingface.co/Systran/faster-whisper-base.en/resolve/3d3d5dee26484f91867d81cb899cfcf72b96be6c/model.bin",
+     "2a166925539a16005f14ff328359f9b9adb9dc4fb631bb3b227526862e93e2ef", 145_216_508,
+     "Whisper base.en, what you say to an orb (MIT)"),
+    ("whisper-base.en/config.json", "https://huggingface.co/Systran/faster-whisper-base.en/resolve/3d3d5dee26484f91867d81cb899cfcf72b96be6c/config.json",
+     "f3bc3821e9fc76a27bae538e11ae5b677dcdd352b4600429ce7951d398569aeb", 2_227,
+     "Whisper base.en's settings"),
+    ("whisper-base.en/tokenizer.json", "https://huggingface.co/Systran/faster-whisper-base.en/resolve/3d3d5dee26484f91867d81cb899cfcf72b96be6c/tokenizer.json",
+     "929c5252409436dce1b38a75d1abbcb5e132d170d8e324e4e04ed915fa2d22df", 2_128_466,
+     "Whisper base.en's tokenizer"),
+    ("whisper-base.en/vocabulary.txt", "https://huggingface.co/Systran/faster-whisper-base.en/resolve/3d3d5dee26484f91867d81cb899cfcf72b96be6c/vocabulary.txt",
+     "ff77588746d3a2595d32ab5b69ffd7b95ce2441ac57533cb66fc3eb575a115cf", 422_309,
+     "Whisper base.en's vocabulary"),
 ]
 
 
@@ -64,10 +77,12 @@ def fetch(dest: Path = DEST, source: Path | None = None, log=print) -> list[str]
         if name not in missing(dest):
             continue
         part = dest / f"{name}.part"
+        part.parent.mkdir(parents=True, exist_ok=True)
         part.unlink(missing_ok=True)
         try:
             if source is not None:
-                shutil.copyfile(source / name, part)
+                # the file where it is named, or a folder holding it directly (a Hugging Face snapshot)
+                shutil.copyfile(source / name if (source / name).is_file() else source / Path(name).name, part)
                 how = f"copied from {source}"
             else:
                 log(f"downloading {name} ({size / 1e6:.0f} MB): {what}")

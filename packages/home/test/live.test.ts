@@ -119,7 +119,7 @@ test("his sandbox: another orb's files, the box's own and the home's environment
   const outside = mkdtempSync(join(tmpdir(), "orbs-box-"));
   t.after(() => rmSync(outside, { recursive: true, force: true }));
   writeFileSync(join(outside, "box-secret.txt"), "the box's own");
-  process.env.ORBS_TEST_SECRET = "sk-not-real-but-shaped-1234";
+  process.env.ORBS_TEST_SECRET = "sk-dummy-but-key-shaped-1234";
   t.after(() => delete process.env.ORBS_TEST_SECRET);
   const dataDir = mkdtempSync(join(tmpdir(), "orbs-sandboxed-"));
   t.after(() => rmSync(dataDir, { recursive: true, force: true }));

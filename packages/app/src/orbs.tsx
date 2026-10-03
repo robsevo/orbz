@@ -844,7 +844,7 @@ function App() {
         ) : room === "sessions" ? (
           <SessionsRoom home={home} office={office} open={inSession.id} tab={inSession.tab} go={(id, tab) => go({ room: "sessions", id, tab: tab ?? "brainstorm" })} />
         ) : room === "chat" ? (
-          <Chat orb={office.find((c) => c.name === talking) ?? office[0] ?? ASH} home={home} person={person?.name ?? null} />
+          <Chat orb={office.find((c) => c.name === talking) ?? office[0] ?? ASH} home={home} person={person?.name ?? null} replies={replies} />
         ) : room === "settings" ? (
           <Settings
             person={person}

@@ -56,6 +56,8 @@ export type HomeDoor = {
 export type Remote = { names: string[]; cert: string | Buffer; key: string | Buffer; port?: number; host?: string };
 
 const BODY_LIMIT = 64 * 1024;
+/** A recording a page sends to be heard (PLAN 4.3): a minute or so of speech. */
+const VOICE_CAP = 5 * 1024 * 1024;
 
 class HttpError extends Error {
   readonly status: number;
@@ -718,6 +720,38 @@ async function handle(
         throw e instanceof ComputerError ? new HttpError(400, e.message) : e;
       }
       return state();
+    }
+  }
+  // his voice and his ears (PLAN 4.3): Ash's, through the kit. The page records and plays; what he
+  // says and what he hears are the home's
+  if (method === "POST" && parts[0] === "orbs" && parts.length === 4 && parts[2] === "voice") {
+    const orb = decodeURIComponent(parts[1]!);
+    const who = home.inbox.orb(orb);
+    if (!who) throw new HttpError(404, `no orb "${orb}"`);
+    const kit = home.kit;
+    if (!kit) throw new HttpError(503, "his voice is the kit's, and the kit is not running");
+    const ask = async (tool: string, args: Record<string, unknown>): Promise<unknown> => {
+      try {
+        return await kit.call(tool, args);
+      } catch (e) {
+        throw new HttpError(400, e instanceof Error ? e.message.replace(/^.*?Error executing tool \w+: /, "") : String(e));
+      }
+    };
+    if (parts[3] === "phrases" || parts[3] === "say") {
+      const b = await body(req);
+      const voice = typeof b.voice === "string" && b.voice ? b.voice : "ash";
+      const speed = Math.min(1.5, Math.max(0.6, Number(b.speed) || 1));
+      if (parts[3] === "phrases") return { phrases: await ask("voice_phrases", { text: text(b, "text").slice(0, 20_000), voice, speed }) };
+      const said = (await ask("voice_say", { phrase: text(b, "phrase").slice(0, 2000), voice, speed })) as { wav: string };
+      const wav = Buffer.from(said.wav, "base64");
+      res!.writeHead(200, { "content-type": "audio/wav", "content-length": wav.length, "cache-control": "no-store", "x-content-type-options": "nosniff" });
+      res!.end(wav);
+      return STREAMING;
+    }
+    if (parts[3] === "hear" || parts[3] === "woken" || parts[3] === "finished") {
+      const audio = (await rawBody(req, VOICE_CAP)).toString("base64");
+      if (!audio) throw new HttpError(400, "the recording is empty");
+      return await ask(`voice_${parts[3]}`, parts[3] === "finished" ? { audio } : { audio, name: who.name });
     }
   }
   // a command the person types into his terminal, once they have his computer (PLAN 4.6)
