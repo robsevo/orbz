@@ -8,12 +8,18 @@ import { Orb } from "../orb/Orb.tsx";
 import { PERSONALITIES, type Replies, SPECIALTIES, speaks, type Character } from "../orb/spec.ts";
 import { chatOf, idOf, type Message, type Office } from "../home/link.ts";
 import { Talk, type Busy } from "./Talk.tsx";
+import type { Ears } from "../orb/ears.ts";
+import type { Gesture } from "../orb/life.ts";
 import { Computer } from "./Computer.tsx";
 
 export function Chat({ orb, home, person, replies = "speak" }: { orb: Character; home: Office | null; person: string | null; replies?: Replies }) {
   const [busy, setBusy] = useState<Busy>({});
   const [messages, setMessages] = useState<Message[]>([]);
   const [computer, setComputer] = useState(true); // his computer beside the chat (PLAN 2.8), there unless you hide it
+  // his listening cues (PLAN 4.7, after Griffin's): he listens while you talk, leans in when called,
+  // nods at your pauses, thinks while he hears you
+  const [ears, setEars] = useState<Ears | null>(null);
+  const [cue, setCue] = useState<{ name: Gesture; n: number } | null>(null);
   if (!home) {
     return (
       <div style={{ display: "grid", placeItems: "center", alignContent: "center", gap: "var(--s3)", padding: "var(--s7) var(--s5)", textAlign: "center" }}>
@@ -27,10 +33,13 @@ export function Chat({ orb, home, person, replies = "speak" }: { orb: Character;
   }
   const how = busy[idOf(orb.name)];
   const conv = chatOf(orb);
+  const face = how ?? (ears === "hearing" ? "thinking" : ears === "called" || ears === "conversing" ? "listening" : "idle");
   return (
     <div data-orb={orb.hue} data-chat={conv} style={{ display: "grid", gridTemplateRows: "auto 1fr", minHeight: "min(100%, calc(100dvh - 120px))", minWidth: 0 }}>
       <header style={{ display: "flex", alignItems: "center", gap: 12, padding: "var(--s3) var(--s5)", boxShadow: "0 1px 0 var(--sep)", minWidth: 0 }}>
-        <Orb character={orb} size={52} state={how ?? "idle"} poke={false} />
+        <span data-ears-face={face} data-cues={cue?.n ?? 0} style={{ display: "contents" }}>
+          <Orb character={orb} size={52} state={face} gesture={cue} poke={false} />
+        </span>
         <div style={{ display: "grid", minWidth: 0 }}>
           <span style={{ font: "800 18px/24px var(--font)", color: "var(--accent)" }}>{orb.name}</span>
           <span style={{ font: "400 13px/18px var(--font)", color: "var(--text-3)" }}>{how === "speaking" ? "Writing…" : how ? "Working…" : `${SPECIALTIES[orb.specialty].title} · a private chat`}</span>
@@ -49,12 +58,14 @@ export function Chat({ orb, home, person, replies = "speak" }: { orb: Character;
           home={home}
           conversation={conv}
           orbs={[orb]}
-          send={(text) => home.say(orb, text)}
+          send={(text, x) => home.say(orb, text, x)}
           attach={(file) => home.give(orb, file)}
           placeholder={`Message ${orb.name}`}
           empty={`Say hello to ${orb.name}${person ? `, ${person}` : ""}. Just you two: no one else sees this.`}
           onBusy={setBusy}
           onMessages={setMessages}
+          onEars={setEars}
+          onCue={(c) => setCue((g) => ({ name: c, n: (g?.n ?? 0) + 1 }))}
           voice={{ orb, speed: PERSONALITIES[orb.personality].speed, speaks: speaks(orb, replies) }}
         />
       </div>

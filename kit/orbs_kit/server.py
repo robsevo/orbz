@@ -305,6 +305,7 @@ class Spoken(TypedDict):
 class Heard(TypedDict):
     text: str
     seconds: float
+    unsure: bool
 
 
 class Woken(TypedDict):
@@ -315,6 +316,20 @@ class Woken(TypedDict):
 class Finished(TypedDict):
     finished: bool
     p: float
+
+
+class Turned(TypedDict):
+    finished: bool
+    p: float
+    hold: bool
+    words: str
+    unsure: bool
+
+
+class Overlapped(TypedDict):
+    kind: str
+    words: str
+    voiced: float
 
 
 def _voice_call(fn, *a):
@@ -350,6 +365,18 @@ async def voice_woken(audio: str, name: str) -> Woken:
 @server.tool(description="Whether the person sounds finished or only paused (Smart Turn v3.2, Ash's 0.97).")
 async def voice_finished(audio: str) -> Finished:
     return await asyncio.to_thread(_voice_call, voicebox.finished, audio)
+
+
+@server.tool(description="At the person's first pause, in one ask (PLAN 4.7): whether they finished (Smart Turn, and words "
+             "that do not trail off on 'and', 'um', 'the'...), and their words so far, with Whisper's doubt.")
+async def voice_turn(audio: str, name: str = "Ash") -> Turned:
+    return await asyncio.to_thread(_voice_call, voicebox.turn, audio, name)
+
+
+@server.tool(description="What the person said while the orb spoke what `saying` holds (PLAN 4.7): 'echo' (his own words "
+             "back through the microphone), 'backchannel' (an 'mhm': he goes on), 'interrupt' (he stops and listens) or 'nothing'.")
+async def voice_overlap(audio: str, name: str, saying: str = "") -> Overlapped:
+    return await asyncio.to_thread(_voice_call, voicebox.overlap, audio, name, saying)
 
 
 # ── lessons (PLAN 4.4): Ash's lesson.py plans once; its model calls are the home's brain order ──

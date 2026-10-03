@@ -20,11 +20,18 @@ const TAB_RULE: Record<TeamTurn["tab"], string> = {
   floor: "This is the Floor: do the agreed work, your part of it, with your tools, and say in a line or two what you did. Ask the person before anything that matters.",
 };
 
-export function standingContext(o: { orbName: string; brainDir: string; workspace: string; specialty?: Specialty; learned?: string[]; team?: TeamTurn }): string {
+/** Plain spoken English (PLAN 4.7; ASD-STE100 at about 80%, Andrej Karpathy's tip): for a reply the
+ * person will hear, not read. Its plain words are swapped in again by code before he says it (the
+ * kit's voicebox.plain); this is the part only the writer can do. */
+export const ALOUD =
+  "The person spoke to you, and will hear your answer read aloud: say it in plain spoken English. Short sentences of up to about 20 words, one idea each. Active voice, the action first. Common words, and the same word for the same thing. No lists, tables, headings or code: say the two or three things that matter, in order. Keep your own warmth and personality.";
+
+export function standingContext(o: { orbName: string; brainDir: string; workspace: string; specialty?: Specialty; learned?: string[]; team?: TeamTurn; aloud?: boolean }): string {
   const parts = [
     `You are ${o.orbName}, one of the person's orbs: an AI character and assistant that works on its own computer and asks before anything that matters.`,
     `Working directory: ${o.workspace}`,
   ];
+  if (o.aloud) parts.push(ALOUD);
   if (o.team) {
     const others = o.team.with.filter((n) => n !== o.orbName);
     parts.push(

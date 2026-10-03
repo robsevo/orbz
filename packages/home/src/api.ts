@@ -871,10 +871,13 @@ async function handle(
       res!.end(wav);
       return STREAMING;
     }
-    if (parts[3] === "hear" || parts[3] === "woken" || parts[3] === "finished") {
+    if (parts[3] === "hear" || parts[3] === "woken" || parts[3] === "finished" || parts[3] === "turn" || parts[3] === "overlap") {
       const audio = (await rawBody(req, VOICE_CAP)).toString("base64");
       if (!audio) throw new HttpError(400, "the recording is empty");
-      return await ask(`voice_${parts[3]}`, parts[3] === "finished" ? { audio } : { audio, name: who.name });
+      if (parts[3] === "finished") return await ask("voice_finished", { audio });
+      // what he was saying while you spoke over him (PLAN 4.7): his own words back through the microphone are not yours
+      if (parts[3] === "overlap") return await ask("voice_overlap", { audio, name: who.name, saying: (url.searchParams.get("saying") ?? "").slice(0, 2000) });
+      return await ask(`voice_${parts[3]}`, { audio, name: who.name });
     }
   }
   // a command the person types into his terminal, once they have his computer (PLAN 4.6)
@@ -946,7 +949,8 @@ async function handle(
       case "messages": {
         const b = await body(req);
         const conversation = typeof b.conversation === "string" && b.conversation ? b.conversation : "chat:main";
-        return { item: home.inbox.send(orb, conversation, text(b, "text")) };
+        // said aloud (PLAN 4.7): he answers in plain spoken English, for the ear
+        return { item: home.inbox.send(orb, conversation, text(b, "text"), { said: b.said === true }) };
       }
       case "pause":
         home.inbox.pause(orb);

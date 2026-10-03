@@ -2,25 +2,22 @@
 //
 //   press to talk     the microphone records while the button is down (or until pressed again);
 //                     the home hears it (Whisper, through the kit) and it becomes your message
-//   hands-free        the page listens for his NAME ("hey Hazel"): a few seconds at a time, and
-//                     only when something was said, are asked "was that him being called?"; once
-//                     called, your turn is followed until you sound finished (Smart Turn, at the
-//                     first 0.4 s pause) or a longer silence (1.4 s) ends it; what you said becomes
-//                     your message, without the "hey Hazel" in front
+//   hands-free        a real conversation (PLAN 4.7): his NAME wakes him ("hey Hazel"), once; then
+//                     each thing you say is a turn of its own, until a quiet spell or "thanks
+//                     Hazel". Your turn ends when you sound finished (Smart Turn, at your first
+//                     pause, with words that do not trail off) or after quiet, 1.4 s, or 5 s when
+//                     you trail off; you can talk over him (an "mhm" lets him go on, your own words
+//                     stop him and he listens); what Whisper could not make out is "didn't catch
+//                     that", never a message. The turns are turns.ts's, by code; this file is the
+//                     microphone and the home's answers
 //
 // Nothing is sent while nobody speaks, and nothing at all unless you turned it on. The audio goes
 // only to your own home.
 import type { Office } from "../home/link.ts";
 import type { Character } from "./spec.ts";
+import { type Act, type Ears, LONGEST_TURN_S, RATE, Turns, VOICED, withoutCall } from "./turns.ts";
 
-export const RATE = 16000;
-/** Louder than this (RMS) is someone speaking. */
-const VOICED = 0.012;
-/** A pause this long asks whether you have finished; this long ends the turn whatever it says. */
-export const EARLY_S = 0.4;
-export const ENDPOINT_S = 1.4;
-const WINDOW_S = 2.5;
-const LONGEST_TURN_S = 20;
+export { RATE, withoutCall, type Ears };
 
 /** 16 kHz mono float samples as a 16-bit WAV, the way the home's ears read it. */
 export function wavOf(samples: Float32Array, rate = RATE): Blob {
@@ -41,12 +38,6 @@ export function wavOf(samples: Float32Array, rate = RATE): Blob {
   data.setUint32(40, samples.length * 2, true);
   samples.forEach((v, i) => data.setInt16(44 + i * 2, Math.max(-1, Math.min(1, v)) * 0x7fff, true));
   return new Blob([data.buffer], { type: "audio/wav" });
-}
-
-/** What was said, without the call in front of it ("Hey Hazel, what's on?" → "what's on?"). */
-export function withoutCall(text: string, name: string): string {
-  const n = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return text.replace(new RegExp(`^\\s*(?:(?:hey|hi|hello|okay|ok|yo)[,\\s]+)?${n}[,.!?\\s]*`, "i"), "").trim();
 }
 
 const rms = (a: Float32Array): number => Math.sqrt(a.reduce((s, v) => s + v * v, 0) / Math.max(1, a.length));
@@ -70,8 +61,9 @@ async function microphone(chunk: (a: Float32Array) => void): Promise<() => void>
   };
 }
 
-/** Press to talk: records until the returned stop, then the home hears it. Resolves the words. */
-export async function pressToTalk(home: Office, c: Character): Promise<{ stop: () => Promise<string> }> {
+/** Press to talk: records until the returned stop, then the home hears it. Resolves the words, and
+ * whether Whisper was unsure of them ("didn't catch that", PLAN 4.7). */
+export async function pressToTalk(home: Office, c: Character): Promise<{ stop: () => Promise<{ words: string; unsure: boolean }> }> {
   const got: Float32Array[] = [];
   const end = await microphone((a) => got.push(a));
   return {
@@ -83,34 +75,68 @@ export async function pressToTalk(home: Office, c: Character): Promise<{ stop: (
         all.set(a, at);
         at += a.length;
       }
-      if (rms(all) < VOICED / 3) return "";
-      return withoutCall(await home.hear(c, wavOf(all)), c.name);
+      if (rms(all) < VOICED / 3) return { words: "", unsure: false };
+      const h = await home.hear(c, wavOf(all));
+      return { words: withoutCall(h.text, c.name), unsure: h.unsure };
     },
   };
 }
 
-export type Ears = "listening" | "called" | "hearing";
 
-/** Hands-free: listens for his name, then for your turn; `heard` gets your words. Returns its stop. */
-export async function listenFor(home: Office, c: Character, o: { heard: (text: string) => void; state?: (s: Ears) => void; failed?: (why: string) => void }): Promise<() => void> {
+/** Hands-free (PLAN 4.7): his name once, then a conversation. `he` says whether he is speaking or
+ * working now, `saying` what he is saying (so his own voice, coming back, is not yours). Returns
+ * its stop. */
+export async function listenFor(
+  home: Office,
+  c: Character,
+  o: {
+    heard: (text: string) => void;
+    /** Whisper could not make out what you said: "didn't catch that". */
+    missed?: () => void;
+    /** You took the floor while he spoke: stop him. */
+    interrupt?: () => void;
+    /** He leans in when called ("hop"), nods at your pause ("nod"). */
+    cue?: (cue: "hop" | "nod") => void;
+    state?: (s: Ears) => void;
+    failed?: (why: string) => void;
+    he?: () => { speaking: boolean; busy: boolean };
+    saying?: () => string;
+  },
+): Promise<() => void> {
+  const turns = new Turns(c.name);
   const keep = RATE * LONGEST_TURN_S;
   let buf = new Float32Array(0); // the last LONGEST_TURN_S seconds
-  let since = 0; // samples since the last question
-  let voicedAt = -Infinity; // sample index of the last voiced chunk
   let total = 0;
-  let turnFrom: number | null = null; // where the turn being followed began (a sample index)
-  let asking = false;
-  let askedThisPause = false;
-  const tail = (s: number): Float32Array => buf.slice(Math.max(0, buf.length - Math.round(s * RATE)));
-  const fromTurn = (): Float32Array => buf.slice(Math.max(0, buf.length - (total - (turnFrom ?? total))));
-  const ask = async (fn: () => Promise<void>): Promise<void> => {
-    asking = true;
-    try {
-      await fn();
-    } catch (e) {
-      o.failed?.(e instanceof Error ? e.message : String(e));
-    } finally {
-      asking = false;
+  let stopped = false;
+  const slice = (from: number, to: number): Float32Array => {
+    const at = total - buf.length; // the sample buf[0] is
+    return buf.slice(Math.max(0, from - at), Math.max(0, to - at));
+  };
+  const fail = (e: unknown): void => {
+    turns.failed();
+    if (!stopped) o.failed?.(e instanceof Error ? e.message : String(e));
+  };
+  // with `globalThis.__orbsEars` set to an array (tests do), every act and every answer is kept there
+  const log = (e: Record<string, unknown>): void => {
+    const l = (globalThis as { __orbsEars?: unknown[] }).__orbsEars;
+    if (Array.isArray(l)) l.push({ ...e, at: performance.now() });
+  };
+  const answered = <T extends object>(kind: string, then: (x: T) => Act[]) => (x: T): void => {
+    log({ answer: kind, ...x });
+    run(then(x));
+  };
+  const run = (acts: Act[]): void => {
+    if (stopped) return;
+    for (const a of acts) {
+      log({ act: a.kind, ...(a.kind === "heard" ? { words: a.words } : a.kind === "ears" ? { ears: a.ears } : "from" in a ? { s: ((a.to - a.from) / RATE).toFixed(2) } : {}) });
+      if (a.kind === "woken") void home.woken(c, wavOf(slice(a.from, a.to))).then(answered("woken", (w) => turns.woke(w)), fail);
+      else if (a.kind === "turn") void home.turn(c, wavOf(slice(a.from, a.to))).then(answered("turn", (t) => turns.turned(t)), fail);
+      else if (a.kind === "overlap") void home.overlap(c, wavOf(slice(a.from, a.to)), o.saying?.() ?? "").then(answered("overlap", (x) => turns.overheard(x)), fail);
+      else if (a.kind === "heard") o.heard(a.words);
+      else if (a.kind === "missed") o.missed?.();
+      else if (a.kind === "interrupt") o.interrupt?.();
+      else if (a.kind === "ears") o.state?.(a.ears);
+      else if (a.kind === "cue") o.cue?.(a.cue);
     }
   };
   const end = await microphone((a) => {
@@ -119,48 +145,11 @@ export async function listenFor(home: Office, c: Character, o: { heard: (text: s
     next.set(a, next.length - a.length);
     buf = next;
     total += a.length;
-    since += a.length;
-    if (rms(a) > VOICED) {
-      voicedAt = total;
-      askedThisPause = false;
-    }
-    if (asking) return;
-    const quiet = (total - voicedAt) / RATE;
-    if (turnFrom === null) {
-      // waiting for his name: a few seconds at a time, only after something was said
-      if (since >= RATE * 1.2 && quiet < 1.5) {
-        since = 0;
-        const clip = tail(WINDOW_S);
-        const cutAt = total; // where the clip ended: the answer comes back later, with more heard since
-        void ask(async () => {
-          const w = await home.woken(c, wavOf(clip));
-          if (w.woken && turnFrom === null) {
-            turnFrom = cutAt - clip.length; // the call and what follows it are one turn, however slow the answer
-            askedThisPause = false;
-            o.state?.("called");
-          }
-        });
-      }
-      return;
-    }
-    const long = (total - turnFrom) / RATE >= LONGEST_TURN_S - 0.5;
-    const done = async (): Promise<void> => {
-      const turn = fromTurn();
-      turnFrom = null;
-      o.state?.("hearing");
-      const words = withoutCall(await home.hear(c, wavOf(turn)), c.name);
-      o.state?.("listening");
-      if (words) o.heard(words);
-    };
-    if (quiet >= ENDPOINT_S || long) void ask(done);
-    else if (quiet >= EARLY_S && !askedThisPause) {
-      askedThisPause = true; // once per pause: more silence is not news about what you said
-      const turn = fromTurn();
-      void ask(async () => {
-        if ((await home.finished(c, wavOf(turn))).finished) await done();
-      });
-    }
+    run(turns.hear(a.length, rms(a), o.he?.() ?? { speaking: false, busy: false }));
   });
   o.state?.("listening");
-  return end;
+  return () => {
+    stopped = true;
+    end();
+  };
 }

@@ -122,8 +122,8 @@ export interface Office {
   setName(p: Person): Promise<void>;
   /** A conversation's messages since `since`, and the card waiting in it, if one is. */
   messages(conversation: string, since?: number): Promise<{ messages: Message[]; card: Card | null }>;
-  /** A private chat with one orb (PLAN 2.10). */
-  say(c: Character, text: string): Promise<void>;
+  /** A private chat with one orb (PLAN 2.10); `said`, you spoke it (PLAN 4.7: he answers for the ear). */
+  say(c: Character, text: string, o?: { said?: boolean }): Promise<void>;
   /** Sessions (PLAN 2.9). */
   sessions(): Promise<Session[]>;
   newSession(title: string, members: Partial<Record<Tab, string[]>>): Promise<Session>;
@@ -211,10 +211,15 @@ export interface Office {
   /** His voice (PLAN 4.3): the phrases a reply is said in, and one phrase as WAV, at `speed`. */
   phrasesFor(c: Character, text: string, speed: number): Promise<string[]>;
   spoken(c: Character, phrase: string, speed: number): Promise<ArrayBuffer>;
-  /** His ears: what you said in a recording; whether it was him being called; whether you finished. */
-  hear(c: Character, audio: Blob): Promise<string>;
+  /** His ears: what you said in a recording (and whether Whisper was unsure of it); whether it was
+   * him being called; whether you finished. */
+  hear(c: Character, audio: Blob): Promise<{ text: string; unsure: boolean }>;
   woken(c: Character, audio: Blob): Promise<{ woken: boolean; heard: string }>;
   finished(c: Character, audio: Blob): Promise<{ finished: boolean; p: number }>;
+  /** A real conversation (PLAN 4.7): your first pause in one ask (finished? your words so far);
+   * what you said while he was saying `saying` (his echo, an "mhm", or you taking the floor). */
+  turn(c: Character, audio: Blob): Promise<{ finished: boolean; p: number; hold: boolean; words: string; unsure: boolean }>;
+  overlap(c: Character, audio: Blob, saying: string): Promise<{ kind: string; words: string }>;
   /** Ends his run now (the conversation's Stop). */
   stop(c: Character): Promise<void>;
   /** His lesson (PLAN 4.4): the one he is giving now, or null; the canvas's address; your answer
@@ -373,8 +378,8 @@ export function doorOffice(base: Character): Office {
     async sayIn(session, tab, text) {
       await call(`../sessions/${session}/${tab}/messages`, { method: "POST", body: JSON.stringify({ text }) });
     },
-    async say(c, text) {
-      await call(`../orbs/${encodeURIComponent(idOf(c.name))}/messages`, { method: "POST", body: JSON.stringify({ conversation: chatOf(c), text }) });
+    async say(c, text, o) {
+      await call(`../orbs/${encodeURIComponent(idOf(c.name))}/messages`, { method: "POST", body: JSON.stringify({ conversation: chatOf(c), text, ...(o?.said && { said: true }) }) });
     },
     async answer(card, choice, text) {
       await call(`../cards/${card}`, { method: "POST", body: JSON.stringify({ choice, ...(text !== undefined && { answer: text }) }) });
@@ -564,7 +569,14 @@ export function doorOffice(base: Character): Office {
       return res.arrayBuffer();
     },
     async hear(c, audio) {
-      return (await call<{ text: string }>(`../orbs/${encodeURIComponent(idOf(c.name))}/voice/hear`, { method: "POST", body: audio, headers: { "content-type": audio.type || "application/octet-stream" } })).text;
+      const h = await call<{ text: string; unsure?: boolean }>(`../orbs/${encodeURIComponent(idOf(c.name))}/voice/hear`, { method: "POST", body: audio, headers: { "content-type": audio.type || "application/octet-stream" } });
+      return { text: h.text, unsure: h.unsure === true };
+    },
+    async turn(c, audio) {
+      return call<{ finished: boolean; p: number; hold: boolean; words: string; unsure: boolean }>(`../orbs/${encodeURIComponent(idOf(c.name))}/voice/turn`, { method: "POST", body: audio, headers: { "content-type": audio.type || "application/octet-stream" } });
+    },
+    async overlap(c, audio, saying) {
+      return call<{ kind: string; words: string }>(`../orbs/${encodeURIComponent(idOf(c.name))}/voice/overlap?saying=${encodeURIComponent(saying.slice(0, 2000))}`, { method: "POST", body: audio, headers: { "content-type": audio.type || "application/octet-stream" } });
     },
     async woken(c, audio) {
       return call<{ woken: boolean; heard: string }>(`../orbs/${encodeURIComponent(idOf(c.name))}/voice/woken`, { method: "POST", body: audio, headers: { "content-type": audio.type || "application/octet-stream" } });

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Controls for the home's tests (PLAN 1.2_t; CLAUDE.md rule 4): each mutant plants one real
-defect in a scratch copy of packages/home (or packages/terminal, PLAN 1.9_t), and the named suite
-must go red. The repo itself is never touched.
+defect in a scratch copy of packages/home (or packages/terminal, PLAN 1.9_t, or packages/app, or the
+kit's own code, kit/orbs_kit, PLAN 4.7_t), and the named suite must go red. The repo itself is never
+touched.
 
     pnpm check:controls      # runs this after tools/check_controls.py
     tools/home_mutants.py --only terminal/    # just the mutants whose file, name or suite has this text
@@ -22,6 +23,7 @@ REPO = Path(__file__).resolve().parent.parent
 HOME_PKG = REPO / "packages" / "home"
 TERMINAL_PKG = REPO / "packages" / "terminal"
 APP_PKG = REPO / "packages" / "app"
+KIT = REPO / "kit"
 
 # (the defect, the file, its edits as (exact text, replacement), the suites that must go red)
 MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
@@ -1049,7 +1051,7 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ('const VOICE_CAP = 5 * 1024 * 1024;', 'const VOICE_CAP = 5 * 1024 * 1024 * 1024;'),
     ], ['voice.test.ts']),
     ("his ears listen for anyone's name", 'src/api.ts', [
-        ('parts[3] === "finished" ? { audio } : { audio, name: who.name }', 'parts[3] === "finished" ? { audio } : { audio, name: "Ash" }'),
+        ('      return await ask(`voice_${parts[3]}`, { audio, name: who.name });', '      return await ask(`voice_${parts[3]}`, { audio, name: "Ash" });'),
     ], ['voice.test.ts']),
     ('a voice for an orb who is not there', 'src/api.ts', [
         ('    const who = home.inbox.orb(orb);\n    if (!who) throw new HttpError(404, `no orb "${orb}"`);\n    const kit = home.kit;', '    const who = home.inbox.orb(orb) ?? { name: orb };\n    const kit = home.kit;'),
@@ -1177,6 +1179,19 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ('letting an orb go twice hands his habits on twice', 'src/home.ts', [
         ('    if (who && who.letGoAt !== null) return { orb: who, handed }; // gone already: his habits were handed on then, or kept\n', ''),
     ], ['org.test.ts']),
+    # a message said aloud, and what he hears over himself (PLAN 4.7)
+    ('a message said aloud is answered as if read', 'src/agent/loop.ts', [
+        ('        aloud: ctx.items.some((i) => i.data.said === true),', '        aloud: false,'),
+    ], ['voice.test.ts']),
+    ('the door forgets a message was said', 'src/api.ts', [
+        ('{ said: b.said === true }', '{ said: false }'),
+    ], ['voice.test.ts']),
+    ('every message is taken as said', 'src/inbox.ts', [
+        ('o.said ? { data: { said: true } } : {}', '{ data: { said: true } }'),
+    ], ['voice.test.ts']),
+    ('what you said over him is judged without what he was saying', 'src/api.ts', [
+        ('saying: (url.searchParams.get("saying") ?? "").slice(0, 2000)', 'saying: ""'),
+    ], ['voice.test.ts']),
 ]
 
 # the app (PLAN 2.x): paths are inside packages/app
@@ -1637,8 +1652,8 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ('        if (open && l) setTab("Lesson");\n', ''),
     ], ['lesson-view.test.ts']),
     # his voice and his ears in the app (PLAN 4.3)
-    ("a slow answer cuts the start of your turn", "src/orb/ears.ts", [
-        ("            turnFrom = cutAt - clip.length; // the call and what follows it are one turn, however slow the answer", "            turnFrom = total - clip.length;"),
+    ("a slow answer cuts the start of your turn", "src/orb/turns.ts", [
+        ("    this.#follow(ask.from); // the call and what follows it are one turn, however slow the answer", "    this.#follow(this.#total);"),
     ], ["voice.test.ts"]),
     ('a stop lets him finish his phrase', 'src/orb/speech.ts', [
         ('  current.stop();\n  current = null;\n  record(', '  current = null;\n  record('),
@@ -1646,12 +1661,12 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ('Stop does not end his run', 'src/rooms/Talk.tsx', [
         ('    if (o.voice) o.home.stop(o.voice.orb).catch(() => {});\n', ''),
     ], ['voice.test.ts']),
-    ('the call stays in front of your message', 'src/orb/ears.ts', [
+    ('the call stays in front of your message', 'src/orb/turns.ts', [
         ('  return text.replace(new RegExp(', '  return text || text.replace(new RegExp('),
-    ], ['voice.test.ts']),
-    ('his name never wakes him', 'src/orb/ears.ts', [
-        ('          if (w.woken && turnFrom === null) {', '          if (false && w.woken && turnFrom === null) {'),
-    ], ['voice.test.ts']),
+    ], ['turns.test.ts', 'voice.test.ts']),
+    ('his name never wakes him', 'src/orb/turns.ts', [
+        ('    if (!ask || !w.woken || this.#mode !== "asleep") return [];', '    if (true) return [];'),
+    ], ['turns.test.ts']),
     # his screen live in the app, your hands and his terminal (PLAN 4.6)
     ('a press on his screen goes nowhere', 'src/rooms/Computer.tsx', [
         ('              hand({ kind: "click", x: Math.round(((e.clientX - r.left) / r.width) * width), y: Math.round(((e.clientY - r.top) / r.height) * height) });\n', ''),
@@ -1691,6 +1706,59 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ('a weekly card opens no career page', 'src/rooms/Notices.tsx', [
         ('onClick={() => o.go({ room: "career", orb: c.name })}', 'onClick={() => undefined}'),
     ], ['org-view.test.ts']),
+    # a real conversation: the turns, by code, and the page (PLAN 4.7)
+    ('the conversation needs his name every turn', 'src/orb/turns.ts', [
+        ('    const acts: Act[] = [];\n    this.#mode = "between";', '    const acts: Act[] = [];\n    this.#mode = "asleep";'),
+    ], ['turns.test.ts']),
+    ('a quiet spell never ends the conversation', 'src/orb/turns.ts', [
+        ('      if (!he.busy && s(this.#total - Math.max(this.#idleFrom, this.#voicedAt)) >= IDLE_S) {', '      if (false) {'),
+    ], ['turns.test.ts']),
+    ('the conversation ends while he works', 'src/orb/turns.ts', [
+        ('      if (he.speaking || he.busy) this.#idleFrom = this.#total;\n', ''),
+        ('      if (!he.busy && s(this.#total', '      if (s(this.#total'),
+    ], ['turns.test.ts']),
+    ('a trailing turn ends at 1.4 s', 'src/orb/turns.ts', [
+        ('    this.#wait = t.hold || t.p < UNFINISHED_P ? PATIENT_S : ENDPOINT_S;', '    this.#wait = ENDPOINT_S;'),
+    ], ['turns.test.ts']),
+    ("the first pause's words are heard again", 'src/orb/turns.ts', [
+        ('      if (this.#early && this.#early.at >= this.#voicedAt) return this.#end(', '      if (false) return this.#end('),
+    ], ['turns.test.ts']),
+    ('a stale pause ends your turn', 'src/orb/turns.ts', [
+        ('    if (this.#voicedAt > ask.to) return []; // you went on', '    if (false) return []; // you went on'),
+    ], ['turns.test.ts']),
+    ("an 'mhm' stops him", 'src/orb/turns.ts', [
+        ('    if (o.kind === "interrupt") {', '    if (o.kind !== "echo") {'),
+    ], ['turns.test.ts']),
+    ('his own words coming back stop him', 'src/orb/turns.ts', [
+        ('    if (o.kind === "interrupt") {', '    if (o.kind !== "backchannel") {'),
+    ], ['turns.test.ts']),
+    ("an interruption's turn starts where it was answered", 'src/orb/turns.ts', [
+        ('      this.#follow(ask.from); // your turn began where your voice did', '      this.#follow(this.#total); // your turn began where your voice did'),
+    ], ['turns.test.ts']),
+    ('his own tail starts a turn', 'src/orb/turns.ts', [
+        ('      if (voiced && s(this.#total - this.#heQuietAt) >= TAIL_S) {', '      if (voiced) {'),
+    ], ['turns.test.ts']),
+    ("'thanks Hazel' is sent as a message", 'src/orb/turns.ts', [
+        ('    else if (said && endsConversation(said, this.#name)) {', '    else if (false) {'),
+    ], ['turns.test.ts']),
+    ('a doubted turn is sent', 'src/orb/turns.ts', [
+        ('    if (unsure) acts.push({ kind: "missed" });', '    if (false) acts.push({ kind: "missed" });'),
+    ], ['turns.test.ts']),
+    ('a sound too short to matter is asked about', 'src/orb/turns.ts', [
+        ('s(this.#voicedAt - this.#overAskedTo) >= OVERLAP_S', 's(this.#voicedAt - this.#overAskedTo) >= 0'),
+    ], ['turns.test.ts']),
+    ('hands-free sends what you said as typed', 'src/rooms/Talk.tsx', [
+        ('      heard: (w) => void o.send(w, { said: true }).catch(', '      heard: (w) => void o.send(w).catch('),
+    ], ['voice.test.ts']),
+    ('what no one could make out is never answered', 'src/orb/ears.ts', [
+        ('      else if (a.kind === "missed") o.missed?.();', '      else if (a.kind === "missed") undefined;'),
+    ], ['voice.test.ts']),
+    ('you cannot talk over him', 'src/rooms/Talk.tsx', [
+        ('      interrupt: stop, // you took the floor', '      interrupt: () => undefined, // you took the floor'),
+    ], ['voice.test.ts']),
+    ('he does not lean in when called', 'src/rooms/Chat.tsx', [
+        ('          onCue={(c) => setCue((g) => ({ name: c, n: (g?.n ?? 0) + 1 }))}', '          onCue={() => undefined}'),
+    ], ['voice.test.ts']),
 ]
 
 # the `orbs` terminal (PLAN 1.9): paths are inside packages/terminal
@@ -1739,6 +1807,42 @@ TERMINAL_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
 ]
 
 
+# the kit's own code (kit/orbs_kit; the carried kit/ash is Ash's, checked by his own suites): (the
+# defect, the file inside kit/, its edits, the kit suites that must go red)
+KIT_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
+    # a real conversation's rules in the kit (PLAN 4.7)
+    ("his own 'hold on' coming back stops him", 'orbs_kit/voicebox.py', [
+        ('    elif len(heard) >= 3 and sum(w in mine for w in heard) / len(heard) >= 0.6:\n        kind = "echo"  # first: his own "hold on, I\'m checking", coming back, must not stop him\n    elif set(heard) & STOPS:\n        kind = "interrupt"  # "wait", "hold on": short or long, he stops\n', '    elif set(heard) & STOPS:\n        kind = "interrupt"\n    elif len(heard) >= 3 and sum(w in mine for w in heard) / len(heard) >= 0.6:\n        kind = "echo"\n'),
+    ], ['test_conversation_rules.py']),
+    ("a short 'mhm' Whisper wrote words for stops him", 'orbs_kit/voicebox.py', [
+        ('    elif voiced <= BURST_S:\n        kind = "backchannel"  # even his name: Whisper, primed with it, writes it for a sound it cannot place\n', ''),
+    ], ['test_conversation_rules.py']),
+    ('his name never stops him', 'orbs_kit/voicebox.py', [
+        ('    elif name.strip().lower() in heard:\n        kind = "interrupt"\n', ''),
+    ], ['test_conversation_rules.py']),
+    ('a long sentence heard badly is taken as said', 'orbs_kit/voicebox.py', [
+        ('    return text, len(words) >= SURE_WORDS and sum(p for _, p in words) / len(words) < SURE', '    return text, False'),
+    ], ['test_conversation_rules.py']),
+    ('a short line is doubted on its score', 'orbs_kit/voicebox.py', [
+        ('SURE_WORDS = 6', 'SURE_WORDS = 1'),
+    ], ['test_conversation_rules.py']),
+    ('a phantom is taken as said', 'orbs_kit/voicebox.py', [
+        ('    if PHANTOMS.match(text):\n        return "", True\n', ''),
+    ], ['test_conversation_rules.py']),
+    ('a number ends no thought', 'orbs_kit/voicebox.py', [
+        ('    last = re.findall(r"[a-z0-9\']+", t.lower())', '    last = re.findall(r"[a-z\']+", t.lower())'),
+    ], ['test_conversation_rules.py']),
+    ("a question ending on 'and' ends the turn", 'orbs_kit/voicebox.py', [
+        ('    return not (t.endswith("?") and last[-1] in QUESTION_ENDS)', '    return not t.endswith("?")'),
+    ], ['test_conversation_rules.py']),
+    ('plain English swaps nothing', 'orbs_kit/voicebox.py', [
+        ('    for r, to in _PLAIN:', '    for r, to in _PLAIN[:0]:'),
+    ], ['test_conversation_rules.py']),
+    ('a long sentence is said whole', 'orbs_kit/voicebox.py', [
+        ('    if len(sentence.split()) <= LONGEST_WORDS:\n        return [sentence]', '    if True:\n        return [sentence]'),
+    ], ['test_conversation_rules.py']),
+]
+
 def copy_home(tmp: Path) -> Path:
     """A scratch copy laid out like the repo: packages/home and packages/terminal beside the real
     kit/ and docs/ (linked, used read-only), so a copied test finds everything the real one does.
@@ -1756,6 +1860,39 @@ def copy_home(tmp: Path) -> Path:
     if not (tmp / "tsconfig.base.json").exists():  # the app's build reads it (Vite follows tsconfig's extends)
         (tmp / "tsconfig.base.json").symlink_to(REPO / "tsconfig.base.json")
     return pkgs
+
+
+def copy_kit(tmp: Path) -> Path:
+    """A scratch copy of the kit's own code and tests (kit/orbs_kit, kit/tests), the rest of the kit
+    (Ash's carried modules, the models, its Python) linked, read only. Apart from copy_home's, whose
+    kit/ stays the real one. Returns the directory that holds kit/."""
+    root = tmp / "kitwork"
+    if root.exists():
+        shutil.rmtree(root)
+    kit = root / "kit"
+    kit.mkdir(parents=True)
+    for part in ("orbs_kit", "tests"):
+        shutil.copytree(KIT / part, kit / part, ignore=shutil.ignore_patterns("__pycache__"))
+    for linked in ("ash", ".venv", "pyproject.toml", "uv.lock", ".python-version"):
+        if (KIT / linked).exists():
+            (kit / linked).symlink_to(KIT / linked, target_is_directory=(KIT / linked).is_dir())
+    return root
+
+
+def run_kit_suites(root: Path, suites: list[str]) -> subprocess.CompletedProcess[str]:
+    """Kit suites (paths inside `root`), each script on the kit's own Python, as kit/tests/run.py
+    runs them: red if any fails, or hangs past ten minutes."""
+    py = KIT / ".venv" / "bin" / "python"
+    out, code = [], 0
+    for s in suites:
+        try:
+            r = subprocess.run([str(py), str(root / s)], cwd=root / "kit", capture_output=True, text=True, timeout=600, env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"})
+            out.append(r.stdout + r.stderr)
+            code = code or r.returncode
+        except subprocess.TimeoutExpired:
+            out.append(f"[{s} hung past 600 s]")
+            code = code or 124
+    return subprocess.CompletedProcess([str(py), *suites], code, "\n".join(out), "")
 
 
 def run_suites(work: Path, suites: list[str]) -> subprocess.CompletedProcess[str]:
@@ -1784,6 +1921,7 @@ def main() -> int:
     planted = [(name, f"home/{rel}", edits, [f"home/test/{s}" for s in ss]) for name, rel, edits, ss in MUTANTS]
     planted += [(name, f"terminal/{rel}", edits, [f"terminal/test/{s}" for s in ss]) for name, rel, edits, ss in TERMINAL_MUTANTS]
     planted += [(name, f"app/{rel}", edits, [f"app/test/{s}" for s in ss]) for name, rel, edits, ss in APP_MUTANTS]
+    planted += [(name, f"kit/{rel}", edits, [f"kit/tests/{s}" for s in ss]) for name, rel, edits, ss in KIT_MUTANTS]
     if "--only" in sys.argv:
         # each --only TEXT adds the mutants whose file, name or suite has TEXT in it
         onlys = [sys.argv[i + 1] for i, a in enumerate(sys.argv[:-1]) if a == "--only"]
@@ -1795,20 +1933,23 @@ def main() -> int:
         # one share of the list, so a long run can go as several jobs, each under the 2-hour ceiling
         k, n = (int(x) for x in sys.argv[sys.argv.index("--part") + 1].split("/"))
         planted = planted[k - 1::n]
-    suites = sorted({s for *_, ss in planted for s in ss})
+    suites = sorted({s for *_, ss in planted for s in ss if not s.startswith("kit/")})
+    kit_suites = sorted({s for *_, ss in planted for s in ss if s.startswith("kit/")})
     with tempfile.TemporaryDirectory(prefix="orbs-mutants-") as td:
         tmp = Path(td)
         # M.0, the control for every line below: the copy with NOTHING planted must be green.
         # If it is red (a path the copy lacks, a missing dependency), every mutant would be
         # "caught" for that reason instead of its own, and this tool would prove nothing.
-        base = run_suites(copy_home(tmp), suites)
-        print(f"{'PASS' if base.returncode == 0 else 'FAIL'}  M.0 the scratch copy, unmutated, is green")
-        if base.returncode != 0:
-            print("\n".join("    " + l for l in (base.stdout + base.stderr).splitlines()[-25:]))
-            print("the baseline is red, so the mutants below would prove nothing")
-            return 1
+        bases = ([("the packages", run_suites(copy_home(tmp), suites))] if suites else []) + ([("the kit", run_kit_suites(copy_kit(tmp), kit_suites))] if kit_suites else [])
+        for what, base in bases:
+            print(f"{'PASS' if base.returncode == 0 else 'FAIL'}  M.0 the scratch copy of {what}, unmutated, is green")
+            if base.returncode != 0:
+                print("\n".join("    " + l for l in (base.stdout + base.stderr).splitlines()[-25:]))
+                print("the baseline is red, so the mutants below would prove nothing")
+                return 1
         for name, rel, edits, suites_for in planted:
-            work = copy_home(tmp)
+            kit = rel.startswith("kit/")
+            work = copy_kit(tmp) if kit else copy_home(tmp)
             f = work / rel
             text = f.read_text()
             gone = [old for old, _ in edits if old not in text]
@@ -1819,7 +1960,7 @@ def main() -> int:
             for old, new in edits:
                 text = text.replace(old, new, 1)
             f.write_text(text)
-            caught = run_suites(work, suites_for).returncode != 0
+            caught = (run_kit_suites if kit else run_suites)(work, suites_for).returncode != 0
             print(f"{'PASS' if caught else 'FAIL'}  M: {', '.join(s.split('/test/')[-1] for s in suites_for)} catches: {name}")
             fails += not caught
     print("ALL PASS" if not fails else f"{fails} FAILED")

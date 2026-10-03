@@ -9,11 +9,13 @@
 //
 // With one orb (a private chat) it can be spoken too (PLAN 4.3): his replies in his own voice, when
 // your replies are "Speak & show"; you, by pressing the microphone, or hands-free by saying his name.
-// While he speaks or works, Send is Stop: one press silences him and ends his run.
+// While he speaks or works, Send is Stop: one press silences him and ends his run. Hands-free is a
+// real conversation (PLAN 4.7): his name once, talking over him, "didn't catch that" (ears.ts and
+// turns.ts); what you said is marked as said, so he answers for the ear.
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { Character } from "../orb/spec.ts";
 import { idOf, type Card, type Choice, type Message, type Office } from "../home/link.ts";
-import { speak, speaking, stopSpeaking } from "../orb/speech.ts";
+import { saying, speak, speaking, stopSpeaking } from "../orb/speech.ts";
 import { type Ears, listenFor, pressToTalk } from "../orb/ears.ts";
 
 const bubble = (mine: boolean): CSSProperties => ({
@@ -26,17 +28,25 @@ const button: CSSProperties = { font: "600 14px/20px var(--font)", color: "var(-
 
 export type Busy = Record<string, "thinking" | "speaking">;
 
+/** What he says when Whisper could not make out what you said (PLAN 4.7): a few ways, so it never
+ * sounds like a recording. */
+const MISSED = ["Sorry, I didn't catch that.", "Say that again?", "I missed that, sorry."];
+
 export function Talk(o: {
   home: Office;
   conversation: string;
   /** The orbs who may speak here (their words are labelled by name when there is more than one). */
   orbs: Character[];
-  send: (text: string) => Promise<void>;
+  /** `said`: you spoke it, by the microphone or hands-free (PLAN 4.7). */
+  send: (text: string, o?: { said?: boolean }) => Promise<void>;
   placeholder: string;
   empty: ReactNode;
   /** A private chat lets you give him files (PLAN 2.4): each kept on the home, its path in your message. */
   attach?: (file: File) => Promise<string>;
   onBusy?: (b: Busy) => void;
+  /** How his ears are (hands-free on), and his listening cues: he leans in when called, nods at your pause. */
+  onEars?: (e: Ears | null) => void;
+  onCue?: (cue: "hop" | "nod") => void;
   onMessages?: (m: Message[]) => void;
   /** A private chat's voice (PLAN 4.3): the orb, his pace, and whether his replies are spoken. */
   voice?: { orb: Character; speed: number; speaks: boolean };
@@ -51,9 +61,14 @@ export function Talk(o: {
   const [said, setSaid] = useState<string | null>(null);
   const [open, setOpen] = useState(false); // the live stream: words arrive as written only once it is open
   const [talking, setTalking] = useState(false); // he is speaking
-  const [recording, setRecording] = useState<{ stop: () => Promise<string> } | null>(null);
-  const [ears, setEars] = useState<Ears | null>(null); // hands-free, when on
+  const [recording, setRecording] = useState<{ stop: () => Promise<{ words: string; unsure: boolean }> } | null>(null);
+  const [ears, setEarsState] = useState<Ears | null>(null); // hands-free, when on
   const stopEars = useRef<(() => void) | null>(null);
+  const busyNow = useRef<Busy>({}); // who is working now, for the ears (a closure over state would be stale)
+  const setEars = (e: Ears | null): void => {
+    setEarsState(e);
+    o.onEars?.(e);
+  };
   const spokenUpTo = useRef<number | null>(null); // the newest reply already spoken (or there before you came)
   const end = useRef<HTMLDivElement>(null);
   const shownUpTo = useRef(0); // the newest message already shown
@@ -105,6 +120,7 @@ export function Talk(o: {
       return next;
     });
   useEffect(() => {
+    busyNow.current = busy;
     o.onBusy?.(busy);
   }, [busy]);
   useEffect(() => {
@@ -163,12 +179,23 @@ export function Talk(o: {
     setTalking(false);
     if (o.voice) o.home.stop(o.voice.orb).catch(() => {});
   };
+  // what Whisper could not make out (PLAN 4.7): he says so, and nothing reaches his brain
+  const missed = (): void => {
+    if (!o.voice) return;
+    const line = MISSED[Math.floor(Math.random() * MISSED.length)]!;
+    if (o.voice.speaks) {
+      setTalking(true);
+      void speak(o.home, o.voice.orb, o.voice.speed, line).then(() => setTalking(speaking()));
+    } else setSaid(line);
+  };
   const talk = (): void => {
     if (!o.voice) return;
     if (recording) {
       const r = recording;
       setRecording(null);
-      r.stop().then((words) => (words ? o.send(words) : undefined), (e: Error) => setSaid(e.message)).catch((e: Error) => setSaid(e.message));
+      r.stop()
+        .then((h) => (h.unsure ? missed() : h.words ? o.send(h.words, { said: true }) : undefined), (e: Error) => setSaid(e.message))
+        .catch((e: Error) => setSaid(e.message));
       return;
     }
     stopSpeaking();
@@ -182,7 +209,16 @@ export function Talk(o: {
       setEars(null);
       return;
     }
-    listenFor(o.home, o.voice.orb, { heard: (w) => void o.send(w).catch((e: Error) => setSaid(e.message)), state: setEars, failed: setSaid }).then(
+    listenFor(o.home, o.voice.orb, {
+      heard: (w) => void o.send(w, { said: true }).catch((e: Error) => setSaid(e.message)),
+      missed,
+      interrupt: stop, // you took the floor: he stops, as with Stop, and listens
+      cue: (c) => o.onCue?.(c),
+      state: setEars,
+      failed: setSaid,
+      he: () => ({ speaking: speaking(), busy: Object.keys(busyNow.current).length > 0 }),
+      saying,
+    }).then(
       (end) => (stopEars.current = end),
       (e: Error) => setSaid(e.message),
     );
@@ -265,7 +301,7 @@ export function Talk(o: {
               Hands-free
             </button>
             <span style={{ font: "500 12px/16px var(--font)", color: "var(--text-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
-              {ears === "called" ? `${o.voice.orb.name} is listening…` : ears === "hearing" ? "Hearing you…" : ears ? `Say “hey ${o.voice.orb.name}”` : recording ? "Recording: press the microphone again to send" : ""}
+              {ears === "called" ? `${o.voice.orb.name} is listening…` : ears === "hearing" ? "Hearing you…" : ears === "conversing" ? `Talking with ${o.voice.orb.name} · “thanks” ends it` : ears ? `Say “hey ${o.voice.orb.name}”` : recording ? "Recording: press the microphone again to send" : ""}
             </span>
           </div>
         )}

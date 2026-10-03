@@ -173,8 +173,9 @@ export class Inboxes {
   }
 
   /** A message from the owner in a chat. */
-  send(orb: string, conversation: string, text: string): Item {
-    return this.enqueue(orb, conversation, "chat", text);
+  /** Your message to an orb; `said`, it was spoken (PLAN 4.7), and he answers for the ear. */
+  send(orb: string, conversation: string, text: string, o: { said?: boolean } = {}): Item {
+    return this.enqueue(orb, conversation, "chat", text, o.said ? { data: { said: true } } : {});
   }
 
   /** Items in a conversation that are waiting or running (a schedule never overlaps itself). */

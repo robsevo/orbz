@@ -17,6 +17,7 @@ const record = (s: Said): void => {
 
 let ctx: AudioContext | null = null;
 let current: { stop: () => void } | null = null;
+let words = ""; // what he is saying now: the phrase sounding and the one after it (PLAN 4.7)
 
 /** Stops him speaking now: the phrase playing is cut, the rest are never fetched. */
 export function stopSpeaking(): void {
@@ -28,6 +29,10 @@ export function stopSpeaking(): void {
 
 /** Whether he is speaking now. */
 export const speaking = (): boolean => current !== null;
+
+/** What he is saying now, so his own voice coming back through the microphone is not taken for
+ * yours (PLAN 4.7): the phrase sounding and the next. Empty when he is quiet. */
+export const saying = (): string => (current ? words : "");
 
 /** Speaks `text` as `c` (stopping anything he was saying). Resolves when he has finished or was
  * stopped; a voice the home cannot speak resolves at once with why. */
@@ -66,6 +71,7 @@ export async function speak(home: Office, c: Character, speed: number, text: str
       // when the phrase stops sounding: at its end, or the moment a stop cuts it
       const ended = new Promise<void>((ok) => source!.addEventListener("ended", () => (record({ kind: "ended", at: performance.now() }), ok()), { once: true }));
       source.start();
+      words = [phrases[i], phrases[i + 1]].filter(Boolean).join(" ");
       record({ kind: "phrase", text: phrases[i]!, seconds: buf.duration, at: performance.now() });
       await ended;
     }
