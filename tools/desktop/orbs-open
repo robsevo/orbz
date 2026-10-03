@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Opens Orbs from the desktop (owner, 10-03; tools/desktop/install.sh puts it in ~/.local/bin).
+# It starts the home if it is not running (the checkout it was installed for, its output in
+# <data>/home.log), then opens the app in a window of its own: a Chromium browser's app window with
+# a profile of its own (<data>/window), so its session and its place in the dock are Orbs'. The
+# first time, that window is paired with a one-time link from the home's door (POST /devices/pair,
+# with the token the home keeps in <data>/home.json); `orbs-open --pair` pairs it again.
+set -u
+REPO="${ORBS_REPO:-@REPO@}"
+NODE="${ORBS_NODE:-@NODE@}"
+DATA="${ORBS_HOME:-$HOME/.orbs}"
+WIN="$DATA/window"
+
+say() {
+  command -v notify-send >/dev/null && notify-send -a Orbs -i orbs "Orbs" "$1"
+  echo "orbs-open: $1" >&2
+}
+field() { python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])' "$DATA/home.json" "$1" 2>/dev/null; }
+alive() {
+  [ -f "$DATA/home.json" ] || return 1
+  curl -sf -o /dev/null -H "authorization: Bearer $(field token)" "http://127.0.0.1:$(field port)/status"
+}
+
+if ! alive; then
+  [ -d "$REPO/packages/home" ] || { say "there is no Orbs checkout at $REPO"; exit 1; }
+  mkdir -p "$DATA"
+  ( cd "$REPO" && setsid "$NODE" packages/home/src/main.ts >> "$DATA/home.log" 2>&1 < /dev/null & )
+  for _ in $(seq 1 120); do alive && break; sleep 0.5; done
+  alive || { say "the home did not start: see $DATA/home.log"; exit 1; }
+fi
+
+PORT=$(field port)
+URL="http://127.0.0.1:$PORT/app/orbs.html"
+if [ "${1:-}" = "--pair" ] || [ ! -f "$WIN/paired" ]; then
+  URL=$(curl -sf -X POST -H "authorization: Bearer $(field token)" "http://127.0.0.1:$PORT/devices/pair" \
+    | python3 -c 'import json, sys; print(json.load(sys.stdin)["link"])') || { say "the home gave no pairing link"; exit 1; }
+  mkdir -p "$WIN" && touch "$WIN/paired"
+fi
+
+B=""
+for b in brave brave-browser google-chrome-stable google-chrome chromium chromium-browser; do
+  B=$(command -v "$b") && break
+done
+if [ -n "${ORBS_OPEN_DRY:-}" ]; then echo "${B:-xdg-open} --user-data-dir=$WIN --class=orbs --app=$URL"; exit 0; fi
+[ -n "$B" ] || exec xdg-open "$URL"
+exec "$B" --user-data-dir="$WIN" --class=orbs --no-first-run --no-default-browser-check --app="$URL" >/dev/null 2>&1

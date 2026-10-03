@@ -1,0 +1,17 @@
+[Desktop Entry]
+Type=Application
+Name=Orbs
+GenericName=Your office of orbs
+Comment=Chat with your orbs and see their work
+Exec=@HOME@/.local/bin/orbs-open
+Icon=orbs
+Terminal=false
+StartupNotify=true
+StartupWMClass=orbs
+Categories=Office;
+Keywords=orbs;assistant;chat;office;
+Actions=pair;
+
+[Desktop Action pair]
+Name=Pair this window again
+Exec=@HOME@/.local/bin/orbs-open --pair
