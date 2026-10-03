@@ -34,7 +34,10 @@ import { computerTools, type PageCheck } from "./computer/tools.ts";
 import { Vault } from "./computer/vault.ts";
 import { defaultStore, type SecretStore } from "./chatgpt/store.ts";
 import type { Undo } from "./gym/card.ts";
-import { type Level, levelOf, nextFor } from "./gym/levels.ts";
+import { type Level, levelOf, nextFor, tenureOf } from "./gym/levels.ts";
+import { orgTools } from "./org.ts";
+import { habitsOf, shareHabit } from "./gym/share.ts";
+import { parse as parsePlan } from "./plans/format.ts";
 import { SPECIALTY_FAMILIES } from "./brain/constitution.ts";
 import type { Case, CaseStep, StepFn } from "./gym/cases.ts";
 import { earnedFor, promotedFor, type Promoted } from "./gym/steps.ts";
@@ -297,6 +300,21 @@ export class Home {
       }),
       ...computerTools(this.computers, this.vault, pageCheck),
       ...lessonTools(this.lessons),
+      // how the org works (PLAN 5.4): who fits a row, and a Senior passing a habit on (your yes first)
+      ...orgTools({
+        events: this.events, dataDir: this.dataDir,
+        office: () => this.inbox.orbs().map((o) => ({ id: o.id, name: o.name, specialty: o.specialty, level: levelOf(this.events, o.id), createdAt: o.createdAt })),
+        tabOf: (conversation) => {
+          const t = parseTabConversation(conversation);
+          return t ? (this.team.get(t.id)?.[t.tab] ?? null) : null;
+        },
+        rowText: (plan, row) => {
+          const p = this.plans.get(plan);
+          return p ? (parsePlan(p.body).rows.find((r) => r.id === row && !r.test)?.text ?? null) : null;
+        },
+        habits: (orb) => habitsOf(this.events, this.dataDir, orb),
+        share: (from, to, task) => shareHabit(this.events, this.dataDir, { from, to, task, why: "mentoring" }),
+      }),
     ];
     this.agent = opts.runner
       ? null
@@ -406,6 +424,7 @@ export class Home {
       own: () => opts.brain?.preset.own ?? null,
       tools, // the exam offers the own brain the very tools the loop does
       orbs: () => this.inbox.orbs().filter((o) => o.letGoAt === null).map((o) => ({ id: o.id, specialty: o.specialty })),
+      everyone: () => this.inbox.orbs({ all: true }).map((o) => ({ id: o.id, specialty: o.specialty, hired: tenureOf(this.events, o).hired, away: o.letGoAt !== null })),
       plans: () => this.plans.list(),
     });
     this.notices = new Notices(db, this.events, this.clock, {
@@ -598,6 +617,20 @@ export class Home {
     const res = await chat(ep, [...(r.system ? [{ role: "system" as const, content: r.system }] : []), ...r.messages], { maxTokens: Math.min(8000, r.maxTokens) });
     this.spend.record({ tier: "big", model: ep.model, costUsd: res.costUsd, costSource: res.costSource, promptTokens: res.promptTokens, completionTokens: res.completionTokens });
     return { model: ep.model, text: res.text };
+  }
+
+  /** Lets an orb go (PLAN 5.5), his habits handed to another orb first if you say so: copied, so they
+   * answer under the new owner's rules, while his own stay with him, archived. */
+  letGo(orb: string, handTo?: string): { orb: ReturnType<Inboxes["letGo"]>; handed: string[] } {
+    const handed: string[] = [];
+    const who = this.inbox.orb(orb);
+    if (who && who.letGoAt !== null) return { orb: who, handed }; // gone already: his habits were handed on then, or kept
+    if (handTo) {
+      const to = this.inbox.orb(handTo);
+      if (!to || to.letGoAt !== null || handTo === orb) throw new Error(`${handTo} cannot take his habits: hand them to someone else in the office`);
+      for (const h of habitsOf(this.events, this.dataDir, orb)) handed.push(shareHabit(this.events, this.dataDir, { from: orb, to: handTo, task: h.task, why: "hand-off" }).task);
+    }
+    return { orb: this.inbox.letGo(orb), handed };
   }
 
   /** A session's shared workspace (PLAN 5.1): the team's files, which claims divide among them. */

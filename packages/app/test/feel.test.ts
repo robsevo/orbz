@@ -118,8 +118,8 @@ test("the sound fits the press: a tab ticks, a choice picks, dice roll, he bubbl
     await page.locator("[data-cradle] canvas").click();
     await page.getByRole("textbox", { name: "Name" }).fill("Pip");
     await page.getByRole("button", { name: "Create Pip" }).click();
-    await page.getByRole("button", { name: "Delete Pip…" }).click();
-    await page.getByRole("button", { name: "Delete Pip", exact: true }).click();
+    await page.getByRole("button", { name: "Let Pip go…" }).click();
+    await page.getByRole("button", { name: "Let Pip go", exact: true }).click();
     assert.deepEqual((await played(page)).map((p) => p.sound), ["tick", "pick", "roll", "poke", "create", "tap", "delete"]);
     // and a key press sounds as a click does
     await clear(page);

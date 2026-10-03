@@ -95,8 +95,8 @@ test("a hire, and a let-go, are the home's: one let go is archived there, out of
   await page.waitForFunction(() => document.querySelector("h2")?.textContent === "Wren");
   await new Promise((r) => setTimeout(r, 300));
   assert.deepEqual(home.inbox.orbs().map((o) => o.name), ["Pip", "Wren"]);
-  await page.getByRole("button", { name: "Delete Wren…" }).click();
-  await page.getByRole("group", { name: "Delete Wren?" }).getByRole("button", { name: "Delete Wren" }).click();
+  await page.getByRole("button", { name: "Let Wren go…" }).click();
+  await page.getByRole("group", { name: "Let Wren go?" }).getByRole("button", { name: "Let Wren go" }).click();
   await page.waitForTimeout(600);
   assert.ok(!home.inbox.orbs().some((o) => o.name === "Wren"), "out of the office");
   assert.ok(home.inbox.orbs({ all: true }).find((o) => o.name === "Wren")?.letGoAt, "archived, kept");

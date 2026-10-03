@@ -34,6 +34,9 @@ import type { Gesture, OrbState } from "./orb/life.ts";
 import { useMood, useMoods, WORN } from "./orb/useMood.ts";
 import { preview, stopPreview } from "./orb/preview.ts";
 import { span } from "./orb/age.ts";
+import { Radar } from "./ui/Radar.tsx";
+import { OrgRoom } from "./rooms/Org.tsx";
+import { CareerRoom } from "./rooms/Career.tsx";
 import { applyTheme, savedTheme } from "./ui/theme.ts";
 
 applyTheme(savedTheme(), false); // before the first paint: the theme you chose, never a flash of another
@@ -125,36 +128,6 @@ function Bars({ items }: { items: { name: string; value: number }[] }) {
   );
 }
 
-/** Where he leans, on eight skills: a radar in his colour. */
-function Radar({ items }: { items: { name: string; value: number }[] }) {
-  const n = items.length;
-  const R = 70;
-  const at = (i: number, v: number): [number, number] => {
-    const a = -Math.PI / 2 + (i / n) * 2 * Math.PI;
-    return [Math.cos(a) * R * (v / 5), Math.sin(a) * R * (v / 5)];
-  };
-  const poly = items.map((t, i) => at(i, t.value).join(",")).join(" ");
-  return (
-    <svg viewBox="-118 -100 236 200" role="img" aria-label={`Leans toward: ${items.map((t) => `${t.name} ${t.value}`).join(", ")}`} style={{ width: "100%", maxWidth: 300, display: "block", margin: "0 auto" }}>
-      {[1, 2, 3, 4, 5].map((ring) => (
-        <polygon key={ring} points={items.map((_, i) => at(i, ring).join(",")).join(" ")} fill="none" stroke="var(--fill-2)" strokeWidth={1} />
-      ))}
-      {items.map((_, i) => {
-        const [x, y] = at(i, 5);
-        return <line key={i} x1={0} y1={0} x2={x} y2={y} stroke="var(--fill-2)" strokeWidth={1} />;
-      })}
-      <polygon points={poly} fill="var(--accent-wash)" stroke="var(--accent)" strokeWidth={2} strokeLinejoin="round" />
-      {items.map((t, i) => {
-        const [x, y] = at(i, 6.4);
-        return (
-          <text key={t.name} x={x} y={y} textAnchor="middle" dominantBaseline="middle" style={{ font: "600 11px var(--font)", fill: "var(--text-3)" }}>
-            {t.name}
-          </text>
-        );
-      })}
-    </svg>
-  );
-}
 
 function Sheet({ c, onRename, replies, standing, startsAs }: { c: Character; onRename?: (name: string) => void; replies: Replies; standing?: Standing | null; startsAs?: "Junior" | "Senior" }) {
   const sh = sheetOf(c);
@@ -466,9 +439,13 @@ function RepliesRow({ replies, setReplies }: { replies: Replies; setReplies: (r:
 }
 
 /** An orb in the office: what he is made of, fixed, and the one thing you can still do (let him go). */
-function Card({ c, replies, setReplies, onDelete, onChat }: { c: Character; replies: Replies; setReplies: (r: Replies) => void; onDelete: () => void; onChat: () => void }) {
+function Card({ c, replies, setReplies, onDelete, onChat, onCareer, others }: { c: Character; replies: Replies; setReplies: (r: Replies) => void; onDelete: (handTo?: string) => void; onChat: () => void; onCareer: () => void; others: Character[] }) {
   const [asking, setAsking] = useState(false);
-  useEffect(() => setAsking(false), [c.name]);
+  const [handTo, setHandTo] = useState(""); // whose his habits become when he goes, if anyone's
+  useEffect(() => {
+    setAsking(false);
+    setHandTo("");
+  }, [c.name]);
   const facts: [string, string][] = [
     ["Personality", PERSONALITIES[c.personality].label],
     ["Specialty", SPECIALTIES[c.specialty].label],
@@ -485,6 +462,9 @@ function Card({ c, replies, setReplies, onDelete, onChat }: { c: Character; repl
       <button data-sound="pick" onClick={onChat} style={{ ...s.btn, justifySelf: "stretch", background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)", fontWeight: 800 }}>
         Chat with {c.name}
       </button>
+      <button onClick={onCareer} style={{ ...s.btn, justifySelf: "start" }}>
+        {c.name}'s career
+      </button>
       <span style={{ font: "700 17px/22px var(--font)", color: "var(--text-1)" }}>Made of</span>
       <Balanced min={100}>
         {facts.map(([k, v]) => (
@@ -499,11 +479,22 @@ function Card({ c, replies, setReplies, onDelete, onChat }: { c: Character; repl
         An orb stays as he was made. He grows from the work you approve, not from edits.
       </p>
       {asking ? (
-        <div role="group" aria-label={`Delete ${c.name}?`} style={{ display: "grid", gap: 8, padding: "var(--s3)", borderRadius: 14, background: "var(--fill)", boxShadow: "inset 0 0 0 1px var(--off)" }}>
-          <span style={{ font: "600 14px/20px var(--font)", color: "var(--text-1)" }}>{c.name} goes for good. An orb can't be brought back.</span>
+        <div role="group" aria-label={`Let ${c.name} go?`} style={{ display: "grid", gap: 8, padding: "var(--s3)", borderRadius: 14, background: "var(--fill)", boxShadow: "inset 0 0 0 1px var(--off)" }}>
+          <span style={{ font: "600 14px/20px var(--font)", color: "var(--text-1)", textWrap: "pretty" }}>{c.name} leaves the office. Everything he did is kept, he keeps learning, and you can rehire him from the org chart.</span>
+          {others.length > 0 && (
+            <label style={{ display: "flex", alignItems: "center", gap: 8, font: "500 13px/18px var(--font)", color: "var(--text-2)", minWidth: 0 }}>
+              Hand his habits to
+              <select value={handTo} onChange={(e) => setHandTo(e.target.value)} style={{ font: "500 13px/18px var(--font)", color: "var(--text-1)", background: "var(--raised)", border: 0, borderRadius: 8, padding: "4px 8px", minWidth: 0 }}>
+                <option value="">No one</option>
+                {others.map((o) => (
+                  <option key={o.name} value={idOf(o.name)}>{o.name}</option>
+                ))}
+              </select>
+            </label>
+          )}
           <OneLine style={{ justifyContent: "flex-start" }}>
-            <button data-sound="delete" onClick={onDelete} style={{ ...s.btn, color: "var(--off)", boxShadow: "inset 0 0 0 1px var(--off)" }}>
-              Delete {c.name}
+            <button data-sound="delete" onClick={() => onDelete(handTo || undefined)} style={{ ...s.btn, color: "var(--off)", boxShadow: "inset 0 0 0 1px var(--off)" }}>
+              Let {c.name} go
             </button>
             <button onClick={() => setAsking(false)} style={s.btn}>
               Keep him
@@ -512,7 +503,7 @@ function Card({ c, replies, setReplies, onDelete, onChat }: { c: Character; repl
         </div>
       ) : (
         <button onClick={() => setAsking(true)} style={{ ...s.btn, justifySelf: "start", color: "var(--text-3)" }}>
-          Delete {c.name}…
+          Let {c.name} go…
         </button>
       )}
     </div>
@@ -587,9 +578,14 @@ function App() {
     if (home) home.setName(p).catch((e: Error) => setSaid(e.message));
     else savePerson(p);
   };
-  const [room, setRoom] = useState<"office" | "settings" | "chat" | "sessions" | "notices" | "calendar" | "lab">(() => {
+  const [room, setRoom] = useState<"office" | "settings" | "chat" | "sessions" | "notices" | "calendar" | "lab" | "org" | "career">(() => {
     const r = parseRoute(location.hash).room;
-    return r === "settings" || r === "chat" || r === "sessions" || r === "notices" || r === "calendar" || r === "lab" ? r : "office";
+    return r === "settings" || r === "chat" || r === "sessions" || r === "notices" || r === "calendar" || r === "lab" || r === "org" || r === "career" ? r : "office";
+  });
+  // whose career page is open (PLAN 5.6)
+  const [careerOf, setCareerOf] = useState<string | null>(() => {
+    const r = parseRoute(location.hash);
+    return r.room === "career" ? r.orb : null;
   });
   const notices = useNotices(home);
   const [inSession, setInSession] = useState<{ id: number | null; tab: SessionTab }>(() => {
@@ -665,11 +661,11 @@ function App() {
     history.replaceState(history.state, "", routeHash({ room: "office", orb: made.name }));
     window.setTimeout(() => play("hop"), 120);
   };
-  const remove = (who: string): void => {
+  const remove = (who: string, handTo?: string): void => {
     const i = office.findIndex((c) => c.name === who);
     const rest = office.filter((c) => c.name !== who);
     const gone = office[i];
-    if (home && gone) home.letGo(gone).catch((e: Error) => setSaid(`${who} was not let go: ${e.message}`));
+    if (home && gone) home.letGo(gone, handTo).catch((e: Error) => setSaid(`${who} was not let go: ${e.message}`));
     setLeaving(who);
     window.setTimeout(() => {
       setLeaving(null);
@@ -687,12 +683,17 @@ function App() {
   // where you are is an address (ui/nav.ts): going somewhere adds it to the history, so the side
   // menu's Back and the browser's Back are the same Back
   const routeOf = (): Route =>
-    room === "settings" ? { room: "settings" } : room === "notices" ? { room: "notices" } : room === "calendar" ? { room: "calendar" } : room === "lab" ? { room: "lab" } : room === "sessions" ? { room: "sessions", ...inSession } : room === "chat" && talking ? { room: "chat", orb: talking } : view.kind === "new" ? { room: "new" } : { room: "office", orb: view.name };
+    room === "settings" ? { room: "settings" } : room === "notices" ? { room: "notices" } : room === "calendar" ? { room: "calendar" } : room === "lab" ? { room: "lab" } : room === "org" ? { room: "org" } : room === "career" && careerOf ? { room: "career", orb: careerOf } : room === "sessions" ? { room: "sessions", ...inSession } : room === "chat" && talking ? { room: "chat", orb: talking } : view.kind === "new" ? { room: "new" } : { room: "office", orb: view.name };
   const show = (r: Route): void => {
     if (r.room === "settings") setRoom("settings");
     else if (r.room === "notices") setRoom("notices");
     else if (r.room === "calendar") setRoom("calendar");
     else if (r.room === "lab") setRoom("lab");
+    else if (r.room === "org") setRoom("org");
+    else if (r.room === "career") {
+      setRoom("career");
+      setCareerOf(r.orb);
+    }
     else if (r.room === "sessions") {
       setRoom("sessions");
       setInSession({ id: r.id, tab: r.tab });
@@ -806,6 +807,7 @@ function App() {
             {navItem("Notifications", room === "notices", { room: "notices" }, "◔", notices.notices.length)}
             {navItem("Calendar", room === "calendar", { room: "calendar" }, "▤")}
             {navItem("The lab", room === "lab", { room: "lab" }, "✦")}
+            {navItem("Org chart", room === "org", { room: "org" }, "◇")}
             {navItem("Settings", room === "settings", { room: "settings" }, "⚙")}
           </nav>
           <div style={{ ...s.head, margin: "var(--s3) var(--s2) var(--s1)" }}>The office</div>
@@ -835,7 +837,11 @@ function App() {
           </div>
         </aside>
 
-        {room === "lab" ? (
+        {room === "org" ? (
+          <OrgRoom home={home} office={office} open={(c) => go({ room: "career", orb: c.name })} rehired={() => void home?.orbs().then((o) => o && setOffice(o))} />
+        ) : room === "career" ? (
+          <CareerRoom home={home} orb={office.find((c) => c.name === careerOf) ?? office[0] ?? ASH} />
+        ) : room === "lab" ? (
           <LabRoom home={home} office={office} go={go} />
         ) : room === "calendar" ? (
           <CalendarRoom home={home} office={office} />
@@ -928,7 +934,7 @@ function App() {
 
           <div className="orbs-pair" style={{ display: "grid", gap: "var(--s4)", padding: "0 var(--s5)", gridTemplateColumns: "minmax(0, 1fr)", alignItems: "start" }}>
             <Sheet c={me} onRename={making ? (n) => edit({ name: n }) : undefined} replies={replies} standing={making ? null : standing} startsAs={startsAs} />
-            {making ? <Creator me={me} edit={edit} replies={replies} setReplies={setReplies} /> : <Card c={me} replies={replies} setReplies={setReplies} onDelete={() => remove(me.name)} onChat={() => go({ room: "chat", orb: me.name })} />}
+            {making ? <Creator me={me} edit={edit} replies={replies} setReplies={setReplies} /> : <Card c={me} replies={replies} setReplies={setReplies} onDelete={(handTo) => remove(me.name, handTo)} onChat={() => go({ room: "chat", orb: me.name })} onCareer={() => go({ room: "career", orb: me.name })} others={office.filter((o) => o.name !== me.name)} />}
           </div>
 
           <div style={{ padding: "0 var(--s5)" }}>

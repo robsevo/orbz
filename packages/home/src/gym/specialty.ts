@@ -13,7 +13,7 @@ import { ledger } from "./xp.ts";
 export const AREAS = ["frontend", "backend", "data", "devops", "design", "research", "writing", "inbox", "scheduling", "finance", "bookings", "teaching"] as const;
 export type Area = (typeof AREAS)[number];
 
-const BY_EXTENSION: Record<string, Area> = {
+export const BY_EXTENSION: Record<string, Area> = {
   tsx: "frontend", jsx: "frontend", css: "frontend", scss: "frontend", html: "frontend", vue: "frontend", svelte: "frontend",
   ts: "backend", js: "backend", mjs: "backend", py: "backend", go: "backend", rs: "backend", java: "backend", rb: "backend", php: "backend",
   csv: "data", tsv: "data", sql: "data", parquet: "data", ipynb: "data", xlsx: "data",

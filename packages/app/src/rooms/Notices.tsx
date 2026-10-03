@@ -8,8 +8,8 @@ import type { Character } from "../orb/spec.ts";
 import { idOf, type YourDay, type MorningCard, type Notice, type Office, type Undo } from "../home/link.ts";
 import type { Route } from "../ui/nav.ts";
 
-const MARK: Record<Notice["kind"], string> = { bill: "¤", reminder: "◷", approval: "!", done: "✓", promotion: "↑" };
-const KIND_WORDS: Record<Notice["kind"], string> = { bill: "Bill", reminder: "Reminder", approval: "Waiting for your OK", done: "Finished", promotion: "Ready for promotion" };
+const MARK: Record<Notice["kind"], string> = { bill: "¤", reminder: "◷", approval: "!", done: "✓", promotion: "↑", performance: "◔" };
+const KIND_WORDS: Record<Notice["kind"], string> = { bill: "Bill", reminder: "Reminder", approval: "Waiting for your OK", done: "Finished", promotion: "Ready for promotion", performance: "Weekly card" };
 const button: CSSProperties = { font: "600 13px/18px var(--font)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 10, padding: "6px 12px", cursor: "pointer", boxShadow: "inset 0 0 0 .5px var(--hairline)", minHeight: 32 };
 
 /** What is out, kept up to date as it comes and goes (on this device or another). */
@@ -170,7 +170,7 @@ export function NoticesRoom(o: { home: Office | null; office: Character[]; notic
                   <button onClick={() => away(n.id)} aria-label={`Put away: ${n.title}`} style={{ ...button, padding: "6px 10px" }}>
                     ✕
                   </button>
-                  {(n.kind === "promotion" || where) && (
+                  {(n.kind === "promotion" || (n.kind === "performance" && c) || where) && (
                     <span style={{ gridColumn: "1 / -1", paddingLeft: 38, display: "flex", gap: 6, flexWrap: "wrap" }}>
                       {n.kind === "promotion" && (
                         <>
@@ -181,6 +181,12 @@ export function NoticesRoom(o: { home: Office | null; office: Character[]; notic
                             Not yet
                           </button>
                         </>
+                      )}
+                      {/* his week (PLAN 5.5): the evidence is on his career page */}
+                      {n.kind === "performance" && c && (
+                        <button onClick={() => o.go({ room: "career", orb: c.name })} style={button}>
+                          {c.name}'s career
+                        </button>
                       )}
                       {where && (
                         <button onClick={() => o.go(where)} style={button}>

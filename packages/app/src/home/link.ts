@@ -32,7 +32,7 @@ export type CalendarEntry =
   | { kind: "event"; id: string; calendar: string; title: string; day: string; time: string | null; until: string | null; location: string | null };
 /** The notification centre (PLAN 2.11): what needs you or happened, as the home keeps it. */
 export type Notice = {
-  id: number; kind: "bill" | "reminder" | "approval" | "done" | "promotion"; orb: string; conversation: string | null; card: number | null; reminder: number | null;
+  id: number; kind: "bill" | "reminder" | "approval" | "done" | "promotion" | "performance"; orb: string; conversation: string | null; card: number | null; reminder: number | null;
   title: string; detail: string; due: string | null; at: number;
 };
 /** The morning card (PLAN 3.5): yesterday's work, orb by orb, and the night after it. */
@@ -50,6 +50,19 @@ export type BoardRowState = { plan: number; row: string; test: boolean; box: str
 export type Change = { id: number; plan: number; proposer: string; row: string; feature: string; description: string; test: string; agreedBy: string | null };
 export type ClaimState = { id: number; plan: number; orb: string; name: string; rows: string[]; paths: string[]; stale: boolean };
 export type SessionBoard = { plans: { id: number; title: string; status: string; rows: BoardRowState[]; changes: Change[] }[]; claims: ClaimState[]; chatter: { seq: number; at: number; text: string }[] };
+
+/** The org chart (PLAN 5.6): the office with levels and how long each has been about, who leads each
+ * kind of work, and who was let go (to rehire). */
+export type OrgOrb = { id: string; name: string; specialty: string; level: string; createdAt: number; born: number; hired: number; left: number | null; now: number };
+export type OrgState = { chief: string | null; leads: Record<string, string>; orbs: OrgOrb[]; away: OrgOrb[] };
+/** A career page (PLAN 5.6). */
+export type CareerState = Standing & {
+  radar: Record<string, { xp: number; passRate: number | null; runs: number }>;
+  niches: { word: string; runs: number; ratio: number }[];
+  habits: { task: string; version: number; shared: { from: string } | null }[];
+  reviews: { given: number; received: number };
+  performance: { suggest: string; why: string } | null;
+};
 
 export type Standing = {
   level: string;
@@ -100,7 +113,11 @@ export interface Office {
   readonly kind: "home" | "preview";
   orbs(): Promise<Character[] | null>;
   add(c: Character): Promise<void>;
-  letGo(c: Character): Promise<void>;
+  letGo(c: Character, handTo?: string): Promise<void>;
+  /** Brings back an orb you let go (PLAN 5.5), with everything he had and what he learned away. */
+  rehire(id: string): Promise<void>;
+  org(): Promise<OrgState>;
+  career(c: Character): Promise<CareerState>;
   me(): Promise<Person | null>;
   setName(p: Person): Promise<void>;
   /** A conversation's messages since `since`, and the card waiting in it, if one is. */
@@ -321,8 +338,17 @@ export function doorOffice(base: Character): Office {
     async add(c) {
       await call("../orbs", { method: "POST", body: JSON.stringify(toHome(c)) });
     },
-    async letGo(c) {
-      await call(`../orbs/${encodeURIComponent(idOf(c.name))}`, { method: "DELETE" });
+    async letGo(c, handTo) {
+      await call(`../orbs/${encodeURIComponent(idOf(c.name))}${handTo ? `?handTo=${encodeURIComponent(handTo)}` : ""}`, { method: "DELETE" });
+    },
+    async rehire(id) {
+      await call(`../orbs/${encodeURIComponent(id)}/rehire`, { method: "POST" });
+    },
+    async org() {
+      return call<OrgState>("../org");
+    },
+    async career(c) {
+      return call<CareerState>(`../orbs/${encodeURIComponent(idOf(c.name))}/career`);
     },
     async me() {
       const { me } = await call<{ me: { name: string | null; since: number | null } }>("../me");

@@ -12,7 +12,7 @@ import type { Clock } from "./clock.ts";
 import { tx } from "./db.ts";
 import type { EventLog, HomeEvent } from "./events.ts";
 
-export type NoticeKind = "bill" | "reminder" | "approval" | "done" | "promotion";
+export type NoticeKind = "bill" | "reminder" | "approval" | "done" | "promotion" | "performance";
 export type Notice = {
   id: number; kind: NoticeKind; orb: string; conversation: string | null; card: number | null; reminder: number | null;
   title: string; detail: string; due: string | null; at: number;
@@ -192,6 +192,11 @@ export class Notices {
         kind: "promotion", orb: e.orb, conversation: null, title: `${this.#nameOf(e.orb)} is ready for ${String(e.data.to)}`,
         detail: `${x.xp.has} XP; ${x.tasks.has.length} ${x.tasks.has.length === 1 ? "task" : "tasks"} learned in the specialty; no regression lately`, due: null,
       });
+    } else if (e.type === "performance.card" && e.orb) {
+      // his week (PLAN 5.5): a suggestion and its evidence, for you; it never acts
+      const SAY: Record<string, string> = { promote: "promote him", keep: "keep going", retrain: "some practice", "let go": "give him work, or let him go" };
+      this.#settle("kind = 'performance' AND orb = ?", e.orb);
+      this.#add(`performance:${e.seq}`, { kind: "performance", orb: e.orb, conversation: null, title: `${this.#nameOf(e.orb)}'s week: ${SAY[String(e.data.suggest)] ?? String(e.data.suggest)}`, detail: String(e.data.why ?? ""), due: null });
     } else if ((e.type === "orb.promoted" || e.type === "promotion.declined") && e.orb) {
       this.#settle("kind = 'promotion' AND orb = ?", e.orb);
     } else if (e.type === "run.finished" && e.data.outcome === "ok" && e.orb && e.conversation) {

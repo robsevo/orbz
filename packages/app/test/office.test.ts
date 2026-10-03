@@ -1,7 +1,7 @@
 // PLAN 2.2_t, the office as rendered (owner, 2026-10-01: "call it the office ... once an orb is
 // created, he can be deleted, but not edited"). The page opens on an orb in the office, fixed: no
 // name to type, no tabs, no dice. A new orb is made in the creator and joins the office when
-// created; a name that is empty or taken stops him. Deleting asks first, and "Keep him" keeps him.
+// created; a name that is empty or taken stops him. Letting him go asks first, and "Keep him" keeps him.
 // And the layout rule holds everywhere, in both themes, at a phone's size and a desk's, on every
 // tab: nothing scrolls sideways, spills, or is left alone on a row.
 import assert from "node:assert/strict";
@@ -102,18 +102,18 @@ test("a name that is empty or already in the office stops him being created", { 
   }
 });
 
-test("deleting asks first; 'Keep him' keeps him, and 'Delete' lets him go", { skip }, async () => {
+test("letting him go asks first; 'Keep him' keeps him, and 'Let Gus go' lets him go", { skip }, async () => {
   const page = await open();
   try {
     await page.locator("aside").getByRole("button", { name: /Gus/ }).click();
-    await page.getByRole("button", { name: "Delete Gus…" }).click();
-    const ask = page.getByRole("group", { name: "Delete Gus?" });
+    await page.getByRole("button", { name: "Let Gus go…" }).click();
+    const ask = page.getByRole("group", { name: "Let Gus go?" });
     assert.equal(await ask.count(), 1, "it asks");
     assert.ok((await sidebar(page)).includes("Gus"), "asking deletes nothing");
     await ask.getByRole("button", { name: "Keep him" }).click();
     assert.ok((await sidebar(page)).includes("Gus"), "kept");
-    await page.getByRole("button", { name: "Delete Gus…" }).click();
-    await page.getByRole("group", { name: "Delete Gus?" }).getByRole("button", { name: "Delete Gus" }).click();
+    await page.getByRole("button", { name: "Let Gus go…" }).click();
+    await page.getByRole("group", { name: "Let Gus go?" }).getByRole("button", { name: "Let Gus go" }).click();
     await page.waitForTimeout(450);
     assert.ok(!(await sidebar(page)).includes("Gus"), "gone");
     assert.equal(await page.getByRole("heading", { name: "Gus" }).count(), 0, "and someone else is shown");

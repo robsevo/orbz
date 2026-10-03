@@ -1134,6 +1134,49 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("a session's computer shows anyone its files", 'src/api.ts', [
         ('      if (!s || ![...s.brainstorm, ...s.floor].includes(orb)) throw new HttpError(404,', '      if (!s) throw new HttpError(404,'),
     ], ['team-board.test.ts']),
+    # how the org works, a habit passed on, the weekly card, letting go and rehiring, the door's org chart (PLAN 5.4-5.6)
+    ('rows go to whoever joined first', 'src/org.ts', [
+        ('.sort((a, b) => Number(covers(b)) - Number(covers(a)) || xp.get(b.id)! - xp.get(a.id)! || rank(b) - rank(a) || a.createdAt - b.createdAt)', '.sort((a, b) => a.createdAt - b.createdAt)'),
+    ], ['org.test.ts']),
+    ("a row's files tell nothing of its kind", 'src/org.ts', [
+        ('    const a = BY_EXTENSION[m[1]!.toLowerCase()];\n    if (a) return a;', '    const a = undefined;\n    if (a) return a;'),
+    ], ['org.test.ts']),
+    ('a kind is led by whoever joined last', 'src/org.ts', [
+        ('  for (const m of [...team].sort((a, b) => rank(b) - rank(a) || a.createdAt - b.createdAt)) if (!by.has(m.specialty)) by.set(m.specialty, m.id);', '  for (const m of [...team].sort((a, b) => rank(b) - rank(a) || b.createdAt - a.createdAt)) if (!by.has(m.specialty)) by.set(m.specialty, m.id);'),
+    ], ['org.test.ts']),
+    ('a junior passes habits on', 'src/org.ts', [
+        ('        if (LEVELS.indexOf(me.level) < LEVELS.indexOf("Senior")) return "Mentoring is a Senior\'s: pass habits on once you are one.";\n', ''),
+    ], ['org.test.ts']),
+    ('a habit passed on stays keyed to its giver', 'src/gym/share.ts', [
+        ('const rekey = (s: string, from: string, to: string): string => (s.startsWith(`${from}|`) ? `${to}|${s.slice(from.length + 1)}` : s);', 'const rekey = (s: string, _from: string, _to: string): string => s;'),
+    ], ['org.test.ts']),
+    ('the gap is not practised first', 'src/gym/night.ts', [
+        ('    found.sort((a, b) => gapFirst(a) - gapFirst(b)); // stable: the most approved first, within each\n', ''),
+    ], ['org.test.ts']),
+    ('an orb away gets a weekly card', 'src/gym/night.ts', [
+        ('      if (p.away || !cardDue(events, p.id, { hired: p.hired, now: clock.now() })) continue;', '      if (!cardDue(events, p.id, { hired: p.hired, now: clock.now() })) continue;'),
+    ], ['org.test.ts']),
+    ('the weekly card comes every night', 'src/gym/performance.ts', [
+        ('  return o.now - last >= WEEK_MS;', '  return true;'),
+    ], ['org.test.ts']),
+    ('his habits go to an orb who is away', 'src/home.ts', [
+        ('      if (!to || to.letGoAt !== null || handTo === orb) throw new Error(', '      if (!to) throw new Error('),
+    ], ['org.test.ts']),
+    ('the org chart names no lead', 'src/api.ts', [
+        ('    return { chief, leads: Object.fromEntries(bySpecialty), orbs: team.map(', '    return { chief, leads: {}, orbs: team.map('),
+    ], ['org.test.ts']),
+    ('a career page leaves his habits out', 'src/api.ts', [
+        ('      habits: habitsOf(home.events, home.dataDir, orb).map((h) => {', '      habits: habitsOf(home.events, home.dataDir, "nobody").map((h) => {'),
+    ], ['org.test.ts']),
+    ('a weekly card is no notice', 'src/notices.ts', [
+        ('    } else if (e.type === "performance.card" && e.orb) {', '    } else if (e.type === "performance.card" && e.orb && false) {'),
+    ], ['org.test.ts']),
+    ('rehiring someone in the office restarts his days in the company', 'src/inbox.ts', [
+        ('    if (o.letGoAt === null) return o; // in the office already: his days in the company go on\n', ''),
+    ], ['org.test.ts']),
+    ('letting an orb go twice hands his habits on twice', 'src/home.ts', [
+        ('    if (who && who.letGoAt !== null) return { orb: who, handed }; // gone already: his habits were handed on then, or kept\n', ''),
+    ], ['org.test.ts']),
 ]
 
 # the app (PLAN 2.x): paths are inside packages/app
@@ -1629,6 +1672,25 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ('your Approve does nothing', 'src/rooms/Board.tsx', [
         ('onClick={() => act(home.reviewRow(p.id, r.row, true, ""))}', 'onClick={() => undefined}'),
     ], ['team-board-view.test.ts']),
+    # the org chart, career pages, the weekly card, letting go and rehiring in the app (PLAN 5.5, 5.6)
+    ('the org chart shows no lead first', 'src/rooms/Org.tsx', [
+        ('{[lead && lead !== org.chief ? card(lead, true) : null, ...rest.map((id) => card(id, false))].filter(Boolean)}', '{[...rest.map((id) => card(id, false))].filter(Boolean)}'),
+    ], ['org-view.test.ts']),
+    ('a face does not open his career page', 'src/rooms/Org.tsx', [
+        ('onClick={() => open(c)}', 'onClick={() => undefined}'),
+    ], ['org-view.test.ts']),
+    ('Rehire does nothing', 'src/rooms/Org.tsx', [
+        ('onClick={() => void home.rehire(o.id).then(() => rehired(), (e: Error) => setSaid(e.message))}', 'onClick={() => undefined}'),
+    ], ['org-view.test.ts']),
+    ('his habits are not handed on', 'src/orbs.tsx', [
+        ('onClick={() => onDelete(handTo || undefined)}', 'onClick={() => onDelete(undefined)}'),
+    ], ['org-view.test.ts']),
+    ('his career page does not say his age', 'src/rooms/Career.tsx', [
+        ('{`Age ${span(c.born, c.now)} · ', '{`${span(c.born, c.now)} · '),
+    ], ['org-view.test.ts']),
+    ('a weekly card opens no career page', 'src/rooms/Notices.tsx', [
+        ('onClick={() => o.go({ room: "career", orb: c.name })}', 'onClick={() => undefined}'),
+    ], ['org-view.test.ts']),
 ]
 
 # the `orbs` terminal (PLAN 1.9): paths are inside packages/terminal

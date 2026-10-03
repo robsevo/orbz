@@ -137,6 +137,7 @@ export class Inboxes {
   rehire(id: string): Orb {
     const o = this.orb(id);
     if (!o) throw new UnknownOrbError(id);
+    if (o.letGoAt === null) return o; // in the office already: his days in the company go on
     tx(this.#db, () => {
       this.#db.prepare("UPDATE orbs SET let_go_at = NULL WHERE id = ?").run(id);
       this.#events.append("orb.rehired", { name: o.name }, { orb: id });

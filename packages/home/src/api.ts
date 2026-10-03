@@ -42,6 +42,8 @@ import { cronOf } from "./schedule.ts";
 import { labOf, reopen } from "./lab.ts";
 import { morningCard } from "./gym/card.ts";
 import { levelOf, nextFor, tenureOf } from "./gym/levels.ts";
+import { leadsOf } from "./org.ts";
+import { habitsOf } from "./gym/share.ts";
 import { findHotPaths } from "./gym/finder.ts";
 import { nichesOf, radarOf } from "./gym/specialty.ts";
 import { version } from "./version.ts";
@@ -458,7 +460,46 @@ async function handle(
     }
   }
   // letting an orb go: archived, his work kept (decision 12); rehiring brings him back
-  if (method === "DELETE" && parts[0] === "orbs" && parts.length === 2) return { orb: home.inbox.letGo(decodeURIComponent(parts[1]!)) };
+  // letting an orb go (PLAN 5.5): his habits handed to another orb first, if you name one (?handTo=)
+  if (method === "DELETE" && parts[0] === "orbs" && parts.length === 2) {
+    const orb = decodeURIComponent(parts[1]!);
+    if (!home.inbox.orb(orb)) throw new HttpError(404, `no orb "${orb}"`);
+    try {
+      return home.letGo(orb, url.searchParams.get("handTo") ?? undefined);
+    } catch (e) {
+      throw new HttpError(409, e instanceof Error ? e.message : String(e));
+    }
+  }
+  // the org chart (PLAN 5.6): who is in the office, at what level, how long, and who leads each kind of work
+  if (method === "GET" && url.pathname === "/org") {
+    const now = home.clock.now();
+    const team = home.inbox.orbs().map((o) => ({ id: o.id, name: o.name, specialty: o.specialty, level: levelOf(home.events, o.id), createdAt: o.createdAt }));
+    const { chief, bySpecialty } = leadsOf(team);
+    const away = home.inbox.orbs({ all: true }).filter((o) => o.letGoAt !== null).map((o) => ({ id: o.id, name: o.name, specialty: o.specialty, level: levelOf(home.events, o.id), createdAt: o.createdAt, ...tenureOf(home.events, o), now }));
+    return { chief, leads: Object.fromEntries(bySpecialty), orbs: team.map((m) => ({ ...m, ...tenureOf(home.events, home.inbox.orb(m.id)!), now })), away };
+  }
+  // a career page (PLAN 5.6): read off the log by code
+  if (method === "GET" && parts[0] === "orbs" && parts.length === 3 && parts[2] === "career") {
+    const orb = decodeURIComponent(parts[1]!);
+    const who = home.inbox.orb(orb);
+    if (!who) throw new HttpError(404, `no orb "${orb}"`);
+    const now = home.clock.now();
+    const promoted = home.events.ofType("habit.promoted").filter((e) => e.orb === orb);
+    return {
+      level: levelOf(home.events, orb), xp: home.xp.of(orb, now).total, next: nextFor(home.events, orb, { specialty: who.specialty, now }),
+      ...tenureOf(home.events, who), now,
+      radar: radarOf(home.events, orb), niches: nichesOf(home.events, orb),
+      habits: habitsOf(home.events, home.dataDir, orb).map((h) => {
+        const shared = promoted.find((e) => e.data.kind === h.key && Number(e.data.version) === h.version)?.data.shared as { from?: string } | undefined;
+        return { task: h.task, version: h.version, shared: shared?.from ? { from: home.inbox.orb(shared.from)?.name ?? shared.from } : null };
+      }),
+      reviews: {
+        given: home.events.ofType("board.ticked").filter((e) => e.data.reviewer === orb).length,
+        received: home.events.ofType("board.review_asked").filter((e) => e.data.by === orb).length,
+      },
+      performance: home.events.ofType("performance.card").findLast((e) => e.orb === orb)?.data ?? null,
+    };
+  }
   if (method === "POST" && parts[0] === "orbs" && parts.length === 3 && parts[2] === "rehire") return { orb: home.inbox.rehire(decodeURIComponent(parts[1]!)) };
   // sessions (PLAN 2.9): a Brainstorm and a Floor, and the orbs that work each
   if (method === "GET" && url.pathname === "/sessions") return { sessions: home.team.list() };

@@ -17,7 +17,9 @@ import { TOOLS, toolSpecs, type ToolDef } from "../agent/tools.ts";
 import { type Case, casesOf } from "./cases.ts";
 import { clears, gate, K, type Sitting, sit, type Verdict } from "./exam.ts";
 import { brainStep, EXAMPLES, type Playbook, playbookOf } from "./playbook.ts";
-import { nextFor } from "./levels.ts";
+import { AREAS_OF, nextFor } from "./levels.ts";
+import { AREAS, tagRun } from "./specialty.ts";
+import { cardDue, weekOf } from "./performance.ts";
 import { promoteTemplates } from "./templates.ts";
 import type { Plan } from "../plans/plans.ts";
 import type { Specialty } from "../brain/constitution.ts";
@@ -63,6 +65,9 @@ export type GymOptions = {
   k?: number;
   /** The office, for the promotions the night proposes (PLAN 3.8). */
   orbs?: () => { id: string; specialty: Specialty }[];
+  /** Every orb ever hired, away ones too (they still learn), with when he joined this time: for the
+   * gap each night practises first (PLAN 5.4) and the weekly card (PLAN 5.5, office orbs only). */
+  everyone?: () => { id: string; specialty: Specialty; hired: number; away: boolean }[];
   /** Every plan shown, for the templates its approved ones make (PLAN 3.2). */
   plans?: () => Plan[];
 };
@@ -121,6 +126,16 @@ export class Gym {
     const away = awayOf(events);
     const found = findHotPaths(events, { since: clock.now() - WINDOW_DAYS * DAY_MS }).filter((c) => !away.has(c.orb));
     for (const [orb, left] of away) found.push(...findHotPaths(events, { since: left - WINDOW_DAYS * DAY_MS }).filter((c) => c.orb === orb));
+    // each orb's promotion gap first (PLAN 5.4): when a task learned in his specialty is what stands
+    // between him and his next level, his work in its areas is tried before anything else
+    const people = new Map((this.#o.everyone?.() ?? []).map((p) => [p.id, p]));
+    const gapFirst = (c: Candidate): number => {
+      const p = people.get(c.orb);
+      if (!p || !nextFor(events, c.orb, { specialty: p.specialty, now: clock.now() })?.missing.some((m) => /task/.test(m))) return 1;
+      const area = c.runs[0] === undefined ? null : tagRun(events, c.runs[0]).area;
+      return area && (AREAS_OF[p.specialty] ?? [...AREAS]).includes(area) ? 0 : 1;
+    };
+    found.sort((a, b) => gapFirst(a) - gapFirst(b)); // stable: the most approved first, within each
     for (const c of found) {
       if (!c.trigger.startsWith("schedule:") && !c.trigger.startsWith("trigger:")) continue;
       const cases = casesOf(events, c.runs);
@@ -164,6 +179,11 @@ export class Gym {
     }
     stopped ??= noTeacher ? "no teacher brain is set up" : null;
     const proposed = this.#propose();
+    // the weekly performance card (PLAN 5.5): a suggestion and its evidence, for you; it never acts
+    for (const p of this.#o.everyone?.() ?? []) {
+      if (p.away || !cardDue(events, p.id, { hired: p.hired, now: clock.now() })) continue;
+      events.append("performance.card", weekOf(events, p.id, { specialty: p.specialty, hired: p.hired, now: clock.now() }), { orb: p.id });
+    }
     const templates = (this.#o.orbs?.() ?? []).flatMap((o) => promoteTemplates(events, this.#o.plans?.() ?? [], o.id)).map((x) => `${x.orb}: ${x.title}`);
     events.append("gym.night_done", {
       night, promoted: compiled.filter((x) => x.promoted).map((x) => x.key), rejected: compiled.filter((x) => !x.promoted).map((x) => x.key),
