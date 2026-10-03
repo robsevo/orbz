@@ -78,7 +78,7 @@ test("your hands reach his page only while you have it: a press is a click there
   const site = await web(t);
   const { home } = await agentHome(t, [], { computer: { executable: EXE } });
   await home.computers.open("juniper", site.url("shop.test", "/big-link"));
-  await assert.rejects(home.computers.hands("juniper", { kind: "click", x: 640, y: 400 }), /take his computer over first/);
+  await assert.rejects(home.computers.hands("juniper", { kind: "click", x: 640, y: 400 }), /take the computer over first/);
   home.computers.takeOver("juniper");
   const at = await home.computers.hands("juniper", { kind: "click", x: 640, y: 400 });
   assert.match(at.url, /\/about$/, "a press on his screen clicked the link under it");
@@ -107,7 +107,7 @@ test("his terminal: what a command prints reaches you while it runs; yours run i
   const one = chunks.find((c) => c.chunk.includes("one"));
   const two = chunks.find((c) => c.chunk.includes("two"));
   assert.ok(one && two && two.at - one.at >= 900, "'one' reached you a second before the command ended");
-  await assert.rejects(home.terminal("juniper", "echo hi"), /take his computer over first/);
+  await assert.rejects(home.terminal("juniper", "echo hi"), /take the computer over first/);
   home.computers.takeOver("juniper");
   const r = await home.terminal("juniper", "echo mine > yours.txt && cat yours.txt");
   assert.deepEqual([r.content.trim(), r.isError ?? false], ["mine", false]);

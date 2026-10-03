@@ -627,7 +627,7 @@ export class Home {
     if (who && who.letGoAt !== null) return { orb: who, handed }; // gone already: his habits were handed on then, or kept
     if (handTo) {
       const to = this.inbox.orb(handTo);
-      if (!to || to.letGoAt !== null || handTo === orb) throw new Error(`${handTo} cannot take his habits: hand them to someone else in the office`);
+      if (!to || to.letGoAt !== null || handTo === orb) throw new Error(`${handTo} cannot take those habits: hand them to someone else in the office`);
       for (const h of habitsOf(this.events, this.dataDir, orb)) handed.push(shareHabit(this.events, this.dataDir, { from: orb, to: handTo, task: h.task, why: "hand-off" }).task);
     }
     return { orb: this.inbox.letGo(orb), handed };
@@ -650,7 +650,7 @@ export class Home {
     const wrap = sandboxFor({ workspace, home: join(this.dataDir, "orbs", orb, "shell-home"), dataDir: this.dataDir });
     if (!wrap && !this.#saidUnsandboxed) {
       this.#saidUnsandboxed = true;
-      this.events.append("sandbox.unavailable", { why: process.platform === "linux" ? "bubblewrap is missing or cannot start here" : "his sandbox is bubblewrap's, on Linux" });
+      this.events.append("sandbox.unavailable", { why: process.platform === "linux" ? "bubblewrap is missing or cannot start here" : "the sandbox is bubblewrap's, on Linux" });
     }
     return wrap;
   }
@@ -659,7 +659,7 @@ export class Home {
    * his sandbox, its output live on their screen as his is, and the result back. */
   async terminal(orb: string, command: string, signal?: AbortSignal): Promise<ToolResult> {
     if (!this.inbox.orb(orb)) throw new Error(`no orb "${orb}"`);
-    if (!this.computers.takenOver(orb)) throw new Error("take his computer over first");
+    if (!this.computers.takenOver(orb)) throw new Error("take the computer over first");
     const call = `you-${++this.#yours}`;
     const r = await runCommand(command, workspaceOf(this.dataDir, orb), 120_000, signal, {
       wrap: this.sandbox(orb),

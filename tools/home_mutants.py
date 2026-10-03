@@ -1067,7 +1067,7 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ('      else signal?.addEventListener("abort", stop, { once: true });', '      else void stop;'),
     ], ['live.test.ts']),
     ('your hands work before you take him over', 'src/computer/browser.ts', [
-        ('    if (!this.#taken.has(orb)) throw new ComputerError("take his computer over first");\n    const s = await this.#session(orb);', '    const s = await this.#session(orb);'),
+        ('    if (!this.#taken.has(orb)) throw new ComputerError("take the computer over first");\n    const s = await this.#session(orb);', '    const s = await this.#session(orb);'),
     ], ['live.test.ts']),
     ('an address by your hands is not guarded', 'src/computer/browser.ts', [
         ('      const ok = await checkUrl(h.url);\n      if (!ok.ok) throw new ComputerError(`not opened: ${ok.reason}`);\n', ''),
@@ -1079,7 +1079,7 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ('      o.onOutput?.(chunk);\n', ''),
     ], ['live.test.ts']),
     ('your terminal works before you take him over', 'src/home.ts', [
-        ('    if (!this.computers.takenOver(orb)) throw new Error("take his computer over first");\n    const call = `you-${++this.#yours}`;', '    const call = `you-${++this.#yours}`;'),
+        ('    if (!this.computers.takenOver(orb)) throw new Error("take the computer over first");\n    const call = `you-${++this.#yours}`;', '    const call = `you-${++this.#yours}`;'),
     ], ['live.test.ts']),
     ('his sandbox shows what is not his', 'src/computer/sandbox.ts', [
         ('    for (const h of hidden) a.push("--tmpfs", h);\n', ''),
@@ -1192,6 +1192,10 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ('what you said over him is judged without what he was saying', 'src/api.ts', [
         ('saying: (url.searchParams.get("saying") ?? "").slice(0, 2000)', 'saying: ""'),
     ], ['voice.test.ts']),
+    # no orb is a he or a she (owner, 10-03)
+    ("an orb is never told that no orb is a he or a she", "src/agent/standing.ts", [
+        ("    NO_HE_OR_SHE,\n", ""),
+    ], ["voice.test.ts"]),
 ]
 
 # the app (PLAN 2.x): paths are inside packages/app
@@ -1411,7 +1415,7 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ("    specs: g.id,", '    specs: c.hat === "none" ? g.id : 0,'),
     ], ["spec.test.ts"]),
     ("the accountant forgets the bills", "src/orb/spec.ts", [
-        ('focus: "the books: bills and when they are due, budgets, receipts, taxes; he tells you before a bill is due"', 'focus: "the books: budgets, receipts, taxes"'),
+        ('focus: "the books: bills and when they are due, budgets, receipts, taxes; tells you before a bill is due"', 'focus: "the books: budgets, receipts, taxes"'),
     ], ["spec.test.ts"]),
     ("a dietitian stops saying what he is not", "src/orb/spec.ts", [
         (', limits: "Not a licensed dietitian: general guidance; a doctor for anything medical." }', " }"),

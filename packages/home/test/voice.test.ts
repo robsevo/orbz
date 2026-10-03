@@ -11,7 +11,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { serve } from "../src/api.ts";
-import { ALOUD } from "../src/agent/standing.ts";
+import { ALOUD, NO_HE_OR_SHE } from "../src/agent/standing.ts";
 import { agentHome } from "./helpers.ts";
 
 async function door(t: Parameters<typeof agentHome>[0], kit: boolean) {
@@ -79,6 +79,7 @@ test("a message you said is answered for the ear; one you typed is not", { timeo
   const system = (n: number): string => String((model.agent[n]![0] as { content?: unknown }).content ?? "");
   assert.ok(system(0).includes(ALOUD), "said: plain spoken English, for the ear");
   assert.ok(!system(1).includes(ALOUD), "CONTROL: typed, it reads as he writes");
+  assert.ok(system(1).includes(NO_HE_OR_SHE), "and every turn: no orb is a he or a she (owner, 10-03)");
   // the same through the door, as the app sends it
   const d = await serve(home, { port: 0 });
   t.after(() => d.close());

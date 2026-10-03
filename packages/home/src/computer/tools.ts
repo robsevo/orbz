@@ -118,7 +118,7 @@ export function computerTools(c: Computers, vault: Vault, pageCheck: PageCheck |
     },
     {
       name: "click",
-      label: "Using his computer",
+      label: "Using the computer",
       description:
         'Click something on the page by its visible words (a button, a link, a tab), e.g. "Next" or "Row F, seat 12". Use the words exactly as read_page shows them. Paying, sending, deleting and booking always ask the person first.',
       parameters: obj({ text: { type: "string", description: "The visible words of what to click." } }, ["text"]),
@@ -144,7 +144,7 @@ export function computerTools(c: Computers, vault: Vault, pageCheck: PageCheck |
     },
     {
       name: "type_into",
-      label: "Typing on his computer",
+      label: "Typing on the computer",
       description:
         "Type into a field on the page, found by its label, placeholder or name; submit presses Enter after. Never a password (sign_in types saved ones). In a turn that read a page, typing asks the person first.",
       parameters: obj(

@@ -175,7 +175,7 @@ export function Computer(o: { home: Office; orb: Character; messages: Message[];
 
 function Work({ open, file, acts, touched }: { open: string | null; file: WorkFile | null; acts: Act[]; touched: Act | undefined }) {
   const [source, setSource] = useState(false);
-  if (!open) return <Quiet>{acts.length ? "Nothing made yet: what he does is under Activity." : "Nothing on his screen yet."}</Quiet>;
+  if (!open) return <Quiet>{acts.length ? "Nothing made yet: the work is under Activity." : "Nothing on the screen yet."}</Quiet>;
   if (!file || file.path !== open) return <Quiet>Opening {open}…</Quiet>;
   if (file.text === null) return <Quiet>{open} is not a text file ({file.size} bytes).</Quiet>;
   const kind = kindOf(open, file.text);
@@ -386,7 +386,7 @@ function Browser({ home, orb, state, setState }: { home: Office; orb: Character;
           )}
         </div>
       ) : (
-        <Quiet>{state.awake ? "His browser is open, on nothing yet." : "His browser is asleep: it wakes when he opens a page."}</Quiet>
+        <Quiet>{state.awake ? `${orb.name}'s browser is open, on nothing yet.` : `${orb.name}'s browser is asleep: it wakes when ${orb.name} opens a page.`}</Quiet>
       )}
       {state.takenOver && (
         <div data-hands style={{ display: "grid", gap: 6, minWidth: 0 }}>
@@ -416,7 +416,7 @@ function Browser({ home, orb, state, setState }: { home: Office; orb: Character;
             }}
             style={{ display: "flex", gap: 6, minWidth: 0 }}
           >
-            <input value={typed} onChange={(e) => setTyped(e.target.value)} aria-label="Type on his page" placeholder="Type on his page" size={1} autoComplete="off" style={field} />
+            <input value={typed} onChange={(e) => setTyped(e.target.value)} aria-label={`Type on ${orb.name}'s page`} placeholder={`Type on ${orb.name}'s page`} size={1} autoComplete="off" style={field} />
             <button type="submit" style={button}>
               Type
             </button>
@@ -443,7 +443,7 @@ function Browser({ home, orb, state, setState }: { home: Office; orb: Character;
         )}
         {asking ? (
           <>
-            <span style={small}>Sign him out of every site?</span>
+            <span style={small}>{`Sign ${orb.name} out of every site?`}</span>
             <button onClick={() => act("reset")} style={{ ...button, color: "var(--alert)" }}>
               Reset
             </button>
@@ -453,11 +453,11 @@ function Browser({ home, orb, state, setState }: { home: Office; orb: Character;
           </>
         ) : (
           <button onClick={() => setAsking(true)} style={button}>
-            Reset his browser
+            {`Reset ${orb.name}'s browser`}
           </button>
         )}
       </div>
-      {state.takenOver && <span style={small}>You have his computer: a press on his screen clicks there. He waits until you hand it back.</span>}
+      {state.takenOver && <span style={small}>{`You have ${orb.name}'s computer: a press on the screen clicks there, and ${orb.name} waits until you hand it back.`}</span>}
       {said && <span role="alert" style={{ font: "500 12px/16px var(--font)", color: "var(--alert)" }}>{said}</span>}
     </div>
   );
@@ -474,7 +474,7 @@ function Files({ dir, entries, acts, go, pick }: { dir: string; entries: Entry[]
           <span aria-hidden>‹</span> {dir}
         </button>
       )}
-      {!entries.length && <Quiet>His computer is empty: nothing made yet.</Quiet>}
+      {!entries.length && <Quiet>The computer is empty: nothing made yet.</Quiet>}
       {entries.map((e) => {
         const name = e.path.split("/").pop()!;
         const act = lastOn.get(e.path);
@@ -543,7 +543,7 @@ function Terminal({ home, orb, acts, live, yours }: { home: Office; orb: Charact
           }}
           style={{ display: "flex", gap: 6, minWidth: 0 }}
         >
-          <input value={line} onChange={(e) => setLine(e.target.value)} aria-label="A command for his terminal" placeholder="A command for his terminal" size={1} autoComplete="off" spellCheck={false} style={{ flex: "1 1 120px", minWidth: 0, font: "500 13px/18px var(--mono)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 8, padding: "6px 10px", outline: 0, boxShadow: "inset 0 0 0 1px var(--hairline)" }} />
+          <input value={line} onChange={(e) => setLine(e.target.value)} aria-label={`A command for ${orb.name}'s terminal`} placeholder={`A command for ${orb.name}'s terminal`} size={1} autoComplete="off" spellCheck={false} style={{ flex: "1 1 120px", minWidth: 0, font: "500 13px/18px var(--mono)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 8, padding: "6px 10px", outline: 0, boxShadow: "inset 0 0 0 1px var(--hairline)" }} />
           <button type="submit" style={{ font: "600 12px/16px var(--font)", border: 0, borderRadius: 8, padding: "6px 10px", background: "var(--fill)", color: "var(--text-1)", cursor: "pointer", minHeight: 30 }}>
             Run
           </button>

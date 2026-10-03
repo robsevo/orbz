@@ -70,7 +70,7 @@ test("his Browser tab: the still of his screen, its address, his face where he c
   await page.getByRole("button", { name: "Chat with Hazel" }).click();
   const computer = page.locator('[data-computer="hazel"]');
   await computer.getByRole("tab", { name: "Browser" }).click();
-  await computer.getByText("His browser is asleep: it wakes when he opens a page.").waitFor();
+  await computer.getByText("Hazel's browser is asleep: it wakes when Hazel opens a page.").waitFor();
   await page.locator('[data-stream="open"]').waitFor({ timeout: 20_000 });
 
   await h.computers.open("hazel", site.url("shop.test", "/shop"));
@@ -90,20 +90,20 @@ test("his Browser tab: the still of his screen, its address, his face where he c
   await shot(page, "after-a-click");
 
   await computer.getByRole("button", { name: "Take over" }).click();
-  await computer.getByText("You have his computer: a press on his screen clicks there. He waits until you hand it back.").waitFor();
+  await computer.getByText("You have Hazel's computer: a press on the screen clicks there, and Hazel waits until you hand it back.").waitFor();
   assert.equal(h.computers.takenOver("hazel"), true, "your hand reached his computer");
   await assert.rejects(h.computers.click("hazel", "About us"), /the person has your computer/);
   await computer.getByRole("button", { name: "Hand back" }).click();
   await computer.getByRole("button", { name: "Take over" }).waitFor();
   assert.equal(h.computers.takenOver("hazel"), false);
 
-  await computer.getByRole("button", { name: "Reset his browser" }).click();
-  await computer.getByText("Sign him out of every site?").waitFor();
+  await computer.getByRole("button", { name: "Reset Hazel's browser" }).click();
+  await computer.getByText("Sign Hazel out of every site?").waitFor();
   await computer.getByRole("button", { name: "Keep" }).click();
   assert.equal(h.events.ofType("computer.reset").length, 0, "one press asks; Keep keeps");
-  await computer.getByRole("button", { name: "Reset his browser" }).click();
+  await computer.getByRole("button", { name: "Reset Hazel's browser" }).click();
   await computer.getByRole("button", { name: "Reset", exact: true }).click();
-  await computer.getByText("His browser is asleep: it wakes when he opens a page.").waitFor({ timeout: 20_000 });
+  await computer.getByText("Hazel's browser is asleep: it wakes when Hazel opens a page.").waitFor({ timeout: 20_000 });
   assert.equal(h.events.ofType("computer.reset").length, 1, "the second press resets him");
 
   assert.deepEqual(await measure(page), [], "nothing spills at desk size");

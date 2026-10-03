@@ -250,14 +250,14 @@ function Morning(o: { card: MorningCard; office: Character[]; takeBack: (u: Undo
               <span style={{ font: "400 12px/17px var(--font)", color: "var(--text-3)", marginLeft: "auto" }}>{n.costUsd ? `$${n.costUsd.toFixed(4)}` : "no cost"} · {n.tokens.toLocaleString("en-GB")} tokens</span>
             </div>
             {answered > 0 && (
-              <div role="img" aria-label={`${n.habits} by his habits, ${n.own} by his own brain, ${n.big} by the big brain`} style={{ display: "grid", gap: 4 }}>
+              <div role="img" aria-label={`${n.habits} by habits, ${n.own} by ${c?.name ?? n.orb}'s own brain, ${n.big} by the big brain`} style={{ display: "grid", gap: 4 }}>
                 <span style={{ display: "flex", height: 8, borderRadius: 4, overflow: "hidden", background: "var(--fill)" }}>
                   {n.habits > 0 && <i data-split="habits" style={{ flex: n.habits, background: "var(--accent)" }} />}
                   {n.own > 0 && <i data-split="own" style={{ flex: n.own, background: "var(--accent-glow)" }} />}
                   {n.big > 0 && <i data-split="big" style={{ flex: n.big, background: "var(--text-3)" }} />}
                 </span>
                 <span style={{ font: "400 12px/17px var(--font)", color: "var(--text-2)" }}>
-                  {n.habits} by habit · {n.own} by his own brain · {n.big} by the big brain
+                  {n.habits} by habit · {n.own} by {c?.name ?? n.orb}'s own brain · {n.big} by the big brain
                 </span>
               </div>
             )}

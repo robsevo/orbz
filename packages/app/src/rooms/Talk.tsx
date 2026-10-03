@@ -320,8 +320,8 @@ export function Talk(o: {
         <div style={{ display: "flex", gap: 8, minWidth: 0 }}>
         {o.attach && (
           <>
-            <input ref={picker} type="file" multiple hidden aria-label="Files to give him" onChange={(e) => give(e.target.files)} />
-            <button type="button" onClick={() => picker.current?.click()} aria-label="Give him a file" style={{ ...button, padding: "8px 12px" }}>
+            <input ref={picker} type="file" multiple hidden aria-label={`Files to give ${o.orbs[0]?.name ?? "the orb"}`} onChange={(e) => give(e.target.files)} />
+            <button type="button" onClick={() => picker.current?.click()} aria-label={`Give ${o.orbs[0]?.name ?? "the orb"} a file`} style={{ ...button, padding: "8px 12px" }}>
               File
             </button>
           </>

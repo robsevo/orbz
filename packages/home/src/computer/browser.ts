@@ -170,7 +170,7 @@ export class Computers {
       };
       const stop = (): void => {
         set.delete(go);
-        fail(new ComputerError("stopped while the person had his computer"));
+        fail(new ComputerError("stopped while the person had the computer"));
       };
       set.add(go);
       if (signal?.aborted) stop();
@@ -181,11 +181,11 @@ export class Computers {
   /** The person's hands on his page, only while they have it: a click, typing, a key, a scroll, an
    * address (checked like his own: never this machine or its network), back and forward. */
   async hands(orb: string, h: Hands): Promise<{ url: string; title: string }> {
-    if (!this.#taken.has(orb)) throw new ComputerError("take his computer over first");
+    if (!this.#taken.has(orb)) throw new ComputerError("take the computer over first");
     const s = await this.#session(orb);
     const p = s.page;
     if (h.kind === "click") {
-      if (!(h.x >= 0 && h.x <= SCREEN.width && h.y >= 0 && h.y <= SCREEN.height)) throw new ComputerError("a click lands on his screen");
+      if (!(h.x >= 0 && h.x <= SCREEN.width && h.y >= 0 && h.y <= SCREEN.height)) throw new ComputerError("a click lands on the screen");
       await this.#andWait(p, () => p.mouse.click(h.x, h.y));
     } else if (h.kind === "type") await p.keyboard.type(h.text.slice(0, 2000));
     else if (h.kind === "key") {
@@ -260,7 +260,7 @@ export class Computers {
 
   async #launch(orb: string): Promise<Session> {
     const exe = this.#o.executable === undefined ? chromiumPath() : this.#o.executable;
-    if (!exe) throw new ComputerError("there is no Chromium on this machine for his browser: set ORBS_CHROME to one, or run `npx playwright install chromium`");
+    if (!exe) throw new ComputerError("there is no Chromium on this machine for an orb's browser: set ORBS_CHROME to one, or run `npx playwright install chromium`");
     const dir = profileOf(this.#o.dataDir, orb);
     const home = homeOf(this.#o.dataDir, orb);
     mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -293,7 +293,7 @@ export class Computers {
       }
     } catch (e) {
       await proxy.close();
-      throw new ComputerError(`his browser did not start: ${(e instanceof Error ? e.message : String(e)).split("\n")[0]!.slice(0, 200)}`);
+      throw new ComputerError(`the browser did not start: ${(e instanceof Error ? e.message : String(e)).split("\n")[0]!.slice(0, 200)}`);
     }
     const s: Session = { context, page: context.pages()[0] ?? (await context.newPage()), idle: null, proxy };
     const watch = (p: Page): void => {

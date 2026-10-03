@@ -53,8 +53,8 @@ test("a file given in a private chat: kept in from-you, a chip until sent, its p
   await page.goto(d.pairLink());
   await page.locator(".orbs-window").waitFor({ timeout: 30_000 });
   await page.goto(page.url().replace(/#.*$/, "#/chat/Ada"));
-  await page.getByRole("button", { name: "Give him a file" }).waitFor({ timeout: 20_000 });
-  await page.getByLabel("Files to give him").setInputFiles([
+  await page.getByRole("button", { name: "Give Ada a file" }).waitFor({ timeout: 20_000 });
+  await page.getByLabel("Files to give Ada").setInputFiles([
     { name: "sales.csv", mimeType: "text/csv", buffer: Buffer.from("month,total\nJan,12\nFeb,30\n") },
     { name: "draft.txt", mimeType: "text/plain", buffer: Buffer.from("not this one") },
   ]);

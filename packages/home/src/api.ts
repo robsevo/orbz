@@ -759,7 +759,7 @@ async function handle(
       return { awake: home.computers.awake(orb), takenOver: home.computers.takenOver(orb), screen };
     };
     if (method === "GET" && parts[2] === "screen.jpg" && parts.length === 3) {
-      if (!existsSync(file)) throw new HttpError(404, "he has not looked at anything yet");
+      if (!existsSync(file)) throw new HttpError(404, "nothing has been looked at yet");
       res!.writeHead(200, { "content-type": "image/jpeg", "cache-control": "no-store", "x-content-type-options": "nosniff" });
       res!.end(readFileSync(file));
       return STREAMING;
@@ -794,7 +794,7 @@ async function handle(
     }
     // the person's hands on his page, once they have taken it over
     if (method === "POST" && parts[2] === "computer" && parts.length === 4 && parts[3] === "hands") {
-      if (!home.computers.takenOver(orb)) throw new HttpError(409, "take his computer over first");
+      if (!home.computers.takenOver(orb)) throw new HttpError(409, "take the computer over first");
       try {
         return { at: await home.computers.hands(orb, (await body(req)) as Hands), ...state() };
       } catch (e) {
@@ -808,7 +808,7 @@ async function handle(
         else if (parts[3] === "reset") await home.computers.reset(orb);
         else if (parts[3] === "take-over") home.computers.takeOver(orb);
         else if (parts[3] === "hand-back") home.computers.handBack(orb);
-        else throw new HttpError(404, `no ${parts[3]} for his computer`);
+        else throw new HttpError(404, `no ${parts[3]} for this computer`);
       } catch (e) {
         throw e instanceof ComputerError ? new HttpError(400, e.message) : e;
       }
@@ -852,7 +852,7 @@ async function handle(
     const who = home.inbox.orb(orb);
     if (!who) throw new HttpError(404, `no orb "${orb}"`);
     const kit = home.kit;
-    if (!kit) throw new HttpError(503, "his voice is the kit's, and the kit is not running");
+    if (!kit) throw new HttpError(503, "voices are the kit's, and the kit is not running");
     const ask = async (tool: string, args: Record<string, unknown>): Promise<unknown> => {
       try {
         return await kit.call(tool, args);
@@ -884,7 +884,7 @@ async function handle(
   if (method === "POST" && parts[0] === "orbs" && parts.length === 3 && parts[2] === "terminal") {
     const orb = decodeURIComponent(parts[1]!);
     if (!home.inbox.orb(orb)) throw new HttpError(404, `no orb "${orb}"`);
-    if (!home.computers.takenOver(orb)) throw new HttpError(409, "take his computer over first");
+    if (!home.computers.takenOver(orb)) throw new HttpError(409, "take the computer over first");
     const r = await home.terminal(orb, text(await body(req), "command"));
     return { output: r.content, failed: r.isError === true };
   }

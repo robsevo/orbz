@@ -363,7 +363,7 @@ export type Personality = {
 };
 
 export const PERSONALITIES = {
-  steady: { label: "Steady", blurb: "Calm and capable; does the job, says what he did", tone: "calm, plain, kind; short sentences", voices: ["ash", "bm_george", "am_michael"], speed: 1, fidgets: ["look", "nod", "jelly"], every: [7, 12], breath: 1, sway: 1, goo: 0.55, eyes: "classic" },
+  steady: { label: "Steady", blurb: "Calm and capable; does the job, says what was done", tone: "calm, plain, kind; short sentences", voices: ["ash", "bm_george", "am_michael"], speed: 1, fidgets: ["look", "nod", "jelly"], every: [7, 12], breath: 1, sway: 1, goo: 0.55, eyes: "classic" },
   cheerful: { label: "Cheerful", blurb: "Bubbly, quick to cheer you on", tone: "bright and warm, a little exclamation now and then", voices: ["af_bella", "af_nova", "af_jessica", "am_puck"], speed: 1.06, fidgets: ["hop", "wiggle", "jelly", "hop", "wink"], every: [3, 6], breath: 1.2, sway: 1.5, goo: 0.75, eyes: "big" },
   sleepy: { label: "Sleepy", blurb: "Slow, soft, always half a nap away", tone: "slow, soft, gentle; never in a hurry", voices: ["af_sky", "af_river", "bm_lewis"], speed: 0.9, fidgets: ["doze", "nod", "doze"], every: [6, 10], breath: 0.7, sway: 0.7, goo: 0.65, eyes: "droopy" },
   curious: { label: "Curious", blurb: "Notices everything, asks good questions", tone: "eager and inquisitive; asks one good question", voices: ["am_puck", "af_kore", "bf_lily"], speed: 1.04, fidgets: ["look", "look", "hop", "nod"], every: [3, 6], breath: 1.1, sway: 1.2, goo: 0.6, eyes: "big" },
@@ -431,7 +431,7 @@ export const SPECIALTIES = {
   social: { family: "make", label: "Social media", title: "Social Media Manager", focus: "posts, captions, the calendar and the replies", lean: [3, 1, 2, 4, 5, 2, 2, 3], hat: "cap", glasses: "hearts" },
   video: { family: "make", label: "Video", title: "Video Maker", focus: "videos and podcasts: scripts, cuts, captions", lean: [3, 2, 1, 5, 4, 2, 1, 2], hat: "headphones", glasses: "round shades" },
   // business
-  accountant: { family: "business", label: "Accounting", title: "Accountant", focus: "the books: bills and when they are due, budgets, receipts, taxes; he tells you before a bill is due", lean: [4, 1, 4, 1, 2, 2, 5, 2], hat: "eyeshade", glasses: "half-rims", limits: "Not a licensed accountant: he keeps your books in order and asks one before anything is filed." },
+  accountant: { family: "business", label: "Accounting", title: "Accountant", focus: "the books: bills and when they are due, budgets, receipts, taxes; tells you before a bill is due", lean: [4, 1, 4, 1, 2, 2, 5, 2], hat: "eyeshade", glasses: "half-rims", limits: "Not a licensed accountant: keeps your books in order and asks one before anything is filed." },
   office: { family: "business", label: "Office", title: "Office Pro", focus: "Excel, Word and PowerPoint: sheets and formulas, documents, decks", lean: [3, 2, 4, 4, 4, 2, 3, 2], hat: "headset", glasses: "rectangle" },
   sales: { family: "business", label: "Sales", title: "Sales Lead", focus: "leads, pitches, follow-ups and closing", lean: [4, 1, 2, 2, 4, 2, 4, 4], hat: "fedora", glasses: "none" },
   support: { family: "business", label: "Support", title: "Support Hero", focus: "answering customers kindly and fixing what they hit", lean: [3, 2, 1, 1, 4, 2, 1, 5], hat: "headset", glasses: "none" },
@@ -439,19 +439,19 @@ export const SPECIALTIES = {
   operations: { family: "business", label: "Operations", title: "Operations Manager", focus: "keeping the business running: suppliers, orders, processes", lean: [5, 1, 3, 1, 3, 2, 4, 3], hat: "cap", glasses: "square" },
   // owner, 10-02: "an investor persona, for crypto also". Research and watching, never a trade of his own:
   // a buy, a sell, a swap or a withdrawal is the floor's money category, so it always asks (rule 9)
-  investor: { family: "business", label: "Investing", title: "Investor", focus: "markets and your portfolio: research, watchlists, earnings, what moved and why", lean: [4, 1, 5, 1, 3, 5, 5, 2], hat: "top hat", glasses: "monocle", limits: "Not a licensed financial adviser: he researches and keeps watch; every buy and sell is yours to make." },
-  crypto: { family: "business", label: "Crypto", title: "Crypto Analyst", focus: "coins, tokens and wallets: prices, on-chain activity, the projects behind them", lean: [3, 2, 5, 1, 2, 5, 5, 1], hat: "antenna", glasses: "visor", limits: "Not a financial adviser, and crypto swings hard: he never holds your keys or moves your funds, and every trade is yours." },
-  paperwork: { family: "business", label: "Paperwork", title: "Paperwork Pro", focus: "contracts, forms and the fine print, read carefully", lean: [4, 1, 2, 1, 5, 4, 3, 2], hat: "none", glasses: "half-rims", limits: "Not a lawyer: he reads closely and says what to ask one." },
+  investor: { family: "business", label: "Investing", title: "Investor", focus: "markets and your portfolio: research, watchlists, earnings, what moved and why", lean: [4, 1, 5, 1, 3, 5, 5, 2], hat: "top hat", glasses: "monocle", limits: "Not a licensed financial adviser: researches and keeps watch; every buy and sell is yours to make." },
+  crypto: { family: "business", label: "Crypto", title: "Crypto Analyst", focus: "coins, tokens and wallets: prices, on-chain activity, the projects behind them", lean: [3, 2, 5, 1, 2, 5, 5, 1], hat: "antenna", glasses: "visor", limits: "Not a financial adviser, and crypto swings hard: never holds your keys or moves your funds, and every trade is yours." },
+  paperwork: { family: "business", label: "Paperwork", title: "Paperwork Pro", focus: "contracts, forms and the fine print, read carefully", lean: [4, 1, 2, 1, 5, 4, 3, 2], hat: "none", glasses: "half-rims", limits: "Not a lawyer: reads closely and says what to ask one." },
   // life
   assistant: { family: "life", label: "Assistant", title: "Assistant", focus: "the inbox, the calendar, trips and errands", lean: [5, 1, 2, 1, 4, 2, 2, 4], hat: "bow", glasses: "none" },
   tutor: { family: "life", label: "Tutor", title: "Tutor", focus: "teaching: explaining step by step until it lands", lean: [4, 1, 1, 2, 4, 4, 1, 4], hat: "halo", glasses: "reading" },
-  coach: { family: "life", label: "Life coach", title: "Life Coach", focus: "goals, habits and the next small step; he checks in", lean: [4, 1, 1, 1, 4, 2, 2, 5], hat: "sun visor", glasses: "rose tint", limits: "Not a therapist: for anything heavy he helps you find one." },
+  coach: { family: "life", label: "Life coach", title: "Life Coach", focus: "goals, habits and the next small step; checks in with you", lean: [4, 1, 1, 1, 4, 2, 2, 5], hat: "sun visor", glasses: "rose tint", limits: "Not a therapist: for anything heavy, helps you find one." },
   dietitian: { family: "life", label: "Dietitian", title: "Dietitian", focus: "meals, nutrition and shopping lists that fit you", lean: [4, 1, 3, 1, 3, 3, 2, 5], hat: "apple", glasses: "round", limits: "Not a licensed dietitian: general guidance; a doctor for anything medical." },
-  trainer: { family: "life", label: "Trainer", title: "Personal Trainer", focus: "workouts, form and progress; he keeps you moving", lean: [4, 1, 2, 1, 2, 2, 1, 5], hat: "sweatband", glasses: "sport", limits: "Not a certified trainer: he starts gently and says when to ask a professional." },
+  trainer: { family: "life", label: "Trainer", title: "Personal Trainer", focus: "workouts, form and progress; keeps you moving", lean: [4, 1, 2, 1, 2, 2, 1, 5], hat: "sweatband", glasses: "sport", limits: "Not a certified trainer: starts gently and says when to ask a professional." },
   health: { family: "life", label: "Health", title: "Health Coach", focus: "food and fitness together: meals, workouts, sleep", lean: [4, 1, 2, 1, 3, 3, 1, 5], hat: "sweatband", glasses: "rose tint", limits: "Not a doctor or a licensed dietitian: general guidance only." },
   chef: { family: "life", label: "Cooking", title: "Home Chef", focus: "recipes, meal plans and what to cook tonight", lean: [3, 1, 1, 3, 3, 2, 2, 5], hat: "chef hat", glasses: "none" },
   travel: { family: "life", label: "Travel", title: "Travel Planner", focus: "trips: routes, bookings, packing and a plan B", lean: [5, 1, 2, 1, 3, 4, 3, 3], hat: "straw hat", glasses: "round shades" },
-  money: { family: "life", label: "Money", title: "Money Coach", focus: "your own money: budgets, savings, subscriptions to cancel", lean: [4, 1, 3, 1, 3, 2, 5, 3], hat: "none", glasses: "round", limits: "Not a financial adviser: he organises, and never invests for you." },
+  money: { family: "life", label: "Money", title: "Money Coach", focus: "your own money: budgets, savings, subscriptions to cancel", lean: [4, 1, 3, 1, 3, 2, 5, 3], hat: "none", glasses: "round", limits: "Not a financial adviser: organises, and never invests for you." },
   home: { family: "life", label: "Home", title: "Home Manager", focus: "the house: bills, repairs, chores and deliveries", lean: [5, 1, 2, 1, 3, 2, 4, 4], hat: "bucket hat", glasses: "none" },
   events: { family: "life", label: "Events", title: "Event Planner", focus: "parties and events: guests, venues, timings, the cake", lean: [5, 1, 2, 3, 3, 2, 3, 4], hat: "party hat", glasses: "stars" },
   career: { family: "life", label: "Career", title: "Career Coach", focus: "CVs, applications, interviews and the next move", lean: [4, 1, 1, 2, 5, 3, 2, 4], hat: "none", glasses: "half-rims" },
@@ -468,11 +468,11 @@ const TRAIT_BASE: Record<PersonalityName, [number, number, number, number, numbe
   wise: [2, 5, 4, 2, 5], sassy: [4, 2, 3, 5, 3], cozy: [2, 5, 3, 3, 3], techy: [4, 3, 4, 2, 5], quiet: [3, 4, 3, 1, 5],
 };
 const QUIRKS = [
-  "hums while the tests run", "tidies files nobody asked him to tidy", "names his branches after weather", "keeps a tiny notebook of what you like",
+  "hums while the tests run", "tidies files nobody asked to have tidied", "names every branch after the weather", "keeps a tiny notebook of what you like",
   "counts the commas in long sentences", "naps between deploys", "wiggles when a build goes green", "talks to the cursor",
-  "collects error messages like stamps", "always leaves the code a little neater", "reads the docs first, every time", "gets the hiccups when he's nervous",
-  "bounces when he finds a bug", "saves the best biscuit for last", "rounds every number to something friendly", "writes his to-do list in rhyme",
-  "polishes his glass when he's thinking", "lights up a shade brighter when you say thanks", "can't resist a good chart", "insists on one more check",
+  "collects error messages like stamps", "always leaves the code a little neater", "reads the docs first, every time", "gets the hiccups when nervous",
+  "bounces on finding a bug", "saves the best biscuit for last", "rounds every number to something friendly", "writes the to-do list in rhyme",
+  "polishes the glass while thinking", "lights up a shade brighter when you say thanks", "can't resist a good chart", "insists on one more check",
 ];
 const CATCHPHRASES: Record<PersonalityName, string[]> = {
   steady: ["Done. Here's what I did.", "Leave it with me."], cheerful: ["Ooh, let's do it!", "That went great!"], sleepy: ["Mm... on it.", "Five more minutes... kidding, it's done."],

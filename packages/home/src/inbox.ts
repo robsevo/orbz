@@ -155,7 +155,7 @@ export class Inboxes {
   ): Item {
     const who = this.orb(orb);
     if (!who) throw new UnknownOrbError(orb);
-    if (who.letGoAt !== null) throw new Error(`${who.name} was let go: rehire him to give him work`);
+    if (who.letGoAt !== null) throw new Error(`${who.name} was let go: rehire ${who.name} to give any work`);
     const at = this.#clock.now();
     const data = opts.data ?? {};
     const fresh = opts.fresh ? 1 : 0;

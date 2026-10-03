@@ -23,7 +23,7 @@ const button: CSSProperties = { font: "600 14px/20px var(--font)", color: "var(-
 const strong: CSSProperties = { ...button, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)", fontWeight: 800 };
 const TAB_WORDS: Record<Tab, { label: string; about: string; empty: string }> = {
   brainstorm: { label: "Brainstorm", about: "Ideas and the debate. A decision lands as ✓ Agreed.", empty: "Throw out an idea, a question, a goal: everyone here takes a turn on it." },
-  floor: { label: "Floor", about: "The agreed work, done. Watch each one's computer.", empty: "Say what to build: everyone here does his part, and asks before anything that matters." },
+  floor: { label: "Floor", about: "The agreed work, done. Watch each one's computer.", empty: "Say what to build: everyone here does their part, and asks before anything that matters." },
 };
 
 export function SessionsRoom(o: { home: Office | null; office: Character[]; open: number | null; tab: Tab; go: (id: number | null, tab?: Tab) => void }) {

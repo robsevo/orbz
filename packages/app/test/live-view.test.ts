@@ -66,7 +66,7 @@ test("at phone size: watch him live, take over, press his screen, type on his pa
   assert.equal(await computer.getByText("live", { exact: true }).count(), 1, "it says it is live");
 
   await computer.getByRole("button", { name: "Take over" }).click();
-  await computer.getByText("You have his computer: a press on his screen clicks there. He waits until you hand it back.").waitFor();
+  await computer.getByText("You have Hazel's computer: a press on the screen clicks there, and Hazel waits until you hand it back.").waitFor();
   await shot(page, "taken-over");
   const box = (await live.boundingBox())!;
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
@@ -76,7 +76,7 @@ test("at phone size: watch him live, take over, press his screen, type on his pa
   await computer.getByRole("button", { name: "Go", exact: true }).click();
   await computer.locator("[data-address]", { hasText: "/big-field" }).waitFor({ timeout: 20_000 });
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
-  await computer.getByLabel("Type on his page").fill("hello from Robin");
+  await computer.getByLabel("Type on Hazel's page").fill("hello from Robin");
   await computer.getByRole("button", { name: "Type", exact: true }).click();
   const titleNow = (): string => {
     try {
@@ -89,7 +89,7 @@ test("at phone size: watch him live, take over, press his screen, type on his pa
   assert.equal(titleNow(), "hello from Robin", "what you typed landed in his page");
 
   await computer.getByRole("tab", { name: "Terminal" }).click();
-  await computer.getByLabel("A command for his terminal").fill("echo hi from Robin");
+  await computer.getByLabel("A command for Hazel's terminal").fill("echo hi from Robin");
   await computer.getByRole("button", { name: "Run", exact: true }).click();
   await computer.locator("[data-yours]", { hasText: "hi from Robin" }).nth(0).waitFor({ timeout: 20_000 });
   assert.match(await computer.locator("[data-yours] pre").last().innerText(), /^hi from Robin/, "his terminal ran your command");
@@ -102,5 +102,5 @@ test("at phone size: watch him live, take over, press his screen, type on his pa
   assert.equal(h.computers.takenOver("hazel"), false, "handed back");
   await computer.getByRole("tab", { name: "Terminal" }).click(); // on its own tab, where the line would be
   await computer.getByRole("tab", { name: "Terminal", selected: true }).waitFor();
-  assert.equal(await computer.getByLabel("A command for his terminal").count(), 0, "and the terminal is his again");
+  assert.equal(await computer.getByLabel("A command for Hazel's terminal").count(), 0, "and the terminal is his again");
 });

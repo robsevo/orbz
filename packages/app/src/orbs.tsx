@@ -142,7 +142,7 @@ function Sheet({ c, onRename, replies, standing, startsAs }: { c: Character; onR
               value={c.name}
               onChange={(e) => onRename(e.target.value.slice(0, 16))}
               aria-label="Name"
-              placeholder="His name"
+              placeholder="Name"
               size={1}
               style={{ ...name, flex: "1 1 120px", minWidth: 0, background: "transparent", border: 0, outline: 0, padding: 0 }}
             />
@@ -154,7 +154,7 @@ function Sheet({ c, onRename, replies, standing, startsAs }: { c: Character; onR
         <span style={{ font: "600 15px/20px var(--font)", color: "var(--text-1)" }}>{cap(sh.title)}</span>
         <span style={{ font: "400 13px/18px var(--font)", color: "var(--text-3)" }}>
           {onRename
-            ? "Not in the office yet · he is fixed once you create him"
+            ? "Not in the office yet · fixed once created"
             : `${standing?.level ?? startsAs ?? "Junior"} · ${(standing?.xp ?? 0).toLocaleString("en-GB")} XP · ${standing?.next?.ready ? `ready for ${standing.next.to}` : "levels come from finished work you approve"}`}
         </span>
         {/* the first of his kind in the office starts as the Senior (owner, 10-02), so the work has someone to lead it */}
@@ -184,7 +184,7 @@ function Sheet({ c, onRename, replies, standing, startsAs }: { c: Character; onR
       <div style={{ display: "grid", gap: 4 }}>
         <Head>Voice</Head>
         <span style={{ font: "400 14px/20px var(--font)", color: "var(--text-2)" }}>
-          {c.voice === "silent" ? "Silent: he writes, never speaks" : `${v.label} · ${v.accent}`}
+          {c.voice === "silent" ? "Silent: writes, never speaks" : `${v.label} · ${v.accent}`}
           {c.voice !== "silent" && !speaks(c, replies) ? ` (${REPLIES[replies].toLowerCase()} for now)` : ""}
         </span>
       </div>
@@ -476,14 +476,14 @@ function Card({ c, replies, setReplies, onDelete, onChat, onCareer, others }: { 
       </Balanced>
       <RepliesRow replies={replies} setReplies={setReplies} />
       <p style={{ margin: 0, font: "400 13px/18px var(--font)", color: "var(--text-3)" }}>
-        An orb stays as he was made. He grows from the work you approve, not from edits.
+        An orb stays as made, and grows from the work you approve, not from edits.
       </p>
       {asking ? (
         <div role="group" aria-label={`Let ${c.name} go?`} style={{ display: "grid", gap: 8, padding: "var(--s3)", borderRadius: 14, background: "var(--fill)", boxShadow: "inset 0 0 0 1px var(--off)" }}>
-          <span style={{ font: "600 14px/20px var(--font)", color: "var(--text-1)", textWrap: "pretty" }}>{c.name} leaves the office. Everything he did is kept, he keeps learning, and you can rehire him from the org chart.</span>
+          <span style={{ font: "600 14px/20px var(--font)", color: "var(--text-1)", textWrap: "pretty" }}>{c.name} leaves the office. All of {c.name}'s work is kept, the learning goes on, and a rehire is a press away on the org chart.</span>
           {others.length > 0 && (
             <label style={{ display: "flex", alignItems: "center", gap: 8, font: "500 13px/18px var(--font)", color: "var(--text-2)", minWidth: 0 }}>
-              Hand his habits to
+              Hand {c.name}'s habits to
               <select value={handTo} onChange={(e) => setHandTo(e.target.value)} style={{ font: "500 13px/18px var(--font)", color: "var(--text-1)", background: "var(--raised)", border: 0, borderRadius: 8, padding: "4px 8px", minWidth: 0 }}>
                 <option value="">No one</option>
                 {others.map((o) => (
@@ -497,7 +497,7 @@ function Card({ c, replies, setReplies, onDelete, onChat, onCareer, others }: { 
               Let {c.name} go
             </button>
             <button onClick={() => setAsking(false)} style={s.btn}>
-              Keep him
+              Keep {c.name}
             </button>
           </OneLine>
         </div>
@@ -649,7 +649,7 @@ function App() {
     }
   };
   const name = me.name.trim();
-  const blocked = !making ? null : !name ? "Give him a name first" : taken(name) ? `Someone in the office is already called ${name}` : null;
+  const blocked = !making ? null : !name ? "Give your orb a name first" : taken(name) ? `Someone in the office is already called ${name}` : null;
   const create = (): void => {
     if (view.kind !== "new" || blocked) return;
     const made = { ...view.draft, name };
@@ -923,12 +923,12 @@ function App() {
                   Roll everything
                 </button>
                 <button data-sound="create" disabled={Boolean(blocked)} onClick={create} style={{ ...s.btn, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)", fontWeight: 800, opacity: blocked ? 0.5 : 1, cursor: blocked ? "not-allowed" : "pointer" }}>
-                  Create {name || "him"}
+                  Create {name || "your orb"}
                 </button>
               </OneLine>
             )}
             <p style={{ margin: 0, font: "400 13px/18px var(--font)", color: blocked ? "var(--alert)" : "var(--text-3)", textAlign: "center" }}>
-              {blocked ?? `${name || "He"}, ${sheetOf(me).title}. Click him, or move your pointer: he watches.`}
+              {blocked ?? `${name || "Your orb"}, ${sheetOf(me).title}. Give a click, or move your pointer: the eyes follow.`}
             </p>
           </div>
 

@@ -75,7 +75,7 @@ test("the morning card: yesterday's split, its cost, what he learned and the nig
   const dana = card.locator('[data-morning-orb="dana"]');
   const words = await dana.innerText();
   assert.match(words, /Dana[\s\S]*\$0\.0123 · 1,000 tokens/);
-  assert.match(words, /2 by habit · 0 by his own brain · 5 by the big brain/, "yesterday's split, as the log has it");
+  assert.match(words, /2 by habit · 0 by Dana's own brain · 5 by the big brain/, "yesterday's split, as the log has it");
   assert.match(words, /Learned: “Invoices go out on the 1st\.”/);
   assert.match(words, /A new habit: A trigger \(t1\): read file, then remind/);
   assert.deepEqual(await desk.locator("[data-split]").evaluateAll((els) => els.map((e) => e.getAttribute("data-split"))), ["habits", "big"]);

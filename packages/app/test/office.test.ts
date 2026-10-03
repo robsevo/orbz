@@ -94,7 +94,7 @@ test("a name that is empty or already in the office stops him being created", { 
     assert.equal(await page.getByText("Someone in the office is already called oscar").count(), 1);
     await page.getByRole("textbox", { name: "Name" }).fill("  ");
     assert.equal(await create.isDisabled(), true, "no name at all");
-    assert.equal(await page.getByText("Give him a name first").count(), 1);
+    assert.equal(await page.getByText("Give your orb a name first").count(), 1);
     await page.getByRole("textbox", { name: "Name" }).fill("Wren");
     assert.equal(await create.isDisabled(), false, "control: a free name creates");
   } finally {
@@ -102,7 +102,7 @@ test("a name that is empty or already in the office stops him being created", { 
   }
 });
 
-test("letting him go asks first; 'Keep him' keeps him, and 'Let Gus go' lets him go", { skip }, async () => {
+test("letting an orb go asks first; 'Keep Gus' keeps Gus, and 'Let Gus go' lets Gus go", { skip }, async () => {
   const page = await open();
   try {
     await page.locator("aside").getByRole("button", { name: /Gus/ }).click();
@@ -110,7 +110,7 @@ test("letting him go asks first; 'Keep him' keeps him, and 'Let Gus go' lets him
     const ask = page.getByRole("group", { name: "Let Gus go?" });
     assert.equal(await ask.count(), 1, "it asks");
     assert.ok((await sidebar(page)).includes("Gus"), "asking deletes nothing");
-    await ask.getByRole("button", { name: "Keep him" }).click();
+    await ask.getByRole("button", { name: "Keep Gus" }).click();
     assert.ok((await sidebar(page)).includes("Gus"), "kept");
     await page.getByRole("button", { name: "Let Gus go…" }).click();
     await page.getByRole("group", { name: "Let Gus go?" }).getByRole("button", { name: "Let Gus go" }).click();

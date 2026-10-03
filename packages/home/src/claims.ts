@@ -141,7 +141,7 @@ export class Claims {
   recover(session: number, id: number, by: string): Claim | null {
     const c = this.live(session).find((x) => x.id === id);
     if (!c) throw new ClaimError(`no live claim ${id}`);
-    if (!c.stale) throw new ClaimError(`${c.orb}'s claim is not stale: it can be taken over after ${Math.round(STALE_MS / 60_000)} minutes without a sign of him`);
+    if (!c.stale) throw new ClaimError(`${c.orb}'s claim is not stale: it can be taken over after ${Math.round(STALE_MS / 60_000)} minutes without a sign of ${c.orb}`);
     const now = this.#clock.now();
     tx(this.#db, () => {
       if (by === "you") this.#db.prepare("UPDATE claims SET finished = ? WHERE id = ?").run(now, id);

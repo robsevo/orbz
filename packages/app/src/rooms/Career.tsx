@@ -13,7 +13,7 @@ import { Radar } from "../ui/Radar.tsx";
 const head: CSSProperties = { font: "700 11px/16px var(--font)", letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)" };
 const small: CSSProperties = { font: "500 13px/18px var(--font)", color: "var(--text-3)", textWrap: "pretty", overflowWrap: "anywhere" };
 const button: CSSProperties = { font: "600 13px/18px var(--font)", border: 0, borderRadius: 10, padding: "8px 12px", background: "var(--fill)", color: "var(--text-1)", cursor: "pointer", minHeight: 34 };
-const SUGGEST: Record<string, string> = { promote: "Promote him", keep: "Keep going", retrain: "Some practice", "let go": "Give him work, or let him go" };
+const SUGGEST: Record<string, string> = { promote: "Ready for a promotion", keep: "Keep going", retrain: "Some practice", "let go": "Give work, or let go" };
 
 export function CareerRoom({ home, orb }: { home: Office | null; orb: Character }) {
   const [c, setC] = useState<CareerState | null>(null);
@@ -24,7 +24,7 @@ export function CareerRoom({ home, orb }: { home: Office | null; orb: Character 
     load();
     return home.watch({ event: (e) => void (e.orb === idOf(orb.name) && /^(xp\.|orb\.|promotion\.|habit\.|performance\.|board\.)/.test(e.type) && load()) });
   }, [home, orb.name]);
-  if (!home) return <p style={{ ...small, padding: "var(--s5)" }}>His career is the home's: open the app from your home to see it.</p>;
+  if (!home) return <p style={{ ...small, padding: "var(--s5)" }}>Careers are the home's: open the app from your home to see one.</p>;
   if (!c) return <p style={{ ...small, padding: "var(--s5)" }}>{said ?? "Loading…"}</p>;
   const areas = Object.entries(c.radar);
   const top = Math.max(1, ...areas.map(([, a]) => a.xp));
@@ -52,14 +52,14 @@ export function CareerRoom({ home, orb }: { home: Office | null; orb: Character 
           </div>
         )}
       </section>
-      <section aria-label="What he does" style={{ display: "grid", gap: 6 }}>
-        <span style={head}>What he does</span>
+      <section aria-label={`What ${orb.name} does`} style={{ display: "grid", gap: 6 }}>
+        <span style={head}>{`What ${orb.name} does`}</span>
         <Radar items={areas.map(([name, a]) => ({ name, value: Math.round((a.xp / top) * 5) }))} />
         {areas.every(([, a]) => a.xp === 0) && <span style={small}>Nothing yet: finished work you approve fills this in, by the kind of work it was.</span>}
       </section>
       {c.niches.length > 0 && (
-        <section aria-label="His niches" style={{ display: "grid", gap: 6 }}>
-          <span style={head}>His work leans on</span>
+        <section aria-label={`${orb.name}'s niches`} style={{ display: "grid", gap: 6 }}>
+          <span style={head}>{`${orb.name}'s work leans on`}</span>
           <span style={small}>{c.niches.map((n) => n.word).join(" · ")}</span>
         </section>
       )}

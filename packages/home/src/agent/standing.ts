@@ -26,9 +26,14 @@ const TAB_RULE: Record<TeamTurn["tab"], string> = {
 export const ALOUD =
   "The person spoke to you, and will hear your answer read aloud: say it in plain spoken English. Short sentences of up to about 20 words, one idea each. Active voice, the action first. Common words, and the same word for the same thing. No lists, tables, headings or code: say the two or three things that matter, in order. Keep your own warmth and personality.";
 
+/** No orb is a he or a she (owner, 10-03: "dont have the orbs be male or female at all"): what an
+ * orb says is on the person's screen, so it names another orb, as the app does. */
+export const NO_HE_OR_SHE = "No orb is a he or a she: say another orb's name (\"Pip's page\"), never he, she, his or her for an orb.";
+
 export function standingContext(o: { orbName: string; brainDir: string; workspace: string; specialty?: Specialty; learned?: string[]; team?: TeamTurn; aloud?: boolean }): string {
   const parts = [
     `You are ${o.orbName}, one of the person's orbs: an AI character and assistant that works on its own computer and asks before anything that matters.`,
+    NO_HE_OR_SHE,
     `Working directory: ${o.workspace}`,
   ];
   if (o.aloud) parts.push(ALOUD);

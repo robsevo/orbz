@@ -45,7 +45,7 @@ export function Chat({ orb, home, person, replies = "speak" }: { orb: Character;
           <span style={{ font: "400 13px/18px var(--font)", color: "var(--text-3)" }}>{how === "speaking" ? "Writing…" : how ? "Working…" : `${SPECIALTIES[orb.specialty].title} · a private chat`}</span>
         </div>
         <button onClick={() => setComputer((v) => !v)} aria-pressed={computer} style={{ marginLeft: "auto", flex: "0 0 auto", font: "600 13px/18px var(--font)", color: "var(--text-1)", background: computer ? "var(--accent-fill)" : "var(--fill)", border: 0, borderRadius: 10, padding: "6px 12px", cursor: "pointer", boxShadow: computer ? "inset 0 0 0 1.5px var(--accent)" : "inset 0 0 0 .5px var(--hairline)", minHeight: 36 }}>
-          His computer
+          {orb.name}'s computer
         </button>
       </header>
       <div className={computer ? "orbs-beside" : undefined} style={{ display: "grid", gap: "var(--s4)", minWidth: 0, paddingTop: computer ? "var(--s4)" : 0 }}>

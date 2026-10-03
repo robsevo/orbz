@@ -63,7 +63,7 @@ export function whoFits(events: EventLog, text: string, team: Member[]): { orb: 
     .map((m) => ({
       orb: m.id,
       name: m.name,
-      why: [area ? (covers(m) ? `${area} is his kind of work` : `${area} is not his kind of work`) : "the row names no kind of work", area ? `${xp.get(m.id)} XP in ${area}` : null, m.level].filter(Boolean).join("; "),
+      why: [area ? (covers(m) ? `${area} is ${m.name}'s kind of work` : `${area} is not ${m.name}'s kind of work`) : "the row names no kind of work", area ? `${xp.get(m.id)} XP in ${area}` : null, m.level].filter(Boolean).join("; "),
     }));
 }
 
@@ -106,8 +106,8 @@ export function orgTools(o: {
       name: "share_habit",
       label: "Passing a habit on",
       description:
-        "Mentoring: pass one of your habits (by its task) to a junior of your own kind. It becomes his, under his own rules; yours stays yours. Name no task to see your habits. The person says yes first.",
-      parameters: { type: "object", properties: { to: { type: "string", description: "His name." }, task: { type: "string" } }, required: ["to"], additionalProperties: false },
+        "Mentoring: pass one of your habits (by its task) to a junior of your own kind. It becomes the junior's, under the junior's own rules; yours stays yours. Name no task to see your habits. The person says yes first.",
+      parameters: { type: "object", properties: { to: { type: "string", description: "The junior's name." }, task: { type: "string" } }, required: ["to"], additionalProperties: false },
       describe: (a) => `pass the habit ${str(a.task)} on to ${str(a.to)}`,
       decision: "ask",
       precheck: (a, ctx) => {
@@ -127,7 +127,7 @@ export function orgTools(o: {
         const them = o.office().find((m) => m.name.toLowerCase() === str(a.to).trim().toLowerCase())!;
         const got = o.share(ctx.orb, them.id, str(a.task));
         ctx.note?.(`${nameOf(ctx.orb)} passed a habit to ${them.name}: ${got.task}.`, { shared: got.task });
-        return { content: `Passed on: ${them.name} has it now, as ${got.task}, under his own rules.` };
+        return { content: `Passed on: ${them.name} has it now, as ${got.task}, under ${them.name}'s own rules.` };
       },
     },
   ];

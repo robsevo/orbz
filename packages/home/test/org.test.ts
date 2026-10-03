@@ -33,7 +33,7 @@ test("rows go to the best fit: its kind of work first, then the XP earned there,
   const team = [m("wren", "writing", "Senior", 1), m("ada", "frontend", "Junior", 2), m("bea", "frontend", "Senior", 3), m("cy", "data", "Mid", 4)];
   assert.deepEqual(whoFits(home.events, "the landing page's layout and CSS", team).map((r) => r.orb).slice(0, 2), ["bea", "ada"], "frontend work: the frontend orbs, the Senior first");
   assert.equal(whoFits(home.events, "the landing page's numbers, in sales.csv", team)[0]!.orb, "cy", "a file's kind counts first, before the words");
-  assert.match(whoFits(home.events, "the landing page", team)[0]!.why, /frontend is his kind of work/);
+  assert.match(whoFits(home.events, "the landing page", team)[0]!.why, /frontend is Bea's kind of work/);
   const leads = leadsOf([...team, m("dee", "frontend", "Senior", 0)]);
   assert.equal(leads.bySpecialty.get("frontend"), "dee", "two Seniors of a kind: the first to join leads");
   assert.equal(leads.chief, null);
@@ -103,7 +103,7 @@ test("let go with a hand-off: his habits answer under their new owner; rehired, 
   assert.deepEqual(r.handed, ["bea|trigger:t1|{subject}"]);
   assert.deepEqual(home.letGo("ada", "bea").handed, [], "let go twice: nothing handed twice");
   assert.ok(promotedFor(home.events, home.dataDir, "bea", "bea|trigger:t1|{subject}"), "the habit answers Bea's task now");
-  assert.throws(() => home.letGo("bea", "ada"), /cannot take his habits/, "an orb let go takes nothing");
+  assert.throws(() => home.letGo("bea", "ada"), /cannot take those habits/, "an orb let go takes nothing");
   home.inbox.rehire("ada");
   const back = home.inbox.orb("ada")!;
   assert.deepEqual({ ...back, status: before.orb.status }, before.orb, "rehired: the same orb, field by field");

@@ -194,7 +194,7 @@ export class Notices {
       });
     } else if (e.type === "performance.card" && e.orb) {
       // his week (PLAN 5.5): a suggestion and its evidence, for you; it never acts
-      const SAY: Record<string, string> = { promote: "promote him", keep: "keep going", retrain: "some practice", "let go": "give him work, or let him go" };
+      const SAY: Record<string, string> = { promote: "ready for a promotion", keep: "keep going", retrain: "some practice", "let go": "give work, or let go" };
       this.#settle("kind = 'performance' AND orb = ?", e.orb);
       this.#add(`performance:${e.seq}`, { kind: "performance", orb: e.orb, conversation: null, title: `${this.#nameOf(e.orb)}'s week: ${SAY[String(e.data.suggest)] ?? String(e.data.suggest)}`, detail: String(e.data.why ?? ""), due: null });
     } else if ((e.type === "orb.promoted" || e.type === "promotion.declined") && e.orb) {
