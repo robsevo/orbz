@@ -28,15 +28,35 @@ function noise(x: number, seed: number): number {
 }
 const bump = (x: number): number => (x <= 0 || x >= 1 ? 0 : Math.sin(Math.PI * x) ** 2); // 0 → 1 → 0
 
-/** 0..1 blink: closed for a moment every 2.5-6 s, on the orb's own rhythm. */
+/** 0..1 blink: closed for a moment every 2.5-6 s, on the orb's own rhythm; now and then twice in a
+ * row, the way a face does. */
 function blinkAt(t: number, seed: number): number {
   let at = hash(seed) * 3;
   for (let k = 0; at <= t + 1; k++) {
     const d = t - at;
     if (d >= 0 && d < 0.22) return bump(d / 0.22);
+    if (hash(seed * 11.3 + k) < 0.2 && d >= 0.3 && d < 0.5) return bump((d - 0.3) / 0.2);
     at += 2.5 + 3.5 * hash(seed * 7.3 + k);
   }
   return 0;
+}
+
+/** Where his eyes go on their own between the slow wander: a quick glance to a new spot every two
+ * or three seconds, held there, and now and then back to you (owner, 10-04: "have them feel just a
+ * little more alive"; the wander alone read as a daydream). One slot at a time, so it costs the same
+ * an hour in. */
+function glanceAt(t: number, seed: number, reach: number): [number, number] {
+  const P = 2.4;
+  const u = t / P + hash(seed * 2.3);
+  const k = Math.floor(u);
+  const into = (u - k) * P;
+  const when = 0.3 + hash(seed * 4.1 + k) * 1.5; // when in this slot the eyes move
+  const spot = (j: number): [number, number] => (hash(seed * 6.7 + j) < 0.3 ? [0, 0] : [0.4 * reach * (hash(seed * 8.3 + j) - 0.5), 0.22 * reach * (hash(seed * 9.9 + j) - 0.5)]);
+  const a = spot(k - 1);
+  const b = spot(k);
+  const x = Math.min(1, Math.max(0, (into - when) / 0.11));
+  const e = x * x * (3 - 2 * x);
+  return [a[0] + (b[0] - a[0]) * e, a[1] + (b[1] - a[1]) * e];
 }
 
 /** How a personality moves when left alone: which fidgets, how often, how deep he breathes, how far he sways. */
@@ -46,7 +66,8 @@ const DEFAULT_MOTION: Motion = { kinds: ["look", "wiggle", "jelly", "hop", "nod"
 /** The fidgets an idle orb does on his own, on his personality's rhythm. */
 export function fidgets(seed: number, until: number, m: Motion = DEFAULT_MOTION): Play[] {
   const out: Play[] = [];
-  const [lo, hi] = m.every;
+  // a little more often than each personality's rhythm says (owner, 10-04: "a little more alive")
+  const [lo, hi] = [m.every[0] * 0.85, m.every[1] * 0.85];
   let at = 1.5 + hash(seed * 3.1) * lo;
   for (let k = 0; at < until; k++) {
     out.push({ gesture: m.kinds[Math.floor(hash(seed * 5.7 + k) * m.kinds.length)]!, at });
@@ -142,6 +163,8 @@ export type LifeInput = {
   pointer?: [number, number] | null;
   /** A still (a thumbnail): eyes open, no gesture, nothing that would catch him mid-move. */
   still?: boolean;
+  /** A still that holds one moment of a gesture instead (the app's icon: a wink, happy eyes), `into` seconds in. */
+  pose?: { gesture: Gesture; into: number };
 };
 
 export function lifeFrame(o: LifeInput, t: number): OrbFrame {
@@ -155,11 +178,15 @@ export function lifeFrame(o: LifeInput, t: number): OrbFrame {
     breath: Math.sin(t * 1.15 * m.breath + s * 4) * (0.7 + 0.3 * noise(t * 0.2, s)),
     blink: blinkAt(t, s),
     morph: 0.25 + 0.6 * noise(t * 0.07, s + 3),
-    gaze: [0.35 * (noise(t * 0.11, s + 5) - 0.5), 0.25 * (noise(t * 0.09, s + 9) - 0.5)],
+    gaze: (() => {
+      const g = glanceAt(t, s, Math.min(1.2, 0.7 + 0.3 * m.sway));
+      return [0.22 * (noise(t * 0.11, s + 5) - 0.5) + g[0], 0.16 * (noise(t * 0.09, s + 9) - 0.5) + g[1]] as [number, number];
+    })(),
     sway: [1.2 * m.sway * (noise(t * 0.13, s + 11) - 0.5), 0.8 * m.sway * (noise(t * 0.17, s + 17) - 0.5)],
     happy: 0, sleepy: 0, yawn: 0, surprise: 0, tilt: 0.06 * (noise(t * 0.05, s + 23) - 0.5), mad: 0, jiggle: 0,
     sat: o.sat ?? 1, val: o.val ?? 1, hue2: o.turn2 ?? o.turn, grad: o.grad ?? 0, goo: o.goo, squash: 0, wink: 0,
   };
+  f.sway[1] -= 0.6 * f.breath; // he rises a touch as he breathes in
   if (o.pointer) {
     // he looks at you, and leans a little toward you
     const [px, py] = o.pointer;
@@ -169,7 +196,9 @@ export function lifeFrame(o: LifeInput, t: number): OrbFrame {
   }
   if (o.still) {
     // a portrait: the same pose for every orb, so a picker compares the choices and not the moment
-    return Object.assign(f, { blink: 0, breath: 0, morph: 0.55, gaze: [0, 0], sway: [0, 0], tilt: 0 });
+    Object.assign(f, { blink: 0, breath: 0, morph: 0.55, gaze: [0, 0], sway: [0, 0], tilt: 0 });
+    if (o.pose) apply(f, o.pose.gesture, o.pose.into);
+    return f;
   }
   for (const p of o.plays ?? []) apply(f, p.gesture, t - p.at);
   return f;

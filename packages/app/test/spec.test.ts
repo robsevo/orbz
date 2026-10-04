@@ -3,10 +3,10 @@
 // the sheet stays in range, Ash's bean keeps his numbers, and there is no mouth anywhere.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { HUES, MATERIALS } from "../src/design/tokens.ts";
+import { type HueName, HUES, MATERIALS } from "../src/design/tokens.ts";
 import { ORB_FS } from "../src/orb/glsl.ts";
 import {
-  ASH, EYES, FAMILIES, FINISHES, GLASSES, GRADES, hatFit, HATS, isShades, lookOf, NOT_OURS, offered, outline, PEOPLE_NAMES, PERSONALITIES, sane, SHAPES, sheetOf, SPECIALTIES, surprise, voice, VOICES, wearing, withPersonality,
+  ASH, EYES, FAMILIES, FINISHES, GLASSES, GRADES, hatFit, HATS, inHarmony, isShades, lookOf, NOT_OURS, offered, outline, PEOPLE_NAMES, PERSONALITIES, sane, SHAPES, sheetOf, SPECIALTIES, surprise, voice, VOICES, wearing, wheelSteps, withPersonality,
   type Family, type GlassesName, type HatName, type PersonalityName, type ShapeName, type SpecialtyName,
 } from "../src/orb/spec.ts";
 
@@ -17,6 +17,29 @@ test("names: people's names from our list, never the Dots film's own or an assis
     assert.ok(PEOPLE_NAMES.includes(n) && !NOT_OURS.includes(n), `seed ${seed} named its orb ${n}`);
   }
   assert.ok(new Set(Array.from({ length: 200 }, (_, i) => surprise(i).name)).size > 40, "and plenty of them, not the same few");
+});
+
+/** What is wrong with a list of names: a repeat, a name that is not one plain word, one too long for a
+ * title, or one that is also a colour, a finish, a shape or a personality's (it would read as a label). */
+function nameProblems(names: readonly string[]): string[] {
+  const words = new Set([...HUES.map((h) => h.name), ...Object.keys(FINISHES), ...Object.keys(SHAPES), ...Object.keys(PERSONALITIES)].map((w) => w.toLowerCase()));
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const n of names) {
+    const k = n.toLowerCase();
+    if (seen.has(k)) out.push(`${n} twice`);
+    seen.add(k);
+    if (!/^\p{Lu}\p{Ll}+$/u.test(n)) out.push(`${n} is not one plain word`);
+    if (n.length > 9) out.push(`${n} is too long for a title`);
+    if (words.has(k)) out.push(`${n} is also a look's name`);
+  }
+  return out;
+}
+test("names: hundreds to roll through, each once, plain, short, and never a look's name", () => {
+  assert.deepEqual(nameProblems(PEOPLE_NAMES), []);
+  assert.ok(PEOPLE_NAMES.length >= 500, `only ${PEOPLE_NAMES.length} names to roll`);
+  // controls: each kind of problem is caught
+  assert.deepEqual(nameProblems(["Milo", "Milo", "Mary Ann", "Bartholomew", "Coral"]), ["Milo twice", "Mary Ann is not one plain word", "Bartholomew is too long for a title", "Coral is also a look's name"]);
 });
 
 test("voices: every one has a name of ours; no Kokoro label survives, and none is a fallback", () => {
@@ -49,13 +72,14 @@ test("a personality brings what suits it: a voice from its list, its eyes, its s
   assert.equal(withPersonality(ASH, "steady").voice, "ash", "Ash himself keeps his");
 });
 
-test("the character sheet: traits and leanings in 1..5, a title from both, the article right", () => {
+test("the character sheet: its traits are its DNA, leanings in 1..5, a title from both, the article right", () => {
   for (let seed = 0; seed < 100; seed++) {
     const c = surprise(seed);
     const sh = sheetOf(c);
-    assert.equal(sh.traits.length, 5);
+    assert.equal(sh.traits.length, 7);
     assert.equal(sh.leans.length, 8);
-    for (const t of [...sh.traits, ...sh.leans]) assert.ok(t.value >= 1 && t.value <= 5 && Number.isInteger(t.value), `${t.name} ${t.value}`);
+    assert.deepEqual(sh.traits, sh.dna.traits, "the sheet's traits are the DNA's");
+    for (const t of sh.leans) assert.ok(t.value >= 1 && t.value <= 5 && Number.isInteger(t.value), `${t.name} ${t.value}`);
     assert.equal(sh.title, `the ${PERSONALITIES[c.personality].label} ${SPECIALTIES[c.specialty].title}`);
     assert.doesNotMatch(sh.bio, /\ba [aeiou]/i, sh.bio);
   }
@@ -241,4 +265,39 @@ test("no pow of a base that can dip below zero, and a solid hat replaces what is
   assert.deepEqual(bases.filter((b) => !safe(b)), [], "a pow's base that can go below zero");
   assert.ok(!safe("1.0 - abs(N.y)") && !safe("(a - 0.35)/0.55"), "control: the old bases are caught");
   assert.match(code, /col = aa >= 1\.0 \? c : mix\(col, c, aa\);/, "a solid hat replaces what is under it, a NaN too");
+});
+
+test("a roll's colours go together on the colour wheel, accessories too, and every kind turns up", () => {
+  /** What clashes in an orb's colours: a gradient that is not analogous, an accessory off the scheme. */
+  const clashes = (c: { hue: HueName; hue2: HueName | null; hatHue?: string | null; glassesHue?: string | null }): string[] => {
+    const out: string[] = [];
+    if (c.hue2 && !(inHarmony(c.hue, c.hue2) && wheelSteps(c.hue, c.hue2) <= 3)) out.push(`gradient ${c.hue} to ${c.hue2}`);
+    for (const a of [c.hatHue, c.glassesHue]) if (a && a !== "white" && a !== "black" && !inHarmony(c.hue, a as HueName)) out.push(`${a} on ${c.hue}`);
+    return out;
+  };
+  const seen = { hat: new Set<string>(), glasses: new Set<string>() };
+  for (let seed = 0; seed < 600; seed++) {
+    const c = surprise(seed);
+    assert.deepEqual(clashes(c), [], `seed ${seed}`);
+    if (c.hat === "none") assert.equal(c.hatHue, null, "no hat, no hat colour");
+    seen.hat.add(c.hatHue === null ? "own" : c.hatHue === c.hue ? "his" : c.hatHue === "white" || c.hatHue === "black" ? "neutral" : "partner");
+    seen.glasses.add(c.glassesHue === null ? "own" : c.glassesHue === c.hue ? "his" : c.glassesHue === "white" || c.glassesHue === "black" ? "neutral" : "partner");
+  }
+  assert.deepEqual([...seen.hat].sort(), ["his", "neutral", "own", "partner"], "a hat takes every kind of colour");
+  assert.deepEqual([...seen.glasses].sort(), ["his", "neutral", "own", "partner"], "and so do the glasses");
+  // controls: a muddy gradient, an accessory five steps off
+  assert.deepEqual(clashes({ hue: "azure", hue2: "coral" }), ["gradient azure to coral"]);
+  assert.deepEqual(clashes({ hue: "azure", hue2: null, hatHue: HUES[5]!.name }), [`${HUES[5]!.name} on azure`]);
+  assert.ok(inHarmony("azure", HUES[12]!.name) && inHarmony("azure", HUES[8]!.name), "across, and a third round, go together");
+});
+
+test("a roll for the first orb is always an assistant; the dice decide the rest as they would", () => {
+  for (let seed = 0; seed < 300; seed++) {
+    const first = surprise(seed, { specialty: "assistant" });
+    const any = surprise(seed);
+    assert.equal(first.specialty, "assistant");
+    assert.equal(first.hue, any.hue, "the same dice: the same colour");
+    assert.equal(first.name, any.name, "and name");
+  }
+  assert.ok(new Set(Array.from({ length: 300 }, (_, s) => surprise(s).specialty)).size > 20, "control: without it, the dice pick from all of them");
 });

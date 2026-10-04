@@ -40,7 +40,8 @@ export type ToolContext = {
   /** Puts a line in the conversation for everyone in it (a session's "✓ Agreed", PLAN 2.9). */
   note?: (text: string, meta: Record<string, unknown>) => void;
   /** Keeps a bill or a reminder for the person, for the notification centre (PLAN 2.11). */
-  remind?: (r: { kind: "bill" | "reminder"; title: string; due: string; amount?: string | null; aheadDays?: number }) => { id: number; comesUpAt: number };
+  /** Keeps a reminder; `keeper` names the person's assistant when it was handed to them (the planning is theirs). */
+  remind?: (r: { kind: "bill" | "reminder"; title: string; due: string; amount?: string | null; aheadDays?: number }) => { id: number; comesUpAt: number; keeper?: string };
   /** The bills and reminders kept, and moving one (only once the person approves: the floor). */
   reminders?: () => { id: number; kind: string; title: string; due: string; amount: string | null }[];
   moveReminder?: (id: number, due: string) => { id: number; due: string };
@@ -437,7 +438,10 @@ export const TOOLS: ToolDef[] = [
       try {
         const kind = s(a.kind) === "bill" ? "bill" : "reminder";
         const r = ctx.remind({ kind, title: s(a.title), due: s(a.due), amount: typeof a.amount === "string" ? a.amount : null, ...(typeof a.ahead_days === "number" && { aheadDays: a.ahead_days }) });
-        return { content: `Kept (${kind} ${r.id}). It comes up ${new Date(r.comesUpAt).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}.` };
+        const when = new Date(r.comesUpAt).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
+        // handed to the person's assistant, who plans everything: say so, so the person hears who has it
+        if (r.keeper) return { content: `Handed to ${r.keeper}, the person's assistant, who keeps their plans (${kind} ${r.id}). It comes up ${when}. Tell the person ${r.keeper} has it.` };
+        return { content: `Kept (${kind} ${r.id}). It comes up ${when}.` };
       } catch (e) {
         return { content: e instanceof Error ? e.message : String(e), isError: true };
       }

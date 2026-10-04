@@ -108,3 +108,30 @@ test("through the door: what is out, putting one away for every device, putting 
   assert.deepEqual((await call("GET", "/notices")).json.notices, []);
   assert.equal(((await call("GET", "/reminders")).json.reminders as unknown[]).length, 3, "the reminders are still kept (the calendar's)");
 });
+
+test("an orb's reminder is handed to the person's assistant, who plans everything; it says so", async (t) => {
+  // owner, 10-04: "hand off the planning notif to the persons assistant orb, which should always be the case, even in the code"
+  const h = await agentHome(t, [
+    { calls: [{ name: "remind", args: { kind: "reminder", title: "Water on for dinner", due: "2030-03-20T18:15" } }] },
+    { chunks: ["Maya has it: water on at 6:15."] },
+  ]);
+  h.home.inbox.addOrb("maya", "Maya", "assistant");
+  h.home.inbox.addOrb("basil", "Basil", "chef");
+  h.home.inbox.send("basil", "chat:basil", "remind me to start dinner at 6:15 on 20 March 2030");
+  for (let i = 0; i < 20 && h.model.agent.length < 2; i++) {
+    await h.home.inbox.idle();
+    await new Promise((r) => setTimeout(r, 30));
+  }
+  assert.deepEqual(h.home.notices.reminders().map((r) => [r.orb, r.title, r.conversation]), [["maya", "Water on for dinner", "chat:basil"]], "kept by Maya, made in Basil's chat");
+  const said = h.home.conversations.list("chat:basil").find((m) => m.role === "tool")!.content;
+  assert.match(said, /^Handed to Maya, the person's assistant/);
+  // who keeps what: the assistant its own; an accountant its bills, but not its reminders; with no assistant, the orb itself
+  h.home.inbox.addOrb("penny", "Penny", "accountant");
+  assert.equal(h.home.plannerFor("maya", "reminder").id, "maya");
+  assert.equal(h.home.plannerFor("penny", "bill").id, "penny", "the accountant holds the bills");
+  assert.equal(h.home.plannerFor("penny", "reminder").id, "maya", "and hands over the rest");
+  assert.equal(h.home.plannerFor("basil", "bill").id, "maya");
+  await h.home.letGo("maya");
+  assert.deepEqual(h.home.inbox.orbs().filter((o) => o.specialty === "assistant"), [], "Maya let go");
+  assert.equal(h.home.plannerFor("basil", "reminder").id, "basil", "control: with no assistant here, the orb keeps it");
+});

@@ -200,6 +200,11 @@ test("the first of his kind starts as the Senior, the next of that kind a Junior
     await page.getByRole("tab", { name: "Specialty" }).click();
     await page.getByRole("button", { name: new RegExp(`^${title}`) }).click();
   };
+  // the first orb is the assistant (owner, 10-04): hired first, the Senior of its kind
+  await page.getByText("Starts as the Senior: your first Assistant", { exact: true }).waitFor();
+  await page.getByRole("textbox", { name: "Name" }).fill("Maya");
+  await page.getByRole("button", { name: "Create Maya" }).click();
+  await page.getByRole("heading", { name: "Maya" }).waitFor();
   await page.getByRole("button", { name: "New orb" }).first().click();
   await pick("Frontend Builder");
   await page.getByText("Starts as the Senior: your first Frontend Builder", { exact: true }).waitFor();
@@ -217,4 +222,35 @@ test("the first of his kind starts as the Senior, the next of that kind a Junior
   await page.getByText("Starts as the Senior: your first All-Rounder", { exact: true }).waitFor();
   assert.deepEqual(await measure(page), [], "the Senior's line fits a phone too");
   await page.close();
+});
+
+test("the first orb is the assistant: every roll is one, and it is the one offered; a later orb any (owner, 10-04)", { skip, timeout: 240_000 }, async () => {
+  const page = await open("desk"); // nothing in the office yet: the creator is on the first orb
+  try {
+    const said = () => page.locator("[data-cradle] > p").innerText();
+    for (let i = 0; i < 6; i++) {
+      await page.getByRole("button", { name: /Roll everything/ }).click();
+      await page.waitForTimeout(120);
+      assert.match(await said(), /Assistant\./, `roll ${i}: ${await said()}`);
+    }
+    await page.getByRole("tab", { name: "Specialty" }).click();
+    assert.equal(await page.locator("[data-first-assistant] button").count(), 1, "only the assistant is offered");
+    await page.getByRole("button", { name: "Roll specialty" }).click();
+    assert.match(await said(), /Assistant\./, "its own die too");
+    // hire it; the next orb may be anything
+    await page.getByRole("textbox", { name: "Name" }).fill("Maya");
+    await page.getByRole("button", { name: "Create Maya" }).click();
+    await page.getByRole("button", { name: "New orb" }).first().click();
+    await page.getByRole("tab", { name: "Specialty" }).click();
+    assert.equal(await page.locator("[data-first-assistant]").count(), 0, "control: a later orb is offered everything");
+    const titles = new Set<string>();
+    for (let i = 0; i < 6; i++) {
+      await page.getByRole("button", { name: /Roll everything/ }).click();
+      await page.waitForTimeout(120);
+      titles.add((await said()).replace(/^.*?, the \w+ /, "").split(".")[0]!);
+    }
+    assert.ok([...titles].some((t) => t !== "Assistant"), `control: later rolls are not all assistants (${[...titles].join(", ")})`);
+  } finally {
+    await page.close();
+  }
 });

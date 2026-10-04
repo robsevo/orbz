@@ -15,7 +15,7 @@ import { build } from "vite";
 import type { Browser } from "playwright-core";
 import { findChrome, launch, serveDir } from "./harness.ts";
 import { PERSONALITIES, VOICES } from "../src/orb/spec.ts";
-import { sampleOf } from "../src/orb/preview.ts";
+import { sampleOf, takesOf } from "../src/orb/preview.ts";
 
 const APP = fileURLToPath(new URL("..", import.meta.url));
 const skip = findChrome() ? false : "no Chromium on this machine";
@@ -50,6 +50,20 @@ test("every voice has its sample: a short clip, its line heard in it when it was
     assert.ok(heard[v.id]?.kept && heard[v.id]!.alike >= 0.6, `${v.id}: heard saying its line (${JSON.stringify(heard[v.id])})`);
   }
   assert.deepEqual(missing, [], "a voice without its sample is a press that says nothing");
+  // its other takes (owner, 10-04: "make the voices say something else each time"): each a clip, each heard
+  // saying its own line, no two the same line
+  for (const v of VOICES.filter((x) => x.kokoro !== null)) {
+    const lines = new Set<string>();
+    for (let t = 0; t < takesOf(v.id); t++) {
+      const file = sampleOf(v.id, t);
+      assert.ok(existsSync(join(APP, "public", file)), `${file} is listed and there`);
+      const key = t === 0 ? v.id : `${v.id}#${/-(\d+)\.mp3$/.exec(file)![1]}`;
+      assert.ok(heard[key]?.kept && heard[key]!.alike >= 0.6, `${file}: heard saying its line (${JSON.stringify(heard[key])})`);
+      lines.add(heard[key]!.line);
+    }
+    assert.equal(lines.size, takesOf(v.id), `${v.id}'s takes each say something else`);
+  }
+  assert.ok(takesOf("af_heart") >= 4 && takesOf("ash") >= 4, "an English voice has several takes");
   assert.ok(!existsSync(join(APP, "public", sampleOf("silent"))), "Silent says nothing");
 });
 
@@ -87,13 +101,19 @@ test("pressing a voice plays it at his pace; the next press stops it; Silent pla
     assert.equal(first!.pitch, true, "the pitch kept");
     assert.equal((await served).status(), 200, "and the sample is there to play");
 
+    // pressed again, it says something else: its next take
+    await fable.click();
+    const second = (await played()).at(-1)!.src.split("/").at(-1);
+    assert.equal(second, sampleOf("bm_fable", 1).split("/").at(-1), "the second press, the second take");
+    assert.notEqual(second, "bm_fable.mp3", "not the same line again");
+
     await page.locator('button[data-voice="af_heart"]').first().click();
-    assert.deepEqual((await played()).map((p) => p.src.split("/").at(-1)), ["bm_fable.mp3", "af_heart.mp3"]);
+    assert.deepEqual((await played()).map((p) => p.src.split("/").at(-1)), ["bm_fable.mp3", second, "af_heart.mp3"]);
     const paused = await page.evaluate(() => (globalThis as unknown as { __paused: string[] }).__paused);
     assert.ok(paused.some((s) => s.endsWith("/voices/bm_fable.mp3")), "the first stopped when the next began");
 
     await page.locator('button[data-voice="silent"]').first().click();
-    assert.equal((await played()).length, 2, "Silent plays nothing");
+    assert.equal((await played()).length, 3, "Silent plays nothing");
   } finally {
     await page.close();
   }

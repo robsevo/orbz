@@ -6,6 +6,7 @@
 // The starter shapes are our own; the owner names and redraws them. No mouth on any of them, no
 // cheeks (owner, 2026-09-24): the eyes carry every mood.
 import { HUES, MATERIALS, type HueName, type Material } from "../design/tokens.ts";
+import { type Dna, dnaOf, dnaSays } from "./dna.ts";
 import { ORB_TURNS } from "./hues.ts";
 import type { Gesture } from "./life.ts";
 import type { OrbLook } from "./renderer.ts";
@@ -304,9 +305,58 @@ export const PEOPLE_NAMES = [
   "Oscar", "Luna", "Daisy", "Milo", "Theo", "Hazel", "Rosie", "Benny", "June", "Nico", "Gus", "Ada", "Arlo", "Bea", "Cal", "Clara",
   "Dev", "Eddie", "Elsie", "Ezra", "Faye", "Finn", "Frankie", "Georgie", "Hugo", "Ines", "Isla", "Ivy", "Jonah", "Kai", "Kit",
   "Leo", "Lola", "Mabel", "Marco", "Maya", "Mina", "Nell", "Noah", "Nora", "Olive", "Omar", "Otis", "Penny", "Poppy", "Priya",
-  "Quinn", "Raffi", "Remy", "Ruby", "Rufus", "Sami", "Sasha", "Stella", "Teddy", "Tess", "Toby", "Uma", "Vera", "Wes", "Willa",
+  "Quinn", "Raffi", "Remy", "Ruby", "Rufus", "Sami", "Sasha", "Stella", "Teddy0", "Tess", "Toby", "Uma", "Vera", "Wes", "Willa",
   "Yara", "Zoe", "Zara", "Aiko", "Amara", "Anya", "Bodhi", "Cleo", "Dara", "Elio", "Esme", "Iggy0", "Juno0", "Kenji", "Lena",
   "Lou", "Mateo", "Mei", "Nadia", "Pia", "Rafa", "Rio", "Sol0", "Tariq", "Wren", "Yuki", "Zeke", "Ines0", "Basil", "Cosmo", "Dot0",
+  // many more to roll through (owner, 10-04: "more random addicting names to play with here when
+  // rolling. many more lol"): still people's names, and the nicknames people really go by; none a
+  // colour, a finish, a shape or a personality here (a "Coral" in coral reads as a label), none a
+  // famous character's, and at most 9 letters, so "Barnaby's computer" still fits its title
+  // short and sweet
+  "Abe", "Alfie", "Archie", "Artie", "Bert", "Bertie", "Bibi", "Billie", "Bo", "Bobbie", "Bonnie", "Bram",
+  "Cass", "Charlie", "Chester", "Connie", "Dex", "Dolly", "Dottie", "Edie", "Effie", "Ellie", "Elmer", "Etta",
+  "Evie", "Fitz", "Flo", "Franny", "Freddie", "Gigi", "Gil", "Goldie", "Hank", "Hattie", "Herbie", "Hettie",
+  "Ike", "Jack", "Jem", "Jo", "Joey", "Josie", "Kip", "Lettie", "Lizzie", "Lottie", "Lucy", "Lulu", "Mack",
+  "Maisie", "Mattie", "Millie", "Mimi", "Mo", "Moe", "Nancy", "Ned", "Nellie", "Ollie", "Ozzie", "Patsy",
+  "Peggy", "Pip", "Pippa", "Polly", "Queenie", "Reggie", "Ronnie", "Rudy", "Sadie", "Sally", "Sid", "Sonny",
+  "Stan", "Suzy", "Tad", "Tilly", "Tommy", "Trixie", "Vic", "Wally", "Walt", "Zed",
+  // grandparents' names, back again
+  "Agatha", "Agnes", "Albert", "Alma", "Ambrose", "Archer", "Augusta", "Augustus", "Barnaby", "Beatrix",
+  "Bernard", "Bernice", "Beryl", "Blanche", "Cecil", "Clarence", "Clement", "Cora", "Cornelius", "Cyril",
+  "Delphine", "Dolores", "Doris", "Dorothy", "Dudley", "Edgar", "Edith", "Edmund", "Eleanor", "Elspeth",
+  "Enid", "Ernest", "Estelle", "Esther", "Ethel", "Eugene", "Eunice", "Fletcher", "Florence", "Georgina",
+  "Gertrude", "Gilbert", "Gladys", "Greta", "Harriet", "Hector", "Hester", "Hilda", "Horace", "Humphrey",
+  "Ida", "Imogen", "Irving", "Jasper", "Leopold", "Lillian", "Lionel", "Lorna", "Louisa", "Mae", "Magnus",
+  "Marjorie", "Matilda", "Maude", "Mavis", "Mervyn", "Mildred", "Montague", "Mortimer", "Muriel", "Murray",
+  "Myrtle", "Nigel", "Nina", "Norbert", "Odette", "Opal", "Oswald", "Otto", "Percy", "Phyllis", "Prudence",
+  "Quentin", "Reginald", "Rosalie", "Rosalind", "Rupert", "Ruth", "Silas", "Stanley", "Sybil", "Sylvia",
+  "Thaddeus", "Thelma", "Theodora", "Tobias", "Vernon", "Vivian", "Walter", "Wilfred", "Winifred", "Winston",
+  "Yvonne",
+  // from outside
+  "Alder", "Aspen", "Autumn", "Bay", "Birdie", "Briar", "Briony", "Brook", "Calla", "Cedar", "Dahlia", "Ember",
+  "Fern", "Flora", "Forest", "Gale", "Garnet", "Heath", "Heather", "Holly", "Indigo", "Jasmine", "Juniper",
+  "Lark", "Laurel", "Lily", "Linden", "Magnolia", "Maple", "Marlow", "Meadow", "Moss", "Oakley", "Rain",
+  "Reed", "River", "Rowan", "Saffron", "Sage", "Skye", "Sorrel", "Storm", "Sunny", "Tansy", "Willow", "Wynn",
+  "Zinnia",
+  // from everywhere
+  "Aarav", "Abebe", "Adaeze", "Aiyana", "Akira", "Alejo", "Amani", "Amir", "Ananya", "Anika", "Anouk", "Ansel",
+  "Aoi", "Arjun", "Asha", "Astrid", "Ayla", "Aziz", "Bao", "Bastien", "Beto", "Bilal", "Bjorn", "Bodil",
+  "Bruno", "Cato", "Celeste", "Chiara", "Chidi", "Dagny", "Dario", "Darius", "Diego", "Dmitri", "Eero", "Elif",
+  "Emeka", "Emil", "Emre", "Enzo", "Esra", "Ezio", "Farid", "Femi", "Fiona", "Freya", "Gael", "Gideon", "Gita",
+  "Giulia", "Goran", "Gustavo", "Hamid", "Hamza", "Hana", "Hao", "Hiro", "Idris", "Ilaria", "Ilse", "Ilya",
+  "Imani", "Ingrid", "Inti", "Ira", "Isak", "Jalen", "Jaya", "Jiro", "Joon", "Jun", "Kaito", "Kalani", "Kamal",
+  "Kavi", "Keiko", "Kemal", "Kenzo", "Koa", "Kofi", "Laila", "Lan", "Lars", "Leila", "Lev", "Lior", "Lorenzo",
+  "Luca", "Lucia", "Lupe", "Mako", "Malik", "Mara", "Maren", "Mateus", "Matteo", "Mehmet", "Mika", "Mira",
+  "Nalu", "Nami", "Nia", "Nikolai", "Nilo", "Nils", "Noor", "Nuno", "Odile", "Ola", "Olek", "Oona", "Oren",
+  "Pablo", "Paco", "Paz", "Petra", "Pilar", "Piotr", "Pita", "Quim", "Rangi", "Rania", "Ravi", "Ren", "Reza",
+  "Rohan", "Rosa", "Rumi", "Sakura", "Santi", "Sanne", "Selin", "Senna", "Shira", "Suki", "Sven", "Tamsin",
+  "Tane", "Taro", "Tavi", "Teo", "Teodor", "Tiago", "Tomas", "Tui", "Ulla", "Uri", "Vanja", "Vito", "Wei",
+  "Wiremu", "Xavi", "Xiu", "Yael", "Yaro", "Yosef", "Yui", "Yusuf", "Zaid", "Zofia", "Zola", "Zuri",
+  // the nicknames people go by
+  "Ace", "Biff", "Bix", "Boo", "Bubba", "Bud", "Buster", "Butch", "Chip", "Chuck", "Dash", "Dewey", "Didi",
+  "Digby", "Dizzy", "Duke", "Fifi", "Flick", "Fritz", "Gabby", "Ginger", "Hap", "Huck", "Jazz", "Jinx", "Juju",
+  "Lefty", "Lolo", "Lux", "Mitzi", "Monty", "Moxie", "Murphy", "Nacho", "Nibs", "Paddy", "Peaches", "Rocco",
+  "Scout", "Skip", "Smitty", "Spud", "Taffy", "Tex", "Tito", "Tug", "Ziggy",
 ].filter((n) => !/\d/.test(n)); // (a trailing digit marks a name left out on purpose, so it is not added back by accident)
 
 /** Names an orb never gets: the Dots film's own characters, and assistants people already know. */
@@ -505,12 +555,9 @@ export type SpecialtyName = keyof typeof SPECIALTIES;
 
 // ── the character sheet ────────────────────────────────────────────────────────────────────────
 /** Traits, 1..5: flavour from his personality (and a little of his seed), shown as bars. */
-export const TRAITS = ["Pace", "Care", "Curiosity", "Humour", "Focus"] as const;
-const TRAIT_BASE: Record<PersonalityName, [number, number, number, number, number]> = {
-  steady: [3, 4, 3, 2, 5], cheerful: [4, 4, 3, 4, 3], sleepy: [1, 4, 2, 3, 2], curious: [4, 3, 5, 3, 3], shy: [2, 5, 3, 2, 4],
-  grumpy: [3, 3, 2, 3, 5], dapper: [3, 5, 3, 2, 4], dreamy: [2, 3, 5, 3, 2], brave: [5, 3, 4, 3, 3], silly: [4, 3, 4, 5, 2],
-  wise: [2, 5, 4, 2, 5], sassy: [4, 2, 3, 5, 3], cozy: [2, 5, 3, 3, 3], techy: [4, 3, 4, 2, 5], quiet: [3, 4, 3, 1, 5],
-};
+// Traits are the orb's DNA (dna.ts): the same total for every orb, spread by its personality and
+// moved by everything it is made of.
+export { TRAITS } from "./dna.ts";
 const QUIRKS = [
   "hums while the tests run", "tidies files nobody asked to have tidied", "names every branch after the weather", "keeps a tiny notebook of what you like",
   "counts the commas in long sentences", "naps between deploys", "wiggles when a build goes green", "talks to the cursor",
@@ -526,7 +573,7 @@ const CATCHPHRASES: Record<PersonalityName, string[]> = {
   cozy: ["There we go, all snug.", "No rush, I've got it."], techy: ["Nominal. Ship it.", "Logging that."], quiet: ["(done)", "(it's in your drafts)"],
 };
 
-export type Sheet = { title: string; traits: { name: string; value: number }[]; leans: { name: string; value: number }[]; bio: string; quirk: string; catchphrase: string };
+export type Sheet = { title: string; traits: { name: string; value: number; nature: number }[]; leans: { name: string; value: number }[]; bio: string; quirk: string; catchphrase: string; dna: Dna };
 
 const rng = (seed: number): (() => number) => {
   let x = Math.abs(Math.floor(seed * 9973)) % 233280;
@@ -541,13 +588,16 @@ export function sheetOf(c: Character): Sheet {
   const clamp = (v: number): number => Math.max(1, Math.min(5, Math.round(v)));
   const shapeWord = c.shape === "bean" ? "glass bean" : `${c.shape}-shaped orb`;
   const wear = wearing(c, "in");
+  const dna = dnaOf(c);
+  r(); r(); r(); r(); r(); // the five draws the traits' jitter took before the DNA, so every orb keeps its quirk and catchphrase
   return {
     title: `the ${P.label} ${S.title}`,
-    traits: TRAITS.map((name, i) => ({ name, value: clamp(TRAIT_BASE[c.personality][i]! + (r() - 0.5) * 1.2) })),
+    traits: dna.traits,
     leans: SKILLS.map((name, i) => ({ name, value: clamp(S.lean[i]! + (r() - 0.5) * 0.9) })),
-    bio: `${c.name} is ${/^[aeiou]/.test(c.hue) ? "an" : "a"} ${c.hue} ${shapeWord}${wear} who handles ${S.focus}. ${P.blurb}.`,
+    bio: `${c.name} is ${/^[aeiou]/.test(c.hue) ? "an" : "a"} ${c.hue} ${shapeWord}${wear} who handles ${S.focus}. ${P.blurb}. ${dnaSays(c, dna)}`,
     quirk: QUIRKS[Math.floor(r() * QUIRKS.length)]!,
     catchphrase: CATCHPHRASES[c.personality][Math.floor(r() * CATCHPHRASES[c.personality].length)]!,
+    dna,
   };
 }
 
@@ -683,26 +733,74 @@ export function applicationNote(c: Character): string {
   return `${c.name} ${sheetOf(c).quirk}, and would love to take on ${focus} for you.`;
 }
 
-export function surprise(seed: number): Character {
+// ── colours that go together (owner, 10-04: "randomizing should randomize accesory color too. but
+// everything should, but also based on color wheel concepts so the colors randomized with everything
+// match, up to the user to change what they want after") ────────────────────────────────────────────
+// The 24 hues are a wheel, 15° apart. A roll picks one scheme for the whole orb: analogous (a step or
+// two along), complementary (straight across), split-complementary (either side of across) or triadic
+// (a third of the way round). A gradient stays analogous, so its blend never goes muddy; the hat and
+// the glasses take their own colours, his, white or black, or the scheme's partner.
+export const SCHEMES = { analogous: [2, -2, 3, -3], complementary: [12], split: [10, 14], triadic: [8, 16] } as const;
+export type Scheme = keyof typeof SCHEMES;
+const stepOf = (h: HueName): number => HUES.findIndex((x) => x.name === h);
+const hueAt = (i: number): HueName => HUES[((i % HUES.length) + HUES.length) % HUES.length]!.name;
+/** How many steps round the wheel from one hue to another (0 to 12). */
+export const wheelSteps = (a: HueName, b: HueName): number => {
+  const d = Math.abs(stepOf(a) - stepOf(b)) % HUES.length;
+  return Math.min(d, HUES.length - d);
+};
+/** A partner for `hue` in `scheme`, from one roll of the dice (0..1). */
+export const partnerOf = (hue: HueName, scheme: Scheme, u: number): HueName => {
+  const offs = SCHEMES[scheme];
+  return hueAt(stepOf(hue) + offs[Math.min(offs.length - 1, Math.floor(u * offs.length))]!);
+};
+/** Whether two of an orb's colours go together: the same, or a scheme's step apart. */
+export const inHarmony = (a: HueName, b: HueName): boolean => [0, 2, 3, 8, 10, 12].includes(wheelSteps(a, b));
+
+/** A whole orb from its dice. `specialty` fixes what it does (the first orb is always the assistant,
+ * owner 10-04: "only give them assistant orb choices when rolling dice the first orb they create"). */
+export function surprise(seed: number, o: { specialty?: SpecialtyName } = {}): Character {
   let x = Math.abs(Math.floor(seed)) % 233280;
   const r = (): number => (x = (x * 9301 + 49297) % 233280) / 233280;
   const personality = pickOne(Object.keys(PERSONALITIES).filter((p) => p !== "steady") as PersonalityName[], r);
   const P = PERSONALITIES[personality];
   const hue = pickOne(HUES.map((h) => h.name), r);
-  const specialty = pickOne(Object.keys(SPECIALTIES) as SpecialtyName[], r);
-  return {
+  const rolled = pickOne(Object.keys(SPECIALTIES) as SpecialtyName[], r); // drawn either way, so the rest of a seed's orb is the same
+  const specialty = o.specialty ?? rolled;
+  const c: Character = {
     name: orbName(r),
     personality,
     specialty,
     seed: Math.floor(r() * 1e6),
     hue,
-    hue2: r() < 0.2 ? pickOne(HUES.map((h) => h.name), r) : null,
+    hue2: r() < 0.2 ? partnerOf(hue, "analogous", r()) : null, // one draw, as before, so a seed keeps the rest of its orb
     finish: r() < 0.75 ? "glass" : pickOne(Object.keys(FINISHES) as FinishName[], r),
     shape: pickOne(Object.keys(SHAPES) as ShapeName[], r),
     eyes: r() < 0.7 ? P.eyes : pickOne(Object.keys(EYES) as EyesName[], r),
     hat: r() < 0.5 ? SPECIALTIES[specialty].hat : pickOne(Object.keys(HATS) as HatName[], r),
     glasses: r() < 0.5 ? SPECIALTIES[specialty].glasses : r() < 0.5 ? "none" : pickOne(Object.keys(GLASSES) as GlassesName[], r),
     voice: pickOne(P.voices.filter((v) => v !== "ash"), r) ?? "silent",
-    goo: Math.max(0, Math.min(1, P.goo + (r() - 0.5) * 0.2)),
+    goo: Math.round(Math.max(0, Math.min(1, P.goo + (r() - 0.5) * 0.2)) * 100) / 100, // in hundredths, the slider's step
+    // drawn last, so everything before keeps what a seed gave it
+    ...accessoryColours(hue, r),
   };
+  if (c.hat === "none") c.hatHue = null;
+  if (c.glasses === "none") c.glassesHue = null;
+  return c;
+}
+
+/** The hat's and the glasses' colours for a roll: a scheme for the orb, then for each its own colours,
+ * his, white or black, or the scheme's partner (the two take the same partner, so they go together). */
+function accessoryColours(hue: HueName, r: () => number): { hatHue: AccessoryHue | null; glassesHue: AccessoryHue | null } {
+  const schemes = Object.keys(SCHEMES) as Scheme[];
+  const scheme = schemes[Math.floor(r() * schemes.length)]!;
+  const partner = partnerOf(hue, scheme, r());
+  const pick = (own: number, his: number, neutral: number): AccessoryHue | null => {
+    const u = r();
+    if (u < own) return null;
+    if (u < own + his) return hue;
+    if (u < own + his + neutral) return r() < 0.5 ? "white" : "black";
+    return partner;
+  };
+  return { hatHue: pick(0.4, 0.15, 0.15), glassesHue: pick(0.5, 0.15, 0.2) };
 }

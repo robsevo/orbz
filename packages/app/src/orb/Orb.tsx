@@ -26,12 +26,14 @@ export type OrbProps = {
   still?: boolean;
   /** "portrait": a close-up of his face (choosing eyes or glasses), instead of his whole window. */
   framing?: "window" | "portrait";
+  /** With `still`: the moment of a gesture he holds (the app's icon). */
+  pose?: { gesture: Gesture; into: number };
   style?: CSSProperties;
 };
 
 const seedOf = (s: string): number => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 9973, 7) / 97;
 
-export function Orb({ character, size = 120, state = "idle", gesture = null, fidget = true, poke = true, tint = 0.8, every = 1, still = false, framing = "window", style }: OrbProps) {
+export function Orb({ character, size = 120, state = "idle", gesture = null, fidget = true, poke = true, tint = 0.8, every = 1, still = false, framing = "window", pose, style }: OrbProps) {
   // the close-up is cut to fit his width: half the frame, less the edge's fade and a little room
   const frame: Framing = useMemo(
     () => (framing === "portrait" ? { ...PORTRAIT, radius: Math.min(PORTRAIT.radius, PORTRAIT.w / 2 / (halfWidth(character.shape) + PORTRAIT.edge + 0.04)) } : DESIGN),
@@ -72,6 +74,7 @@ export function Orb({ character, size = 120, state = "idle", gesture = null, fid
         })(),
         motion: motionOf(live.current.character),
         still,
+        ...(pose && { pose }),
         seed, tint: live.current.tint, goo: live.current.character.goo, state: live.current.state,
         plays: live.current.fidget && live.current.state === "idle" ? [...own, ...plays.current] : plays.current,
         pointer: pointer.current,

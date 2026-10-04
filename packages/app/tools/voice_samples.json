@@ -6,11 +6,81 @@
   "seconds": 2.98,
   "kept": true
  },
+ "af_alloy#2": {
+  "line": "Leave it with me. I'll have it done by lunch.",
+  "heard": "Leave it with me, I'll have it done by lunch.",
+  "alike": 1.0,
+  "seconds": 3.13,
+  "kept": true
+ },
+ "af_alloy#3": {
+  "line": "Your day is sorted, and I'll remind you before anything is due.",
+  "heard": "Your day is sorted, and I'll remind you before anything is due.",
+  "alike": 1.0,
+  "seconds": 4.48,
+  "kept": true
+ },
+ "af_alloy#4": {
+  "line": "I finished the report. Do you want to take a look?",
+  "heard": "I finished the report. Do you want to take a look?",
+  "alike": 1.0,
+  "seconds": 3.34,
+  "kept": true
+ },
+ "af_alloy#5": {
+  "line": "That bill is paid, and your calendar is up to date.",
+  "heard": "That bill is paid, and your calendar is up to date.",
+  "alike": 1.0,
+  "seconds": 3.89,
+  "kept": true
+ },
+ "af_alloy#6": {
+  "line": "Good idea. Let's make it happen.",
+  "heard": "Good idea, let's make it happen.",
+  "alike": 1.0,
+  "seconds": 2.95,
+  "kept": true
+ },
  "af_aoede": {
   "line": "This is how I sound when I talk to you.",
   "heard": "This is how I sound when I talk to you.",
   "alike": 1.0,
   "seconds": 1.97,
+  "kept": true
+ },
+ "af_aoede#2": {
+  "line": "Leave it with me. I'll have it done by lunch.",
+  "heard": "Leave it with me, I'll have it done by lunch.",
+  "alike": 1.0,
+  "seconds": 2.23,
+  "kept": true
+ },
+ "af_aoede#3": {
+  "line": "Your day is sorted, and I'll remind you before anything is due.",
+  "heard": "Your day is sorted, and I'll remind you before anything is due.",
+  "alike": 1.0,
+  "seconds": 3.67,
+  "kept": true
+ },
+ "af_aoede#4": {
+  "line": "I finished the report. Do you want to take a look?",
+  "heard": "I've finished the report, do you want to take a look?",
+  "alike": 0.98,
+  "seconds": 2.47,
+  "kept": true
+ },
+ "af_aoede#5": {
+  "line": "That bill is paid, and your calendar is up to date.",
+  "heard": "That bill is paid and your calendar is up to date.",
+  "alike": 1.0,
+  "seconds": 2.81,
+  "kept": true
+ },
+ "af_aoede#6": {
+  "line": "Good idea. Let's make it happen.",
+  "heard": "Good idea, let's make it happen.",
+  "alike": 1.0,
+  "seconds": 2.13,
   "kept": true
  },
  "af_bella": {
@@ -20,11 +90,81 @@
   "seconds": 2.06,
   "kept": true
  },
+ "af_bella#2": {
+  "line": "Leave it with me. I'll have it done by lunch.",
+  "heard": "Leave it with me. I'll have it done by lunch.",
+  "alike": 1.0,
+  "seconds": 2.51,
+  "kept": true
+ },
+ "af_bella#3": {
+  "line": "Your day is sorted, and I'll remind you before anything is due.",
+  "heard": "Your day is sorted, and I'll remind you before anything is due.",
+  "alike": 1.0,
+  "seconds": 3.7,
+  "kept": true
+ },
+ "af_bella#4": {
+  "line": "I finished the report. Do you want to take a look?",
+  "heard": "I finished the report. Do you want to take a look?",
+  "alike": 1.0,
+  "seconds": 2.72,
+  "kept": true
+ },
+ "af_bella#5": {
+  "line": "That bill is paid, and your calendar is up to date.",
+  "heard": "That bill is paid, and your calendar is up to date.",
+  "alike": 1.0,
+  "seconds": 3.21,
+  "kept": true
+ },
+ "af_bella#6": {
+  "line": "Good idea. Let's make it happen.",
+  "heard": "Good idea. Let's make it happen.",
+  "alike": 1.0,
+  "seconds": 2.52,
+  "kept": true
+ },
  "af_heart": {
   "line": "This is how I sound when I talk to you.",
   "heard": "This is how I sound when I talk to you.",
   "alike": 1.0,
   "seconds": 2.08,
+  "kept": true
+ },
+ "af_heart#2": {
+  "line": "Leave it with me. I'll have it done by lunch.",
+  "heard": "Leave it with me, I'll have it done by lunch.",
+  "alike": 1.0,
+  "seconds": 2.51,
+  "kept": true
+ },
+ "af_heart#3": {
+  "line": "Your day is sorted, and I'll remind you before anything is due.",
+  "heard": "Your day is sorted, and I'll remind you before anything is due.",
+  "alike": 1.0,
+  "seconds": 3.56,
+  "kept": true
+ },
+ "af_heart#4": {
+  "line": "I finished the report. Do you want to take a look?",
+  "heard": "I finished the report. Do you want to take a look?",
+  "alike": 1.0,
+  "seconds": 2.79,
+  "kept": true
+ },
+ "af_heart#5": {
+  "line": "That bill is paid, and your calendar is up to date.",
+  "heard": "That bill is paid, and your calendar is up to date.",
+  "alike": 1.0,
+  "seconds": 3.24,
+  "kept": true
+ },
+ "af_heart#6": {
+  "line": "Good idea. Let's make it happen.",
+  "heard": "Good idea. Let's make it happen.",
+  "alike": 1.0,
+  "seconds": 2.5,
   "kept": true
  },
  "af_jessica": {
@@ -34,11 +174,81 @@
   "seconds": 2.31,
   "kept": true
  },
+ "af_jessica#2": {
+  "line": "Leave it with me. I'll have it done by lunch.",
+  "heard": "Leave it with me, I'll have it done by lunch.",
+  "alike": 1.0,
+  "seconds": 2.55,
+  "kept": true
+ },
+ "af_jessica#3": {
+  "line": "Your day is sorted, and I'll remind you before anything is due.",
+  "heard": "Your day is sorted and I'll remind you before anything is due.",
+  "alike": 1.0,
+  "seconds": 3.45,
+  "kept": true
+ },
+ "af_jessica#4": {
+  "line": "I finished the report. Do you want to take a look?",
+  "heard": "I finished the report, do you want to take a look?",
+  "alike": 1.0,
+  "seconds": 2.57,
+  "kept": true
+ },
+ "af_jessica#5": {
+  "line": "That bill is paid, and your calendar is up to date.",
+  "heard": "That bill is paid and your calendar is up to date.",
+  "alike": 1.0,
+  "seconds": 3.02,
+  "kept": true
+ },
+ "af_jessica#6": {
+  "line": "Good idea. Let's make it happen.",
+  "heard": "Good idea, let's make it happen.",
+  "alike": 1.0,
+  "seconds": 2.48,
+  "kept": true
+ },
  "af_kore": {
   "line": "This is how I sound when I talk to you.",
   "heard": "This is how I sound when I talk to you.",
   "alike": 1.0,
   "seconds": 2.19,
+  "kept": true
+ },
+ "af_kore#2": {
+  "line": "Leave it with me. I'll have it done by lunch.",
+  "heard": "Leave it with me, I'll have it done by lunch.",
+  "alike": 1.0,
+  "seconds": 2.27,
+  "kept": true
+ },
+ "af_kore#3": {
+  "line": "Your day is sorted, and I'll remind you before anything is due.",
+  "heard": "Your day is sorted, and I'll remind you before anything is due.",
+  "alike": 1.0,
+  "seconds": 4.06,
+  "kept": true
+ },
+ "af_kore#4": {
+  "line": "I finished the report. Do you want to take a look?",
+  "heard": "I finished the report, do you want to take a look?",
+  "alike": 1.0,
+  "seconds": 2.66,
+  "kept": true
+ },
+ "af_kore#5": {
+  "line": "That bill is paid, and your calendar is up to date.",
+  "heard": "That bill is paid and your calendar is up to date.",
+  "alike": 1.0,
+  "seconds": 3.1,
+  "kept": true
+ },
+ "af_kore#6": {
+  "line": "Good idea. Let's make it happen.",
+  "heard": "Good idea, let's make it happen.",
+  "alike": 1.0,
+  "seconds": 2.41,
   "kept": true
  },
  "af_nicole": {
@@ -48,11 +258,81 @@
   "seconds": 2.95,
   "kept": true
  },
+ "af_nicole#2": {
+  "line": "Leave it with me. I'll have it done by lunch.",
+  "heard": "Leave it with me. I'll have it done by lunch.",
+  "alike": 1.0,
+  "seconds": 3.66,
+  "kept": true
+ },
+ "af_nicole#3": {
+  "line": "Your day is sorted, and I'll remind you before anything is due.",
+  "heard": "Your day is sorted, and I'll remind you before anything is due.",
+  "alike": 1.0,
+  "seconds": 5.49,
+  "kept": true
+ },
+ "af_nicole#4": {
+  "line": "I finished the report. Do you want to take a look?",
+  "heard": "I finished the report. Do you want to take a look?",
+  "alike": 1.0,
+  "seconds": 3.83,
+  "kept": true
+ },
+ "af_nicole#5": {
+  "line": "That bill is paid, and your calendar is up to date.",
+  "heard": "That bill is paid, and your calendar is up to date.",
+  "alike": 1.0,
+  "seconds": 4.66,
+  "kept": true
+ },
+ "af_nicole#6": {
+  "line": "Good idea. Let's make it happen.",
+  "heard": "Good idea. Let's make it happen.",
+  "alike": 1.0,
+  "seconds": 3.41,
+  "kept": true
+ },
  "af_nova": {
   "line": "This is how I sound when I talk to you.",
   "heard": "This is how I sound when I talk to you.",
   "alike": 1.0,
   "seconds": 2.89,
+  "kept": true
+ },
+ "af_nova#2": {
+  "line": "Leave it with me. I'll have it done by lunch.",
+  "heard": "Leave it with me, I'll have it done by lunch.",
+  "alike": 1.0,
+  "seconds": 2.94,
+  "kept": true
+ },
+ "af_nova#3": {
+  "line": "Your day is sorted, and I'll remind you before anything is due.",
+  "heard": "Your day is sorted, and I'll remind you before anything is due.",
+  "alike": 1.0,
+  "seconds": 4.35,
+  "kept": true
+ },
+ "af_nova#4": {
+  "line": "I finished the report. Do you want to take a look?",
+  "heard": "I finished the report, do you want to take a look?",
+  "alike": 1.0,
+  "seconds": 3.15,
+  "kept": true
+ },
+ "af_nova#5": {
+  "line": "That bill is paid, and your calendar is up to date.",
+  "heard": "That bill is paid and your calendar is up to date.",
+  "alike": 1.0,
+  "seconds": 3.7,
+  "kept": true
+ },
+ "af_nova#6": {
+  "line": "Good idea. Let's make it happen.",
+  "heard": "Good idea, let's make it happen.",
+  "alike": 1.0,
+  "seconds": 2.88,
   "kept": true
  },
  "af_river": {
@@ -62,11 +342,81 @@
   "seconds": 2.4,
   "kept": true
  },
+ "af_river#2": {
+  "line": "Leave it with me. I'll have it done by lunch.",
+  "heard": "Leave it with me, I'll have it done by lunch.",
+  "alike": 1.0,
+  "seconds": 2.66,
+  "kept": true
+ },
+ "af_river#3": {
+  "line": "Your day is sorted, and I'll remind you before anything is due.",
+  "heard": "Your day is sorted, and I'll remind you before anything is due.",
+  "alike": 1.0,
+  "seconds": 3.85,
+  "kept": true
+ },
+ "af_river#4": {
+  "line": "I finished the report. Do you want to take a look?",
+  "heard": "I finished the report, do you want to take a look?",
+  "alike": 1.0,
+  "seconds": 2.79,
+  "kept": true
+ },
+ "af_river#5": {
+  "line": "That bill is paid, and your calendar is up to date.",
+  "heard": "That bill is paid and your calendar is up to date.",
+  "alike": 1.0,
+  "seconds": 3.2,
+  "kept": true
+ },
+ "af_river#6": {
+  "line": "Good idea. Let's make it happen.",
+  "heard": "Good idea, let's make it happen.",
+  "alike": 1.0,
+  "seconds": 2.63,
+  "kept": true
+ },
  "af_sarah": {
   "line": "This is how I sound when I talk to you.",
   "heard": "This is how I sound when I talk to you.",
   "alike": 1.0,
   "seconds": 2.04,
+  "kept": true
+ },
+ "af_sarah#2": {
+  "line": "Leave it with me. I'll have it done by lunch.",
+  "heard": "Leave it with me. I'll have it done by lunch.",
+  "alike": 1.0,
+  "seconds": 2.49,
+  "kept": true
+ },
+ "af_sarah#3": {
+  "line": "Your day is sorted, and I'll remind you before anything is due.",
+  "heard": "Your day is sorted, and I'll remind you before anything is due.",
+  "alike": 1.0,
+  "seconds": 3.5,
+  "kept": true
+ },
+ "af_sarah#4": {
+  "line": "I finished the report. Do you want to take a look?",
+  "heard": "I finished the report. Do you want to take a look?",
+  "alike": 1.0,
+  "seconds": 2.74,
+  "kept": true
+ },
+ "af_sarah#5": {
+  "line": "That bill is paid, and your calendar is up to date.",
+  "heard": "That bill is paid, and your calendar is up to date.",
+  "alike": 1.0,
+  "seconds": 3.18,
+  "kept": true
+ },
+ "af_sarah#6": {
+  "line": "Good idea. Let's make it happen.",
+  "heard": "Good idea. Let's make it happen.",
+  "alike": 1.0,
+  "seconds": 2.45,
   "kept": true
  },
  "af_sky": {
@@ -76,11 +426,81 @@
   "seconds": 2.46,
   "kept": true
  },
+ "af_sky#2": {
+  "line": "Leave it with me. I'll have it done by lunch.",
+  "heard": "Leave it with me, I'll have it done by lunch.",
+  "alike": 1.0,
+  "seconds": 2.62,
+  "kept": true
+ },
+ "af_sky#3": {
+  "line": "Your day is sorted, and I'll remind you before anything is due.",
+  "heard": "Your day is sorted, and I'll remind you before anything is due.",
+  "alike": 1.0,
+  "seconds": 3.8,
+  "kept": true
+ },
+ "af_sky#4": {
+  "line": "I finished the report. Do you want to take a look?",
+  "heard": "I finished the report, do you want to take a look?",
+  "alike": 1.0,
+  "seconds": 2.74,
+  "kept": true
+ },
+ "af_sky#5": {
+  "line": "That bill is paid, and your calendar is up to date.",
+  "heard": "That bill is paid, and your calendar is up to date.",
+  "alike": 1.0,
+  "seconds": 3.44,
+  "kept": true
+ },
+ "af_sky#6": {
+  "line": "Good idea. Let's make it happen.",
+  "heard": "Good idea. Let's make it happen.",
+  "alike": 1.0,
+  "seconds": 2.56,
+  "kept": true
+ },
  "am_adam": {
   "line": "This is how I sound when I talk to you.",
   "heard": "This is how I sound when I talk to you.",
   "alike": 1.0,
   "seconds": 2.1,
+  "kept": true
+ },
+ "am_adam#2": {
+  "line": "Leave it with me. I'll have it done by lunch.",
+  "heard": "Leave it with me, I'll have it done by lunch.",
+  "alike": 1.0,
+  "seconds": 2.44,
+  "kept": true
+ },
+ "am_adam#3": {
+  "line": "Your day is sorted, and I'll remind you before anything is due.",
+  "heard": "Your day is sorted, and I'll remind you before anything is due.",
+  "alike": 1.0,
+  "seconds": 3.69,
+  "kept": true
+ },
+ "am_adam#4": {
+  "line": "I finished the report. Do you want to take a look?",
+  "heard": "I finished the report, do you want to take a look?",
+  "alike": 1.0,
+  "seconds": 2.64,
+  "kept": true
+ },
+ "am_adam#5": {
+  "line": "That bill is paid, and your calendar is up to date.",
+  "heard": "That bill is paid, and your calendar is up to date.",
+  "alike": 1.0,
+  "seconds": 3.22,
+  "kept": true
+ },
+ "am_adam#6": {
+  "line": "Good idea. Let's make it happen.",
+  "heard": "Good idea. Let's make it happen.",
+  "alike": 1.0,
+  "seconds": 2.39,
   "kept": true
  },
  "am_echo": {
@@ -90,11 +510,81 @@
   "seconds": 2.85,
   "kept": true
  },
+ "am_echo#2": {
+  "line": "Leave it with me. I'll have it done by lunch.",
+  "heard": "Leave it with me, I'll have it done by lunch.",
+  "alike": 1.0,
+  "seconds": 3.02,
+  "kept": true
+ },
+ "am_echo#3": {
+  "line": "Your day is sorted, and I'll remind you before anything is due.",
+  "heard": "Your day is sorted, and I'll remind you before anything is due.",
+  "alike": 1.0,
+  "seconds": 4.24,
+  "kept": true
+ },
+ "am_echo#4": {
+  "line": "I finished the report. Do you want to take a look?",
+  "heard": "I finished the report. Do you want to take a look?",
+  "alike": 1.0,
+  "seconds": 3.13,
+  "kept": true
+ },
+ "am_echo#5": {
+  "line": "That bill is paid, and your calendar is up to date.",
+  "heard": "That bill is paid, and your calendar is up to date.",
+  "alike": 1.0,
+  "seconds": 3.6,
+  "kept": true
+ },
+ "am_echo#6": {
+  "line": "Good idea. Let's make it happen.",
+  "heard": "Good idea, let's make it happen.",
+  "alike": 1.0,
+  "seconds": 2.82,
+  "kept": true
+ },
  "am_eric": {
   "line": "This is how I sound when I talk to you.",
   "heard": "This is how I sound when I talk to you.",
   "alike": 1.0,
   "seconds": 2.38,
+  "kept": true
+ },
+ "am_eric#2": {
+  "line": "Leave it with me. I'll have it done by lunch.",
+  "heard": "Leave it with me, I'll have it done by lunch.",
+  "alike": 1.0,
+  "seconds": 2.31,
+  "kept": true
+ },
+ "am_eric#3": {
+  "line": "Your day is sorted, and I'll remind you before anything is due.",
+  "heard": "Your day is sorted, and I'll remind you before anything is due.",
+  "alike": 1.0,
+  "seconds": 3.64,
+  "kept": true
+ },
+ "am_eric#4": {
+  "line": "I finished the report. Do you want to take a look?",
+  "heard": "I finished the report, do you want to take a look?",
+  "alike": 1.0,
+  "seconds": 2.62,
+  "kept": true
+ },
+ "am_eric#5": {
+  "line": "That bill is paid, and your calendar is up to date.",
+  "heard": "That bill is paid and your calendar is up to date.",
+  "alike": 1.0,
+  "seconds": 3.19,
+  "kept": true
+ },
+ "am_eric#6": {
+  "line": "Good idea. Let's make it happen.",
+  "heard": "Good idea, let's make it happen.",
+  "alike": 1.0,
+  "seconds": 2.02,
   "kept": true
  },
  "am_fenrir": {
@@ -104,11 +594,81 @@
   "seconds": 1.99,
   "kept": true
  },
+ "am_fenrir#2": {
+  "line": "Leave it with me. I'll have it done by lunch.",
+  "heard": "Leave it with me, I'll have it done by lunch.",
+  "alike": 1.0,
+  "seconds": 2.27,
+  "kept": true
+ },
+ "am_fenrir#3": {
+  "line": "Your day is sorted, and I'll remind you before anything is due.",
+  "heard": "Your day is sorted, and I'll remind you before anything is due.",
+  "alike": 1.0,
+  "seconds": 3.8,
+  "kept": true
+ },
+ "am_fenrir#4": {
+  "line": "I finished the report. Do you want to take a look?",
+  "heard": "I finished the report, do you want to take a look?",
+  "alike": 1.0,
+  "seconds": 2.47,
+  "kept": true
+ },
+ "am_fenrir#5": {
+  "line": "That bill is paid, and your calendar is up to date.",
+  "heard": "That bill is paid and your calendar is up to date.",
+  "alike": 1.0,
+  "seconds": 2.91,
+  "kept": true
+ },
+ "am_fenrir#6": {
+  "line": "Good idea. Let's make it happen.",
+  "heard": "Good idea. Let's make it happen.",
+  "alike": 1.0,
+  "seconds": 2.24,
+  "kept": true
+ },
  "am_liam": {
   "line": "This is how I sound when I talk to you.",
   "heard": "This is how I sound when I talk to you.",
   "alike": 1.0,
   "seconds": 2.34,
+  "kept": true
+ },
+ "am_liam#2": {
+  "line": "Leave it with me. I'll have it done by lunch.",
+  "heard": "Leave it with me, I'll have it done by lunch.",
+  "alike": 1.0,
+  "seconds": 2.34,
+  "kept": true
+ },
+ "am_liam#3": {
+  "line": "Your day is sorted, and I'll remind you before anything is due.",
+  "heard": "Your day is sorted, and I'll remind you before anything is due.",
+  "alike": 1.0,
+  "seconds": 3.86,
+  "kept": true
+ },
+ "am_liam#4": {
+  "line": "I finished the report. Do you want to take a look?",
+  "heard": "I finished the report, do you want to take a look?",
+  "alike": 1.0,
+  "seconds": 2.62,
+  "kept": true
+ },
+ "am_liam#5": {
+  "line": "That bill is paid, and your calendar is up to date.",
+  "heard": "That bill is paid and your calendar is up to date.",
+  "alike": 1.0,
+  "seconds": 2.91,
+  "kept": true
+ },
+ "am_liam#6": {
+  "line": "Good idea. Let's make it happen.",
+  "heard": "Good idea, let's make it happen.",
+  "alike": 1.0,
+  "seconds": 2.04,
   "kept": true
  },
  "am_michael": {
@@ -118,9 +678,79 @@
   "seconds": 2.36,
   "kept": true
  },
+ "am_michael#2": {
+  "line": "Leave it with me. I'll have it done by lunch.",
+  "heard": "Leave it with me. I'll have it done by lunch.",
+  "alike": 1.0,
+  "seconds": 2.94,
+  "kept": true
+ },
+ "am_michael#3": {
+  "line": "Your day is sorted, and I'll remind you before anything is due.",
+  "heard": "Your day is sorted, and I'll remind you before anything is due.",
+  "alike": 1.0,
+  "seconds": 4.11,
+  "kept": true
+ },
+ "am_michael#4": {
+  "line": "I finished the report. Do you want to take a look?",
+  "heard": "I finished the report. Do you want to take a look?",
+  "alike": 1.0,
+  "seconds": 3.13,
+  "kept": true
+ },
+ "am_michael#5": {
+  "line": "That bill is paid, and your calendar is up to date.",
+  "heard": "That bill is paid and your calendar is up to date.",
+  "alike": 1.0,
+  "seconds": 3.4,
+  "kept": true
+ },
+ "am_michael#6": {
+  "line": "Good idea. Let's make it happen.",
+  "heard": "Good idea. Let's make it happen.",
+  "alike": 1.0,
+  "seconds": 2.69,
+  "kept": true
+ },
  "am_onyx": {
   "line": "This is how I sound when I talk to you.",
   "heard": "This is how I sound when I talk to you.",
+  "alike": 1.0,
+  "seconds": 2.95,
+  "kept": true
+ },
+ "am_onyx#2": {
+  "line": "Leave it with me. I'll have it done by lunch.",
+  "heard": "Leave it with me, I'll have it done by lunch.",
+  "alike": 1.0,
+  "seconds": 3.02,
+  "kept": true
+ },
+ "am_onyx#3": {
+  "line": "Your day is sorted, and I'll remind you before anything is due.",
+  "heard": "Your day is sorted, and I'll remind you before anything is due.",
+  "alike": 1.0,
+  "seconds": 4.44,
+  "kept": true
+ },
+ "am_onyx#4": {
+  "line": "I finished the report. Do you want to take a look?",
+  "heard": "I finished the report, do you want to take a look?",
+  "alike": 1.0,
+  "seconds": 3.17,
+  "kept": true
+ },
+ "am_onyx#5": {
+  "line": "That bill is paid, and your calendar is up to date.",
+  "heard": "That bill is paid and your calendar is up to date.",
+  "alike": 1.0,
+  "seconds": 3.85,
+  "kept": true
+ },
+ "am_onyx#6": {
+  "line": "Good idea. Let's make it happen.",
+  "heard": "Good idea, let's make it happen.",
   "alike": 1.0,
   "seconds": 2.95,
   "kept": true
@@ -132,11 +762,81 @@
   "seconds": 2.12,
   "kept": true
  },
+ "am_puck#2": {
+  "line": "Leave it with me. I'll have it done by lunch.",
+  "heard": "Leave it with me, I'll have it done by lunch.",
+  "alike": 1.0,
+  "seconds": 2.36,
+  "kept": true
+ },
+ "am_puck#3": {
+  "line": "Your day is sorted, and I'll remind you before anything is due.",
+  "heard": "Your day is sorted and I'll remind you before anything is due.",
+  "alike": 1.0,
+  "seconds": 3.87,
+  "kept": true
+ },
+ "am_puck#4": {
+  "line": "I finished the report. Do you want to take a look?",
+  "heard": "I finished the report, do you want to take a look?",
+  "alike": 1.0,
+  "seconds": 2.51,
+  "kept": true
+ },
+ "am_puck#5": {
+  "line": "That bill is paid, and your calendar is up to date.",
+  "heard": "That bill is paid and your calendar is up to date.",
+  "alike": 1.0,
+  "seconds": 2.95,
+  "kept": true
+ },
+ "am_puck#6": {
+  "line": "Good idea. Let's make it happen.",
+  "heard": "Good idea, let's make it happen.",
+  "alike": 1.0,
+  "seconds": 1.8,
+  "kept": true
+ },
  "am_santa": {
   "line": "This is how I sound when I talk to you.",
   "heard": "This is how I sound when I talk to you.",
   "alike": 1.0,
   "seconds": 2.93,
+  "kept": true
+ },
+ "am_santa#2": {
+  "line": "Leave it with me. I'll have it done by lunch.",
+  "heard": "Leave it with me. I'll have it done by lunch.",
+  "alike": 1.0,
+  "seconds": 3.04,
+  "kept": true
+ },
+ "am_santa#3": {
+  "line": "Your day is sorted, and I'll remind you before anything is due.",
+  "heard": "Your day is sorted, and I'll remind you before anything is due.",
+  "alike": 1.0,
+  "seconds": 4.19,
+  "kept": true
+ },
+ "am_santa#4": {
+  "line": "I finished the report. Do you want to take a look?",
+  "heard": "I finished the report. Do you want to take a look?",
+  "alike": 1.0,
+  "seconds": 3.21,
+  "kept": true
+ },
+ "am_santa#5": {
+  "line": "That bill is paid, and your calendar is up to date.",
+  "heard": "That bill is paid, and your calendar is up to date.",
+  "alike": 1.0,
+  "seconds": 3.87,
+  "kept": true
+ },
+ "am_santa#6": {
+  "line": "Good idea. Let's make it happen.",
+  "heard": "Good idea. Let's make it happen.",
+  "alike": 1.0,
+  "seconds": 2.84,
   "kept": true
  },
  "ash": {
@@ -146,11 +846,81 @@
   "seconds": 2.57,
   "kept": true
  },
+ "ash#2": {
+  "line": "Leave it with me. I'll have it done by lunch.",
+  "heard": "Leave it with me, I'll have it done by lunch.",
+  "alike": 1.0,
+  "seconds": 2.7,
+  "kept": true
+ },
+ "ash#3": {
+  "line": "Your day is sorted, and I'll remind you before anything is due.",
+  "heard": "Your day is sorted, and I'll remind you before anything is due.",
+  "alike": 1.0,
+  "seconds": 3.98,
+  "kept": true
+ },
+ "ash#4": {
+  "line": "I finished the report. Do you want to take a look?",
+  "heard": "I finished the report, do you want to take a look?",
+  "alike": 1.0,
+  "seconds": 2.96,
+  "kept": true
+ },
+ "ash#5": {
+  "line": "That bill is paid, and your calendar is up to date.",
+  "heard": "That bill is paid, and your calendar is up to date.",
+  "alike": 1.0,
+  "seconds": 3.49,
+  "kept": true
+ },
+ "ash#6": {
+  "line": "Good idea. Let's make it happen.",
+  "heard": "Good idea, let's make it happen.",
+  "alike": 1.0,
+  "seconds": 2.75,
+  "kept": true
+ },
  "bf_alice": {
   "line": "This is how I sound when I talk to you.",
   "heard": "This is how I sound when I talk to you.",
   "alike": 1.0,
   "seconds": 2.61,
+  "kept": true
+ },
+ "bf_alice#2": {
+  "line": "Leave it with me. I'll have it done by lunch.",
+  "heard": "Leave it with me, I'll have it done by lunch.",
+  "alike": 1.0,
+  "seconds": 2.7,
+  "kept": true
+ },
+ "bf_alice#3": {
+  "line": "Your day is sorted, and I'll remind you before anything is due.",
+  "heard": "Your day is sorted, and I'll remind you before anything is due.",
+  "alike": 1.0,
+  "seconds": 4.34,
+  "kept": true
+ },
+ "bf_alice#4": {
+  "line": "I finished the report. Do you want to take a look?",
+  "heard": "I finished the report, do you want to take a look?",
+  "alike": 1.0,
+  "seconds": 2.91,
+  "kept": true
+ },
+ "bf_alice#5": {
+  "line": "That bill is paid, and your calendar is up to date.",
+  "heard": "That bill is paid and your calendar is up to date.",
+  "alike": 1.0,
+  "seconds": 3.15,
+  "kept": true
+ },
+ "bf_alice#6": {
+  "line": "Good idea. Let's make it happen.",
+  "heard": "Good idea, let's make it happens.",
+  "alike": 0.98,
+  "seconds": 2.63,
   "kept": true
  },
  "bf_emma": {
@@ -160,11 +930,81 @@
   "seconds": 2.36,
   "kept": true
  },
+ "bf_emma#2": {
+  "line": "Leave it with me. I'll have it done by lunch.",
+  "heard": "Leave it with me, I'll have it done by lunch.",
+  "alike": 1.0,
+  "seconds": 2.42,
+  "kept": true
+ },
+ "bf_emma#3": {
+  "line": "Your day is sorted, and I'll remind you before anything is due.",
+  "heard": "Your day is sorted, and I'll remind you before anything is due.",
+  "alike": 1.0,
+  "seconds": 3.77,
+  "kept": true
+ },
+ "bf_emma#4": {
+  "line": "I finished the report. Do you want to take a look?",
+  "heard": "I finished the report, do you want to take a look?",
+  "alike": 1.0,
+  "seconds": 2.74,
+  "kept": true
+ },
+ "bf_emma#5": {
+  "line": "That bill is paid, and your calendar is up to date.",
+  "heard": "that bill is paid and your calendar is up to date.",
+  "alike": 1.0,
+  "seconds": 2.89,
+  "kept": true
+ },
+ "bf_emma#6": {
+  "line": "Good idea. Let's make it happen.",
+  "heard": "Good idea, let's make it happen.",
+  "alike": 1.0,
+  "seconds": 2.39,
+  "kept": true
+ },
  "bf_isabella": {
   "line": "This is how I sound when I talk to you.",
   "heard": "This is how I sound when I talk to you.",
   "alike": 1.0,
   "seconds": 2.42,
+  "kept": true
+ },
+ "bf_isabella#2": {
+  "line": "Leave it with me. I'll have it done by lunch.",
+  "heard": "Leave it with me. I'll have it done by lunch.",
+  "alike": 1.0,
+  "seconds": 2.64,
+  "kept": true
+ },
+ "bf_isabella#3": {
+  "line": "Your day is sorted, and I'll remind you before anything is due.",
+  "heard": "Your day is sorted and I'll remind you before anything is due.",
+  "alike": 1.0,
+  "seconds": 3.8,
+  "kept": true
+ },
+ "bf_isabella#4": {
+  "line": "I finished the report. Do you want to take a look?",
+  "heard": "I finished the report. Do you want to take a look?",
+  "alike": 1.0,
+  "seconds": 2.98,
+  "kept": true
+ },
+ "bf_isabella#5": {
+  "line": "That bill is paid, and your calendar is up to date.",
+  "heard": "That bill is paid and your calendar is up to date.",
+  "alike": 1.0,
+  "seconds": 3.4,
+  "kept": true
+ },
+ "bf_isabella#6": {
+  "line": "Good idea. Let's make it happen.",
+  "heard": "Good idea, let's make it happen.",
+  "alike": 1.0,
+  "seconds": 2.6,
   "kept": true
  },
  "bf_lily": {
@@ -174,11 +1014,81 @@
   "seconds": 2.74,
   "kept": true
  },
+ "bf_lily#2": {
+  "line": "Leave it with me. I'll have it done by lunch.",
+  "heard": "Leave it with me, I'll have it done by lunch.",
+  "alike": 1.0,
+  "seconds": 2.72,
+  "kept": true
+ },
+ "bf_lily#3": {
+  "line": "Your day is sorted, and I'll remind you before anything is due.",
+  "heard": "Your day is sorted and I'll remind you before anything is due.",
+  "alike": 1.0,
+  "seconds": 4.19,
+  "kept": true
+ },
+ "bf_lily#4": {
+  "line": "I finished the report. Do you want to take a look?",
+  "heard": "I finished the report, do you want to take a look?",
+  "alike": 1.0,
+  "seconds": 2.91,
+  "kept": true
+ },
+ "bf_lily#5": {
+  "line": "That bill is paid, and your calendar is up to date.",
+  "heard": "That bill is paid and your calendar is up to date.",
+  "alike": 1.0,
+  "seconds": 3.1,
+  "kept": true
+ },
+ "bf_lily#6": {
+  "line": "Good idea. Let's make it happen.",
+  "heard": "Good idea, let's make it happen.",
+  "alike": 1.0,
+  "seconds": 2.17,
+  "kept": true
+ },
  "bm_daniel": {
   "line": "This is how I sound when I talk to you.",
   "heard": "This is how I sound when I talk to you.",
   "alike": 1.0,
   "seconds": 2.46,
+  "kept": true
+ },
+ "bm_daniel#2": {
+  "line": "Leave it with me. I'll have it done by lunch.",
+  "heard": "Leave it with me, I'll have it done by lunch.",
+  "alike": 1.0,
+  "seconds": 2.51,
+  "kept": true
+ },
+ "bm_daniel#3": {
+  "line": "Your day is sorted, and I'll remind you before anything is due.",
+  "heard": "Your day is sorted, and I'll remind you before anything is due.",
+  "alike": 1.0,
+  "seconds": 3.89,
+  "kept": true
+ },
+ "bm_daniel#4": {
+  "line": "I finished the report. Do you want to take a look?",
+  "heard": "I finished the report, do you want to take a look?",
+  "alike": 1.0,
+  "seconds": 2.87,
+  "kept": true
+ },
+ "bm_daniel#5": {
+  "line": "That bill is paid, and your calendar is up to date.",
+  "heard": "That bill is paid, and your calendar is up to date.",
+  "alike": 1.0,
+  "seconds": 3.38,
+  "kept": true
+ },
+ "bm_daniel#6": {
+  "line": "Good idea. Let's make it happen.",
+  "heard": "Good idea, let's make it happen.",
+  "alike": 1.0,
+  "seconds": 2.1,
   "kept": true
  },
  "bm_fable": {
@@ -188,11 +1098,81 @@
   "seconds": 2.91,
   "kept": true
  },
+ "bm_fable#2": {
+  "line": "Leave it with me. I'll have it done by lunch.",
+  "heard": "Leave it with me, I'll have it done by lunch.",
+  "alike": 1.0,
+  "seconds": 3.02,
+  "kept": true
+ },
+ "bm_fable#3": {
+  "line": "Your day is sorted, and I'll remind you before anything is due.",
+  "heard": "Your day is sorted, and I'll remind you before anything is due.",
+  "alike": 1.0,
+  "seconds": 4.35,
+  "kept": true
+ },
+ "bm_fable#4": {
+  "line": "I finished the report. Do you want to take a look?",
+  "heard": "I finished the report, do you want to take a look?",
+  "alike": 1.0,
+  "seconds": 3.32,
+  "kept": true
+ },
+ "bm_fable#5": {
+  "line": "That bill is paid, and your calendar is up to date.",
+  "heard": "That bill is paid, and your calendar is up to date.",
+  "alike": 1.0,
+  "seconds": 3.75,
+  "kept": true
+ },
+ "bm_fable#6": {
+  "line": "Good idea. Let's make it happen.",
+  "heard": "Good idea, let's make it happen.",
+  "alike": 1.0,
+  "seconds": 3.03,
+  "kept": true
+ },
  "bm_george": {
   "line": "This is how I sound when I talk to you.",
   "heard": "This is how I sound when I talk to you.",
   "alike": 1.0,
   "seconds": 2.87,
+  "kept": true
+ },
+ "bm_george#2": {
+  "line": "Leave it with me. I'll have it done by lunch.",
+  "heard": "Leave it with me, I'll have it done by lunch.",
+  "alike": 1.0,
+  "seconds": 2.98,
+  "kept": true
+ },
+ "bm_george#3": {
+  "line": "Your day is sorted, and I'll remind you before anything is due.",
+  "heard": "Your day is sorted and I'll remind you before anything is due.",
+  "alike": 1.0,
+  "seconds": 4.36,
+  "kept": true
+ },
+ "bm_george#4": {
+  "line": "I finished the report. Do you want to take a look?",
+  "heard": "I finished the report. Do you want to take a look?",
+  "alike": 1.0,
+  "seconds": 3.21,
+  "kept": true
+ },
+ "bm_george#5": {
+  "line": "That bill is paid, and your calendar is up to date.",
+  "heard": "That bill is paid and your calendar is up to date.",
+  "alike": 1.0,
+  "seconds": 3.54,
+  "kept": true
+ },
+ "bm_george#6": {
+  "line": "Good idea. Let's make it happen.",
+  "heard": "Good idea, let's make it happen.",
+  "alike": 1.0,
+  "seconds": 2.75,
   "kept": true
  },
  "bm_lewis": {
@@ -202,11 +1182,60 @@
   "seconds": 2.63,
   "kept": true
  },
+ "bm_lewis#2": {
+  "line": "Leave it with me. I'll have it done by lunch.",
+  "heard": "Leave it with me. I'll have it done by lunch.",
+  "alike": 1.0,
+  "seconds": 2.89,
+  "kept": true
+ },
+ "bm_lewis#3": {
+  "line": "Your day is sorted, and I'll remind you before anything is due.",
+  "heard": "Your day is sorted, and I'll remind you before anything is due.",
+  "alike": 1.0,
+  "seconds": 3.98,
+  "kept": true
+ },
+ "bm_lewis#4": {
+  "line": "I finished the report. Do you want to take a look?",
+  "heard": "I finished the report. Do you want to take a look?",
+  "alike": 1.0,
+  "seconds": 3.23,
+  "kept": true
+ },
+ "bm_lewis#5": {
+  "line": "That bill is paid, and your calendar is up to date.",
+  "heard": "That bill is paid and your calendar is up to date.",
+  "alike": 1.0,
+  "seconds": 3.4,
+  "kept": true
+ },
+ "bm_lewis#6": {
+  "line": "Good idea. Let's make it happen.",
+  "heard": "Good idea. Let's make it happen.",
+  "alike": 1.0,
+  "seconds": 2.69,
+  "kept": true
+ },
  "ef_dora": {
   "line": "¡Hola! Así suena mi voz.",
   "heard": "Hola, así suena mi voz.",
   "alike": 1.0,
   "seconds": 1.65,
+  "kept": true
+ },
+ "ef_dora#2": {
+  "line": "Déjalo conmigo. Lo tengo listo hoy.",
+  "heard": "Déjalo conmigo, lo tengo listo hoy.",
+  "alike": 1.0,
+  "seconds": 2.44,
+  "kept": true
+ },
+ "ef_dora#3": {
+  "line": "Tu día ya está organizado.",
+  "heard": "Tu día ya está organizado.",
+  "alike": 1.0,
+  "seconds": 1.95,
   "kept": true
  },
  "em_alex": {
@@ -216,11 +1245,39 @@
   "seconds": 1.74,
   "kept": true
  },
+ "em_alex#2": {
+  "line": "Déjalo conmigo. Lo tengo listo hoy.",
+  "heard": "Déjalo conmigo, lo tengo listo hoy.",
+  "alike": 1.0,
+  "seconds": 2.46,
+  "kept": true
+ },
+ "em_alex#3": {
+  "line": "Tu día ya está organizado.",
+  "heard": "Tu día ya está organizado.",
+  "alike": 1.0,
+  "seconds": 2.1,
+  "kept": true
+ },
  "em_santa": {
   "line": "¡Hola! Así suena mi voz.",
   "heard": "Hola, así suena mi voz.",
   "alike": 1.0,
   "seconds": 1.63,
+  "kept": true
+ },
+ "em_santa#2": {
+  "line": "Déjalo conmigo. Lo tengo listo hoy.",
+  "heard": "Déjalo conmigo, lo tengo listo hoy.",
+  "alike": 1.0,
+  "seconds": 2.49,
+  "kept": true
+ },
+ "em_santa#3": {
+  "line": "Tu día ya está organizado.",
+  "heard": "Tu día ya está organizado.",
+  "alike": 1.0,
+  "seconds": 1.99,
   "kept": true
  },
  "ff_siwis": {
@@ -230,11 +1287,39 @@
   "seconds": 1.67,
   "kept": true
  },
+ "ff_siwis#2": {
+  "line": "Laisse-moi faire. Ce sera prêt ce soir.",
+  "heard": "Laisse-moi faire, ce sera prêt ce soir.",
+  "alike": 1.0,
+  "seconds": 2.46,
+  "kept": true
+ },
+ "ff_siwis#3": {
+  "line": "Ta journée est organisée.",
+  "heard": "Ta journée est organisée.",
+  "alike": 1.0,
+  "seconds": 1.59,
+  "kept": true
+ },
  "hf_alpha": {
   "line": "नमस्ते! यह मेरी आवाज़ है।",
   "heard": "नमस्ते यह मेरी आवाज है",
   "alike": 1.0,
   "seconds": 2.31,
+  "kept": true
+ },
+ "hf_alpha#2": {
+  "line": "मुझ पर छोड़ दो। आज ही हो जाएगा।",
+  "heard": "मुझ पर छोड़ दो आज ही हो जाएगा",
+  "alike": 1.0,
+  "seconds": 2.95,
+  "kept": true
+ },
+ "hf_alpha#3": {
+  "line": "आपका दिन तैयार है।",
+  "heard": "आपका दिन तेयार है.",
+  "alike": 1.0,
+  "seconds": 1.82,
   "kept": true
  },
  "hf_beta": {
@@ -244,11 +1329,39 @@
   "seconds": 1.93,
   "kept": true
  },
+ "hf_beta#2": {
+  "line": "मुझ पर छोड़ दो। आज ही हो जाएगा।",
+  "heard": "मुझ पर छोड़ दो आज ही हो जाएगा",
+  "alike": 1.0,
+  "seconds": 2.44,
+  "kept": true
+ },
+ "hf_beta#3": {
+  "line": "आपका दिन तैयार है।",
+  "heard": "आपका दिन तेयार है.",
+  "alike": 1.0,
+  "seconds": 1.72,
+  "kept": true
+ },
  "hm_omega": {
   "line": "नमस्ते! यह मेरी आवाज़ है।",
   "heard": "नमस्ते यह मेरी आवाज है",
   "alike": 1.0,
   "seconds": 2.31,
+  "kept": true
+ },
+ "hm_omega#2": {
+  "line": "मुझ पर छोड़ दो। आज ही हो जाएगा।",
+  "heard": "मुझ पर छोड़ दो आज ही हो जाएगा।",
+  "alike": 1.0,
+  "seconds": 2.93,
+  "kept": true
+ },
+ "hm_omega#3": {
+  "line": "आपका दिन तैयार है।",
+  "heard": "आपका दिन तयार है.",
+  "alike": 1.0,
+  "seconds": 1.85,
   "kept": true
  },
  "hm_psi": {
@@ -258,6 +1371,20 @@
   "seconds": 2.19,
   "kept": true
  },
+ "hm_psi#2": {
+  "line": "मुझ पर छोड़ दो। आज ही हो जाएगा।",
+  "heard": "मुझ पर छोड़, दो आज ही हो जाएगा.",
+  "alike": 1.0,
+  "seconds": 2.83,
+  "kept": true
+ },
+ "hm_psi#3": {
+  "line": "आपका दिन तैयार है।",
+  "heard": "आपका दिन तयार है.",
+  "alike": 1.0,
+  "seconds": 1.85,
+  "kept": true
+ },
  "if_sara": {
   "line": "Ciao! Questa è la mia voce.",
   "heard": "Ciao questa è la mia voce.",
@@ -265,11 +1392,39 @@
   "seconds": 1.85,
   "kept": true
  },
+ "if_sara#2": {
+  "line": "Lascia fare a me. Sarà pronto stasera.",
+  "heard": "Lascia fare a me e sarà pronto stasera.",
+  "alike": 0.97,
+  "seconds": 2.42,
+  "kept": true
+ },
+ "if_sara#3": {
+  "line": "La tua giornata è organizzata.",
+  "heard": "La tua giornata è organizzata.",
+  "alike": 1.0,
+  "seconds": 2.38,
+  "kept": true
+ },
  "im_nicola": {
   "line": "Ciao! Questa è la mia voce.",
   "heard": "Ciao, questa è la mia voce.",
   "alike": 1.0,
   "seconds": 2.04,
+  "kept": true
+ },
+ "im_nicola#2": {
+  "line": "Lascia fare a me. Sarà pronto stasera.",
+  "heard": "Lascia fare a me, sarà pronto stasera.",
+  "alike": 1.0,
+  "seconds": 2.83,
+  "kept": true
+ },
+ "im_nicola#3": {
+  "line": "La tua giornata è organizzata.",
+  "heard": "La tua giornata è organizzata.",
+  "alike": 1.0,
+  "seconds": 2.63,
   "kept": true
  },
  "jf_alpha": {
@@ -314,6 +1469,20 @@
   "seconds": 1.7,
   "kept": true
  },
+ "pf_dora#2": {
+  "line": "Deixa comigo. Fica pronto hoje.",
+  "heard": "Deixa comigo, fica pronto hoje.",
+  "alike": 1.0,
+  "seconds": 2.23,
+  "kept": true
+ },
+ "pf_dora#3": {
+  "line": "O seu dia está organizado.",
+  "heard": "O seu dia está organizado.",
+  "alike": 1.0,
+  "seconds": 1.91,
+  "kept": true
+ },
  "pm_alex": {
   "line": "Olá! Esta é a minha voz.",
   "heard": "Olá, esta é a minha voz.",
@@ -321,11 +1490,39 @@
   "seconds": 1.7,
   "kept": true
  },
+ "pm_alex#2": {
+  "line": "Deixa comigo. Fica pronto hoje.",
+  "heard": "Deixa comigo, fica pronto hoje.",
+  "alike": 1.0,
+  "seconds": 2.31,
+  "kept": true
+ },
+ "pm_alex#3": {
+  "line": "O seu dia está organizado.",
+  "heard": "O seu dia está organizado.",
+  "alike": 1.0,
+  "seconds": 1.99,
+  "kept": true
+ },
  "pm_santa": {
   "line": "Olá! Esta é a minha voz.",
   "heard": "Olá, esta é a minha voz.",
   "alike": 1.0,
   "seconds": 1.65,
+  "kept": true
+ },
+ "pm_santa#2": {
+  "line": "Deixa comigo. Fica pronto hoje.",
+  "heard": "Deixa comigo, fica pronto hoje.",
+  "alike": 1.0,
+  "seconds": 2.4,
+  "kept": true
+ },
+ "pm_santa#3": {
+  "line": "O seu dia está organizado.",
+  "heard": "O seu dia está organizado.",
+  "alike": 1.0,
+  "seconds": 2.06,
   "kept": true
  },
  "zf_xiaobei": {

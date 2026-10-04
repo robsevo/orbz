@@ -68,7 +68,7 @@ export type AgentOptions = {
   /** The person's web-search key, when a search needs it (PLAN 3.10). */
   searchKey?: () => Promise<SearchKey | null>;
   /** Keeps a bill or a reminder for the person (the notification centre, PLAN 2.11). */
-  remind?: (orb: string, conversation: string, r: Parameters<NonNullable<ToolContext["remind"]>>[0]) => { id: number; comesUpAt: number };
+  remind?: (orb: string, conversation: string, r: Parameters<NonNullable<ToolContext["remind"]>>[0]) => { id: number; comesUpAt: number; keeper?: string };
   /** The bills and reminders kept, and moving one (the calendar, PLAN 2.12). */
   reminders?: ToolContext["reminders"];
   moveReminder?: ToolContext["moveReminder"];

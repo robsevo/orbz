@@ -115,7 +115,7 @@ test("the sound fits the press: a tab ticks, a choice picks, dice roll, he bubbl
     await page.locator('[data-page]:not([hidden]) button[data-pick][aria-pressed="false"]').first().click(); // one he is not already, on the page shown
     await page.waitForTimeout(700); // past the combo
     await page.getByRole("button", { name: "Roll everything" }).click();
-    await page.locator("[data-cradle] canvas").click();
+    await page.locator("[data-cradle] canvas").first().click(); // the new orb (for the moment of the change, who he was is drawn behind)
     await page.getByRole("textbox", { name: "Name" }).fill("Pip");
     await page.getByRole("button", { name: "Create Pip" }).click();
     await page.getByRole("button", { name: "Let Pip go…" }).click();

@@ -58,6 +58,21 @@ LINES: dict[str, tuple[str, str, str | None]] = {
     "p": ("Olá! Esta é a minha voz.", "pt", "pt-br"),
     "z": ("你好！这是我的声音。", "zh", "cmn"),
 }
+# More takes, so a voice says something else on each press (owner, 10-04: "make the voices say something
+# else each time when pressing them to preview"): take 1 is LINES' (<id>.mp3), these are takes 2 on
+# (<id>-2.mp3, ...). Japanese and Mandarin keep their one line: Japanese's phonemes are written by hand,
+# and Mandarin needs misaki's overlay. Short and plain, no greeting opener (Classic drops it).
+MORE: dict[str, list[str]] = {
+    "a": ["Leave it with me. I'll have it done by lunch.", "Your day is sorted, and I'll remind you before anything is due.",
+          "I finished the report. Do you want to take a look?", "That bill is paid, and your calendar is up to date.",
+          "Good idea. Let's make it happen."],
+    "e": ["Déjalo conmigo. Lo tengo listo hoy.", "Tu día ya está organizado."],
+    "f": ["Laisse-moi faire. Ce sera prêt ce soir.", "Ta journée est organisée."],
+    "h": ["मुझ पर छोड़ दो। आज ही हो जाएगा।", "आपका दिन तैयार है।"],
+    "i": ["Lascia fare a me. Sarà pronto stasera.", "La tua giornata è organizzata."],
+    "p": ["Deixa comigo. Fica pronto hoje.", "O seu dia está organizado."],
+}
+MORE["b"] = MORE["a"]
 KOKORO_LANG = {"e": "es", "f": "fr-fr", "h": "hi", "i": "it", "j": "ja", "p": "pt-br", "z": "cmn"}
 # How alike the line and what Whisper heard must be (letters only, for the scripts without spaces
 # characters): a clip under it is not kept.
@@ -117,18 +132,27 @@ def espeak_phonemes(text: str, lang: str) -> str:
     return " ".join(out)
 
 
-def render(vid: str, models: Path, ash_cfg: dict) -> tuple[np.ndarray, int, str, str]:
-    """A voice's line as audio: (samples, rate, the line, Whisper's name for its language)."""
+def takes_of(vid: str) -> list[str]:
+    """Every line a voice says, take 1 first."""
+    code = "a" if vid == "ash" else vid[0]
+    return [LINES[code][0], *MORE.get(code, [])]
+
+
+def render(vid: str, models: Path, ash_cfg: dict, line: str | None = None) -> tuple[np.ndarray, int, str, str]:
+    """A voice's line as audio (take 1's unless `line` is given): (samples, rate, the line, Whisper's
+    name for its language)."""
     import voice as V
 
     paths = {"model": models / "kokoro-v1.0.onnx", "voices": models / "voices-v1.0.bin"}
     if vid == "ash":
         kw = V.settings(ash_cfg)
         kw["speed"] = 1.0
-        line, lang, _ = LINES["a"]
+        _, lang, _ = LINES["a"]
+        line = line or LINES["a"][0]
         audio, sr = V.Voice(**kw, **paths).say(line)
         return audio, sr, line, lang
-    line, lang, espeak = LINES[vid[0]]
+    first, lang, espeak = LINES[vid[0]]
+    line = line or first
     if espeak is None:
         # an English voice, with Classic's delivery (his energy and movement) but its own sound
         kw = V.settings(ash_cfg)
@@ -168,6 +192,7 @@ def main() -> None:
     ap.add_argument("--models", type=Path, default=ROOT / "kit" / "ash" / "models")
     ap.add_argument("--ash-voice", type=Path, default=Path.home() / "ash" / "voice" / "voice.json")
     ap.add_argument("--only", default="", help="comma-separated voice ids")
+    ap.add_argument("--more", action="store_true", help="only the takes after the first (the first is kept as it is)")
     a = ap.parse_args()
     if not (a.models / "kokoro-v1.0.onnx").exists():
         sys.exit(f"no Kokoro model in {a.models} (see CLAUDE.md: the kit's model files)")
@@ -180,10 +205,13 @@ def main() -> None:
     report = json.loads(report_path.read_text()) if report_path.exists() else {}
     want = [v for v in voice_ids() if not a.only or v in a.only.split(",")]
     refused = []
+    jobs = [(vid, n, line) for vid in want for n, line in enumerate(takes_of(vid), 1) if n > 1 or not a.more]
     with tempfile.TemporaryDirectory() as tmp:
-        for i, vid in enumerate(want):
-            audio, sr, line, lang = render(vid, a.models, ash_cfg)
-            wav = Path(tmp) / f"{vid}.wav"
+        for i, (vid, n, want_line) in enumerate(jobs):
+            name = vid if n == 1 else f"{vid}-{n}"  # the file; the report's key is the same with # for -
+            key = vid if n == 1 else f"{vid}#{n}"
+            audio, sr, line, lang = render(vid, a.models, ash_cfg, want_line)
+            wav = Path(tmp) / f"{name}.wav"
             import wave
 
             with wave.open(str(wav), "wb") as w:
@@ -195,21 +223,28 @@ def main() -> None:
             score = alike(line, heard)
             if i == 0:
                 # the control: the same clip against another language's line must NOT pass, or the check proves nothing
-                other = LINES["f" if lang == "en" else "a"][0]
+                other = LINES["f" if lang == "en" else "a"][0]  # (any take: it is another language's line)
                 if alike(other, heard) >= HEARD:
                     sys.exit(f"the check cannot fail: {vid}'s clip scored {alike(other, heard):.2f} against {other!r}")
             seconds = round(len(audio) / sr, 2)
-            print(f"{vid:14} {score:.2f}  {seconds:4.1f}s  heard: {heard}")
+            print(f"{name:16} {score:.2f}  {seconds:4.1f}s  heard: {heard}")
             if score < HEARD:
-                refused.append(vid)
-                (out / f"{vid}.mp3").unlink(missing_ok=True)
-                report[vid] = {"line": line, "heard": heard, "alike": round(score, 2), "kept": False}
+                refused.append(name)
+                (out / f"{name}.mp3").unlink(missing_ok=True)
+                report[key] = {"line": line, "heard": heard, "alike": round(score, 2), "kept": False}
                 continue
-            subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(wav), "-ac", "1", "-ar", "24000", "-c:a", "libmp3lame", "-b:a", "40k", str(out / f"{vid}.mp3")], check=True)
-            report[vid] = {"line": line, "heard": heard, "alike": round(score, 2), "seconds": seconds, "kept": True}
+            subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(wav), "-ac", "1", "-ar", "24000", "-c:a", "libmp3lame", "-b:a", "40k", str(out / f"{name}.mp3")], check=True)
+            report[key] = {"line": line, "heard": heard, "alike": round(score, 2), "seconds": seconds, "kept": True}
     report_path.write_text(json.dumps(dict(sorted(report.items())), ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
-    kept = sum(1 for v in want if v not in refused)
-    print(f"\n{kept} of {len(want)} kept in {out.relative_to(ROOT)}" + (f"; not heard right, so not kept: {', '.join(refused)}" if refused else ""))
+    # the app's list of each voice's takes, in order, from the files that were kept (a take Whisper did
+    # not hear right is left out, and the voice's next press goes on to the one after)
+    takes: dict[str, list[str]] = {}
+    for vid in voice_ids():
+        files = [f"{vid}.mp3" if n == 1 else f"{vid}-{n}.mp3" for n in range(1, len(takes_of(vid)) + 1)]
+        takes[vid] = [f for f in files if (out / f).exists()]
+    (APP / "src" / "orb" / "takes.json").write_text(json.dumps(takes, indent=0) + "\n", encoding="utf-8")
+    kept = len(jobs) - len(refused)
+    print(f"\n{kept} of {len(jobs)} kept in {out.relative_to(ROOT)}" + (f"; not heard right, so not kept: {', '.join(refused)}" if refused else ""))
     sys.exit(1 if refused else 0)
 
 

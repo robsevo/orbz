@@ -899,6 +899,14 @@ void main(){
   }
 
   // ---- outer glow ---------------------------------------------------------
+  // HIS WINDOW IS NEVER SEEN (owner, 10-04: "its shadow kind of gives away the container its in, you
+  // see the dark square ... especially when an animation passes through"). What he gives off (this
+  // glow, the shadow under him, a waking bloom) reached the window's edge at 10-15% when he listened,
+  // talked or hopped, and the edge fade below cut it square. Now it fades to nothing on an oval inside
+  // the window, held by the window, not by him, so a hop carries none of it to an edge.
+  vec2 qw = gl_FragCoord.xy - uRes*0.5; qw.y = -qw.y; qw.y += uRes.y*(0.5 - uCy);
+  vec2 qh = vec2(uRes.x*0.5, qw.y > 0.0 ? uRes.y*(1.0 - uCy) : uRes.y*uCy);
+  float room = 1.0 - smoothstep(0.58, 0.96, length(qw/qh));
   float g = exp(-max(0.0, db-Rg) / (Rg*0.30));   // the glow follows the body's shape
   float wsG = clamp(speak*(0.50 + 0.80*uLevel), 0.0, 1.0);
   float wtG = clamp(think*(0.62 + 0.22*sin(t*1.25)), 0.0, 1.0);
@@ -917,13 +925,14 @@ void main(){
   // (only the light that comes on with him — awake, hearing, talking — so the resting look is his)
   float gpRest = 0.09 + 0.055*max(0.0, uBreath)*(1.0 - awake);
   col += mix(MIDS, hueGlow, cwGlow) * g * (gpRest + (gp - gpRest + 0.12*cwGlow) * glowIn);
-  A = max(A, g * gp * 0.78);
+  // (its cover outside him is about half what it was: on a light page it read as a dark cloud, owner 10-04)
+  A = max(A, g * gp * 0.40 * room);
 
   // cast glow beneath, offset down: gives it somewhere to sit
   vec2 sp = vec2(p.x, p.y + Rg*0.62) * vec2(1.0, 1.9);
   float sh = exp(-max(0.0, length(sp)-Rg*0.52) / (Rg*0.34));
   col += DEEP * sh * 0.16;
-  A = max(A, sh * 0.13);
+  A = max(A, sh * 0.09 * room);
 
   // ---- waking -------------------------------------------------------------
   // Was a hard ring expanding outward - a shockwave, and the most mechanical thing on him.
@@ -932,7 +941,7 @@ void main(){
   if (uWake > 0.001) {
     float b = exp(-max(0.0, db - Rg) / (Rg*0.55)) * uWake;
     col += mix(PALE, hueGlow, cwGlow*0.85) * b * 0.55;
-    A = max(A, b*0.45);
+    A = max(A, b*0.45*room);
     // and the body itself lifts, so the bloom reads as him brightening, not a light behind him
     col += mix(PALE, hueGlow, cwGlow*0.7) * exp(-db/(Rg*0.9)) * uWake * 0.10;
   }
@@ -988,7 +997,7 @@ void main(){
     }
     if (h.y > 1.5) {                                               // and the bead's glow reaches past it
       float gl = exp(-max(0.0, h.x)/0.10)*0.55;
-      col += uAccCol2*gl*0.6; A = max(A, gl*0.5);
+      col += uAccCol2*gl*0.6; A = max(A, gl*0.5*room);
     }
   }
 

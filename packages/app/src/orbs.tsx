@@ -14,7 +14,10 @@ import { createRoot } from "react-dom/client";
 import { HUES, MATERIALS, stylesheet, type HueName } from "./design/tokens.ts";
 import { hex } from "./design/color.ts";
 import { Orb } from "./orb/Orb.tsx";
-import { Balanced, OneLine, useMore } from "./ui/Balanced.tsx";
+import { DESIGN } from "./orb/renderer.ts";
+import { CEILING, grownOf, grownSays, type Move, SKILL_MAX, TOTAL } from "./orb/dna.ts";
+import { readStrand, shareOf, strandOf } from "./orb/strand.ts";
+import { Balanced, OneLine, Tall, useMore } from "./ui/Balanced.tsx";
 import { Paged } from "./ui/Paged.tsx";
 import { installFeel } from "./ui/feel.ts";
 import { setSounds, soundsOn } from "./ui/sound.ts";
@@ -28,7 +31,7 @@ import { NoticesRoom, useNotices } from "./rooms/Notices.tsx";
 import { CalendarRoom } from "./rooms/Calendar.tsx";
 import { LabRoom } from "./rooms/Lab.tsx";
 import { Chat } from "./rooms/Chat.tsx";
-import { connect, idOf, keepOffice, keptOffice, type Office, passkeysHere, signInWithPasskey, type Standing, type Tab as SessionTab } from "./home/link.ts";
+import { type CareerState, connect, idOf, keepOffice, keptOffice, type Office, passkeysHere, signInWithPasskey, type Standing, type Tab as SessionTab } from "./home/link.ts";
 import { DEMO_CREW } from "./orb/demo.ts";
 import { NEWBORN } from "./onboarding/story.ts";
 import type { Gesture, OrbState } from "./orb/life.ts";
@@ -43,7 +46,7 @@ import { applyTheme, savedTheme } from "./ui/theme.ts";
 
 applyTheme(savedTheme(), false); // before the first paint: the theme you chose, never a flash of another
 import {
-  ASH, EYES, FAMILIES, FINISHES, GLASSES, HATS, offered, orbName, type AccessoryHue, PERSONALITIES, REPLIES, SHAPES, sheetOf, speaks, SPECIALTIES, surprise, voice, VOICES, withPersonality,
+  ASH, EYES, FAMILIES, FINISHES, GLASSES, HATS, offered, orbName, partnerOf, type Scheme, SCHEMES, type AccessoryHue, PERSONALITIES, REPLIES, SHAPES, sheetOf, speaks, SPECIALTIES, surprise, voice, VOICES, withPersonality,
   type Character, type EyesName, type Family, type FinishName, type GlassesName, type HatName, type PersonalityName, type Replies, type ShapeName, type SpecialtyName,
 } from "./orb/spec.ts";
 
@@ -109,30 +112,153 @@ function DieIcon({ size = 16, spins = 0 }: { size?: number; spins?: number }) {
   );
 }
 
+// ── Roll everything, as a change (owner, 10-04: "a cooler animation when pressing rolling everything?
+// kind of like a pokemon evolving or smt. but quick"): the orb goes white and glowing, flickers
+// between the old and the new faster and faster, bursts in a flash and a ring of sparks, and comes
+// back in the new one's colours with a hop. Under a second; still for anyone who asked for less motion.
+const EVOLVE_MS = 900;
+const FLIPS = [110, 210, 290, 355, 410, 455, 495, 530, 560]; // the new one shows after each odd flip; the last is the new
+const REVEAL = 600; // when the colour starts to come back (and the hop)
+const calm = (): boolean => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+const ease = (x: number): number => 1 - (1 - Math.min(1, Math.max(0, x))) ** 3;
+const SPARK = "M0 -6 C.8 -1.6 1.6 -.8 6 0 C1.6 .8 .8 1.6 0 6 C-.8 1.6 -1.6 .8 -6 0 C-1.6 -.8 -.8 -1.6 0 -6 Z";
+
+/** The cradle's orb: as he is, or changing from `from` into him. */
+function Evolving({ me, from, size, state, gesture }: { me: Character; from: { c: Character; n: number } | null; size: number; state: OrbState; gesture: { name: Gesture; n: number } | null }) {
+  const [e, setE] = useState<number | null>(null);
+  useEffect(() => {
+    if (!from || calm()) return;
+    const start = performance.now();
+    let raf = 0;
+    const tick = (): void => {
+      const d = performance.now() - start;
+      setE(d >= EVOLVE_MS ? null : d);
+      if (d < EVOLVE_MS) raf = requestAnimationFrame(tick);
+    };
+    setE(0);
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [from?.n]);
+  const changing = e !== null && from !== null;
+  const t = e ?? EVOLVE_MS;
+  const flipped = FLIPS.filter((f) => t >= f);
+  const showNew = !changing || flipped.length % 2 === 1;
+  // how white he is: in over the first flip, held through the flicker, back to colour after the flash
+  const white = !changing ? 0 : t < FLIPS[0]! ? ease(t / FLIPS[0]!) : t < REVEAL ? 1 : 1 - ease((t - REVEAL) / (EVOLVE_MS - 20 - REVEAL));
+  const kick = flipped.length ? 0.06 * Math.exp(-(t - flipped[flipped.length - 1]!) / 60) : 0;
+  const look: CSSProperties = changing
+    ? { filter: `contrast(${1 - white}) brightness(${1 + white}) drop-shadow(0 0 ${12 * white}px var(--flash-glow))`, transform: `scale(${1 + 0.035 * white + kick})` }
+    : {};
+  const burst = changing ? (t - FLIPS[FLIPS.length - 1]!) / 340 : -1; // the flash and the sparks
+  const h = (size * DESIGN.h) / DESIGN.w;
+  const cy = h * DESIGN.cy; // his centre, where the flash comes from
+  return (
+    <span data-evolve={changing ? (showNew ? "new" : "old") : undefined} style={{ position: "relative", display: "grid", width: size, height: h }}>
+      <Orb character={me} size={size} state={state} gesture={gesture} style={{ gridArea: "1 / 1", ...look, opacity: showNew ? 1 : 0 }} />
+      {changing && (
+        // who he was, for the moment of the change: not pressable, and not read out as a second orb
+        <span aria-hidden style={{ gridArea: "1 / 1", opacity: showNew ? 0 : 1, pointerEvents: "none" }}>
+          <Orb character={from.c} size={size} state={state} poke={false} style={look} />
+        </span>
+      )}
+      {burst >= 0 && burst < 1 && (
+        <span aria-hidden style={{ position: "absolute", left: 0, top: 0, width: size, height: h, pointerEvents: "none" }}>
+          <span style={{ position: "absolute", left: size / 2 - size * 0.45, top: cy - size * 0.45, width: size * 0.9, height: size * 0.9, borderRadius: "50%", background: "radial-gradient(circle, var(--flash) 0%, var(--flash-mid) 34%, var(--flash-none) 70%)", transform: `scale(${0.3 + 1.7 * ease(burst)})`, opacity: 1 - burst }} />
+          {Array.from({ length: 8 }, (_, i) => {
+            const a = (i / 8) * Math.PI * 2 + 0.4;
+            const r = size * (0.18 + 0.52 * ease(burst * 1.15)) * (i % 2 ? 0.82 : 1);
+            return (
+              <svg key={i} width="14" height="14" viewBox="-7 -7 14 14" style={{ position: "absolute", left: size / 2 + Math.cos(a) * r - 7, top: cy + Math.sin(a) * r - 7, opacity: 1 - burst * burst, transform: `scale(${1.3 - 0.6 * burst}) rotate(${burst * 90}deg)`, filter: "drop-shadow(0 0 4px var(--accent))", overflow: "visible" }}>
+                <path d={SPARK} fill="var(--flash)" />
+              </svg>
+            );
+          })}
+        </span>
+      )}
+    </span>
+  );
+}
+
 function Head({ children }: { children: ReactNode }) {
   return <span style={s.head}>{children}</span>;
 }
 
-function Bars({ items }: { items: { name: string; value: number }[] }) {
+/** His traits (his DNA, orb/dna.ts): each out of the ceiling, a tick where his nature put it, and how
+ * far everything he is moved it. They always add up to the same total. */
+function Bars({ items, max = CEILING, kind = "traits" }: { items: { name: string; value: number; nature: number }[]; max?: number; kind?: "traits" | "skills" }) {
   return (
-    <div style={{ display: "grid", gap: 6 }}>
-      {items.map((t) => (
-        <div key={t.name} style={{ display: "grid", gridTemplateColumns: "84px 1fr", alignItems: "center", gap: 10, minWidth: 0 }}>
-          <span style={{ font: "600 12px/16px var(--font)", color: "var(--text-3)" }}>{t.name}</span>
-          <span aria-label={`${t.name} ${t.value} of 5`} style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 3 }}>
-            {[1, 2, 3, 4, 5].map((n) => (
-              <i key={n} style={{ height: 6, borderRadius: 3, background: n <= t.value ? "var(--accent)" : "var(--fill-2)" }} />
-            ))}
-          </span>
-        </div>
+    <div data-traits={kind === "traits" ? "" : undefined} data-skills={kind === "skills" ? "" : undefined} style={{ display: "grid", gap: 6 }}>
+      {items.map((t) => {
+        const moved = Math.round((t.value - t.nature) * 10) / 10;
+        return (
+          <div key={t.name} data-trait={t.name} style={{ display: "grid", gridTemplateColumns: "84px 1fr 52px", alignItems: "center", gap: 10, minWidth: 0 }}>
+            <span style={{ font: "600 12px/16px var(--font)", color: "var(--text-3)" }}>{t.name}</span>
+            <span style={{ display: "grid", alignItems: "center", height: 16 }}>
+              <span role="img" aria-label={`${t.name} ${t.value} of ${max}${moved ? `, ${moved > 0 ? "up" : "down"} ${Math.abs(moved)} from ${kind === "traits" ? "its nature" : "where it started"}` : ""}`} style={{ position: "relative", height: 6, borderRadius: 3, background: "var(--fill-2)" }}>
+                <i style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${(t.value / max) * 100}%`, borderRadius: 3, background: "var(--accent)", transition: "width var(--m-base) var(--m-spring)" }} />
+                <i aria-hidden style={{ position: "absolute", top: -3, bottom: -3, left: `calc(${(t.nature / max) * 100}% - 1px)`, width: 2, borderRadius: 1, background: "var(--text-2)" }} />
+              </span>
+            </span>
+            <span className="num" style={{ font: "600 12px/16px var(--font)", color: "var(--text-2)", textAlign: "right", whiteSpace: "nowrap" }}>
+              {Math.round(t.value)}
+              {moved !== 0 && <span style={{ color: moved > 0 ? "var(--accent)" : "var(--text-3)" }}>{` ${moved > 0 ? "+" : "−"}${Math.abs(Math.round(moved))}`}</span>}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** His DNA strand (owner, 10-04: "a unique dna strand number or string the user gets and can share with
+ * others or recreate the orb in question"): everything he is made of, to copy and share; pasted into
+ * the creator, it makes him again (orb/strand.ts). */
+function Strand({ c }: { c: Character }) {
+  const [copied, setCopied] = useState(false);
+  let strand: string | null = null;
+  try {
+    strand = strandOf(c);
+  } catch {
+    return null; // an orb from before strands, with dice too big for one: nothing to share
+  }
+  const copy = (): void => {
+    const text = shareOf(c);
+    void (navigator.clipboard?.writeText(text) ?? Promise.reject(new Error("no clipboard"))).then(() => setCopied(true), () => setCopied(false));
+  };
+  return (
+    <div data-strand style={{ display: "grid", gap: 4 }}>
+      <Head>DNA</Head>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+        <span data-dna style={{ font: "600 14px/20px var(--mono)", color: "var(--text-1)", letterSpacing: ".04em", userSelect: "all" }}>{strand}</span>
+        <button onClick={copy} data-sound="pick" style={{ ...s.chip, padding: "4px 12px" }}>{copied ? "Copied" : "Copy"}</button>
+      </div>
+      <span style={{ font: "400 12px/16px var(--font)", color: "var(--text-3)" }}>Share it: pasted into New orb, it makes {c.name || "this orb"} again, traits and all.</span>
+    </div>
+  );
+}
+
+/** What shaped him: the biggest moves of his DNA, a clash first, each with what it took and gave. */
+function Shaped({ c, moves }: { c: Character; moves: Move[] }) {
+  const top = [...moves].sort((a, b) => Number(Boolean(b.clash)) - Number(Boolean(a.clash)) || b.n - a.n).slice(0, 5);
+  return (
+    <div data-shaped style={{ display: "grid", gap: 4 }}>
+      <Head>What shaped {c.name || "your orb"}</Head>
+      {top.map((m, i) => (
+        <span key={i} data-move={m.clash ? "clash" : "choice"} style={{ font: "400 13px/18px var(--font)", color: "var(--text-2)", textWrap: "pretty" }}>
+          {m.clash && <b style={{ color: "var(--accent)", fontWeight: 700 }}>Clash · </b>}
+          {cap(m.why)}: <span className="num">{m.to} +{m.n}, {m.from} −{m.n}</span>
+        </span>
       ))}
     </div>
   );
 }
 
 
-function Sheet({ c, onRename, replies, standing, startsAs }: { c: Character; onRename?: (name: string) => void; replies: Replies; standing?: Standing | null; startsAs?: "Junior" | "Senior" }) {
+function Sheet({ c, onRename, replies, standing, startsAs, career }: { c: Character; onRename?: (name: string) => void; replies: Replies; standing?: Standing | null; startsAs?: "Junior" | "Senior"; career?: CareerState | null }) {
   const sh = sheetOf(c);
+  // what his graded work has grown him into (PLAN 3.11), once a home has some to show
+  const grown = career ? grownOf(c, sh.leans, career.radar, career.niches, sh.dna) : null;
+  const grew = grown?.niche ? grown : null;
   const v = voice(c.voice);
   const name = { font: "800 26px/32px var(--font)", color: "var(--accent)" } satisfies CSSProperties;
   return (
@@ -170,7 +296,9 @@ function Sheet({ c, onRename, replies, standing, startsAs }: { c: Character; onR
           </span>
         )}
       </div>
-      <p style={{ margin: 0, font: "400 15px/21px var(--font)", color: "var(--text-2)", textWrap: "balance" }}>{sh.bio}</p>
+      {/* on a phone the rest scrolls under his name (owner, 10-04) */}
+      <Tall label={`${c.name || "Your orb"}'s card`} style={{ display: "grid", gap: "var(--s4)" }}>
+      <p style={{ margin: 0, font: "400 15px/21px var(--font)", color: "var(--text-2)", textWrap: "pretty" }}>{grew ? `${sh.bio} ${grownSays(grew)}` : sh.bio}</p>
       {/* a role a licence stands behind says so: he is a persona that helps, never the professional */}
       {"limits" in SPECIALTIES[c.specialty] && (
         <p style={{ margin: 0, font: "400 13px/18px var(--font)", color: "var(--text-3)" }}>{(SPECIALTIES[c.specialty] as { limits: string }).limits}</p>
@@ -192,12 +320,22 @@ function Sheet({ c, onRename, replies, standing, startsAs }: { c: Character; onR
       </div>
       <div style={{ display: "grid", gap: "var(--s2)" }}>
         <Head>Traits</Head>
-        <Bars items={sh.traits} />
+        <Bars items={grew ? grew.traits : sh.traits} />
+        <span style={{ font: "400 12px/16px var(--font)", color: "var(--text-3)" }}>{TOTAL} points across them, like every orb</span>
       </div>
+      <Shaped c={c} moves={grew ? [...grew.moves, ...sh.dna.moves] : sh.dna.moves} />
+      <Strand key={c.name + c.seed} c={c} />
+      {grew && (
+        <div style={{ display: "grid", gap: "var(--s2)" }}>
+          <Head>Grown from work</Head>
+          <Bars kind="skills" max={SKILL_MAX} items={grew.skills.map((k) => ({ name: k.name, value: k.value, nature: k.start }))} />
+        </div>
+      )}
       <div style={{ display: "grid", gap: "var(--s2)" }}>
         <Head>Leans toward</Head>
         <Radar items={sh.leans} />
       </div>
+      </Tall>
     </div>
   );
 }
@@ -314,18 +452,23 @@ function Tabs({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
   );
 }
 
-function Creator({ me, edit, replies, setReplies }: { me: Character; edit: (p: Partial<Character>) => void; replies: Replies; setReplies: (r: Replies) => void }) {
+function Creator({ me, edit, replies, setReplies, first = false }: { me: Character; edit: (p: Partial<Character>) => void; replies: Replies; setReplies: (r: Replies) => void; first?: boolean }) {
   const [tab, setTab] = useState<Tab>("Personality");
+  // a colour that goes with his (spec.ts SCHEMES): what the colour dice roll, like Roll everything's
+  const partner = (): HueName => partnerOf(me.hue, pick(Object.keys(SCHEMES) as Scheme[]), Math.random());
   useEffect(() => stopPreview, []); // a voice still talking when the creator closes stops with it
   const hues = HUES.map((h) => h.name);
   const dice: Record<Tab, () => void> = {
     Personality: () => edit(withPersonality(me, pick(Object.keys(PERSONALITIES) as PersonalityName[]))),
-    Specialty: () => edit({ specialty: pick(Object.keys(SPECIALTIES) as SpecialtyName[]) }),
+    Specialty: () => edit({ specialty: first ? "assistant" : pick(Object.keys(SPECIALTIES) as SpecialtyName[]) }),
     Shape: () => edit({ shape: pick(Object.keys(SHAPES) as ShapeName[]) }),
     Eyes: () => edit({ eyes: pick(Object.keys(EYES) as EyesName[]) }),
-    Hat: () => edit({ hat: pick(Object.keys(HATS) as HatName[]), hatHue: Math.random() < 0.35 ? pick(hues) : null }),
-    Glasses: () => edit({ glasses: pick(Object.keys(GLASSES) as GlassesName[]), glassesHue: Math.random() < 0.35 ? pick(hues) : null }),
-    Colour: () => edit({ hue: pick(hues), hue2: Math.random() < 0.25 ? pick(hues) : null, finish: Math.random() < 0.7 ? "glass" : pick(Object.keys(FINISHES) as FinishName[]) }),
+    Hat: () => edit({ hat: pick(Object.keys(HATS) as HatName[]), hatHue: Math.random() < 0.35 ? partner() : null }),
+    Glasses: () => edit({ glasses: pick(Object.keys(GLASSES) as GlassesName[]), glassesHue: Math.random() < 0.35 ? partner() : null }),
+    Colour: () => {
+      const hue = pick(hues);
+      edit({ hue, hue2: Math.random() < 0.25 ? partnerOf(hue, "analogous", Math.random()) : null, finish: Math.random() < 0.7 ? "glass" : pick(Object.keys(FINISHES) as FinishName[]) });
+    },
     Voice: () => edit({ voice: pick(VOICES.filter((v) => v.english && offered(v) && v.id !== "ash" && v.id !== "silent").map((v) => v.id)) }),
   };
   const P = PERSONALITIES[me.personality];
@@ -343,10 +486,18 @@ function Creator({ me, edit, replies, setReplies }: { me: Character; edit: (p: P
         <span style={{ font: "700 17px/22px var(--font)", color: "var(--text-1)" }}>{tab}</span>
         <Die label={`Roll ${tab.toLowerCase()}`} onRoll={dice[tab]} />
       </div>
+      <Tall label={`${tab} choices`} style={{ display: "grid", gap: "var(--s4)" }}>
       {tab === "Personality" && (
         <Cards value={me.personality} entries={(Object.keys(PERSONALITIES) as PersonalityName[]).map((k) => [k, PERSONALITIES[k].label, PERSONALITIES[k].blurb])} onPick={(p) => edit(withPersonality(me, p))} />
       )}
-      {tab === "Specialty" && (
+      {tab === "Specialty" && first && (
+        // the first orb is your assistant (owner, 10-04): the rest you hire after
+        <div data-first-assistant style={{ display: "grid", gap: 8 }}>
+          <span style={{ font: "400 14px/20px var(--font)", color: "var(--text-2)" }}>Your first orb is your assistant: they plan everything, your days, your reminders and who does what. Hire the rest after.</span>
+          <Cards value={me.specialty} entries={[["assistant", SPECIALTIES.assistant.title, cap(SPECIALTIES.assistant.focus)]]} onPick={(specialty) => edit({ specialty })} />
+        </div>
+      )}
+      {tab === "Specialty" && !first && (
         <div style={{ display: "grid", gap: "var(--s4)" }}>
           {(Object.keys(FAMILIES) as Family[]).map((fam) => (
             <div key={fam} style={{ display: "grid", gap: 8 }}>
@@ -428,6 +579,7 @@ function Creator({ me, edit, replies, setReplies }: { me: Character; edit: (p: P
           ))}
         </div>
       )}
+      </Tall>
     </div>
   );
 }
@@ -551,6 +703,10 @@ function App() {
   const [leaving, setLeaving] = useState<string | null>(null);
   const [arrived, setArrived] = useState<string | null>(null);
   const [rolls, setRolls] = useState(0);
+  const [evolve, setEvolve] = useState<{ c: Character; n: number } | null>(null); // Roll everything: who he was
+  const recent = useRef<string[]>([]); // the names rolled lately: a roll brings a new one
+  const [strandText, setStrandText] = useState(""); // a DNA strand pasted into the creator
+  const [strandSaid, setStrandSaid] = useState<string | null>(null);
   const [seatHop, setSeatHop] = useState(0); // the New orb seat's orb hops as the pointer comes to it
   const lastReact = useRef(0);
   const [opening, setOpening] = useState(splashWanted);
@@ -625,10 +781,14 @@ function App() {
   const moods = useMoods(home, office.map((c) => idOf(c.name))); // the side menu's dots (PLAN 2.4)
   // where he stands, on a home (PLAN 3.8): his level and XP, kept up as they change
   const [standing, setStanding] = useState<Standing | null>(null);
+  const [career, setCareer] = useState<CareerState | null>(null); // what his work has grown him into (PLAN 3.11)
   useEffect(() => {
-    if (!home || view.kind === "new") return void setStanding(null);
+    if (!home || view.kind === "new") return void (setStanding(null), setCareer(null));
     const c = me;
-    const load = (): void => void home.standing(c).then(setStanding, () => setStanding(null));
+    const load = (): void => {
+      void home.standing(c).then(setStanding, () => setStanding(null));
+      void home.career(c).then(setCareer, () => setCareer(null));
+    };
     load();
     return home.watch({ event: (e) => void (e.orb === idOf(c.name) && /^(xp\.|orb\.promoted|promotion\.)/.test(e.type) && load()) });
   }, [home, view.kind === "new" ? "" : me.name]);
@@ -645,8 +805,9 @@ function App() {
   const startsAs = (making ? !office.some((o) => o.specialty === me.specialty) : office.find((o) => o.specialty === me.specialty) === me) ? "Senior" : "Junior";
   /** A new orb by the dice, with a name nobody in the office has. */
   const fresh = (): Character => {
-    let c = surprise(roll());
-    for (let i = 0; i < 40 && taken(c.name); i++) c = { ...c, name: orbName(() => Math.random()) };
+    let c = surprise(roll(), office.length ? {} : { specialty: "assistant" }); // the first is always the assistant
+    for (let i = 0; i < 40 && (taken(c.name) || recent.current.includes(c.name)); i++) c = { ...c, name: orbName(() => Math.random()) };
+    recent.current = [c.name, ...recent.current].slice(0, 40);
     return c;
   };
   const edit = (patch: Partial<Character>): void => {
@@ -683,7 +844,7 @@ function App() {
       setLeaving(null);
       setOffice(rest);
       const next = rest[Math.max(0, i - 1)];
-      setView(next ? { kind: "orb", name: next.name } : { kind: "new", draft: surprise(roll()) });
+      setView(next ? { kind: "orb", name: next.name } : { kind: "new", draft: surprise(roll(), { specialty: "assistant" }) });
       history.replaceState(history.state, "", routeHash(next ? { room: "office", orb: next.name } : { room: "new" }));
     }, 260);
   };
@@ -904,7 +1065,7 @@ function App() {
               <SoundIcon on={sounds} />
             </button>
             <span style={{ ...s.head }}>{making ? "A new orb" : "In the office"}</span>
-            <Orb character={me} size={176} state={worn} gesture={gesture} />
+            <Evolving me={me} from={evolve} size={176} state={worn} gesture={gesture} />
             {live && !picked && WORN[live.mood].words && (
               <span data-mood={live.mood} style={{ font: "600 13px/18px var(--font)", color: "var(--text-2)" }}>
                 {WORN[live.mood].words}
@@ -932,9 +1093,11 @@ function App() {
                   data-sound="roll"
                   style={{ ...s.btn, display: "inline-flex", alignItems: "center", gap: 8 }}
                   onClick={() => {
+                    setEvolve((x) => ({ c: me, n: (x?.n ?? 0) + 1 }));
                     edit(fresh());
                     setRolls((n) => n + 1);
-                    play("hop");
+                    // the hop as his colours come back (at once, with less motion)
+                    window.setTimeout(() => play("hop"), calm() ? 0 : REVEAL);
                   }}
                 >
                   <DieIcon size={18} spins={rolls} />
@@ -945,18 +1108,41 @@ function App() {
                 </button>
               </OneLine>
             )}
+            {making && (
+              // an orb from its DNA: someone's strand, pasted, and the creator changes into that orb
+              <form
+                data-from-dna
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const read = readStrand(strandText, me.name || undefined);
+                  if (!read.ok) return void setStrandSaid(read.why);
+                  setStrandSaid(null);
+                  setStrandText("");
+                  setEvolve((x) => ({ c: me, n: (x?.n ?? 0) + 1 }));
+                  edit(read.orb);
+                  window.setTimeout(() => play("hop"), calm() ? 0 : REVEAL);
+                }}
+                style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 8, width: "min(100%, 460px)" }}
+              >
+                <input value={strandText} onChange={(e) => (setStrandText(e.target.value), setStrandSaid(null))} aria-label="DNA strand" placeholder="Paste a DNA strand" size={1}
+                  style={{ flex: "1 1 220px", minWidth: 0, font: "500 13px/18px var(--mono)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 10, padding: "8px 12px", boxShadow: "inset 0 0 0 .5px var(--hairline)" }} />
+                <button type="submit" disabled={!strandText.trim()} style={{ ...s.chip, opacity: strandText.trim() ? 1 : 0.5 }}>Make it</button>
+                {strandSaid && <span role="alert" style={{ flex: "1 1 100%", textAlign: "center", font: "500 13px/18px var(--font)", color: "var(--alert)" }}>{strandSaid}</span>}
+              </form>
+            )}
             <p style={{ margin: 0, font: "400 13px/18px var(--font)", color: blocked ? "var(--alert)" : "var(--text-3)", textAlign: "center" }}>
               {blocked ?? `${name || "Your orb"}, ${sheetOf(me).title}. Give a click, or move your pointer: the eyes follow.`}
             </p>
           </div>
 
           <div className="orbs-pair" style={{ display: "grid", gap: "var(--s4)", padding: "0 var(--s5)", gridTemplateColumns: "minmax(0, 1fr)", alignItems: "start" }}>
-            <Sheet c={me} onRename={making ? (n) => edit({ name: n }) : undefined} replies={replies} standing={making ? null : standing} startsAs={startsAs} />
-            {making ? <Creator me={me} edit={edit} replies={replies} setReplies={setReplies} /> : <Card c={me} replies={replies} setReplies={setReplies} onDelete={(handTo) => remove(me.name, handTo)} onChat={() => go({ room: "chat", orb: me.name })} onCareer={() => go({ room: "career", orb: me.name })} others={office.filter((o) => o.name !== me.name)} />}
+            <Sheet c={me} onRename={making ? (n) => edit({ name: n }) : undefined} replies={replies} standing={making ? null : standing} startsAs={startsAs} career={making ? null : career} />
+            {making ? <Creator me={me} edit={edit} replies={replies} setReplies={setReplies} first={!office.length} /> : <Card c={me} replies={replies} setReplies={setReplies} onDelete={(handTo) => remove(me.name, handTo)} onChat={() => go({ room: "chat", orb: me.name })} onCareer={() => go({ room: "career", orb: me.name })} others={office.filter((o) => o.name !== me.name)} />}
           </div>
 
           <div style={{ padding: "0 var(--s5)" }}>
             <div style={{ ...s.head, margin: "0 0 var(--s3)" }}>The office</div>
+            <Tall max="56dvh" label="The office">
             <Balanced
               min={144}
               gap={12}
@@ -1004,6 +1190,7 @@ function App() {
                 </button>
               ))}
             </Balanced>
+            </Tall>
           </div>
         </section>
         )}

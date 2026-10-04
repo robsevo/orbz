@@ -11,7 +11,7 @@ export type Person = { name: string; since: number };
 
 /** Who tells it: your first orb, before you have made him (a plain bean, no name yet). */
 export const NEWBORN: Character = {
-  name: "", personality: "steady", specialty: "general", seed: 7, hue: "azure", hue2: null, finish: "glass",
+  name: "", personality: "steady", specialty: "assistant", seed: 7, hue: "azure", hue2: null, finish: "glass",
   shape: "bean", eyes: "classic", hat: "none", glasses: "none", voice: "am_michael", goo: 0.6,
 };
 /** What his nameplate says until he has a name. */
@@ -41,7 +41,9 @@ export const STORY: readonly Beat[] = [
   // and input gemini api key and if they want to add a local coder, then go to create orb screen")
   { kind: "say", who: "new", text: "First, though, I need a brain to think with. Give me one or two, and I'll use the first that can answer." },
   { kind: "brains" },
-  { kind: "say", who: "new", text: "One problem: I don't have a name yet. Or a look. Or a thing I'm good at. Will you make me?" },
+  // the first orb is always the assistant (owner, 10-04: "that should be the first thing the user has to choose,
+  // an assistant orb. they plan everythhhhhhing")
+  { kind: "say", who: "new", text: "I'll be your assistant: I plan everything, your days, your reminders, and who does what. One problem: I don't have a name yet. Or a look. Will you make me?" },
   { kind: "hire" },
 ];
 

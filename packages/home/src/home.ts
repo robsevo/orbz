@@ -189,6 +189,17 @@ export class Home {
   readonly vault: Vault;
   /** Sessions (PLAN 2.9): a Brainstorm and a Floor, the orbs chosen for each taking their turns. */
   readonly team: Team;
+  /** Who keeps a reminder an orb makes (owner, 10-04: "hand off the planning notif to the persons
+   * assistant orb, which should always be the case, even in the code"; "they plan everything"): the
+   * office's assistant (the first hired, still here), unless the orb is one itself; a bill an accountant
+   * keeps stays with the accountant, who holds the bills; with no assistant in the office, the orb. */
+  plannerFor(orb: string, kind: "bill" | "reminder"): { id: string; name: string } {
+    const me = this.inbox.orb(orb);
+    if (!me || me.specialty === "assistant" || (kind === "bill" && me.specialty === "accountant")) return { id: orb, name: me?.name ?? orb };
+    const assistant = this.inbox.orbs().find((o) => o.specialty === "assistant");
+    return assistant ? { id: assistant.id, name: assistant.name } : { id: orb, name: me.name };
+  }
+
   /** The recruiter (PLAN 5.8): the positions you are hiring for, and who applied. */
   readonly recruiter: Recruiter;
   /** School (PLAN 5.7): an orb you let go, learning the subjects you picked, night by night. */
@@ -374,8 +385,9 @@ export class Home {
           notebook: (orb) => this.school.notebook(orb), // what it kept at school (PLAN 5.7) goes to work with it
           searchKey: () => this.brains.searchKey(),
           remind: (orb, conversation, r) => {
-            const kept = this.notices.remind({ ...r, orb, conversation });
-            return { id: kept.id, comesUpAt: comesUpAt(kept.due, kept.aheadDays) };
+            const keeper = this.plannerFor(orb, r.kind);
+            const kept = this.notices.remind({ ...r, orb: keeper.id, conversation });
+            return { id: kept.id, comesUpAt: comesUpAt(kept.due, kept.aheadDays), ...(keeper.id !== orb && { keeper: keeper.name }) };
           },
           reminders: () => this.notices.reminders(),
           moveReminder: (id, due) => this.notices.move(id, due),

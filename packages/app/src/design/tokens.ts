@@ -253,6 +253,11 @@ export const QR_COLOURS = { ink: parseHex("#121214"), paper: parseHex("#FFFFFF")
 
 function staticVars(): string {
   const v: Record<string, string> = { "--margin": `${MARGIN}px`, "--font": FONT, "--mono": MONO, "--qr-ink": hex(QR_COLOURS.ink), "--qr-paper": hex(QR_COLOURS.paper) };
+  // the app's icon (owner, 10-04: "make the phone app logo much more addicting to want to press and see, it should
+  // make you happy to see in your phone"): a sunny sky behind the orbs, a glow, sparkles
+  Object.assign(v, { "--icon-sun": "#ffe066", "--icon-warm": "#ffa340", "--icon-hot": "#ff5d8f", "--icon-deep": "#a24bd6", "--icon-glow": "rgba(255, 252, 230, 0.85)", "--icon-glow-none": "rgba(255, 252, 230, 0)", "--icon-spark": "#fffdf2" });
+  // the light of an orb changing (Roll everything, owner 10-04): its glow, the flash and the sparks, the same in every theme
+  Object.assign(v, { "--flash": "#ffffff", "--flash-glow": "rgba(255, 255, 255, 0.9)", "--flash-mid": "rgba(255, 255, 255, 0.55)", "--flash-none": "rgba(255, 255, 255, 0)" });
   for (const [k, px] of Object.entries(SPACE)) v[`--s${k}`] = `${px}px`;
   for (const [k, px] of Object.entries(RADIUS)) v[`--r-${k}`] = `${px}px`;
   for (const [k, [size, line, weight]] of Object.entries(TYPE)) v[`--t-${k}`] = `${weight} ${size}px/${line}px ${FONT}`;
@@ -293,6 +298,12 @@ export function stylesheet(fontUrl = "fonts/Nunito.ttf"): string {
     // a row that scrolls fades out at the edge where there is more (ui/Balanced.tsx useMore)
     `.one-line[data-more="right"] { mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }`,
     `.one-line[data-more="left"] { mask-image: linear-gradient(to left, #000 calc(100% - 28px), transparent); }`,
+    // on a phone, a container with too much in it scrolls inside itself (owner, 10-04: "if theres too much info in
+    // any container, make it scrollable"), a fade where there is more (ui/Balanced.tsx Tall)
+    `@media (max-width: 760px) { .orbs-tall { max-height: var(--tall, 72dvh); overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-width: thin; }`,
+    `  .orbs-tall[data-more="down"] { mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent); }`,
+    `  .orbs-tall[data-more="up"] { mask-image: linear-gradient(to top, #000 calc(100% - 36px), transparent); }`,
+    `  .orbs-tall[data-more="up down"] { mask-image: linear-gradient(to bottom, transparent, #000 36px, #000 calc(100% - 36px), transparent); } }`,
     `.one-line[data-more="left right"] { mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); }`,
     `.num { font-variant-numeric: tabular-nums; }`,
     // a press you can feel (owner, 10-01): down it squishes at once, up it springs back past where

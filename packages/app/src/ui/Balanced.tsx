@@ -66,6 +66,40 @@ export function useMore(ref: RefObject<HTMLElement | null>): void {
   });
 }
 
+/** Marks a tall box with where there is more to scroll to ("up", "down"), for its fade. */
+function useMoreDown(ref: RefObject<HTMLElement | null>): void {
+  useLayoutEffect(() => {
+    const el = ref.current!;
+    const mark = (): void => {
+      const more = [el.scrollTop > 1 ? "up" : "", el.scrollTop + el.clientHeight < el.scrollHeight - 1 ? "down" : ""].filter(Boolean).join(" ");
+      if ((el.dataset.more ?? "") !== more) el.dataset.more = more;
+    };
+    mark();
+    el.addEventListener("scroll", mark, { passive: true });
+    const ro = new ResizeObserver(mark);
+    ro.observe(el);
+    for (const k of el.children) ro.observe(k);
+    return () => {
+      el.removeEventListener("scroll", mark);
+      ro.disconnect();
+    };
+  });
+}
+
+/** A box that, on a phone, holds no more than most of the screen and scrolls inside itself, with a fade
+ * where there is more (owner, 10-04: "mobile has to be a little more mobile friendly, if theres too much
+ * info in any container, make it scrollable"); wider, it is just its children. `max` is how much of the
+ * screen it may take. The rule is the app's stylesheet's `.orbs-tall`. */
+export function Tall({ children, max = "72dvh", style, label }: { children: ReactNode; max?: string; style?: CSSProperties; label?: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useMoreDown(ref);
+  return (
+    <div ref={ref} className="orbs-tall" aria-label={label} style={{ ...style, ["--tall" as string]: max }}>
+      {children}
+    </div>
+  );
+}
+
 /** A row of choices on one line: centred when it fits, scrolling sideways (with a fade) when it does not. */
 export function OneLine({ children, gap = 6, style }: { children: ReactNode; gap?: number; style?: CSSProperties }) {
   const ref = useRef<HTMLDivElement>(null);

@@ -1,0 +1,338 @@
+{
+"ash": [
+"ash.mp3",
+"ash-2.mp3",
+"ash-3.mp3",
+"ash-4.mp3",
+"ash-5.mp3",
+"ash-6.mp3"
+],
+"af_alloy": [
+"af_alloy.mp3",
+"af_alloy-2.mp3",
+"af_alloy-3.mp3",
+"af_alloy-4.mp3",
+"af_alloy-5.mp3",
+"af_alloy-6.mp3"
+],
+"af_aoede": [
+"af_aoede.mp3",
+"af_aoede-2.mp3",
+"af_aoede-3.mp3",
+"af_aoede-4.mp3",
+"af_aoede-5.mp3",
+"af_aoede-6.mp3"
+],
+"af_bella": [
+"af_bella.mp3",
+"af_bella-2.mp3",
+"af_bella-3.mp3",
+"af_bella-4.mp3",
+"af_bella-5.mp3",
+"af_bella-6.mp3"
+],
+"af_heart": [
+"af_heart.mp3",
+"af_heart-2.mp3",
+"af_heart-3.mp3",
+"af_heart-4.mp3",
+"af_heart-5.mp3",
+"af_heart-6.mp3"
+],
+"af_jessica": [
+"af_jessica.mp3",
+"af_jessica-2.mp3",
+"af_jessica-3.mp3",
+"af_jessica-4.mp3",
+"af_jessica-5.mp3",
+"af_jessica-6.mp3"
+],
+"af_kore": [
+"af_kore.mp3",
+"af_kore-2.mp3",
+"af_kore-3.mp3",
+"af_kore-4.mp3",
+"af_kore-5.mp3",
+"af_kore-6.mp3"
+],
+"af_nicole": [
+"af_nicole.mp3",
+"af_nicole-2.mp3",
+"af_nicole-3.mp3",
+"af_nicole-4.mp3",
+"af_nicole-5.mp3",
+"af_nicole-6.mp3"
+],
+"af_nova": [
+"af_nova.mp3",
+"af_nova-2.mp3",
+"af_nova-3.mp3",
+"af_nova-4.mp3",
+"af_nova-5.mp3",
+"af_nova-6.mp3"
+],
+"af_river": [
+"af_river.mp3",
+"af_river-2.mp3",
+"af_river-3.mp3",
+"af_river-4.mp3",
+"af_river-5.mp3",
+"af_river-6.mp3"
+],
+"af_sarah": [
+"af_sarah.mp3",
+"af_sarah-2.mp3",
+"af_sarah-3.mp3",
+"af_sarah-4.mp3",
+"af_sarah-5.mp3",
+"af_sarah-6.mp3"
+],
+"af_sky": [
+"af_sky.mp3",
+"af_sky-2.mp3",
+"af_sky-3.mp3",
+"af_sky-4.mp3",
+"af_sky-5.mp3",
+"af_sky-6.mp3"
+],
+"am_adam": [
+"am_adam.mp3",
+"am_adam-2.mp3",
+"am_adam-3.mp3",
+"am_adam-4.mp3",
+"am_adam-5.mp3",
+"am_adam-6.mp3"
+],
+"am_echo": [
+"am_echo.mp3",
+"am_echo-2.mp3",
+"am_echo-3.mp3",
+"am_echo-4.mp3",
+"am_echo-5.mp3",
+"am_echo-6.mp3"
+],
+"am_eric": [
+"am_eric.mp3",
+"am_eric-2.mp3",
+"am_eric-3.mp3",
+"am_eric-4.mp3",
+"am_eric-5.mp3",
+"am_eric-6.mp3"
+],
+"am_fenrir": [
+"am_fenrir.mp3",
+"am_fenrir-2.mp3",
+"am_fenrir-3.mp3",
+"am_fenrir-4.mp3",
+"am_fenrir-5.mp3",
+"am_fenrir-6.mp3"
+],
+"am_liam": [
+"am_liam.mp3",
+"am_liam-2.mp3",
+"am_liam-3.mp3",
+"am_liam-4.mp3",
+"am_liam-5.mp3",
+"am_liam-6.mp3"
+],
+"am_michael": [
+"am_michael.mp3",
+"am_michael-2.mp3",
+"am_michael-3.mp3",
+"am_michael-4.mp3",
+"am_michael-5.mp3",
+"am_michael-6.mp3"
+],
+"am_onyx": [
+"am_onyx.mp3",
+"am_onyx-2.mp3",
+"am_onyx-3.mp3",
+"am_onyx-4.mp3",
+"am_onyx-5.mp3",
+"am_onyx-6.mp3"
+],
+"am_puck": [
+"am_puck.mp3",
+"am_puck-2.mp3",
+"am_puck-3.mp3",
+"am_puck-4.mp3",
+"am_puck-5.mp3",
+"am_puck-6.mp3"
+],
+"am_santa": [
+"am_santa.mp3",
+"am_santa-2.mp3",
+"am_santa-3.mp3",
+"am_santa-4.mp3",
+"am_santa-5.mp3",
+"am_santa-6.mp3"
+],
+"bf_alice": [
+"bf_alice.mp3",
+"bf_alice-2.mp3",
+"bf_alice-3.mp3",
+"bf_alice-4.mp3",
+"bf_alice-5.mp3",
+"bf_alice-6.mp3"
+],
+"bf_emma": [
+"bf_emma.mp3",
+"bf_emma-2.mp3",
+"bf_emma-3.mp3",
+"bf_emma-4.mp3",
+"bf_emma-5.mp3",
+"bf_emma-6.mp3"
+],
+"bf_isabella": [
+"bf_isabella.mp3",
+"bf_isabella-2.mp3",
+"bf_isabella-3.mp3",
+"bf_isabella-4.mp3",
+"bf_isabella-5.mp3",
+"bf_isabella-6.mp3"
+],
+"bf_lily": [
+"bf_lily.mp3",
+"bf_lily-2.mp3",
+"bf_lily-3.mp3",
+"bf_lily-4.mp3",
+"bf_lily-5.mp3",
+"bf_lily-6.mp3"
+],
+"bm_daniel": [
+"bm_daniel.mp3",
+"bm_daniel-2.mp3",
+"bm_daniel-3.mp3",
+"bm_daniel-4.mp3",
+"bm_daniel-5.mp3",
+"bm_daniel-6.mp3"
+],
+"bm_fable": [
+"bm_fable.mp3",
+"bm_fable-2.mp3",
+"bm_fable-3.mp3",
+"bm_fable-4.mp3",
+"bm_fable-5.mp3",
+"bm_fable-6.mp3"
+],
+"bm_george": [
+"bm_george.mp3",
+"bm_george-2.mp3",
+"bm_george-3.mp3",
+"bm_george-4.mp3",
+"bm_george-5.mp3",
+"bm_george-6.mp3"
+],
+"bm_lewis": [
+"bm_lewis.mp3",
+"bm_lewis-2.mp3",
+"bm_lewis-3.mp3",
+"bm_lewis-4.mp3",
+"bm_lewis-5.mp3",
+"bm_lewis-6.mp3"
+],
+"ef_dora": [
+"ef_dora.mp3",
+"ef_dora-2.mp3",
+"ef_dora-3.mp3"
+],
+"em_alex": [
+"em_alex.mp3",
+"em_alex-2.mp3",
+"em_alex-3.mp3"
+],
+"em_santa": [
+"em_santa.mp3",
+"em_santa-2.mp3",
+"em_santa-3.mp3"
+],
+"ff_siwis": [
+"ff_siwis.mp3",
+"ff_siwis-2.mp3",
+"ff_siwis-3.mp3"
+],
+"hf_alpha": [
+"hf_alpha.mp3",
+"hf_alpha-2.mp3",
+"hf_alpha-3.mp3"
+],
+"hf_beta": [
+"hf_beta.mp3",
+"hf_beta-2.mp3",
+"hf_beta-3.mp3"
+],
+"hm_omega": [
+"hm_omega.mp3",
+"hm_omega-2.mp3",
+"hm_omega-3.mp3"
+],
+"hm_psi": [
+"hm_psi.mp3",
+"hm_psi-2.mp3",
+"hm_psi-3.mp3"
+],
+"if_sara": [
+"if_sara.mp3",
+"if_sara-2.mp3",
+"if_sara-3.mp3"
+],
+"im_nicola": [
+"im_nicola.mp3",
+"im_nicola-2.mp3",
+"im_nicola-3.mp3"
+],
+"jf_alpha": [
+"jf_alpha.mp3"
+],
+"jf_gongitsune": [
+"jf_gongitsune.mp3"
+],
+"jf_nezumi": [
+"jf_nezumi.mp3"
+],
+"jf_tebukuro": [
+"jf_tebukuro.mp3"
+],
+"jm_kumo": [
+"jm_kumo.mp3"
+],
+"pf_dora": [
+"pf_dora.mp3",
+"pf_dora-2.mp3",
+"pf_dora-3.mp3"
+],
+"pm_alex": [
+"pm_alex.mp3",
+"pm_alex-2.mp3",
+"pm_alex-3.mp3"
+],
+"pm_santa": [
+"pm_santa.mp3",
+"pm_santa-2.mp3",
+"pm_santa-3.mp3"
+],
+"zf_xiaobei": [
+"zf_xiaobei.mp3"
+],
+"zf_xiaoni": [
+"zf_xiaoni.mp3"
+],
+"zf_xiaoxiao": [
+"zf_xiaoxiao.mp3"
+],
+"zf_xiaoyi": [
+"zf_xiaoyi.mp3"
+],
+"zm_yunjian": [
+"zm_yunjian.mp3"
+],
+"zm_yunxi": [
+"zm_yunxi.mp3"
+],
+"zm_yunxia": [
+"zm_yunxia.mp3"
+],
+"zm_yunyang": [
+"zm_yunyang.mp3"
+]
+}
