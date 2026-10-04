@@ -44,8 +44,14 @@ fi
 if [ "${1:-}" = "--restart" ] && alive; then
   PID=$(field pid)
   kill -TERM "$PID" 2>/dev/null
-  for _ in $(seq 1 60); do kill -0 "$PID" 2>/dev/null || break; sleep 0.5; done
-  kill -0 "$PID" 2>/dev/null && { say "the home (pid $PID) did not stop in 30 s"; exit 1; }
+  # it finishes what it is doing first (an orb's turn, the night's school): 30 s was too short
+  # once (10-04), and the home was left stopped. Up to two minutes, saying so after five seconds.
+  for i in $(seq 1 240); do
+    kill -0 "$PID" 2>/dev/null || break
+    [ "$i" = 10 ] && say "the home is finishing what it is doing, then it starts again"
+    sleep 0.5
+  done
+  kill -0 "$PID" 2>/dev/null && { say "the home (pid $PID) did not stop in two minutes"; exit 1; }
 fi
 
 if ! alive; then
