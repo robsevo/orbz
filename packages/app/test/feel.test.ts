@@ -204,8 +204,12 @@ test("a move pressed lights up and fades back; pressed again, it lights again; a
     const first = await lit(hop);
     assert.equal(first.length, 1, "pressed: it lights up");
     assert.match(await hop.evaluate((el) => getComputedStyle(el).boxShadow), /inset/, "with the ring a chosen button wears");
-    await page.waitForTimeout(1100);
-    assert.deepEqual(await lit(hop), [], "and it has faded back within a second");
+    // within a second by its own clock: what it is set to last, then gone once it has played (a fixed wait of
+    // real time read a busy machine's late frames as a light that would not fade, 10-04)
+    const lasts = await hop.evaluate((el) => el.getAnimations().filter((a) => (a as CSSAnimation).animationName?.startsWith("orbs-flash")).map((a) => Number(a.effect?.getTiming().duration)));
+    assert.ok(lasts.length === 1 && lasts[0]! <= 1000, `it is set to fade within a second (${lasts.join(", ")} ms)`);
+    await hop.evaluate((el) => Promise.race([Promise.all(el.getAnimations().map((a) => a.finished.catch(() => undefined))), new Promise((r) => setTimeout(r, 6000))]));
+    assert.deepEqual(await lit(hop), [], "and it has faded back");
     await hop.click();
     const again = await lit(hop);
     assert.equal(again.length, 1, "pressed again: lit again");

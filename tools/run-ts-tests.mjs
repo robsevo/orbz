@@ -16,7 +16,9 @@ if (files.length === 0) {
 // Half the cores at once, not all of them: most app suites draw in their own Chromium (software
 // WebGL), and eleven at once on twelve cores starved each other until long tests ran past their
 // minute (10-02). Fewer at once finishes about as soon, and each test runs at its own pace.
-const at = Math.max(2, Math.floor(availableParallelism() / 2));
+// A third, since 10-04: at six at once the picture tests (the creator's hat colours, 21 s alone) ran past
+// two minutes, on this morning's code as on the evening's; at four each keeps nearer its own pace.
+const at = Math.max(2, Math.floor(availableParallelism() / 3));
 // The voice suites (Chromium's microphone, the kit's Kokoro and Whisper, all on the CPU) run after the
 // rest, one at a time: beside six other suites, Whisper's part of "press to talk" took 99 s and ran
 // past its minute's wait, and alone it takes 33 s (10-03). Both groups always run, and either one red

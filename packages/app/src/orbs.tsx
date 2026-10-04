@@ -189,6 +189,8 @@ function Evolving({ me, from, size, state, gesture, onDone }: { me: Character; f
     return () => {
       cancelAnimationFrame(raf);
       if (mine.current) mine.current.style.filter = mine.current.style.opacity = mine.current.style.transform = "";
+      // left before the end (another room, say): the change counts as over, so his card is his again
+      onDone?.(from.n);
     };
   }, [from?.n]);
   const h = (size * DESIGN.h) / DESIGN.w;
@@ -755,7 +757,6 @@ function App() {
   // his card says who he is only once he has been shown whole (owner, 10-04: "only show the orbs info when the
   // orb has been shown completely"): until the change is over it still says who he was
   const [shown, setShown] = useState(0);
-  const before = evolve && evolve.n !== shown ? evolve.c : null;
   const recent = useRef<string[]>([]); // the names rolled lately: a roll brings a new one
   const [strandText, setStrandText] = useState(""); // a DNA strand pasted into the creator
   const [strandSaid, setStrandSaid] = useState<string | null>(null);
@@ -825,6 +826,7 @@ function App() {
   }, [office, home]);
 
   const making = view.kind === "new";
+  const before = making && evolve && evolve.n !== shown ? evolve.c : null;
   const at = view.kind === "orb" ? Math.max(0, office.findIndex((c) => c.name === view.name)) : -1;
   const me = view.kind === "new" ? view.draft : office[at] ?? NEWBORN;
   // his real mood, on a home (PLAN 2.3): what happens to him, worn by the face
@@ -1194,7 +1196,7 @@ function App() {
 
           <div style={{ padding: "0 var(--s5)" }}>
             <div style={{ ...s.head, margin: "0 0 var(--s3)" }}>The office</div>
-            <Tall max="56dvh" label="The office">
+            <Tall max="34dvh" label="The office">
             <Balanced
               min={144}
               gap={12}
