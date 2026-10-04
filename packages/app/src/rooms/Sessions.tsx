@@ -60,7 +60,7 @@ function SessionList(o: { home: Office; office: Character[]; sessions: Session[]
   return (
     <div style={{ display: "grid", gap: "var(--s5)", padding: "var(--s5)", alignContent: "start", minWidth: 0 }}>
       <h2 style={{ margin: 0, font: "800 28px/34px var(--font)", color: "var(--text-1)" }}>Sessions</h2>
-      <section aria-label="A new session" style={{ display: "grid", gap: "var(--s3)", padding: "var(--s4)", borderRadius: 18, background: "var(--fill)", boxShadow: "inset 0 0 0 .5px var(--hairline)" }}>
+      <section aria-label="A new session" style={{ display: "grid", gap: "var(--s3)", padding: "var(--s4)", borderRadius: 18, background: "var(--fill)", boxShadow: "inset 0 0 0 1px var(--hairline)" }}>
         <span style={{ font: "700 15px/20px var(--font)", color: "var(--text-1)" }}>A new session: a piece of work, brainstormed, then done</span>
         <input value={title} onChange={(e) => setTitle(e.target.value)} aria-label="What the session is for" placeholder="A landing page, the month's budget, a trip to Lisbon…" size={1} style={{ font: "600 16px/22px var(--font)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 10, padding: "10px 12px", outline: 0, boxShadow: "inset 0 0 0 1px var(--hairline)", minWidth: 0 }} />
         <span style={{ font: "700 11px/16px var(--font)", letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)" }}>Who's in</span>
@@ -100,7 +100,7 @@ function Picker({ office, chosen, set }: { office: Character[]; chosen: string[]
         const id = idOf(c.name);
         const on = chosen.includes(id);
         return (
-          <button key={id} data-orb={c.hue} aria-pressed={on} onClick={() => set(on ? chosen.filter((x) => x !== id) : [...chosen, id])} style={{ ...button, display: "grid", justifyItems: "center", gap: 2, padding: "6px 10px", borderRadius: 14, background: on ? "var(--accent-fill)" : "var(--fill)", boxShadow: on ? "inset 0 0 0 1.5px var(--accent)" : "inset 0 0 0 .5px var(--hairline)" }}>
+          <button key={id} data-orb={c.hue} aria-pressed={on} onClick={() => set(on ? chosen.filter((x) => x !== id) : [...chosen, id])} style={{ ...button, display: "grid", justifyItems: "center", gap: 2, padding: "6px 10px", borderRadius: 14, background: on ? "var(--accent-fill)" : "var(--fill)", boxShadow: on ? "inset 0 0 0 1.5px var(--accent)" : "inset 0 0 0 1px var(--hairline)" }}>
             <Orb character={c} size={44} poke={false} still />
             <span style={{ font: "700 12px/16px var(--font)", color: on ? "var(--text-1)" : "var(--text-3)" }}>{c.name}</span>
           </button>

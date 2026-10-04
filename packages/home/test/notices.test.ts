@@ -135,3 +135,21 @@ test("an orb's reminder is handed to the person's assistant, who plans everythin
   assert.deepEqual(h.home.inbox.orbs().filter((o) => o.specialty === "assistant"), [], "Maya let go");
   assert.equal(h.home.plannerFor("basil", "reminder").id, "basil", "control: with no assistant here, the orb keeps it");
 });
+
+test("the app's door takes the same port each start, and another when that one is taken", async (t) => {
+  // owner, 10-04: "when a user changes theme, it has to be persistent": the app keeps it by address
+  const a = await agentHome(t, []);
+  const b = await agentHome(t, []);
+  const first = await serve(a.home, { port: 0 });
+  t.after(() => first.close());
+  const port = first.port;
+  // control: asked for a taken port with no fallback, it fails as before
+  await assert.rejects(serve(b.home, { port }), /EADDRINUSE/);
+  const second = await serve(b.home, { port, portFallback: true });
+  t.after(() => second.close());
+  assert.notEqual(second.port, port, "taken: another port");
+  await first.close();
+  const again = await serve(a.home, { port, portFallback: true });
+  t.after(() => again.close());
+  assert.equal(again.port, port, "free: the same port as before");
+});

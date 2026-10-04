@@ -80,7 +80,7 @@ export function RecruiterRoom({ home, office, hired }: { home: Office | null; of
             {who.map((a) => {
               const c = applicant(a.seed, k as Kind, taken);
               return (
-                <article key={a.id} data-applicant={a.id} data-orb={c.hue} style={{ display: "grid", gap: 8, padding: "var(--s3)", borderRadius: 16, background: "var(--card)", boxShadow: "inset 0 0 0 .5px var(--hairline)", minWidth: 0 }}>
+                <article key={a.id} data-applicant={a.id} data-orb={c.hue} style={{ display: "grid", gap: 8, padding: "var(--s3)", borderRadius: 16, background: "var(--card)", boxShadow: "inset 0 0 0 1px var(--hairline)", minWidth: 0 }}>
                   <div style={{ display: "flex", gap: 12, alignItems: "center", minWidth: 0 }}>
                     <Orb character={c} size={64} poke={false} still />
                     <span style={{ display: "grid", minWidth: 0 }}>

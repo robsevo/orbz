@@ -12,7 +12,7 @@ import { Recorder, tempDir } from "./helpers.ts";
 const MAIN = new URL("../src/main.ts", import.meta.url).pathname;
 
 function start(dataDir: string): { child: ChildProcessWithoutNullStreams; out: () => string; exit: Promise<number | null> } {
-  const child = spawn(process.execPath, [MAIN, "--data", dataDir], { env: { ...process.env, ORBS_HOME: "" } });
+  const child = spawn(process.execPath, [MAIN, "--data", dataDir], { env: { ...process.env, ORBS_HOME: "", ORBS_PORT: "0" } });
   let out = "";
   child.stdout.on("data", (b: Buffer) => (out += b.toString()));
   child.stderr.on("data", (b: Buffer) => (out += b.toString()));

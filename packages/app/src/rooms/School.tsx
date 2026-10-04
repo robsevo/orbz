@@ -33,7 +33,7 @@ export function SchoolSheet({ home, orb, name, sent }: { home: Office; orb: stri
   const subjects = [...SUBJECTS.filter((s) => picked.includes(s.kind)).map((s) => ({ kind: s.kind as string })), ...(own.trim() ? [{ kind: "custom", name: own.trim() }] : [])];
   const toggle = (k: string): void => setPicked((p) => (p.includes(k) ? p.filter((x) => x !== k) : [...p, k]));
   return (
-    <div role="group" aria-label={`Send ${name} to school`} data-school-sheet={orb} style={{ display: "grid", gap: 10, padding: "var(--s3)", borderRadius: 14, background: "var(--card)", boxShadow: "inset 0 0 0 .5px var(--hairline)", minWidth: 0 }}>
+    <div role="group" aria-label={`Send ${name} to school`} data-school-sheet={orb} style={{ display: "grid", gap: 10, padding: "var(--s3)", borderRadius: 14, background: "var(--card)", boxShadow: "inset 0 0 0 1px var(--hairline)", minWidth: 0 }}>
       <span style={head}>Subjects</span>
       <Balanced min={140} gap={6}>
         {SUBJECTS.map((s) => {

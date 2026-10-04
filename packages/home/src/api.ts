@@ -77,7 +77,7 @@ class HttpError extends Error {
 /** Where the built app is (`pnpm -C packages/app build`), served at /app/. */
 export const APP_DIR = fileURLToPath(new URL("../../app/dist/", import.meta.url));
 
-export async function serve(home: Home, opts: { port?: number; appDir?: string; remote?: Remote } = {}): Promise<HomeDoor> {
+export async function serve(home: Home, opts: { port?: number; portFallback?: boolean; appDir?: string; remote?: Remote } = {}): Promise<HomeDoor> {
   const token = randomBytes(24).toString("base64url");
   const want = Buffer.from(`Bearer ${token}`);
   const sessions = home.sessions;
@@ -97,10 +97,20 @@ export async function serve(home: Home, opts: { port?: number; appDir?: string; 
       });
   };
   const server: Server = createServer(handler(() => server, false));
-  await new Promise<void>((ok, fail) => {
-    server.once("error", fail);
-    server.listen(opts.port ?? 0, "127.0.0.1", () => ok());
-  });
+  // the same port every time when it is free (owner, 10-04: "when a user changes theme, it has to be
+  // persistent"): the app keeps the theme and the rest in the browser, by address, and a new port each
+  // start was a new address; taken (another home, a test), any port, as before
+  const listen = (port: number): Promise<void> =>
+    new Promise<void>((ok, fail) => {
+      server.once("error", fail);
+      server.listen(port, "127.0.0.1", () => (server.off("error", fail), ok()));
+    });
+  try {
+    await listen(opts.port ?? 0);
+  } catch (e) {
+    if (!(opts.portFallback && (e as NodeJS.ErrnoException).code === "EADDRINUSE")) throw e;
+    await listen(0);
+  }
   const port = (server.address() as { port: number }).port;
   const addr = server.address();
   if (!addr || typeof addr === "string") throw new Error("the home's door has no port");

@@ -157,7 +157,7 @@ export function NoticesRoom(o: { home: Office | null; office: Character[]; notic
             {list.map((n) => {
               const where = whereOf(n, o.office);
               return (
-                <article key={n.id} data-notice={n.kind} style={{ display: "grid", gridTemplateColumns: "auto minmax(0, 1fr) auto", gap: "6px 10px", alignItems: "start", padding: "10px 12px", borderRadius: 14, background: "var(--card)", boxShadow: n.kind === "approval" || n.kind === "bill" ? "inset 0 0 0 1.5px var(--accent)" : "inset 0 0 0 .5px var(--hairline)", minWidth: 0 }}>
+                <article key={n.id} data-notice={n.kind} style={{ display: "grid", gridTemplateColumns: "auto minmax(0, 1fr) auto", gap: "6px 10px", alignItems: "start", padding: "10px 12px", borderRadius: 14, background: "var(--card)", boxShadow: n.kind === "approval" || n.kind === "bill" ? "inset 0 0 0 1.5px var(--accent)" : "inset 0 0 0 1px var(--hairline)", minWidth: 0 }}>
                   <span aria-hidden style={{ width: 28, height: 28, borderRadius: "50%", display: "grid", placeItems: "center", background: "var(--accent-fill)", color: "var(--accent)", font: "800 14px/16px var(--font)" }}>{MARK[n.kind]}</span>
                   <span style={{ display: "grid", minWidth: 0 }}>
                     <span style={{ font: "700 14px/19px var(--font)", color: "var(--text-1)", overflowWrap: "break-word", textWrap: "balance" }}>{n.title}</span>
@@ -208,7 +208,7 @@ export function NoticesRoom(o: { home: Office | null; office: Character[]; notic
 /** Your day (PLAN 4.5): the brief in Ash's words, and what clashes, named, never moved for you. */
 function YourDayCard(o: { day: Extract<YourDay, { brief: string }>; go: (r: Route) => void }) {
   return (
-    <section aria-label="Your day" data-day style={{ display: "grid", gap: "var(--s3)", padding: "var(--s4)", borderRadius: 18, background: "var(--card)", boxShadow: "inset 0 0 0 .5px var(--hairline)", minWidth: 0 }}>
+    <section aria-label="Your day" data-day style={{ display: "grid", gap: "var(--s3)", padding: "var(--s4)", borderRadius: 18, background: "var(--card)", boxShadow: "inset 0 0 0 1px var(--hairline)", minWidth: 0 }}>
       <span style={{ font: "800 17px/22px var(--font)", color: "var(--text-1)" }}>Your day</span>
       <span style={{ font: "400 15px/22px var(--font)", color: "var(--text-1)", textWrap: "pretty", overflowWrap: "anywhere" }}>{o.day.brief}</span>
       {o.day.clashes.length > 0 && (
@@ -234,7 +234,7 @@ function YourDayCard(o: { day: Extract<YourDay, { brief: string }>; go: (r: Rout
 function Morning(o: { card: MorningCard; office: Character[]; takeBack: (u: Undo) => void }) {
   const day = new Date(`${o.card.day}T12:00:00`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
   return (
-    <section aria-label="This morning" data-morning={o.card.day} style={{ display: "grid", gap: "var(--s3)", padding: "var(--s4)", borderRadius: 18, background: "var(--card)", boxShadow: "inset 0 0 0 .5px var(--hairline)", minWidth: 0 }}>
+    <section aria-label="This morning" data-morning={o.card.day} style={{ display: "grid", gap: "var(--s3)", padding: "var(--s4)", borderRadius: 18, background: "var(--card)", boxShadow: "inset 0 0 0 1px var(--hairline)", minWidth: 0 }}>
       <span style={{ display: "grid" }}>
         <span style={{ font: "800 17px/22px var(--font)", color: "var(--text-1)" }}>This morning</span>
         <span style={{ font: "400 12px/17px var(--font)", color: "var(--text-3)" }}>{day}, and the night after it</span>

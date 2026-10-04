@@ -40,7 +40,7 @@ type Surfaces = {
   raised: RGB; // a control or the composer on the card
   fill: RGBA; // a chip, a button at rest
   fill2: RGBA; // the same, chosen or hovered
-  hairline: RGBA; // the glass edge: an inset shadow, never a border line
+  hairline: RGBA; // the glass edge: an inset shadow, never a border line (a little stronger since 10-04: "the sections ... kind of blend in sometimes")
   sep: RGBA; // the one line Ash draws, between the sidebar and the chat
   shadow: RGBA;
   scrim: RGBA;
@@ -62,7 +62,7 @@ export const SURFACES: Record<ThemeId, Surfaces> = {
     raised: parseHex("#2A2A2D"),
     fill: [255, 255, 255, 0.06],
     fill2: [255, 255, 255, 0.12],
-    hairline: [255, 255, 255, 0.12],
+    hairline: [255, 255, 255, 0.18],
     sep: [255, 255, 255, 0.06],
     shadow: [0, 0, 0, 0.38],
     scrim: [0, 0, 0, 0.55],
@@ -82,7 +82,7 @@ export const SURFACES: Record<ThemeId, Surfaces> = {
     raised: parseHex("#EFEFF3"),
     fill: [0, 0, 0, 0.05],
     fill2: [0, 0, 0, 0.09],
-    hairline: [0, 0, 0, 0.1],
+    hairline: [0, 0, 0, 0.15],
     sep: [0, 0, 0, 0.06],
     shadow: [0, 0, 0, 0.1],
     scrim: [0, 0, 0, 0.3],
@@ -98,7 +98,7 @@ export const SURFACES: Record<ThemeId, Surfaces> = {
   // deep navy, the night sky over the office
   midnight: {
     ground: parseHex("#090D1A"), card: parseHex("#121A2E"), side: parseHex("#0E1526"), raised: parseHex("#1C2640"),
-    fill: [190, 210, 255, 0.07], fill2: [190, 210, 255, 0.13], hairline: [190, 210, 255, 0.13], sep: [190, 210, 255, 0.07],
+    fill: [190, 210, 255, 0.07], fill2: [190, 210, 255, 0.13], hairline: [190, 210, 255, 0.19], sep: [190, 210, 255, 0.07],
     shadow: [0, 0, 8, 0.45], scrim: [0, 0, 8, 0.6],
     text1: parseHex("#F1F5FF"), text2: parseHex("#DCE3F5"), text3: parseHex("#9DABC9"), quiet: parseHex("#55617F"),
     alert: parseHex("#D6A45E"), ok: parseHex("#3DDC84"), busy: parseHex("#FFD60A"), off: parseHex("#FF5A5F"),
@@ -106,7 +106,7 @@ export const SURFACES: Record<ThemeId, Surfaces> = {
   // deep green, a plant in the corner
   forest: {
     ground: parseHex("#0A120E"), card: parseHex("#15201A"), side: parseHex("#101914"), raised: parseHex("#1F2D25"),
-    fill: [200, 255, 220, 0.06], fill2: [200, 255, 220, 0.12], hairline: [200, 255, 220, 0.12], sep: [200, 255, 220, 0.06],
+    fill: [200, 255, 220, 0.06], fill2: [200, 255, 220, 0.12], hairline: [200, 255, 220, 0.18], sep: [200, 255, 220, 0.06],
     shadow: [0, 6, 2, 0.42], scrim: [0, 6, 2, 0.58],
     text1: parseHex("#F0F7F2"), text2: parseHex("#DCE8E0"), text3: parseHex("#99B0A2"), quiet: parseHex("#587063"),
     alert: parseHex("#D2A25A"), ok: parseHex("#4ADE80"), busy: parseHex("#FACC15"), off: parseHex("#FF6B5E"),
@@ -114,7 +114,7 @@ export const SURFACES: Record<ThemeId, Surfaces> = {
   // warm paper
   sand: {
     ground: parseHex("#EEE8DC"), card: parseHex("#FCF9F3"), side: parseHex("#F4EEE3"), raised: parseHex("#F1EADE"),
-    fill: [60, 40, 10, 0.06], fill2: [60, 40, 10, 0.1], hairline: [60, 40, 10, 0.12], sep: [60, 40, 10, 0.07],
+    fill: [60, 40, 10, 0.06], fill2: [60, 40, 10, 0.1], hairline: [60, 40, 10, 0.17], sep: [60, 40, 10, 0.07],
     shadow: [40, 25, 0, 0.12], scrim: [30, 20, 0, 0.32],
     text1: parseHex("#2A2117"), text2: parseHex("#40352A"), text3: parseHex("#685A49"), quiet: parseHex("#B7A992"),
     alert: parseHex("#87561A"), ok: parseHex("#2D7A32"), busy: parseHex("#865A00"), off: parseHex("#B3261E"),
@@ -122,7 +122,7 @@ export const SURFACES: Record<ThemeId, Surfaces> = {
   // soft pink
   rose: {
     ground: parseHex("#EFE1E6"), card: parseHex("#FFF8FA"), side: parseHex("#F8ECF0"), raised: parseHex("#F5E6EB"),
-    fill: [90, 20, 45, 0.05], fill2: [90, 20, 45, 0.09], hairline: [90, 20, 45, 0.11], sep: [90, 20, 45, 0.06],
+    fill: [90, 20, 45, 0.05], fill2: [90, 20, 45, 0.09], hairline: [90, 20, 45, 0.16], sep: [90, 20, 45, 0.06],
     shadow: [60, 0, 20, 0.1], scrim: [50, 0, 20, 0.3],
     text1: parseHex("#2B1820"), text2: parseHex("#452E38"), text3: parseHex("#6E5260"), quiet: parseHex("#C1A6B1"),
     alert: parseHex("#8A4E1E"), ok: parseHex("#22783A"), busy: parseHex("#835700"), off: parseHex("#B4233C"),
@@ -307,10 +307,11 @@ export function stylesheet(fontUrl = "fonts/Nunito.ttf"): string {
     `.one-line { padding-block: 6px; margin-block: -6px; }`,
     // on a phone, a container with too much in it scrolls inside itself (owner, 10-04: "if theres too much info in
     // any container, make it scrollable"), a fade where there is more (ui/Balanced.tsx Tall)
-    `@media (max-width: 760px) { .orbs-tall { max-height: var(--tall, 48dvh); overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-gutter: stable; padding: 6px 14px 6px 0; margin-right: -6px; }`,
-    `  .orbs-tall[data-more="down"] { mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent); }`,
-    `  .orbs-tall[data-more="up"] { mask-image: linear-gradient(to top, #000 calc(100% - 36px), transparent); }`,
-    `  .orbs-tall[data-more="up down"] { mask-image: linear-gradient(to bottom, transparent, #000 36px, #000 calc(100% - 36px), transparent); } }`,
+    `@media (max-width: 760px) { .orbs-tall { max-height: var(--tall, 48dvh); overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-gutter: stable; padding: 6px 14px 6px 0; margin-right: -6px; } }`,
+    // wherever a tall box scrolls (a phone; the card beside the creator on a wide screen), the fade says there is more
+    `.orbs-tall[data-more="down"] { mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent); }`,
+    `.orbs-tall[data-more="up"] { mask-image: linear-gradient(to top, #000 calc(100% - 36px), transparent); }`,
+    `.orbs-tall[data-more="up down"] { mask-image: linear-gradient(to bottom, transparent, #000 36px, #000 calc(100% - 36px), transparent); }`,
     `.one-line[data-more="left right"] { mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); }`,
     `.num { font-variant-numeric: tabular-nums; }`,
     // a press you can feel (owner, 10-01): down it squishes at once, up it springs back past where

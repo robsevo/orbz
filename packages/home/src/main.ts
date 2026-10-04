@@ -43,6 +43,9 @@ if (names.length && (!certFile || !keyFile)) {
   process.exit(2);
 }
 const remotePort = Number(values["remote-port"] ?? process.env.ORBS_REMOTE_PORT ?? 8443);
+// the app's own door on this machine: the same port each start (the browser keeps your theme and the rest by
+// address), unless it is taken; ORBS_PORT=0 for any
+const localPort = Number(process.env.ORBS_PORT ?? 47070);
 
 let home: Home;
 try {
@@ -55,7 +58,7 @@ try {
   throw e;
 }
 home.start();
-const door = await serve(home, names.length ? { remote: { names, cert: readFileSync(certFile!), key: readFileSync(keyFile!), port: remotePort } } : {});
+const door = await serve(home, { port: localPort, portFallback: true, ...(names.length && { remote: { names, cert: readFileSync(certFile!), key: readFileSync(keyFile!), port: remotePort } }) });
 console.log(`orbs home ${version} ready on http://127.0.0.1:${door.port} (data ${home.dataDir}, pid ${process.pid})`);
 // the app, on this machine: a link good once, for five minutes (PLAN 2.4)
 console.log(`open the app: ${door.pairLink()}`);

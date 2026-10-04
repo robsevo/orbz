@@ -55,7 +55,7 @@ export function LabRoom(o: { home: Office | null; office: Character[]; go: (r: R
           <span style={{ font: "700 11px/16px var(--font)", letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)" }}>Brainstorms</span>
           <Balanced min={300} gap={10}>
             {lab.sessions.map((s) => (
-              <article key={s.id} data-brainstorm={s.id} style={{ display: "grid", gap: 8, alignContent: "start", padding: "var(--s4)", borderRadius: 16, background: "var(--card)", boxShadow: "inset 0 0 0 .5px var(--hairline)", minWidth: 0 }}>
+              <article key={s.id} data-brainstorm={s.id} style={{ display: "grid", gap: 8, alignContent: "start", padding: "var(--s4)", borderRadius: 16, background: "var(--card)", boxShadow: "inset 0 0 0 1px var(--hairline)", minWidth: 0 }}>
                 <span style={{ display: "grid", minWidth: 0 }}>
                   <span style={{ font: "800 16px/22px var(--font)", color: "var(--text-1)", overflowWrap: "anywhere", textWrap: "balance" }}>{s.title}</span>
                   <span style={{ font: "400 12px/16px var(--font)", color: "var(--text-3)" }}>{when(s.createdAt)}</span>
@@ -94,7 +94,7 @@ export function LabRoom(o: { home: Office | null; office: Character[]; go: (r: R
               const c = orbOf(p.orb);
               const pct = p.total ? Math.round((p.done / p.total) * 100) : 0;
               return (
-                <article key={p.id} data-plan={p.id} data-orb={c?.hue} style={{ display: "grid", gap: 8, alignContent: "start", padding: "var(--s4)", borderRadius: 16, background: "var(--card)", boxShadow: "inset 0 0 0 .5px var(--hairline)", minWidth: 0 }}>
+                <article key={p.id} data-plan={p.id} data-orb={c?.hue} style={{ display: "grid", gap: 8, alignContent: "start", padding: "var(--s4)", borderRadius: 16, background: "var(--card)", boxShadow: "inset 0 0 0 1px var(--hairline)", minWidth: 0 }}>
                   <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                     {c && <Orb character={c} size={30} poke={false} still />}
                     <span style={{ display: "grid", minWidth: 0 }}>

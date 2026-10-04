@@ -71,7 +71,7 @@ const s = {
   head: { font: "700 11px/16px var(--font)", letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)", margin: 0 },
   btn: { font: "600 14px/20px var(--font)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 10, padding: "8px 14px", cursor: "pointer", boxShadow: "inset 0 0 0 .5px var(--hairline)", minHeight: 36 },
   chip: { font: "600 13px/18px var(--font)", color: "var(--text-2)", background: "var(--fill)", border: 0, borderRadius: 999, padding: "6px 12px", cursor: "pointer", minHeight: 32 },
-  panel: { background: "var(--fill)", borderRadius: 18, boxShadow: "inset 0 0 0 .5px var(--hairline)", padding: "var(--s4)", minWidth: 0, gridTemplateColumns: "minmax(0, 1fr)" },
+  panel: { background: "var(--fill)", borderRadius: 18, boxShadow: "inset 0 0 0 1px var(--hairline)", padding: "var(--s4)", minWidth: 0, gridTemplateColumns: "minmax(0, 1fr)" },
 } satisfies Record<string, CSSProperties>;
 
 const chosen = (on: boolean): CSSProperties => ({
@@ -312,7 +312,7 @@ function Sheet({ c, onRename, replies, standing, startsAs, career }: { c: Charac
   const v = voice(c.voice);
   const name = { font: "800 26px/32px var(--font)", color: "var(--accent)" } satisfies CSSProperties;
   return (
-    <div data-orb={c.hue} style={{ ...s.panel, display: "grid", gap: "var(--s4)" }}>
+    <div data-orb={c.hue} className="orbs-sheet" style={{ ...s.panel, display: "grid", gap: "var(--s4)" }}>
       <div style={{ display: "grid", gap: 4 }}>
         {onRename ? (
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -1179,7 +1179,7 @@ function App() {
                 style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 8, width: "min(100%, 460px)" }}
               >
                 <input value={strandText} onChange={(e) => (setStrandText(e.target.value), setStrandSaid(null))} aria-label="DNA strand" placeholder="Paste a DNA strand" size={1}
-                  style={{ flex: "1 1 220px", minWidth: 0, font: "500 13px/18px var(--mono)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 10, padding: "8px 12px", boxShadow: "inset 0 0 0 .5px var(--hairline)" }} />
+                  style={{ flex: "1 1 220px", minWidth: 0, font: "600 13px/18px var(--font)", letterSpacing: ".03em", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 10, padding: "8px 12px", boxShadow: "inset 0 0 0 .5px var(--hairline)" }} />
                 <button type="submit" disabled={!strandText.trim()} style={{ ...s.chip, opacity: strandText.trim() ? 1 : 0.5 }}>Make it</button>
                 {strandSaid && <span role="alert" style={{ flex: "1 1 100%", textAlign: "center", font: "500 13px/18px var(--font)", color: "var(--alert)" }}>{strandSaid}</span>}
               </form>
@@ -1230,7 +1230,7 @@ function App() {
                   data-orb={c.hue}
                   onClick={() => go({ room: "office", orb: c.name })}
                   style={{
-                    display: "grid", justifyItems: "center", alignContent: "start", gap: 2, padding: "var(--s3) var(--s2)", border: 0, cursor: "pointer", borderRadius: 18, background: !making && c.name === me.name ? "var(--accent-wash)" : "var(--fill)", boxShadow: "inset 0 0 0 .5px var(--hairline)", minWidth: 0,
+                    display: "grid", justifyItems: "center", alignContent: "start", gap: 2, padding: "var(--s3) var(--s2)", border: 0, cursor: "pointer", borderRadius: 18, background: !making && c.name === me.name ? "var(--accent-wash)" : "var(--fill)", boxShadow: "inset 0 0 0 1px var(--hairline)", minWidth: 0,
                     animation: leaving === c.name ? "orbs-leave 260ms var(--m-physical) forwards" : arrived === c.name ? "orbs-arrive 520ms var(--m-spring)" : undefined,
                   }}
                 >
@@ -1266,6 +1266,14 @@ style.textContent = `${stylesheet(`${import.meta.env.BASE_URL}fonts/Nunito.ttf`)
   .orbs-scrim { position: fixed; inset: 0; z-index: 29; background: var(--ground); opacity: .72; }
 }
 @media (min-width: 1100px) { .orbs-pair { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) !important; } }
+/* side by side, no hole under the shorter one (owner, 10-04: "no dead space please. to industry standards"):
+   the row is as tall as the panel beside the card (never under 560px), and the card fills it, its body
+   scrolling under his name with a fade where there is more */
+@media (min-width: 1100px) {
+  .orbs-pair { align-items: stretch !important; }
+  .orbs-pair > .orbs-sheet { height: 0; min-height: max(100%, 560px); display: flex !important; flex-direction: column; }
+  .orbs-pair > .orbs-sheet > .orbs-tall { flex: 1 1 0; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-gutter: stable; padding: 4px 10px 4px 0; margin-right: -6px; }
+}
 /* the work and the chat beside it (a session's Floor, a private chat with his computer open), on a wide screen; one above the other on a narrow one */
 /* the calendar on a phone: each day its number, and a dot for each thing on it (the words are under it, for the day you pick) */
 @media (max-width: 760px) {
