@@ -301,6 +301,9 @@ export function stylesheet(fontUrl = "fonts/Nunito.ttf"): string {
     `button:active:not(:disabled) { translate: 0 1px; scale: .94; transition-duration: 70ms; transition-timing-function: ease-out; }`,
     `button[aria-pressed="true"] { animation: orbs-picked 420ms var(--m-spring); }`,
     `@keyframes orbs-picked { 0% { transform: scale(.9); } 60% { transform: scale(1.05); } 100% { transform: none; } }`,
+    // a move pressed in the creator lights up and fades back (owner, 10-03); two names, so a second press starts it again
+    `@keyframes orbs-flash-a { from { background-color: var(--accent-fill); box-shadow: inset 0 0 0 1.5px var(--accent); color: var(--text-1); } }`,
+    `@keyframes orbs-flash-b { from { background-color: var(--accent-fill); box-shadow: inset 0 0 0 1.5px var(--accent); color: var(--text-1); } }`,
     `@keyframes orbs-roll { 0% { rotate: 0deg; scale: 1; } 45% { scale: 1.3; } 100% { rotate: 360deg; scale: 1; } }`,
     `@keyframes orbs-arrive { 0% { transform: scale(.6); opacity: 0; } 60% { transform: scale(1.06); opacity: 1; } 100% { transform: none; } }`,
     `@keyframes orbs-leave { to { transform: scale(.5); opacity: 0; } }`,

@@ -10,8 +10,16 @@ StartupNotify=true
 StartupWMClass=orbs
 Categories=Office;
 Keywords=orbs;assistant;chat;office;
-Actions=pair;
+Actions=pair;phone;restart;
 
 [Desktop Action pair]
 Name=Pair this window again
 Exec=@HOME@/.local/bin/orbs-open --pair
+
+[Desktop Action phone]
+Name=Open the phone door
+Exec=@HOME@/.local/bin/orbs-open --phone
+
+[Desktop Action restart]
+Name=Restart the home
+Exec=@HOME@/.local/bin/orbs-open --restart

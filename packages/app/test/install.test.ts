@@ -29,6 +29,22 @@ after(() => {
   if (dist) rmSync(dist, { recursive: true, force: true });
 });
 
+test("an iPhone's icon and the title bar's: the page names them; the iPhone's is a full square with no clear pixel; the app is Orbz", { skip }, () => {
+  const html = readFileSync(join(dist, "orbs.html"), "utf8");
+  assert.match(html, /<link rel="apple-touch-icon" sizes="180x180" href="icons\/orbs-apple-180\.png" \/>/);
+  assert.match(html, /<meta name="apple-mobile-web-app-title" content="Orbz" \/>/, "the name under the icon (owner, 10-03)");
+  // a PNG's header: its width, height and colour type (2 is RGB, no alpha; 6 has alpha)
+  const ihdr = (f: string): number[] => {
+    const b = readFileSync(join(dist, "icons", f));
+    return [b.readUInt32BE(16), b.readUInt32BE(20), b[25]!];
+  };
+  assert.deepEqual(ihdr("orbs-apple-180.png"), [180, 180, 2], "180 by 180 and opaque: an iPhone rounds it itself and paints a clear pixel black");
+  for (const n of [32, 16]) {
+    assert.match(html, new RegExp(`<link rel="icon" type="image/png" sizes="${n}x${n}" href="icons/orbs-${n}\\.png" />`), `the title bar's ${n}`);
+    assert.deepEqual(ihdr(`orbs-${n}.png`).slice(0, 2), [n, n]);
+  }
+});
+
 test("served by a home, the app installs: a manifest from the tokens, its icons, nothing Chromium objects to", { skip, timeout: 120_000 }, async (t) => {
   const manifest = JSON.parse(readFileSync(join(dist, "manifest.webmanifest"), "utf8")) as { theme_color: string; background_color: string; icons: { src: string; sizes: string; purpose: string }[]; display: string };
   assert.deepEqual([manifest.theme_color, manifest.background_color, manifest.display], [hex(SURFACES.dark.ground), hex(SURFACES.dark.ground), "standalone"]);

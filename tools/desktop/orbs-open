@@ -5,6 +5,12 @@
 # a profile of its own (<data>/window), so its session and its place in the dock are Orbs'. The
 # first time, that window is paired with a one-time link from the home's door (POST /devices/pair,
 # with the token the home keeps in <data>/home.json); `orbs-open --pair` pairs it again.
+# The phone door (PLAN 2.7, owner 10-03: "how does a user get it on their phone?"): `orbs-open --phone`
+# takes this machine's Tailscale name and its certificate (<data>/tls/) and writes <data>/phone.env;
+# from then on the home starts with that door open (HTTPS on that name, port 8443), its certificate
+# renewed first. Pair the phone from Settings → Devices, then Add to Home Screen.
+# `orbs-open --restart` stops the running home (its pid in <data>/home.json, asked to stop, waited for)
+# and starts it again: after an update, or to open the phone door just set up.
 set -u
 REPO="${ORBS_REPO:-@REPO@}"
 NODE="${ORBS_NODE:-@NODE@}"
@@ -21,10 +27,39 @@ alive() {
   curl -sf -o /dev/null -H "authorization: Bearer $(field token)" "http://127.0.0.1:$(field port)/status"
 }
 
+if [ "${1:-}" = "--phone" ]; then
+  command -v tailscale >/dev/null || { say "the phone door needs Tailscale on this computer and the phone (tailscale.com/download)"; exit 1; }
+  NAME=$(tailscale status --json 2>/dev/null | python3 -c 'import json, sys; print(json.load(sys.stdin)["Self"]["DNSName"].rstrip("."))') \
+    || { say "Tailscale is not signed in: run tailscale up"; exit 1; }
+  mkdir -p "$DATA/tls" && chmod 700 "$DATA/tls"
+  tailscale cert --cert-file "$DATA/tls/$NAME.crt" --key-file "$DATA/tls/$NAME.key" "$NAME" >/dev/null 2>&1 \
+    || { say "Tailscale gave no certificate for $NAME: turn on HTTPS Certificates (login.tailscale.com/admin/dns), and run: sudo tailscale set --operator=\$USER"; exit 1; }
+  chmod 600 "$DATA/tls/$NAME.key"
+  printf 'ORBS_REMOTE_NAME=%s\nORBS_REMOTE_CERT=%s\nORBS_REMOTE_KEY=%s\n' "$NAME" "$DATA/tls/$NAME.crt" "$DATA/tls/$NAME.key" > "$DATA/phone.env"
+  chmod 600 "$DATA/phone.env"
+  if alive; then say "the phone door opens when the home starts again: https://$NAME:8443"; else say "the phone door is set: https://$NAME:8443"; fi
+  exit 0
+fi
+
+if [ "${1:-}" = "--restart" ] && alive; then
+  PID=$(field pid)
+  kill -TERM "$PID" 2>/dev/null
+  for _ in $(seq 1 60); do kill -0 "$PID" 2>/dev/null || break; sleep 0.5; done
+  kill -0 "$PID" 2>/dev/null && { say "the home (pid $PID) did not stop in 30 s"; exit 1; }
+fi
+
 if ! alive; then
   [ -d "$REPO/packages/home" ] || { say "there is no Orbz checkout at $REPO"; exit 1; }
+  # the phone door, if it is set up: its name and certificate, renewed before the home starts
+  if [ -f "$DATA/phone.env" ]; then
+    set -a; . "$DATA/phone.env"; set +a
+    case "${ORBS_REMOTE_NAME:-}" in
+      *.ts.net) command -v tailscale >/dev/null && tailscale cert --cert-file "$ORBS_REMOTE_CERT" --key-file "$ORBS_REMOTE_KEY" "$ORBS_REMOTE_NAME" >/dev/null 2>&1 ;;
+    esac
+  fi
   mkdir -p "$DATA"
-  ( cd "$REPO" && setsid "$NODE" packages/home/src/main.ts >> "$DATA/home.log" 2>&1 < /dev/null & )
+  # in the background with nothing of ours open (its output to the log), so no caller waits on it
+  ( cd "$REPO" && exec setsid "$NODE" packages/home/src/main.ts ) >> "$DATA/home.log" 2>&1 < /dev/null &
   for _ in $(seq 1 120); do alive && break; sleep 0.5; done
   alive || { say "the home did not start: see $DATA/home.log"; exit 1; }
 fi
@@ -32,8 +67,11 @@ fi
 PORT=$(field port)
 URL="http://127.0.0.1:$PORT/app/orbs.html"
 if [ "${1:-}" = "--pair" ] || [ ! -f "$WIN/paired" ]; then
-  URL=$(curl -sf -X POST -H "authorization: Bearer $(field token)" "http://127.0.0.1:$PORT/devices/pair" \
+  LINK=$(curl -sf -X POST -H "authorization: Bearer $(field token)" "http://127.0.0.1:$PORT/devices/pair" \
     | python3 -c 'import json, sys; print(json.load(sys.stdin)["link"])') || { say "the home gave no pairing link"; exit 1; }
+  # the link is the phone door's when that door is open; this window lives on this computer's own
+  # door, so the code is spent there, where the window opens next time too
+  URL="http://127.0.0.1:$PORT/app/orbs.html#pair=${LINK##*#pair=}"
   mkdir -p "$WIN" && touch "$WIN/paired"
 fi
 

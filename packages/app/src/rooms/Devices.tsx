@@ -27,6 +27,7 @@ export function Devices({ home }: { home: Office }) {
   const [devices, setDevices] = useState<Device[]>([]);
   const [keys, setKeys] = useState<Passkey[]>([]);
   const [link, setLink] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false); // the pairing link just copied (owner, 10-03)
   const [said, setSaid] = useState<string | null>(null);
   const load = (): void => {
     home.devices().then(setDevices, (e: Error) => setSaid(e.message));
@@ -68,8 +69,17 @@ export function Devices({ home }: { home: Office }) {
                 )}
               </span>
               <span style={{ font: "400 12px/17px var(--mono)", color: "var(--text-2)", overflowWrap: "anywhere", userSelect: "all" }}>{link}</span>
-              <span>
-                <button onClick={() => (setLink(null), load())} style={button}>
+              <span style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {/* the same link to paste where a camera cannot reach (owner, 10-03: "add copy link ... next to the qr code") */}
+                <button
+                  onClick={() => void navigator.clipboard.writeText(link).then(
+                    () => (setCopied(true), void setTimeout(() => setCopied(false), 2000)),
+                    () => setSaid("This browser would not copy: select the link above and copy it."),
+                  )}
+                  style={button}>
+                  {copied ? "Copied" : "Copy link"}
+                </button>
+                <button onClick={() => (setLink(null), setCopied(false), load())} style={button}>
                   Done
                 </button>
               </span>

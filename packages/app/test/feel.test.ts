@@ -194,6 +194,30 @@ test("the sound switch silences every press, and the page remembers it", { skip 
   }
 });
 
+test("a move pressed lights up and fades back; pressed again, it lights again; another move takes the light", { skip }, async () => {
+  const page = await open();
+  try {
+    const hop = page.getByRole("button", { name: "Hop" });
+    const lit = (b: typeof hop) => b.evaluate((el) => el.getAnimations().map((a) => (a as CSSAnimation).animationName).filter((n) => n?.startsWith("orbs-flash")));
+    assert.deepEqual(await lit(hop), [], "at rest: no light");
+    await hop.click();
+    const first = await lit(hop);
+    assert.equal(first.length, 1, "pressed: it lights up");
+    assert.match(await hop.evaluate((el) => getComputedStyle(el).boxShadow), /inset/, "with the ring a chosen button wears");
+    await page.waitForTimeout(1100);
+    assert.deepEqual(await lit(hop), [], "and it has faded back within a second");
+    await hop.click();
+    const again = await lit(hop);
+    assert.equal(again.length, 1, "pressed again: lit again");
+    assert.notEqual(again[0], first[0], "a fresh run, not the old one held");
+    const wink = page.getByRole("button", { name: "Wink" });
+    await wink.click();
+    assert.deepEqual([await lit(hop), (await lit(wink)).length], [[], 1], "Wink takes the light; Hop's is gone");
+  } finally {
+    await page.close();
+  }
+});
+
 type Measured = { sound: string; peak: number; onset: number; tail: number; centroid: number };
 
 test("every sound, rendered and measured: quiet, no pop at the start, over quickly, and the clicks round", { skip }, async () => {

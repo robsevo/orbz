@@ -3,7 +3,8 @@
 // honey teddy behind him (Neon, so their colours hold at a dock's size), real orbs drawn still by the real renderer, on the app's own glass
 // card. `icon.html?size=512&pad=0.06` is the rounded card with clear corners (an "any" icon, and
 // the desktop's); `&bleed=1` fills the square to its edges with the orbs in its safe middle (a
-// maskable icon, which the phone cuts to its own shape). `tools/shoot_icons.ts` takes the pictures.
+// maskable icon, which the phone cuts to its own shape, and an iPhone's, which rounds it itself).
+// `tools/shoot_icons.ts` takes the pictures.
 // Not part of the app's build.
 import { createRoot } from "react-dom/client";
 import { stylesheet } from "./design/tokens.ts";
@@ -26,7 +27,9 @@ const TEAM: { c: Character; x: number; y: number; s: number }[] = [
 ];
 
 const card = bleed ? size : Math.round(size * (1 - 2 * pad)); // the card's side
-const room = bleed ? size * 0.8 : card; // where the orbs go: a maskable icon keeps them in its middle 80%
+// where the orbs go: a maskable icon keeps them in its middle 80%; an iPhone's (`&room=0.88`), which only
+// rounds the corners, a little more
+const room = bleed ? size * Number(q.get("room") ?? 0.8) : card;
 createRoot(document.getElementById("root")!).render(
   <div data-icon style={{ width: size, height: size, display: "grid", placeItems: "center" }}>
     <div data-orb={ASH.hue} style={{

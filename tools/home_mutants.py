@@ -1841,6 +1841,22 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("the creator's American voices include the weak ones", 'src/orbs.tsx', [
         ('["American", VOICES.filter((v) => v.accent === "American" && offered(v))],', '["American", VOICES.filter((v) => v.accent === "American")],'),
     ], ['voice-preview.test.ts']),
+    # the phone and the press (10-03): an iPhone's icon, the title bar's, Copy link, a move's light
+    ('an iPhone is shown the rounded icon, whose clear corners it paints black', 'vite.config.ts', [
+        ('<link rel="apple-touch-icon" sizes="180x180" href="icons/orbs-apple-180.png" />', '<link rel="apple-touch-icon" href="icons/orbs-192.png" />'),
+    ], ['install.test.ts']),
+    ("the window's title bar has no icon of ours", 'vite.config.ts', [
+        ('<link rel="icon" type="image/png" sizes="32x32" href="icons/orbs-32.png" />\\n    <link rel="icon" type="image/png" sizes="16x16" href="icons/orbs-16.png" />\\n    ', ''),
+    ], ['install.test.ts']),
+    ('Copy link copies nothing', 'src/rooms/Devices.tsx', [
+        ('onClick={() => void navigator.clipboard.writeText(link).then(', 'onClick={() => void Promise.resolve().then('),
+    ], ['devices.test.ts']),
+    ('a pressed move does not light up', 'src/orbs.tsx', [
+        ('...(flash?.g === g && { animation: `${flash.n % 2 ? "orbs-flash-a" : "orbs-flash-b"} 900ms ease-out` })', '...(false && { animation: "" })'),
+    ], ['feel.test.ts']),
+    ('a second press of a move does not light it again', 'src/orbs.tsx', [
+        ('${flash.n % 2 ? "orbs-flash-a" : "orbs-flash-b"}', 'orbs-flash-a'),
+    ], ['feel.test.ts']),
 ]
 
 # the `orbs` terminal (PLAN 1.9): paths are inside packages/terminal

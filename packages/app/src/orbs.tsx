@@ -536,6 +536,8 @@ function App() {
   const [state, setState] = useState<OrbState>("idle");
   const [picked, setPicked] = useState(false); // a mood you chose by hand stands over his real one
   const [gesture, setGesture] = useState<{ name: Gesture; n: number } | null>(null);
+  // the move you last pressed in the creator, lit and fading back (owner, 10-03: "highlight when hop wink etc is pressed")
+  const [flash, setFlash] = useState<{ g: Gesture; n: number } | null>(null);
   const [replies, setReplies] = useState<Replies>("speak");
   const [sounds, setSoundsShown] = useState(soundsOn());
   const [leaving, setLeaving] = useState<string | null>(null);
@@ -908,7 +910,9 @@ function App() {
             </OneLine>
             <OneLine>
               {GESTURES.map(([g, label]) => (
-                <button key={g} style={s.chip} onClick={() => play(g)}>
+                <button key={g} data-flash={flash?.g === g ? flash.n : undefined}
+                  style={{ ...s.chip, ...(flash?.g === g && { animation: `${flash.n % 2 ? "orbs-flash-a" : "orbs-flash-b"} 900ms ease-out` }) }}
+                  onClick={() => (play(g), setFlash((f) => ({ g, n: (f?.n ?? 0) + 1 })))}>
                   {label}
                 </button>
               ))}

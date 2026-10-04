@@ -35,7 +35,7 @@ function installable(): Plugin {
         ctx.filename.endsWith("orbs.html")
           ? html.replace(
               "</head>",
-              `    <link rel="manifest" href="manifest.webmanifest" />\n    <meta name="theme-color" content="${ground}" />\n    <link rel="apple-touch-icon" href="icons/orbs-192.png" />\n  </head>`,
+              `    <link rel="manifest" href="manifest.webmanifest" />\n    <meta name="theme-color" content="${ground}" />\n    <link rel="icon" type="image/png" sizes="32x32" href="icons/orbs-32.png" />\n    <link rel="icon" type="image/png" sizes="16x16" href="icons/orbs-16.png" />\n    <link rel="apple-touch-icon" sizes="180x180" href="icons/orbs-apple-180.png" />\n    <meta name="apple-mobile-web-app-title" content="Orbz" />\n  </head>`,
             )
           : html,
     },

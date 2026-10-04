@@ -1,7 +1,7 @@
 // PLAN 2.7_t in a real browser, on a real home, with Chromium's virtual authenticator:
 //   - Settings makes a passkey on this device; another browser, never paired, signs in with it from
 //     the opening screen and the office opens.
-//   - "Add a phone" shows a QR code of a pairing link; the phone that opens it is in; signed out from
+//   - "Add a phone" shows a QR code of a pairing link (and Copy link copies it); the phone that opens it is in; signed out from
 //     the desk, it is locked out at its next request.
 //   - Nothing spills at phone or desk size.
 import assert from "node:assert/strict";
@@ -94,6 +94,11 @@ test("a passkey made in Settings signs another browser in; a phone paired by its
   await code.waitFor({ timeout: 20_000 });
   const link = (await code.getAttribute("data-qr"))!;
   assert.match(link, /#pair=/);
+  // the same link, copied (owner, 10-03: "add copy link on the link next to the qr code")
+  await desk.context().grantPermissions(["clipboard-read", "clipboard-write"], { origin: new URL(desk.url()).origin });
+  await devices.getByRole("button", { name: "Copy link" }).click();
+  await devices.getByRole("button", { name: "Copied" }).waitFor({ timeout: 5_000 });
+  assert.equal(await desk.evaluate(() => navigator.clipboard.readText()), link, "the pairing link is on the clipboard");
   const phone = await open({ width: 390, height: 844 });
   await phone.goto(link);
   await phone.locator(".orbs-window").waitFor({ timeout: 30_000 });
