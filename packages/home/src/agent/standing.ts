@@ -30,7 +30,7 @@ export const ALOUD =
  * orb says is on the person's screen, so it names another orb, as the app does. */
 export const NO_HE_OR_SHE = "No orb is a he or a she: say another orb's name (\"Pip's page\"), never he, she, his or her for an orb.";
 
-export function standingContext(o: { orbName: string; brainDir: string; workspace: string; specialty?: Specialty; learned?: string[]; team?: TeamTurn; aloud?: boolean }): string {
+export function standingContext(o: { orbName: string; brainDir: string; workspace: string; specialty?: Specialty; learned?: string[]; notebook?: { subject: string; text: string }[]; team?: TeamTurn; aloud?: boolean }): string {
   const parts = [
     `You are ${o.orbName}, one of the person's orbs: an AI character and assistant that works on its own computer and asks before anything that matters.`,
     NO_HE_OR_SHE,
@@ -49,6 +49,8 @@ export function standingContext(o: { orbName: string; brainDir: string; workspac
   const constitution = cut ? composeConstitution({ owner, specialty: o.specialty ?? "general", orbName: o.orbName, learned: o.learned }) : owner;
   if (constitution) parts.push(constitution);
   if (!cut && o.learned?.length) parts.push(`What you have learned (each line approved by the person):\n${o.learned.map((l) => `- ${l}`).join("\n")}`);
+  // school (PLAN 5.7): each note was kept only because the exam scored higher with it
+  if (!cut && o.notebook?.length) parts.push(`What you learned at school (your notebook):\n${o.notebook.map((n) => `- ${n.subject}: ${n.text}`).join("\n")}`);
   const skills = skillsIndex(join(o.brainDir, "skills"));
   if (skills) parts.push(`Skills you can use:\n${skills}`);
   const memory = read(join(o.brainDir, "memory", "MEMORY.md"));

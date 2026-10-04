@@ -62,7 +62,7 @@ export function RecruiterRoom({ home, office, hired }: { home: Office | null; of
             <div key={r.id} data-returning={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", borderRadius: 12, background: "var(--fill)", minWidth: 0 }}>
               <span style={{ flex: "1 1 auto", minWidth: 0, display: "grid" }}>
                 <span style={{ font: "700 14px/19px var(--font)", color: "var(--text-1)" }}>{`${r.name}, ${r.level} ${SPECIALTIES[r.specialty as Kind]?.title ?? r.specialty}`}</span>
-                <span style={small}>{`${r.xp.toLocaleString("en-GB")} XP · ${span(r.hired, r.left ?? r.now)} in the company before`}</span>
+                <span style={small}>{[`${r.xp.toLocaleString("en-GB")} XP`, `${span(r.hired, r.left ?? r.now)} in the company before`, ...r.diplomas.map((d) => `🎓 ${d}`)].join(" · ")}</span>
               </span>
               <button type="button" onClick={() => void home.rehire(r.id).then(hired, (e: Error) => setSaid(e.message))} style={{ ...strong, flex: "0 0 auto" }}>
                 {`Rehire ${r.name}`}

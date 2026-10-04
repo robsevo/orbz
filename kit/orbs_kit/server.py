@@ -42,6 +42,7 @@ from orbs_kit import habits  # noqa: E402
 from orbs_kit import pages  # noqa: E402
 from orbs_kit import voicebox  # noqa: E402
 from orbs_kit import lessons  # noqa: E402
+from orbs_kit import school  # noqa: E402
 
 VERSION = "0.0.0"
 
@@ -452,6 +453,33 @@ async def lesson_explain(index: int, facts: dict) -> str:
              "never a judgement of them).")
 async def lesson_observe(kind: str, text: str) -> Observed:
     return lessons.observe(kind, text)
+
+
+# ── school (PLAN 5.7): what the kit grades by code ─────────────────────────────────────────────────
+
+class SpeechGrade(TypedDict):
+    score: float
+    sentences: int
+    broke: list[dict]
+
+
+class CppGrade(TypedDict):
+    compiled: bool
+    error: str
+    passed: int
+    results: list[dict]
+
+
+@server.tool(description="School (PLAN 5.7): plain spoken English measured by code (ASD-STE100 at about 80%): "
+             "each sentence's length, the spec's hard words, passive voice, and one instruction a sentence.")
+def school_speech(text: str) -> SpeechGrade:
+    return school.speech(text)
+
+
+@server.tool(description="School (PLAN 5.7): a C++ program compiled and run on each test in the habit sandbox "
+             "(no network, a private /tmp, limits, a timeout); a test passes on its exact output, whitespace aside.")
+async def school_cpp(code: str, tests: list[dict]) -> CppGrade:
+    return await asyncio.to_thread(school.cpp, code, tests)
 
 
 def main() -> None:

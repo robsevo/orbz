@@ -332,6 +332,54 @@ const MIGRATIONS: string[] = [
     at        INTEGER NOT NULL
   );
   `,
+  // v14 (PLAN 5.7): school: an orb's terms, each subject (its syllabus and its exam, kept from every
+  // lesson), the lessons, the notebook (only notes that raised the exam) and every sitting
+  `
+  CREATE TABLE school_terms (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    orb        TEXT    NOT NULL,
+    started_at INTEGER NOT NULL,
+    ended_at   INTEGER,
+    pass_mark  REAL    NOT NULL
+  );
+  CREATE UNIQUE INDEX school_one_open_term ON school_terms (orb) WHERE ended_at IS NULL;
+  CREATE TABLE school_subjects (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    term         INTEGER NOT NULL,
+    kind         TEXT    NOT NULL CHECK (kind IN ('maths', 'cpp', 'speech', 'talking', 'ai', 'custom')),
+    name         TEXT    NOT NULL,
+    seed         INTEGER NOT NULL,
+    syllabus     TEXT,
+    exam         TEXT,
+    kept_score   REAL,
+    graduated_at INTEGER,
+    trouble      TEXT
+  );
+  CREATE TABLE school_lessons (
+    id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    subject INTEGER NOT NULL,
+    topic   TEXT    NOT NULL,
+    text    TEXT    NOT NULL,
+    at      INTEGER NOT NULL
+  );
+  CREATE TABLE school_notes (
+    id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    subject INTEGER NOT NULL,
+    text    TEXT    NOT NULL,
+    at      INTEGER NOT NULL
+  );
+  CREATE TABLE school_sittings (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    subject   INTEGER NOT NULL,
+    at        INTEGER NOT NULL,
+    score     REAL,
+    state     TEXT    NOT NULL CHECK (state IN ('graded', 'waiting', 'void')),
+    answers   TEXT    NOT NULL,
+    candidate TEXT,
+    kept      INTEGER,
+    starting  INTEGER NOT NULL DEFAULT 0
+  );
+  `,
 ];
 
 /** The home's data is the person's: the folder is theirs alone (0700) and so is the database

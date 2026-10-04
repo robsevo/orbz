@@ -31,8 +31,8 @@ export const WINDOW_DAYS = 14;
 
 const DAY_MS = 86_400_000;
 
-/** The night that `at` falls in: from NIGHT_HOUR, local time, to the next. */
-function nightOf(at: number): number {
+/** The night that `at` falls in: from NIGHT_HOUR, local time, to the next (school's classes keep the same nights). */
+export function nightOf(at: number): number {
   const d = new Date(at);
   const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), NIGHT_HOUR).getTime();
   return at >= start ? start : new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1, NIGHT_HOUR).getTime();

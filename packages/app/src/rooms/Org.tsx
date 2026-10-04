@@ -6,17 +6,19 @@ import { Orb } from "../orb/Orb.tsx";
 import { SPECIALTIES, type Character } from "../orb/spec.ts";
 import { idOf, type OrgState, type Office } from "../home/link.ts";
 import { Balanced } from "../ui/Balanced.tsx";
+import { ReportCard, SchoolSheet } from "./School.tsx";
 
 const small: CSSProperties = { font: "500 12px/16px var(--font)", color: "var(--text-3)", textWrap: "pretty" };
 
 export function OrgRoom({ home, office, open, rehired }: { home: Office | null; office: Character[]; open: (c: Character) => void; rehired: () => void }) {
   const [org, setOrg] = useState<OrgState | null>(null);
   const [said, setSaid] = useState<string | null>(null);
+  const [sending, setSending] = useState<string | null>(null); // whose school sheet is open (PLAN 5.7)
   useEffect(() => {
     if (!home) return;
     const load = (): void => void home.org().then(setOrg, (e: Error) => setSaid(e.message));
     load();
-    return home.watch({ event: (e) => void (/^(orb\.|promotion\.)/.test(e.type) && load()) }); // a hire, a let-go, a rehire, a promotion
+    return home.watch({ event: (e) => void (/^(orb\.|promotion\.|school\.(enrolled|ended|graduated))/.test(e.type) && load()) }); // a hire, a let-go, a rehire, a promotion, school
   }, [home]);
   if (!home) return <p style={{ ...small, padding: "var(--s5)" }}>The org chart is the home's: open the app from your home to see it.</p>;
   if (!org) return <p style={{ ...small, padding: "var(--s5)" }}>{said ?? "Loading the office…"}</p>;
@@ -49,11 +51,23 @@ export function OrgRoom({ home, office, open, rehired }: { home: Office | null; 
         <section aria-label="Away" style={{ display: "grid", gap: 8, minWidth: 0 }}>
           <span style={{ font: "700 11px/16px var(--font)", letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)" }}>Away</span>
           {org.away.map((o) => (
-            <div key={o.id} data-away={o.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", borderRadius: 12, background: "var(--fill)", minWidth: 0 }}>
-              <span style={{ flex: "1 1 auto", minWidth: 0, font: "600 13px/18px var(--font)", color: "var(--text-1)" }}>{`${o.name}, ${o.level}`}</span>
-              <button type="button" onClick={() => void home.rehire(o.id).then(() => rehired(), (e: Error) => setSaid(e.message))} style={{ font: "600 12px/16px var(--font)", border: 0, borderRadius: 8, padding: "5px 10px", background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)", color: "var(--text-1)", cursor: "pointer", flex: "0 0 auto" }}>
-                Rehire {o.name}
-              </button>
+            <div key={o.id} data-away={o.id} style={{ display: "grid", gap: 8, padding: "8px 10px", borderRadius: 12, background: "var(--fill)", minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", minWidth: 0 }}>
+                <span style={{ flex: "1 1 auto", minWidth: 0, display: "grid" }}>
+                  <span style={{ font: "600 13px/18px var(--font)", color: "var(--text-1)" }}>{`${o.name}, ${o.level}`}</span>
+                  {(o.atSchool || o.diplomas.length > 0) && <span style={small}>{[o.atSchool ? "At school" : null, ...o.diplomas.map((d) => `🎓 ${d}`)].filter(Boolean).join(" · ")}</span>}
+                </span>
+                {!o.atSchool && (
+                  <button type="button" aria-expanded={sending === o.id} onClick={() => setSending(sending === o.id ? null : o.id)} style={{ font: "600 12px/16px var(--font)", border: 0, borderRadius: 8, padding: "5px 10px", background: "var(--raised)", color: "var(--text-1)", cursor: "pointer", flex: "0 0 auto" }}>
+                    {`Send ${o.name} to school`}
+                  </button>
+                )}
+                <button type="button" onClick={() => void home.rehire(o.id).then(() => rehired(), (e: Error) => setSaid(e.message))} style={{ font: "600 12px/16px var(--font)", border: 0, borderRadius: 8, padding: "5px 10px", background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)", color: "var(--text-1)", cursor: "pointer", flex: "0 0 auto" }}>
+                  Rehire {o.name}
+                </button>
+              </div>
+              {sending === o.id && !o.atSchool && <SchoolSheet home={home} orb={o.id} name={o.name} sent={() => setSending(null)} />}
+              <ReportCard home={home} orb={o.id} name={o.name} />
             </div>
           ))}
         </section>

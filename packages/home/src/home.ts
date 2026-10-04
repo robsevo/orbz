@@ -37,6 +37,8 @@ import type { Undo } from "./gym/card.ts";
 import { type Level, LEVELS, levelOf, nextFor, tenureOf } from "./gym/levels.ts";
 import { orgTools } from "./org.ts";
 import { interviewSystem, Recruiter, RecruiterError } from "./recruiter.ts";
+import { School, SchoolError, type ReportCard, type SchoolOptions } from "./school/school.ts";
+import type { Kind } from "./school/subjects.ts";
 import { habitsOf, shareHabit } from "./gym/share.ts";
 import { parse as parsePlan } from "./plans/format.ts";
 import { SPECIALTY_FAMILIES } from "./brain/constitution.ts";
@@ -85,6 +87,8 @@ export type HomeOptions = {
   heartbeatMs?: number;
   /** How long a stopped run may take to wind down (default 5 s). */
   graceMs?: number;
+  /** School (PLAN 5.7): tonight's share of the brain (tests set less). */
+  school?: Pick<SchoolOptions, "asksANight">;
   /** Files no loop may change. Default: the owner's brain and rules, and Orbs' own source. */
   protect?: string[];
   loops?: Omit<LoopsOptions, "dir" | "protect">;
@@ -187,6 +191,8 @@ export class Home {
   readonly team: Team;
   /** The recruiter (PLAN 5.8): the positions you are hiring for, and who applied. */
   readonly recruiter: Recruiter;
+  /** School (PLAN 5.7): an orb you let go, learning the subjects you picked, night by night. */
+  readonly school: School;
   /** XP from graded evidence only (PLAN 3.6): the ledger, in the event log. */
   readonly xp: Xp;
   /** The gym's night (PLAN 3.2): habits (with the kit, proved in its sandbox), the own brain's
@@ -317,6 +323,7 @@ export class Home {
         },
         habits: (orb) => habitsOf(this.events, this.dataDir, orb),
         share: (from, to, task) => shareHabit(this.events, this.dataDir, { from, to, task, why: "mentoring" }),
+        diplomas: (orb) => this.school.diplomas(orb), // school (PLAN 5.7): who is more qualified for a row
       }),
     ];
     this.agent = opts.runner
@@ -364,6 +371,7 @@ export class Home {
           orbName: (orb) => this.inbox.orb(orb)?.name ?? orb,
           orbSpecialty: (orb) => this.inbox.orb(orb)?.specialty ?? "general",
           learned: (orb) => this.learned.list(orb),
+          notebook: (orb) => this.school.notebook(orb), // what it kept at school (PLAN 5.7) goes to work with it
           searchKey: () => this.brains.searchKey(),
           remind: (orb, conversation, r) => {
             const kept = this.notices.remind({ ...r, orb, conversation });
@@ -420,6 +428,25 @@ export class Home {
         });
     this.inbox = new Inboxes(db, this.events, this.clock, opts.runner ?? this.agent!, opts.graceMs);
     this.recruiter = new Recruiter(db, this.events, this.clock);
+    this.school = new School(db, this.events, this.clock, {
+      // the teacher is the preset's teacher, else the big brain; the orb at school is the shared big brain
+      // (no local model yet); every ask checks the spend cap and is recorded with the orb
+      ask: async (who, orb, messages, maxTokens) => {
+        this.spend.check();
+        const big = this.brains.chain.current()?.ep ?? null;
+        const ep = who === "teacher" ? (opts.brain?.preset.teacher ?? big) : big;
+        if (!ep) throw new SchoolError("no brain is set up for school");
+        const r = await chat(ep, messages, { maxTokens });
+        this.spend.record({ tier: who === "teacher" ? "teacher" : "big", model: ep.model, costUsd: r.costUsd, costSource: r.costSource, promptTokens: r.promptTokens, completionTokens: r.completionTokens, orb });
+        return r.text;
+      },
+      kit: kit && ((tool, args) => kit.call(tool, args)),
+      who: (orb) => {
+        const o = this.inbox.orb(orb);
+        return o ? { name: o.name, work: o.specialty } : null;
+      },
+      ...opts.school,
+    });
     this.team = new Team({ db, events: this.events, clock: this.clock, inbox: this.inbox, conversations: this.conversations, level: (orb) => levelOf(this.events, orb) });
     this.xp = new Xp(this.events, { planOrb: (plan) => this.plans.get(plan)?.orb ?? null });
     this.gym = new Gym({
@@ -630,7 +657,7 @@ export class Home {
   recruiting(): {
     positions: string[];
     applicants: { id: number; specialty: string; seed: number; day: string; startsAs: Level }[];
-    returning: { id: string; name: string; specialty: string; level: Level; xp: number; born: number; hired: number; left: number | null; now: number }[];
+    returning: { id: string; name: string; specialty: string; level: Level; xp: number; diplomas: string[]; born: number; hired: number; left: number | null; now: number }[];
   } {
     const now = this.clock.now();
     const positions = this.recruiter.positions();
@@ -639,8 +666,8 @@ export class Home {
     const returning = this.inbox
       .orbs({ all: true })
       .filter((o) => o.letGoAt !== null && positions.includes(o.specialty))
-      .map((o) => ({ id: o.id, name: o.name, specialty: o.specialty, level: levelOf(this.events, o.id), xp: this.xp.of(o.id, now).total, ...tenureOf(this.events, o), now }))
-      .sort((a, b) => LEVELS.indexOf(b.level) - LEVELS.indexOf(a.level) || b.xp - a.xp);
+      .map((o) => ({ id: o.id, name: o.name, specialty: o.specialty, level: levelOf(this.events, o.id), xp: this.xp.of(o.id, now).total, diplomas: this.school.diplomas(o.id).map((d) => d.name), ...tenureOf(this.events, o), now }))
+      .sort((a, b) => LEVELS.indexOf(b.level) - LEVELS.indexOf(a.level) || b.diplomas.length - a.diplomas.length || b.xp - a.xp);
     return { positions, applicants: this.recruiter.applicants().map((a) => ({ ...a, startsAs: startsAs(a.specialty) })), returning };
   }
 
@@ -674,6 +701,26 @@ export class Home {
       this.conversations.add({ conversation: `chat:${made.id}`, orb: made.id, role: m.role === "you" ? "user" : "assistant", content: m.text, meta: { interview: true } });
     }
     return made;
+  }
+
+  /** Sends an orb you let go to school (PLAN 5.7; owner, 10-03: "school happens when we fire"): the
+   * subjects you picked and the mark that makes a diploma; the term starts now (syllabus, exam,
+   * the starting exam), its classes at night. */
+  sendToSchool(orb: string, subjects: { kind: Kind; name?: string }[], passMark: number): ReportCard {
+    const o = this.inbox.orb(orb);
+    if (!o) throw new SchoolError(`no orb "${orb}"`);
+    if (o.letGoAt === null) throw new SchoolError(`only an orb you let go goes to school: ${o.name} is in the office`);
+    this.school.enrol(orb, subjects, passMark);
+    void this.school.start(orb);
+    return this.school.report(orb);
+  }
+
+  /** Brings back an orb you let go (PLAN 5.5): its term at school, if any, ends there (PLAN 5.7),
+   * its report card kept. */
+  rehire(orb: string): ReturnType<Inboxes["rehire"]> {
+    const back = this.inbox.rehire(orb);
+    this.school.end(orb, "rehired");
+    return back;
   }
 
   /** Lets an orb go (PLAN 5.5), his habits handed to another orb first if you say so: copied, so they
@@ -732,6 +779,7 @@ export class Home {
     this.#cancelTimer?.();
     await this.#ticking;
     await this.gym.close();
+    await this.school.close();
     await this.inbox.close();
     await this.loops.close();
     await this.kit?.close();
@@ -756,6 +804,7 @@ export class Home {
     this.notices.due();
     this.loops.startDue();
     void this.gym.due(); // the night goes on beside the ticks; close() waits for it
+    void this.school.due(); // and school's classes (PLAN 5.7)
     await this.triggers.poll({ all: woke });
   }
 
@@ -764,7 +813,7 @@ export class Home {
     this.#cancelTimer?.();
     const now = this.clock.now();
     let delay = this.#heartbeatMs;
-    for (const at of [this.schedules.nextDueAt(), this.notices.nextDueAt(), this.loops.nextDueAt(), this.triggers.nextPollAt(), this.gym.nextAt()]) {
+    for (const at of [this.schedules.nextDueAt(), this.notices.nextDueAt(), this.loops.nextDueAt(), this.triggers.nextPollAt(), this.gym.nextAt(), this.school.nextAt()]) {
       if (at !== null) delay = Math.min(delay, at - now);
     }
     this.#cancelTimer = this.clock.timer(Math.max(MIN_DELAY_MS, delay), () => void this.tick());

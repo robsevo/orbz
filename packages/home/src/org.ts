@@ -14,6 +14,8 @@ import type { ToolDef } from "./agent/tools.ts";
 import type { EventLog } from "./events.ts";
 import { AREAS_OF, LEVELS, type Level } from "./gym/levels.ts";
 import { AREAS, type Area, BY_EXTENSION, radarOf } from "./gym/specialty.ts";
+import type { Diploma } from "./school/school.ts";
+import { inSubject } from "./school/subjects.ts";
 
 export type Member = { id: string; name: string; specialty: Specialty; level: Level; createdAt: number };
 
@@ -53,17 +55,24 @@ export function leadsOf(team: Member[]): { chief: string | null; bySpecialty: Ma
   return { chief, bySpecialty: by };
 }
 
+/** What a diploma in a row's subject counts for when ranking (school, PLAN 5.7: "it should be put into
+ * consideration, whos more qualified for the job"): this much XP, in the ranking only, never in the
+ * ledger (a diploma never promotes). */
+export const DIPLOMA_XP = 150;
+
 /** The team ranked for a row, best first, each with why. */
-export function whoFits(events: EventLog, text: string, team: Member[]): { orb: string; name: string; why: string }[] {
+export function whoFits(events: EventLog, text: string, team: Member[], diplomas: (orb: string) => Diploma[] = () => []): { orb: string; name: string; why: string }[] {
   const area = areaOfText(text);
   const covers = (m: Member): boolean => area === null || (AREAS_OF[m.specialty] ?? [...AREAS]).includes(area);
   const xp = new Map(team.map((m) => [m.id, area ? radarOf(events, m.id)[area].xp : 0]));
+  const studied = new Map(team.map((m) => [m.id, diplomas(m.id).find((d) => inSubject(text, d.kind, d.name)) ?? null]));
+  const weight = (m: Member): number => xp.get(m.id)! + (studied.get(m.id) ? DIPLOMA_XP : 0);
   return [...team]
-    .sort((a, b) => Number(covers(b)) - Number(covers(a)) || xp.get(b.id)! - xp.get(a.id)! || rank(b) - rank(a) || a.createdAt - b.createdAt)
+    .sort((a, b) => Number(covers(b)) - Number(covers(a)) || weight(b) - weight(a) || rank(b) - rank(a) || a.createdAt - b.createdAt)
     .map((m) => ({
       orb: m.id,
       name: m.name,
-      why: [area ? (covers(m) ? `${area} is ${m.name}'s kind of work` : `${area} is not ${m.name}'s kind of work`) : "the row names no kind of work", area ? `${xp.get(m.id)} XP in ${area}` : null, m.level].filter(Boolean).join("; "),
+      why: [area ? (covers(m) ? `${area} is ${m.name}'s kind of work` : `${area} is not ${m.name}'s kind of work`) : "the row names no kind of work", area ? `${xp.get(m.id)} XP in ${area}` : null, studied.get(m.id) ? `a diploma in ${studied.get(m.id)!.name}` : null, m.level].filter(Boolean).join("; "),
     }));
 }
 
@@ -81,6 +90,8 @@ export function orgTools(o: {
   rowText: (plan: number, row: string) => string | null;
   habits: (orb: string) => { task: string; version: number }[];
   share: (from: string, to: string, task: string) => { task: string };
+  /** An orb's diplomas from school (PLAN 5.7), which count when ranking who fits a row. */
+  diplomas?: (orb: string) => Diploma[];
 }): ToolDef[] {
   const nameOf = (id: string): string => o.office().find((m) => m.id === id)?.name ?? id;
   return [
@@ -98,7 +109,7 @@ export function orgTools(o: {
         const text = o.rowText(Number(a.plan), str(a.row));
         if (text === null) return { content: `plan ${str(a.plan)} has no row ${str(a.row)}`, isError: true };
         const team = o.office().filter((m) => members.includes(m.id));
-        const ranked = whoFits(o.events, text, team);
+        const ranked = whoFits(o.events, text, team, o.diplomas);
         return { content: ranked.map((r, i) => `${i + 1}. ${r.name}: ${r.why}`).join("\n") || "No one works this tab." };
       },
     },

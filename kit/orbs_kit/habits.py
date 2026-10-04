@@ -99,15 +99,15 @@ def sandbox() -> list[str] | None:
             "--unshare-all", "--die-with-parent", "--new-session", str(python), "-I", "-S"]
 
 
-def _sandboxed(code: str, runner: str, payload: dict, timeout: float) -> tuple[dict, str | None]:
-    """Runs `runner` with the habit's code inside the sandbox, `payload` on its stdin: its last line
-    as JSON, or why not."""
+def _sandboxed(code: str, runner: str, payload: dict, timeout: float, file: str = "habit.py", what: str = "the habit") -> tuple[dict, str | None]:
+    """Runs `runner` with `code` (the habit's, or school's C++ program, as `file`) inside the sandbox,
+    `payload` on its stdin: its last line as JSON, or why not."""
     prefix = sandbox()
     if prefix is None:
         return {}, "no habit sandbox on this machine yet (bubblewrap on Linux; PLAN 3.2)"
     with tempfile.TemporaryDirectory(prefix="orbs-habit-") as d:
         hd = Path(d)
-        (hd / "habit.py").write_text(code)
+        (hd / file).write_text(code)
         (hd / "runner.py").write_text(runner)
         # the habit's own directory is bound after the /tmp tmpfs, before the namespaces close
         cut = prefix.index("--unshare-all")
@@ -116,13 +116,13 @@ def _sandboxed(code: str, runner: str, payload: dict, timeout: float) -> tuple[d
         try:
             p = subprocess.run(cmd, input=json.dumps(payload), capture_output=True, text=True, timeout=timeout)
         except subprocess.TimeoutExpired:
-            return {}, f"the habit ran past {timeout:g} s"
+            return {}, f"{what} ran past {timeout:g} s"
     if p.returncode != 0 or not p.stdout.strip():
         return {}, f"the sandbox failed (exit {p.returncode}): {p.stderr.strip()[-200:]}"
     try:
         return json.loads(p.stdout.strip().splitlines()[-1]), None
     except ValueError:
-        return {}, "the habit printed something that is not its answer"
+        return {}, f"{what} printed something that is not its answer"
 
 
 def answer(directory: Path, value: dict, timeout: float = TIMEOUT_S) -> dict:

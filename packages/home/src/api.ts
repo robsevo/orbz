@@ -42,7 +42,8 @@ import { cronFor, preview, RuleError, ruleOf, wordsOf } from "./schedule-rules.t
 import { cronOf } from "./schedule.ts";
 import { labOf, reopen } from "./lab.ts";
 import { morningCard } from "./gym/card.ts";
-import { levelOf, nextFor, tenureOf } from "./gym/levels.ts";
+import { LEVELS, levelOf, nextFor, tenureOf } from "./gym/levels.ts";
+import type { Kind } from "./school/subjects.ts";
 import { leadsOf } from "./org.ts";
 import { habitsOf } from "./gym/share.ts";
 import { findHotPaths } from "./gym/finder.ts";
@@ -471,6 +472,41 @@ async function handle(
       throw new HttpError(409, e instanceof Error ? e.message : String(e));
     }
   }
+  // school (PLAN 5.7): send an orb you let go, its report card, the syllabus you change, your thumbs
+  if (parts[0] === "orbs" && parts.length === 3 && parts[2] === "school") {
+    const orb = decodeURIComponent(parts[1]!);
+    if (method === "GET") return home.school.report(orb);
+    if (method === "POST") {
+      const b = await body(req);
+      const subjects = Array.isArray(b.subjects) ? (b.subjects as unknown[]).slice(0, 12).map((s) => {
+        const o = (s && typeof s === "object" ? s : {}) as Record<string, unknown>;
+        return { kind: String(o.kind ?? "") as Kind, ...(typeof o.name === "string" && { name: o.name.slice(0, 60) }) };
+      }) : [];
+      try {
+        return home.sendToSchool(orb, subjects, Number(b.passMark));
+      } catch (e) {
+        throw new HttpError(409, e instanceof Error ? e.message : String(e));
+      }
+    }
+  }
+  if (method === "PUT" && parts[0] === "school" && parts[1] === "subjects" && /^\d+$/.test(parts[2] ?? "") && parts[3] === "syllabus" && parts.length === 4) {
+    const b = await body(req);
+    try {
+      home.school.setSyllabus(Number(parts[2]), Array.isArray(b.topics) ? (b.topics as unknown[]).map(String) : []);
+      return { ok: true };
+    } catch (e) {
+      throw new HttpError(409, e instanceof Error ? e.message : String(e));
+    }
+  }
+  if (method === "POST" && parts[0] === "school" && parts[1] === "sittings" && /^\d+$/.test(parts[2] ?? "") && parts[3] === "answers" && /^\d+$/.test(parts[4] ?? "") && parts.length === 5) {
+    const b = await body(req);
+    try {
+      home.school.thumb(Number(parts[2]), Number(parts[4]), b.up === true);
+      return { ok: true };
+    } catch (e) {
+      throw new HttpError(409, e instanceof Error ? e.message : String(e));
+    }
+  }
   // the recruiter (PLAN 5.8): the positions you are hiring for, who applied, an interview, hire or pass
   if (method === "GET" && url.pathname === "/recruiter") return home.recruiting();
   if (method === "PUT" && parts[0] === "recruiter" && parts[1] === "positions" && parts.length === 3) {
@@ -510,7 +546,11 @@ async function handle(
     const now = home.clock.now();
     const team = home.inbox.orbs().map((o) => ({ id: o.id, name: o.name, specialty: o.specialty, level: levelOf(home.events, o.id), createdAt: o.createdAt }));
     const { chief, bySpecialty } = leadsOf(team);
-    const away = home.inbox.orbs({ all: true }).filter((o) => o.letGoAt !== null).map((o) => ({ id: o.id, name: o.name, specialty: o.specialty, level: levelOf(home.events, o.id), createdAt: o.createdAt, ...tenureOf(home.events, o), now }));
+    // who is away, the most qualified first (school, PLAN 5.7: a diploma counts, never promotes): level, diplomas, XP
+    const away = home.inbox.orbs({ all: true }).filter((o) => o.letGoAt !== null)
+      .map((o) => ({ id: o.id, name: o.name, specialty: o.specialty, level: levelOf(home.events, o.id), createdAt: o.createdAt, ...tenureOf(home.events, o), now,
+        xp: home.xp.of(o.id, now).total, diplomas: home.school.diplomas(o.id).map((d) => d.name), atSchool: home.school.term(o.id) !== null }))
+      .sort((a, b) => LEVELS.indexOf(b.level) - LEVELS.indexOf(a.level) || b.diplomas.length - a.diplomas.length || b.xp - a.xp);
     return { chief, leads: Object.fromEntries(bySpecialty), orbs: team.map((m) => ({ ...m, ...tenureOf(home.events, home.inbox.orb(m.id)!), now })), away };
   }
   // a career page (PLAN 5.6): read off the log by code
@@ -535,7 +575,7 @@ async function handle(
       performance: home.events.ofType("performance.card").findLast((e) => e.orb === orb)?.data ?? null,
     };
   }
-  if (method === "POST" && parts[0] === "orbs" && parts.length === 3 && parts[2] === "rehire") return { orb: home.inbox.rehire(decodeURIComponent(parts[1]!)) };
+  if (method === "POST" && parts[0] === "orbs" && parts.length === 3 && parts[2] === "rehire") return { orb: home.rehire(decodeURIComponent(parts[1]!)) };
   // sessions (PLAN 2.9): a Brainstorm and a Floor, and the orbs that work each
   if (method === "GET" && url.pathname === "/sessions") return { sessions: home.team.list() };
   if (parts[0] === "sessions") {

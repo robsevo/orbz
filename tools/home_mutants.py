@@ -1138,7 +1138,7 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ], ['team-board.test.ts']),
     # how the org works, a habit passed on, the weekly card, letting go and rehiring, the door's org chart (PLAN 5.4-5.6)
     ('rows go to whoever joined first', 'src/org.ts', [
-        ('.sort((a, b) => Number(covers(b)) - Number(covers(a)) || xp.get(b.id)! - xp.get(a.id)! || rank(b) - rank(a) || a.createdAt - b.createdAt)', '.sort((a, b) => a.createdAt - b.createdAt)'),
+        ('.sort((a, b) => Number(covers(b)) - Number(covers(a)) || weight(b) - weight(a) || rank(b) - rank(a) || a.createdAt - b.createdAt)', '.sort((a, b) => a.createdAt - b.createdAt)'),
     ], ['org.test.ts']),
     ("a row's files tell nothing of its kind", 'src/org.ts', [
         ('    const a = BY_EXTENSION[m[1]!.toLowerCase()];\n    if (a) return a;', '    const a = undefined;\n    if (a) return a;'),
@@ -1225,7 +1225,7 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ('const startsAs = (s: string): Level => (office.some((o) => o.specialty === s) ? "Junior" : "Senior");', 'const startsAs = (s: string): Level => "Junior";'),
     ], ['recruiter.test.ts']),
     ('the least qualified applies first', 'src/home.ts', [
-        ('.sort((a, b) => LEVELS.indexOf(b.level) - LEVELS.indexOf(a.level) || b.xp - a.xp);', '.sort((a, b) => LEVELS.indexOf(a.level) - LEVELS.indexOf(b.level) || a.xp - b.xp);'),
+        ('.sort((a, b) => LEVELS.indexOf(b.level) - LEVELS.indexOf(a.level) || b.diplomas.length - a.diplomas.length || b.xp - a.xp);', '.sort((a, b) => LEVELS.indexOf(a.level) - LEVELS.indexOf(b.level) || a.diplomas.length - b.diplomas.length || a.xp - b.xp);'),
     ], ['recruiter.test.ts']),
     ('a let-go orb of any kind applies again', 'src/home.ts', [
         ('.filter((o) => o.letGoAt !== null && positions.includes(o.specialty))', '.filter((o) => o.letGoAt !== null)'),
@@ -1236,6 +1236,61 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ('a hired applicant comes without its look', 'src/home.ts', [
         ('const made = this.inbox.addOrb(orb.id, orb.name, a.specialty, orb.look);', 'const made = this.inbox.addOrb(orb.id, orb.name, a.specialty, {});'),
     ], ['recruiter.test.ts']),
+    # school: a term, its classes, its exam and its diplomas (PLAN 5.7)
+    ('a note is kept that did not raise the exam', 'src/school/school.ts', [
+        ('(s.kept_score === null || score > s.kept_score)', '(s.kept_score === null || score >= s.kept_score)'),
+    ], ['school.test.ts']),
+    ("a lesson keeps the exam's questions", 'src/school/school.ts', [
+        ('    lesson = withoutExam(lesson, exam);\n', ''),
+    ], ['school.test.ts']),
+    ('the practice is the exam', 'src/school/school.ts', [
+        ('if (s.kind === "maths") return mathsPractice(s.seed + done + 1, exam, 3);', 'if (s.kind === "maths") return exam.slice(0, 3);'),
+    ], ['school.test.ts']),
+    ('a diploma at the mark once', 'src/school/school.ts', [
+        ('last.length === 2 && last.every((x) => x.score! >= mark)', 'last.length >= 1 && last.slice(-1).every((x) => x.score! >= mark)'),
+    ], ['school.test.ts']),
+    ('a diploma promotes', 'src/school/school.ts', [
+        ('      this.#events.append("school.graduated", { subject: s.id, name: s.name, kind: s.kind, score: kept }, { orb });\n', '      this.#events.append("school.graduated", { subject: s.id, name: s.name, kind: s.kind, score: kept }, { orb });\n      this.#events.append("orb.promoted", { from: "Senior", to: "Staff" }, { orb });\n'),
+    ], ['school.test.ts']),
+    ('Talking with you does not wait for your thumbs', 'src/school/school.ts', [
+        ('    if (s.kind === "talking") return { answers: list.map((a) => ({ ...a, up: null })), score: null, state: "waiting" };\n', ''),
+    ], ['school.test.ts']),
+    ('a missing verdict counts as no', 'src/school/school.ts', [
+        ('    if (judged.some((v) => v === null)) return { answers: list, score: null, state: "void" };\n', ''),
+    ], ['school.test.ts']),
+    ('a thumb on a graded sitting is taken', 'src/school/school.ts', [
+        ('if (!row || row.state !== "waiting") throw', 'if (!row) throw'),
+    ], ['school.test.ts']),
+    ('school takes the whole night', 'src/school/school.ts', [
+        ('if (!stopped && this.#asked >= share) stopped', 'if (false) stopped'),
+    ], ['school.test.ts']),
+    ("one orb's subjects take the night first", 'src/school/school.ts', [
+        ('const queue = Array.from({ length: Math.max(0, ...lists.map((l) => l.length)) }, (_, i) => lists.flatMap((l) => (l[i] ? [l[i]] : []))).flat();', 'const queue = lists.flat();'),
+    ], ['school.test.ts']),
+    ("a term's end leaves answers waiting for thumbs", 'src/school/school.ts', [
+        ('      this.#db.prepare("UPDATE school_sittings SET state = \'void\' WHERE state = \'waiting\' AND subject IN (SELECT id FROM school_subjects WHERE term = ?)").run(t.id);\n', ''),
+    ], ['../../app/test/school-view.test.ts']),
+    ('rehiring leaves the term open', 'src/home.ts', [
+        ('    this.school.end(orb, "rehired");\n', ''),
+    ], ['school.test.ts']),
+    ('an orb in the office goes to school', 'src/home.ts', [
+        ('    if (o.letGoAt === null) throw new SchoolError(`only an orb you let go goes to school: ${o.name} is in the office`);\n', ''),
+    ], ['school.test.ts']),
+    ('a class past the spend cap goes on', 'src/home.ts', [
+        ('      ask: async (who, orb, messages, maxTokens) => {\n        this.spend.check();\n', '      ask: async (who, orb, messages, maxTokens) => {\n'),
+    ], ['school.test.ts']),
+    ('the notebook stays at school', 'src/agent/standing.ts', [
+        ('if (!cut && o.notebook?.length) parts.push(', 'if (false && o.notebook?.length) parts.push('),
+    ], ['school.test.ts']),
+    ('a diploma counts for any row', 'src/org.ts', [
+        ('diplomas(m.id).find((d) => inSubject(text, d.kind, d.name)) ?? null', 'diplomas(m.id)[0] ?? null'),
+    ], ['school.test.ts']),
+    ('a diploma counts for nothing', 'src/org.ts', [
+        ('(studied.get(m.id) ? DIPLOMA_XP : 0)', '0'),
+    ], ['school.test.ts']),
+    ("the door's thumb marks another answer", 'src/api.ts', [
+        ('home.school.thumb(Number(parts[2]), Number(parts[4]), b.up === true);', 'home.school.thumb(Number(parts[2]), Number(parts[4]) + 1, b.up === true);'),
+    ], ['school.test.ts']),
 ]
 
 # the app (PLAN 2.x): paths are inside packages/app
@@ -1857,6 +1912,25 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ('a second press of a move does not light it again', 'src/orbs.tsx', [
         ('${flash.n % 2 ? "orbs-flash-a" : "orbs-flash-b"}', 'orbs-flash-a'),
     ], ['feel.test.ts']),
+    # school's room: send, rate, a syllabus, a pass mark, the report card (PLAN 5.7)
+    ('Send to school does nothing', 'src/rooms/School.tsx', [
+        ('onClick={() => void home.sendToSchool(orb, subjects, mark).then(sent, (e: Error) => setSaid(e.message))}', 'onClick={() => undefined}'),
+    ], ['school-view.test.ts']),
+    ('a thumb up does nothing', 'src/rooms/School.tsx', [
+        ('onClick={() => void home.thumb(s.rate!.sitting, a.n, true).catch((e: Error) => said(e.message))}', 'onClick={() => undefined}'),
+    ], ['school-view.test.ts']),
+    ('a changed syllabus is not saved', 'src/rooms/School.tsx', [
+        ('void home.setSyllabus(s.id, editing.split("\\n")).then(', 'void Promise.resolve().then('),
+    ], ['school-view.test.ts']),
+    ('the pass mark you pick is ignored', 'src/rooms/School.tsx', [
+        ('onClick={() => setMark(m)}', 'onClick={() => undefined}'),
+    ], ['school-view.test.ts']),
+    ('the career page has no report card', 'src/rooms/Career.tsx', [
+        ('      <ReportCard home={home} orb={idOf(orb.name)} name={orb.name} />\n', ''),
+    ], ['school-view.test.ts']),
+    ('the recruiter hides diplomas', 'src/rooms/Recruiter.tsx', [
+        (', ...r.diplomas.map((d) => `🎓 ${d}`)]', ']'),
+    ], ['school-view.test.ts']),
 ]
 
 # the `orbs` terminal (PLAN 1.9): paths are inside packages/terminal
@@ -1939,6 +2013,25 @@ KIT_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ('a long sentence is said whole', 'orbs_kit/voicebox.py', [
         ('    if len(sentence.split()) <= LONGEST_WORDS:\n        return [sentence]', '    if True:\n        return [sentence]'),
     ], ['test_conversation_rules.py']),
+    # school's exams graded by the kit (PLAN 5.7)
+    ('passive voice is not measured', 'orbs_kit/school.py', [
+        ('def _passive(sentence: str) -> str | None:\n', 'def _passive(sentence: str) -> str | None:\n    return None\n'),
+    ], ['test_school.py']),
+    ('a hard word costs nothing', 'orbs_kit/school.py', [
+        ('        hard = [a for r, a in _HARD if r.search(s)]\n', '        hard = []\n'),
+    ], ['test_school.py']),
+    ('an instruction may run to 25 words', 'orbs_kit/school.py', [
+        ('INSTRUCTION_WORDS = 20\n', 'INSTRUCTION_WORDS = 25\n'),
+    ], ['test_school.py']),
+    ('two instructions in a sentence pass', 'orbs_kit/school.py', [
+        ('        if instruction and _instructions(s) > 1:\n', '        if False:\n'),
+    ], ['test_school.py']),
+    ('a wrong program passes', 'orbs_kit/school.py', [
+        ('r.returncode == 0 and r.stdout.split() == t["output"].split()', 'r.returncode == 0'),
+    ], ['test_school.py']),
+    ('a program runs as long as it likes', 'orbs_kit/school.py', [
+        ('text=True, timeout=p["run_s"], env=env,', 'text=True, env=env,'),
+    ], ['test_school.py']),
 ]
 
 def copy_home(tmp: Path) -> Path:

@@ -54,7 +54,15 @@ export type SessionBoard = { plans: { id: number; title: string; status: string;
 /** The org chart (PLAN 5.6): the office with levels and how long each has been about, who leads each
  * kind of work, and who was let go (to rehire). */
 export type OrgOrb = { id: string; name: string; specialty: string; level: string; createdAt: number; born: number; hired: number; left: number | null; now: number };
-export type OrgState = { chief: string | null; leads: Record<string, string>; orbs: OrgOrb[]; away: OrgOrb[] };
+export type OrgState = { chief: string | null; leads: Record<string, string>; orbs: OrgOrb[]; away: (OrgOrb & { xp: number; diplomas: string[]; atSchool: boolean })[] };
+/** School (PLAN 5.7): an orb's report card, the term now or the last. */
+export type SchoolAnswer = { n: number; ask: string; answer: string; ok: boolean | null; why?: string; up?: boolean | null };
+export type SchoolSubject = {
+  id: number; kind: string; name: string; how: string; syllabus: string[] | null; lessons: number; notes: { text: string; at: number }[];
+  started: number | null; now: number | null; sittings: { id: number; at: number; score: number | null; state: "graded" | "waiting" | "void"; kept: boolean | null; starting: boolean }[];
+  graduatedAt: number | null; rate: { sitting: number; answers: SchoolAnswer[] } | null; trouble: string | null;
+};
+export type ReportCardState = { orb: string; atSchool: boolean; passMark: number | null; since: number | null; subjects: SchoolSubject[]; diplomas: { kind: string; name: string; at: number; score: number }[] };
 /** A career page (PLAN 5.6). */
 export type CareerState = Standing & {
   radar: Record<string, { xp: number; passRate: number | null; runs: number }>;
@@ -69,7 +77,7 @@ export type CareerState = Standing & {
 export type RecruiterState = {
   positions: string[];
   applicants: { id: number; specialty: string; seed: number; day: string; startsAs: string }[];
-  returning: { id: string; name: string; specialty: string; level: string; xp: number; born: number; hired: number; left: number | null; now: number }[];
+  returning: { id: string; name: string; specialty: string; level: string; xp: number; diplomas: string[]; born: number; hired: number; left: number | null; now: number }[];
 };
 export type InterviewLine = { role: "you" | "orb"; text: string; at: number };
 
@@ -134,6 +142,11 @@ export interface Office {
   interview(applicant: number, c: Character, text: string): Promise<string>;
   hireApplicant(applicant: number, c: Character): Promise<void>;
   passApplicant(applicant: number): Promise<void>;
+  /** School (PLAN 5.7): an orb's report card; sending an orb you let go; the syllabus you change; your thumb on an answer. */
+  reportCard(orb: string): Promise<ReportCardState>;
+  sendToSchool(orb: string, subjects: { kind: string; name?: string }[], passMark: number): Promise<void>;
+  setSyllabus(subject: number, topics: string[]): Promise<void>;
+  thumb(sitting: number, n: number, up: boolean): Promise<void>;
   career(c: Character): Promise<CareerState>;
   me(): Promise<Person | null>;
   setName(p: Person): Promise<void>;
@@ -388,6 +401,18 @@ export function doorOffice(base: Character): Office {
     },
     async passApplicant(applicant) {
       await call(`../applicants/${applicant}/pass`, { method: "POST" });
+    },
+    async reportCard(orb) {
+      return call<ReportCardState>(`../orbs/${encodeURIComponent(orb)}/school`);
+    },
+    async sendToSchool(orb, subjects, passMark) {
+      await call(`../orbs/${encodeURIComponent(orb)}/school`, { method: "POST", body: JSON.stringify({ subjects, passMark }) });
+    },
+    async setSyllabus(subject, topics) {
+      await call(`../school/subjects/${subject}/syllabus`, { method: "PUT", body: JSON.stringify({ topics }) });
+    },
+    async thumb(sitting, n, up) {
+      await call(`../school/sittings/${sitting}/answers/${n}`, { method: "POST", body: JSON.stringify({ up }) });
     },
     async career(c) {
       return call<CareerState>(`../orbs/${encodeURIComponent(idOf(c.name))}/career`);

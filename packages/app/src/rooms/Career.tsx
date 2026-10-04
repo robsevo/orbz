@@ -9,6 +9,7 @@ import { SPECIALTIES, type Character } from "../orb/spec.ts";
 import { idOf, type CareerState, type Office } from "../home/link.ts";
 import { span } from "../orb/age.ts";
 import { Radar } from "../ui/Radar.tsx";
+import { ReportCard } from "./School.tsx";
 
 const head: CSSProperties = { font: "700 11px/16px var(--font)", letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)" };
 const small: CSSProperties = { font: "500 13px/18px var(--font)", color: "var(--text-3)", textWrap: "pretty", overflowWrap: "anywhere" };
@@ -79,6 +80,8 @@ export function CareerRoom({ home, orb }: { home: Office | null; orb: Character 
           <span style={small}>{c.performance.why}</span>
         </section>
       )}
+      {/* school (PLAN 5.7): its report card, when it has been */}
+      <ReportCard home={home} orb={idOf(orb.name)} name={orb.name} />
       {said && <span role="status" style={small}>{said}</span>}
     </div>
   );

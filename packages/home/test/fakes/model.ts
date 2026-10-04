@@ -37,6 +37,9 @@ export type FakeModel = {
    * the home), and the words each is answered with, in turn (SUMMARY-OF-MIDDLE once none are left). */
   said: Record<string, unknown>[][];
   replies: string[];
+  /** Answers a request not streamed by what it asks (school's tests), before the replies; undefined
+   * falls through to them. */
+  answer?: (msgs: Record<string, unknown>[]) => string | undefined;
 };
 
 export async function fakeModel(t: TestContext, script: Turn[] = []): Promise<FakeModel> {
@@ -58,7 +61,7 @@ export async function fakeModel(t: TestContext, script: Turn[] = []): Promise<Fa
       if (!body.stream) {
         if (msgs.length === 1 && /^Summarise/.test(String(msgs[0]?.content ?? ""))) fm.summaries++;
         fm.said.push(msgs as Record<string, unknown>[]);
-        const content = fm.replies.shift() ?? "SUMMARY-OF-MIDDLE";
+        const content = fm.answer?.(msgs as Record<string, unknown>[]) ?? fm.replies.shift() ?? "SUMMARY-OF-MIDDLE";
         res.writeHead(200, { "content-type": "application/json" });
         res.end(JSON.stringify({ choices: [{ message: { content }, finish_reason: "stop" }], usage: { prompt_tokens: 50, completion_tokens: 5 } }));
         return;

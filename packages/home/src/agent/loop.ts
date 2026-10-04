@@ -63,6 +63,8 @@ export type AgentOptions = {
   /** What the orb does, and what the person approved for him to remember: his constitution (PLAN 3.9). */
   orbSpecialty?: (orb: string) => Specialty;
   learned?: (orb: string) => string[];
+  /** What an orb kept at school (PLAN 5.7): its notebook, newest first. */
+  notebook?: (orb: string) => { subject: string; text: string }[];
   /** The person's web-search key, when a search needs it (PLAN 3.10). */
   searchKey?: () => Promise<SearchKey | null>;
   /** Keeps a bill or a reminder for the person (the notification centre, PLAN 2.11). */
@@ -126,7 +128,7 @@ export const PLAN_ANSWERS = {
 const est = (text: string): number => Math.ceil(text.length / 4) + 4;
 
 export class AgentRunner implements Runner {
-  readonly #o: Required<Omit<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned" | "searchKey" | "remind" | "reminders" | "moveReminder" | "lessonGate" | "learn" | "habits" | "own" | "templates" | "schedule" | "extraTools" | "sandbox" | "onTerminal" | "workspaceFor" | "heldBy" | "pulse">> & Pick<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned" | "searchKey" | "remind" | "reminders" | "moveReminder" | "lessonGate" | "learn" | "habits" | "own" | "templates" | "schedule" | "extraTools" | "sandbox" | "onTerminal" | "workspaceFor" | "heldBy" | "pulse">;
+  readonly #o: Required<Omit<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned" | "notebook" | "searchKey" | "remind" | "reminders" | "moveReminder" | "lessonGate" | "learn" | "habits" | "own" | "templates" | "schedule" | "extraTools" | "sandbox" | "onTerminal" | "workspaceFor" | "heldBy" | "pulse">> & Pick<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned" | "notebook" | "searchKey" | "remind" | "reminders" | "moveReminder" | "lessonGate" | "learn" | "habits" | "own" | "templates" | "schedule" | "extraTools" | "sandbox" | "onTerminal" | "workspaceFor" | "heldBy" | "pulse">;
   readonly #tools: Map<string, ToolDef>;
 
   constructor(opts: AgentOptions) {
@@ -253,7 +255,7 @@ export class AgentRunner implements Runner {
       const team = ctx.items.map((i) => i.data.team as TeamTurn | undefined).find(Boolean);
       const standing = standingContext({
         orbName: this.#o.orbName(ctx.orb), brainDir: join(this.#o.dataDir, "brain"), workspace: tctx.workspace,
-        specialty: this.#o.orbSpecialty?.(ctx.orb), learned: this.#o.learned?.(ctx.orb), ...(team && { team }),
+        specialty: this.#o.orbSpecialty?.(ctx.orb), learned: this.#o.learned?.(ctx.orb), notebook: this.#o.notebook?.(ctx.orb), ...(team && { team }),
         aloud: ctx.items.some((i) => i.data.said === true), // you spoke (PLAN 4.7): his answer is heard, not read
       });
       await this.#compact(ctx, ep, est(standing));
