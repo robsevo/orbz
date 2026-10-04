@@ -257,6 +257,9 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("the Gemini key is written into brains.json", "src/brain/brains.ts", [
         ("    this.#saved = { ...this.#saved, gemini: { model } };", "    this.#saved = { ...this.#saved, gemini: { model, key: k } as { model: string } };"),
     ], ["brains.test.ts"]),
+    ("an AQ. key, AI Studio's kind now, is turned away as not a key", "src/brain/brains.ts", [
+        ("    if (!/^[\\w.-]{20,}$/.test(k))", "    if (!/^[\\w-]{20,}$/.test(k))"),
+    ], ["brains.test.ts"]),
     ("the error says nothing of how to set a brain up", "src/brain/chain.ts", [
         ('    if (s.state === "absent") return `${cap(s.label)}: not set up (${s.setup})`;', '    if (s.state === "absent") return `${cap(s.label)}: not set up`;'),
     ], ["brains.test.ts", "chain.test.ts"]),

@@ -114,7 +114,10 @@ export class Brains {
    * newest flash it may use (brains.json). A refused key is never kept. */
   async setGemini(key: string, fetcher: typeof fetch = fetch): Promise<{ model: string }> {
     const k = key.trim();
-    if (!/^[\w-]{20,}$/.test(k)) throw new KeyRefusedError("That doesn't look like a Gemini API key.");
+    // Google's keys were AIza and letters; AI Studio now makes "AQ." keys (auth keys, with a dot;
+    // owner 10-03: "That doesn't look like a Gemini API key. when it is"). Both go as a Bearer to
+    // the OpenAI-compatible root, the one way Google takes an AQ. key (a ?key= refuses one).
+    if (!/^[\w.-]{20,}$/.test(k)) throw new KeyRefusedError("That doesn't look like a Gemini API key (they start with AIza or AQ.).");
     let res: Response;
     try {
       res = await fetcher(`${this.#o.geminiBase ?? GEMINI_BASE}/models`, { headers: { authorization: `Bearer ${k}` }, signal: AbortSignal.timeout(15_000) });

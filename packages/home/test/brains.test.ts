@@ -135,3 +135,15 @@ test("the Gemini key: refused keys are never kept; a kept one is in the keychain
   assert.equal(await h.store.get("orbs.gemini"), null, "removed means removed");
   assert.equal(h.home.brains.status().gemini, null);
 });
+
+test("an AQ. key, the kind AI Studio makes now, is checked and kept like the old kind (owner, 10-03)", async (t) => {
+  const h = await home(t);
+  const aq = "AQ.test-gemini-auth-key-not-real-0123456789"; // the dot is the new kind's; the rest says it is not real
+  assert.deepEqual(await h.home.brains.setGemini(`  ${aq}\n`), { model: "gemini-3.8-flash" });
+  assert.equal(await h.store.get("orbs.gemini"), aq, "kept as pasted, trimmed");
+  assert.equal(h.gemini.keys.at(-1), `Bearer ${aq}`, "checked as a Bearer, the way Google takes one");
+  // control: what is not a key is still turned away before anything is asked
+  const asked = h.gemini.keys.length;
+  await assert.rejects(h.home.brains.setGemini("my key is AQ.test-gemini-auth-key"), /doesn't look like a Gemini API key \(they start with AIza or AQ\.\)/);
+  assert.equal(h.gemini.keys.length, asked, "nothing sent for it");
+});
