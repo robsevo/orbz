@@ -551,6 +551,7 @@ function App() {
   const [leaving, setLeaving] = useState<string | null>(null);
   const [arrived, setArrived] = useState<string | null>(null);
   const [rolls, setRolls] = useState(0);
+  const [seatHop, setSeatHop] = useState(0); // the New orb seat's orb hops as the pointer comes to it
   const lastReact = useRef(0);
   const [opening, setOpening] = useState(splashWanted);
   const [drawn, setDrawn] = useState(!opening); // the office draws once the splash starts to leave
@@ -753,9 +754,9 @@ function App() {
       <span aria-hidden style={{ font: "800 16px/16px var(--font)" }}>‹</span> Back
     </button>
   );
-  const navItem = (label: string, on: boolean, to: Route, mark: ReactNode, count = 0): ReactNode => (
-    <button key={label} aria-current={on ? "page" : undefined} aria-label={count ? `${label}, ${count} waiting` : undefined} onClick={() => go(to)} style={{ ...s.btn, display: "flex", alignItems: "center", gap: 10, textAlign: "left", background: on ? "var(--accent-wash)" : "transparent", boxShadow: on ? "inset 0 0 0 1px var(--accent)" : "none" }} data-orb={me.hue}>
-      <span aria-hidden style={{ width: 18, display: "grid", placeItems: "center", color: "var(--accent)", font: "800 15px/16px var(--font)" }}>{mark}</span>
+  const navItem = (label: string, on: boolean, to: Route, mark: ReactNode, count = 0, invite = false): ReactNode => (
+    <button key={label} aria-current={on ? "page" : undefined} aria-label={count ? `${label}, ${count} waiting` : undefined} onClick={() => go(to)} data-invite={invite || undefined} style={{ ...s.btn, display: "flex", alignItems: "center", gap: 10, textAlign: "left", background: on ? "var(--accent-wash)" : "transparent", boxShadow: on ? "inset 0 0 0 1px var(--accent)" : "none", ...(invite && { background: "var(--accent)", color: "var(--ground)", fontWeight: 800, boxShadow: on ? "0 0 0 2px var(--card), 0 0 0 3.5px var(--accent)" : "none" }) }} data-orb={me.hue}>
+      <span aria-hidden style={{ width: 18, display: "grid", placeItems: "center", color: invite ? "var(--ground)" : "var(--accent)", font: invite ? "800 20px/16px var(--font)" : "800 15px/16px var(--font)" }}>{mark}</span>
       {label}
       {count > 0 && (
         // a count, quiet: no sound, no motion beyond its arrival
@@ -814,7 +815,7 @@ function App() {
           <nav aria-label="Rooms" style={{ display: "grid", gap: 4, marginTop: "var(--s2)" }}>
             {backButton({ justifySelf: "start", marginBottom: "var(--s1)" })}
             {navItem("The office", room === "office" && !making, { room: "office", orb: making ? null : me.name }, "◉")}
-            {navItem("New orb", room === "office" && making, { room: "new" }, "+")}
+            {navItem("New orb", room === "office" && making, { room: "new" }, "+", 0, true) /* asks to be pressed (owner, 10-03) */}
             {navItem("Sessions", room === "sessions", { room: "sessions", id: null, tab: "brainstorm" }, "▦")}
             {navItem("Notifications", room === "notices", { room: "notices" }, "◔", notices.notices.length)}
             {navItem("Calendar", room === "calendar", { room: "calendar" }, "▤")}
@@ -960,13 +961,24 @@ function App() {
               min={144}
               gap={12}
               lead={
+                // the empty seat (owner, 10-03: "+ new orb button has to be more inviting than that"): an
+                // orb not made yet sits in it (the first open's newborn), its eyes on you, a + on it; it hops
+                // when the pointer comes
                 <button
                   aria-pressed={making}
+                  aria-label="New orb"
+                  data-new-orb
+                  data-orb={NEWBORN.hue}
                   onClick={() => go({ room: "new" })}
-                  style={{ display: "grid", placeItems: "center", alignContent: "center", gap: 4, minHeight: 72, padding: "var(--s3) var(--s2)", border: 0, cursor: "pointer", borderRadius: 18, background: making ? "var(--accent-wash)" : "transparent", boxShadow: "inset 0 0 0 1.5px var(--fill-2)", color: "var(--text-2)", font: "700 15px/20px var(--font)", minWidth: 0 }}
+                  onPointerEnter={() => setSeatHop((n) => n + 1)}
+                  style={{ display: "grid", justifyItems: "center", alignContent: "center", gap: 2, minHeight: 72, padding: "var(--s3) var(--s2)", border: 0, cursor: "pointer", borderRadius: 18, minWidth: 0, background: "radial-gradient(80% 70% at 50% 30%, var(--accent-fill), var(--accent-wash) 75%)", boxShadow: `inset 0 0 0 ${making ? 2 : 1.5}px var(--accent)` }}
                 >
-                  <b aria-hidden style={{ font: "800 30px/30px var(--font)", color: "var(--text-3)" }}>+</b>
-                  New orb
+                  <span style={{ position: "relative", display: "grid", marginBottom: -14 }}>
+                    <Orb character={NEWBORN} size={100} poke={false} gesture={seatHop ? { name: "hop", n: seatHop } : null} />
+                    <span aria-hidden data-plus style={{ position: "absolute", right: 10, bottom: 20, width: 30, height: 30, borderRadius: 15, display: "grid", placeItems: "center", background: "var(--accent)", color: "var(--ground)", font: "800 22px/22px var(--font)", boxShadow: "0 2px 10px var(--accent-glow)" }}>+</span>
+                  </span>
+                  <span style={{ font: "700 15px/20px var(--font)", color: "var(--accent)" }}>New orb</span>
+                  <span style={{ font: "600 12px/16px var(--font)", color: "var(--text-2)" }}>Make one your way</span>
                 </button>
               }
             >

@@ -1948,6 +1948,22 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ('style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", alignItems: "center", gap: 5, rowGap: 6 }}', 'style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 6 }}'),
         ('minWidth: 32, minHeight: 34, padding: "0 8px",', 'minWidth: 36, minHeight: 34, padding: "0 10px",'),
     ], ["office.test.ts", "creator.test.ts"]),
+    # the New orb seat and the menu's New orb, inviting (owner, 10-03)
+    ("the New orb seat is an empty outline again", "src/orbs.tsx", [
+        ('background: "radial-gradient(80% 70% at 50% 30%, var(--accent-fill), var(--accent-wash) 75%)",', 'background: "transparent",'),
+    ], ["office.test.ts"]),
+    ("the New orb seat's words are grey", "src/orbs.tsx", [
+        ('<span style={{ font: "700 15px/20px var(--font)", color: "var(--accent)" }}>New orb</span>', '<span style={{ font: "700 15px/20px var(--font)", color: "var(--text-2)" }}>New orb</span>'),
+    ], ["office.test.ts"]),
+    ("the New orb seat's orb is faint", "src/orbs.tsx", [
+        ('<Orb character={NEWBORN} size={100} poke={false} gesture={seatHop ? { name: "hop", n: seatHop } : null} />', '<Orb character={NEWBORN} size={100} poke={false} gesture={seatHop ? { name: "hop", n: seatHop } : null} style={{ opacity: 0.6 }} />'),
+    ], ["office.test.ts"]),
+    ("the menu's New orb is a plain row", "src/orbs.tsx", [
+        ('{ room: "new" }, "+", 0, true)', '{ room: "new" }, "+", 0, false)'),
+    ], ["office.test.ts"]),
+    ("the menu's New orb looks like the page you are on", "src/orbs.tsx", [
+        ('...(invite && { background: "var(--accent)", color: "var(--ground)",', '...(invite && { background: "var(--accent-wash)", color: "var(--text-1)",'),
+    ], ["office.test.ts"]),
     # school's room: send, rate, a syllabus, a pass mark, the report card (PLAN 5.7)
     ('Send to school does nothing', 'src/rooms/School.tsx', [
         ('onClick={() => void home.sendToSchool(orb, subjects, mark).then(sent, (e: Error) => setSaid(e.message))}', 'onClick={() => undefined}'),

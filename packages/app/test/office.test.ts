@@ -66,6 +66,40 @@ test("an orb in the office is fixed: no name to type, no creator, no dice; what 
   }
 });
 
+test("the New orb tile is an empty seat: an orb not made yet, a + on it, filled, its words in its colour; pressed, the creator (owner, 10-03)", { skip }, async () => {
+  const page = await open();
+  try {
+    const seat = page.locator("[data-new-orb]");
+    assert.equal(await seat.count(), 1, "one seat");
+    assert.equal(await seat.locator("canvas").count(), 1, "an orb sits in it");
+    assert.equal(await seat.locator("[data-plus]").count(), 1, "a + on it");
+    const look = await seat.evaluate((el) => {
+      const rgb = (hex: string): string => `rgb(${[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(", ")})`;
+      const words = [...el.querySelectorAll("span")].find((x) => x.textContent === "New orb")!;
+      return { fill: getComputedStyle(el).backgroundImage, words: getComputedStyle(words).color, accent: rgb(getComputedStyle(el).getPropertyValue("--accent").trim()) };
+    });
+    assert.match(look.fill, /gradient/, "filled with its colour, not an empty outline");
+    assert.equal(await seat.locator("canvas").evaluate((c) => getComputedStyle(c).opacity), "1", "its orb at full colour: a faint one reads as not for pressing");
+    // the menu's New orb asks to be pressed too: its colour's fill and ring, not a plain row
+    const invite = page.locator("[data-invite]");
+    assert.equal(await invite.count(), 1);
+    assert.equal(await invite.textContent(), "+New orb");
+    // a button, filled with its colour: not a row, and not the page you are on (that one is washed and ringed)
+    const fill = (b: Element) => ({ bg: getComputedStyle(b).backgroundColor, accent: getComputedStyle(b).getPropertyValue("--accent").trim() });
+    const pill = await invite.evaluate(fill);
+    assert.equal(pill.bg, `rgb(${[1, 3, 5].map((i) => parseInt(pill.accent.slice(i, i + 2), 16)).join(", ")})`, "filled with its colour");
+    const here = await page.locator('button[aria-current="page"]').first().evaluate(fill);
+    assert.notEqual(here.bg, pill.bg, "and unlike the page you are on");
+    assert.equal(await page.getByRole("button", { name: "Sessions", exact: true }).evaluate((b) => getComputedStyle(b).backgroundColor), "rgba(0, 0, 0, 0)", "control: a plain row is not filled");
+    assert.equal(look.words, look.accent, "New orb in its colour, not grey");
+    await seat.click();
+    assert.equal(await page.getByRole("tablist").count(), 1, "pressed, the creator");
+    assert.equal(await seat.getAttribute("aria-pressed"), "true", "and the seat says it is the one open");
+  } finally {
+    await page.close();
+  }
+});
+
 test("a new orb joins the office when he is created, and is fixed from then on", { skip }, async () => {
   const page = await open();
   try {
