@@ -301,9 +301,13 @@ export function stylesheet(fontUrl = "fonts/Nunito.ttf"): string {
     // a row that scrolls fades out at the edge where there is more (ui/Balanced.tsx useMore)
     `.one-line[data-more="right"] { mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }`,
     `.one-line[data-more="left"] { mask-image: linear-gradient(to left, #000 calc(100% - 28px), transparent); }`,
+    // a row that scrolls sideways clips up and down too: room above and below for a press's lift and a pick's
+    // bounce (owner, 10-04: "when hovering on buttons ... most of em get cut off as the animate to get bigger"),
+    // taken back by the margin so the layout does not move
+    `.one-line { padding-block: 6px; margin-block: -6px; }`,
     // on a phone, a container with too much in it scrolls inside itself (owner, 10-04: "if theres too much info in
     // any container, make it scrollable"), a fade where there is more (ui/Balanced.tsx Tall)
-    `@media (max-width: 760px) { .orbs-tall { max-height: var(--tall, 72dvh); overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-gutter: stable; padding-right: 14px; margin-right: -6px; }`,
+    `@media (max-width: 760px) { .orbs-tall { max-height: var(--tall, 72dvh); overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-gutter: stable; padding: 6px 14px 6px 0; margin-right: -6px; }`,
     `  .orbs-tall[data-more="down"] { mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent); }`,
     `  .orbs-tall[data-more="up"] { mask-image: linear-gradient(to top, #000 calc(100% - 36px), transparent); }`,
     `  .orbs-tall[data-more="up down"] { mask-image: linear-gradient(to bottom, transparent, #000 36px, #000 calc(100% - 36px), transparent); } }`,

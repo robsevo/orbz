@@ -177,7 +177,10 @@ function Evolving({ me, from, size, state, gesture, onDone }: { me: Character; f
       }
       if (t < EVOLVE_MS) raf = requestAnimationFrame(tick);
       else {
-        for (const el of [mine.current, old.current]) if (el) el.style.filter = el.style.opacity = el.style.transform = "";
+        // he is himself again; who he was stays out of sight until React takes him away (cleared, he would
+        // show over the new one for a frame: owner, 10-04, "it glitches back to the new one after")
+        if (mine.current) mine.current.style.filter = mine.current.style.opacity = mine.current.style.transform = "";
+        if (old.current) old.current.style.opacity = "0";
         setDone(from.n);
         onDone?.(from.n);
       }
@@ -1035,7 +1038,7 @@ function App() {
             {navItem("Settings", room === "settings", { room: "settings" }, "⚙")}
           </nav>
           <div style={{ ...s.head, margin: "var(--s3) var(--s2) var(--s1)" }}>The office</div>
-          <div style={{ display: "grid", gap: 2, overflowY: "auto", minHeight: 0 }}>
+          <div style={{ display: "grid", gap: 2, overflowY: "auto", minHeight: 0, paddingBlock: 4 }}>
             {office.map((c) => (
               <button
                 key={c.name}

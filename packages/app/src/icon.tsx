@@ -36,18 +36,38 @@ const TEAM: { c: Character; x: number; y: number; s: number; pose: { gesture: Ge
       { c: { ...ASH, name: "Bo", hue: "iris", shape: "teddy", eyes: "big", finish: "neon" }, x: 0.73, y: 0.35, s: 0.48, pose: { gesture: "squish", into: 0.4 }, turn: 8 },
       { c: { ...ASH, eyes: "big", finish: "neon" }, x: 0.5, y: 0.6, s: 0.68, pose: { gesture: "squish", into: 0.4 } },
     ];
-/** ORBZ in Nunito Black, tipped a little: an extrusion (shadows stepping down and right, outlined)
- * behind a white-to-gold face. Sizes in em, so it scales with the card. */
-const EXTRUDE = Array.from({ length: 9 }, (_, k) => `${((k + 1) * 0.007).toFixed(3)}em ${((k + 1) * 0.011).toFixed(3)}em 0 var(--icon-extrude)`).join(", ");
+/** ORBZ as bubble letters (owner, 10-04: "make the writing on the orbs logo more bubbly"): Nunito Black
+ * puffed out by a thick stroke of its own colour with round joins (an SVG text's stroke can be round; a
+ * CSS text outline cannot), a dark rim round it, a plum extrusion stepping down and right, a white-to-gold
+ * face and a gloss along the top. */
 function Wordmark({ size }: { size: number }) {
-  const shared = { position: "absolute", inset: 0, display: "grid", placeItems: "center", font: `900 ${size}px/1 var(--font)`, letterSpacing: "-0.01em", whiteSpace: "nowrap" } as const;
+  const W = 1000;
+  const H = 340;
+  const fs = 250; // the letters, in the drawing's units
+  const puff = 20; // how far each letter is blown up (past about 24 the O, R and B close up)
+  const rim = 12; // the dark line round it all
+  const at = { x: W / 2, y: 238, textAnchor: "middle", style: { font: `900 ${fs}px var(--font)`, letterSpacing: "10px" } } as const;
+  const round = { strokeLinejoin: "round", strokeLinecap: "round" } as const;
+  const depth = Array.from({ length: 10 }, (_, k) => k + 1);
   return (
-    <div style={{ position: "relative", width: "100%", height: size * 1.2, transform: "rotate(-5deg)" }}>
-      {/* the extrusion and its outline, and a soft shadow on the sky */}
-      <span aria-hidden style={{ ...shared, color: "var(--icon-extrude)", WebkitTextStroke: "0.07em var(--icon-outline)", paintOrder: "stroke fill", textShadow: `${EXTRUDE}, 0.02em 0.16em 0.12em var(--icon-drop)` }}>ORBZ</span>
-      {/* the face: white at the top to gold, outlined thin */}
-      <span style={{ ...shared, WebkitTextStroke: "0.02em var(--icon-outline)", background: "linear-gradient(180deg, var(--icon-face-top) 18%, var(--icon-face-mid) 55%, var(--icon-face-low) 88%)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>ORBZ</span>
-    </div>
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={size * 1.36} style={{ display: "block", overflow: "visible", transform: "rotate(-5deg)", filter: `drop-shadow(0 ${size * 0.07}px ${size * 0.06}px var(--icon-drop))` }}>
+      <defs>
+        <linearGradient id="orbz-face" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0.12" stopColor="var(--icon-face-top)" />
+          <stop offset="0.55" stopColor="var(--icon-face-mid)" />
+          <stop offset="0.92" stopColor="var(--icon-face-low)" />
+        </linearGradient>
+      </defs>
+      {/* the deepest step's rim, then the extrusion stepping down and right */}
+      <text {...at} x={W / 2 + 10 * 3.2} y={238 + 10 * 4.4} fill="var(--icon-outline)" stroke="var(--icon-outline)" strokeWidth={puff + rim * 2} {...round}>ORBZ</text>
+      {depth.reverse().map((k) => (
+        <text key={k} {...at} x={W / 2 + k * 3.2} y={238 + k * 4.4} fill="var(--icon-extrude)" stroke="var(--icon-extrude)" strokeWidth={puff} {...round}>ORBZ</text>
+      ))}
+      {/* the face's rim, the puffed face, and its gloss */}
+      <text {...at} fill="var(--icon-outline)" stroke="var(--icon-outline)" strokeWidth={puff + rim * 2} {...round}>ORBZ</text>
+      <text {...at} fill="url(#orbz-face)" stroke="url(#orbz-face)" strokeWidth={puff} {...round}>ORBZ</text>
+      <text {...at} y={238 - 34} fill="none" stroke="var(--icon-face-top)" strokeOpacity={0.7} strokeWidth={10} {...round} style={{ ...at.style, clipPath: "inset(0 0 62% 0)" }}>ORBZ</text>
+    </svg>
   );
 }
 /** The sparkles: where (fractions of the card) and how big (of the card). */
@@ -77,7 +97,7 @@ createRoot(document.getElementById("root")!).render(
       ))}
       {words && (
         <div style={{ position: "absolute", left: (card - room) / 2, width: room, top: (card - room) / 2 + room * 0.67 }}>
-          <Wordmark size={Math.round(room * 0.25)} />
+          <Wordmark size={Math.round(room * 0.22)} />
         </div>
       )}
     </div>
