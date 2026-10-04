@@ -17,5 +17,13 @@ if (files.length === 0) {
 // WebGL), and eleven at once on twelve cores starved each other until long tests ran past their
 // minute (10-02). Fewer at once finishes about as soon, and each test runs at its own pace.
 const at = Math.max(2, Math.floor(availableParallelism() / 2));
-const run = spawnSync(process.execPath, ["--test", "--test-timeout=120000", `--test-concurrency=${at}`, ...files], { stdio: "inherit" });
-process.exit(run.status ?? 1);
+// The voice suites (Chromium's microphone, the kit's Kokoro and Whisper, all on the CPU) run after the
+// rest, one at a time: beside six other suites, Whisper's part of "press to talk" took 99 s and ran
+// past its minute's wait, and alone it takes 33 s (10-03). Both groups always run, and either one red
+// is the gate red.
+const alone = files.filter((f) => /\/voice\.test\.ts$/.test(f));
+const rest = files.filter((f) => !alone.includes(f));
+const node = (list, n) => spawnSync(process.execPath, ["--test", "--test-timeout=120000", `--test-concurrency=${n}`, ...list], { stdio: "inherit" }).status ?? 1;
+const first = node(rest, at);
+const then = alone.length ? node(alone, 1) : 0;
+process.exit(first || then ? 1 : 0);
