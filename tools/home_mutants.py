@@ -1631,22 +1631,26 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ("    if (at >= 0 && pageOf(at) !== page) {\n      setWent(pageOf(at) > page ? \"on\" : \"back\");\n      setPage(pageOf(at));\n    }\n", ""),
     ], ["creator.test.ts"]),
     ("a hat's colour paints nothing", "src/orb/spec.ts", [
-        ('accCol: c.hatHue ? paint("accent", c.hatHue) : paint(w.main, c.hue),', "accCol: paint(w.main, c.hue),"),
+        ('accCol: c.hatHue ? tone(c.hatHue, c.hue) : paint(w.main, c.hue),', "accCol: paint(w.main, c.hue),"),
     ], ["spec.test.ts", "creator.test.ts"]),
     ("the frames' colour paints nothing", "src/orb/spec.ts", [
-        ('    specsCol: c.glassesHue ? paint("accent", c.glassesHue) : paint(g.frame, c.hue),', "    specsCol: paint(g.frame, c.hue),"),
+        ('    specsCol: c.glassesHue ? tone(c.glassesHue, c.hue) : paint(g.frame, c.hue),', "    specsCol: paint(g.frame, c.hue),"),
     ], ["spec.test.ts"]),
     ("choosing an accessory's colour does nothing", "src/orbs.tsx", [
         ("            <Swatch hue={h.name} size={28} on={value === h.name} label={`${what} in ${h.name}`} onPick={() => onPick(h.name)} />", "            <Swatch hue={h.name} size={28} on={value === h.name} label={`${what} in ${h.name}`} onPick={() => undefined} />"),
     ], ["creator.test.ts"]),
     ("an accessory's colour is lost when he is kept", "src/orb/spec.ts", [
-        ('    hatHue: typeof c.hatHue === "string" && hues.includes(c.hatHue) ? c.hatHue : c.hatHue === null ? null : base.hatHue ?? null,', "    hatHue: null,"),
+        ('    hatHue: typeof c.hatHue === "string" && (hues.includes(c.hatHue) || c.hatHue === "white" || c.hatHue === "black") ? (c.hatHue as AccessoryHue) : c.hatHue === null ? null : base.hatHue ?? null,', "    hatHue: null,"),
     ], ["spec.test.ts", "creator.test.ts"]),
     ("hats sit where they did on every shape (no fit)", "src/orb/spec.ts", [
         ("  const Y = Math.max(Math.min(head(-FIT_AT), head(FIT_AT)) - beanDrop, peak);", "  const Y = -S0.d[1] * (1 + outline(S0, -Math.PI / 2));"),
     ], ["spec.test.ts"]),
-    ("a hat hides his ears", "src/orb/glsl.ts", [
-        ("      col = mix(col, c, aa*(1.0 - earFront));                       // his ears in front of it, the hat behind them", "      col = mix(col, c, aa);"),
+    ("his shape shows inside a hat: his ears drawn over it again", "src/orb/glsl.ts", [
+        ("  float nd = db/Rg;\n\n  if (nd < 1.04) {", "  float nd = db/Rg;\n  // his ears in front of a hat, as if through it\n  float earT = uShapeD.x < 0.3 ? uShapeC.z*(exp(-pow((ang0 + 1.5707963 - uShapeC.w)/uShapeD.x, 2.0)) + exp(-pow((ang0 + 1.5707963 + uShapeC.w)/uShapeD.x, 2.0))) : 0.0;\n  float Rskull = Rs - uShapeD.y*Rg*earT*(1.0 + 0.5*uSquash*cos(2.0*ang0));\n  float earFront = earT > 0.005 ? smoothstep(Rskull - 1.5, Rskull + 1.5, length(p))*smoothstep(1.0, 1.0 - 2.6/Rg, nd) : 0.0;\n\n  if (nd < 1.04) {"),
+        ("      col = mix(col, c, aa);                                        // in front of all of him, his ears too (owner, 10-03)", "      col = mix(col, c, aa*(1.0 - earFront));"),
+    ], ["characters.test.ts"]),
+    ("a hat is drawn see-through", "src/orb/glsl.ts", [
+        ("      col = mix(col, c, aa);                                        // in front of all of him, his ears too (owner, 10-03)", "      col = mix(col, c, aa*0.5);"),
     ], ["characters.test.ts"]),
     ("a bunny's hat sits on his ears' tips", "src/orb/spec.ts", [
         ("  const S: ShapeNumbers = ears ? { ...S0, c: [S0.c[0], S0.c[1], 0, S0.c[3]] } : S0;", "  const S: ShapeNumbers = S0;"),
@@ -1915,6 +1919,35 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ('a second press of a move does not light it again', 'src/orbs.tsx', [
         ('${flash.n % 2 ? "orbs-flash-a" : "orbs-flash-b"}', 'orbs-flash-a'),
     ], ['feel.test.ts']),
+    # the creator, more of everything (owner, 10-03): shapes, eyes, hats, glasses, white and black
+    ("a new shape is an old one by another name", "src/orb/spec.ts", [
+        ("  owl: shape({ tall: 0.06, belly: 0.95, wide: 0.08, ears: 0.13, earSpread: 0.52, earWidth: 0.07, scale: 0.86 }),", "  owl: shape({ tall: 0.06, belly: 0.9, wide: 0.06, ears: 0.2, earSpread: 0.78, earWidth: 0.24, scale: 0.84 }),"),
+    ], ["spec.test.ts"]),
+    ("a white hat is painted his accent", "src/orb/spec.ts", [
+        ('const tone = (h: AccessoryHue, hue: HueName): [number, number, number] => (h === "white" || h === "black" ? paint(h, hue) : paint("accent", h));', 'const tone = (h: AccessoryHue, hue: HueName): [number, number, number] => (h === "black" ? paint(h, hue) : paint("accent", h === "white" ? hue : h));'),
+    ], ["spec.test.ts", "creator.test.ts"]),
+    ("black frames are lost when he is kept", "src/orb/spec.ts", [
+        ('    glassesHue: typeof c.glassesHue === "string" && (hues.includes(c.glassesHue) || c.glassesHue === "white" || c.glassesHue === "black") ?', '    glassesHue: typeof c.glassesHue === "string" && (hues.includes(c.glassesHue) || c.glassesHue === "white") ?'),
+    ], ["spec.test.ts"]),
+    ("a new hat has no drawing", "src/orb/glsl.ts", [
+        ("  if (id == 40) {", "  if (id == 400) {"),
+    ], ["spec.test.ts"]),
+    ("a new pair of glasses has no drawing", "src/orb/glsl.ts", [
+        ("    else if (id == 21) d = ", "    else if (id == 210) d = "),
+    ], ["spec.test.ts"]),
+    ("two hats share a number", "src/orb/spec.ts", [
+        ('  "unicorn horn": { id: 40, main: "gold", second: "cream", tilt: 0 },', '  "unicorn horn": { id: 39, main: "gold", second: "cream", tilt: 0 },'),
+    ], ["spec.test.ts"]),
+    ("the antlers' ring is drawn under him too", "src/orb/glsl.ts", [
+        ("float band = max(max(abs(length(q - vec2(0.0, 0.76)) - 0.72) - 0.03, abs(q.x) - 0.20), q.y - 0.2);", "float band = max(abs(length(q - vec2(0.0, 0.76)) - 0.72) - 0.03, abs(q.x) - 0.20);"),
+    ], ["characters.test.ts"]),
+    ("the white swatch does nothing", "src/orbs.tsx", [
+        ("title={cap(m)} onClick={() => onPick(m)} data-material={m}", "title={cap(m)} onClick={() => undefined} data-material={m}"),
+    ], ["creator.test.ts"]),
+    ("the page numbers spill past a phone's width", "src/ui/Paged.tsx", [
+        ('style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", alignItems: "center", gap: 5, rowGap: 6 }}', 'style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 6 }}'),
+        ('minWidth: 32, minHeight: 34, padding: "0 8px",', 'minWidth: 36, minHeight: 34, padding: "0 10px",'),
+    ], ["office.test.ts", "creator.test.ts"]),
     # school's room: send, rate, a syllabus, a pass mark, the report card (PLAN 5.7)
     ('Send to school does nothing', 'src/rooms/School.tsx', [
         ('onClick={() => void home.sendToSchool(orb, subjects, mark).then(sent, (e: Error) => setSaid(e.message))}', 'onClick={() => undefined}'),

@@ -364,6 +364,65 @@ vec2 accSDF(vec2 q){
     float horns = min(h1, h2);
     return horns < 0.0 || band < 0.0 ? vec2(min(horns, band), 1.0) : vec2(min(dome, horns), 0.0);
   }
+  // more (owner, 10-03: "Can we add more accessories in every section?")
+  if (id == 33) {       // a bowler: a round crown on a short curled brim, a band
+    float crown = max(sdEll(q - vec2(0.0, -0.12), vec2(0.36, 0.34)), q.y + 0.02);
+    float brim = sdEll(q - vec2(0.0, 0.0), vec2(0.54, 0.065));
+    float band = max(crown, abs(q.y + 0.08) - 0.04);
+    return band < 0.0 ? vec2(band, 1.0) : vec2(min(crown, brim), 0.0);
+  }
+  if (id == 34) {       // a fez: a short tapered crown, flat on top, and a tassel hanging off it
+    float tt = clamp((0.04 - q.y)/0.48, 0.0, 1.0);
+    float crown = max(abs(q.x) - mix(0.31, 0.22, tt), max(q.y - 0.04, -0.44 - q.y)) - 0.01;
+    float cord = sdCap(q, vec2(0.0, -0.44), vec2(0.26, -0.30), 0.018);
+    float tassel = sdEll(q - vec2(0.28, -0.20), vec2(0.045, 0.10));
+    return pick(vec2(crown, 0.0), vec2(min(cord, tassel), 1.0));
+  }
+  if (id == 35) {       // a tricorn, a pirate's: seen from the front a boat, low where it sits on him, its brim
+                        // turned up into a point at each side, gold along that edge, the crown inside
+    float cut = sdEll(q - vec2(0.0, -0.46), vec2(0.48, 0.30));
+    float boat = max(sdEll(q - vec2(0.0, -0.12), vec2(0.72, 0.30)), -cut);
+    float crown = max(sdEll(q - vec2(0.0, -0.16), vec2(0.30, 0.28)), q.y + 0.02);
+    float trim = max(boat, abs(cut) - 0.035);
+    return trim < 0.0 ? vec2(trim, 1.0) : vec2(min(boat, crown), 0.0);
+  }
+  if (id == 36) {       // a Santa hat: a soft cone flopping to one side, a fur trim, a pompom
+    float cone = sdTri(q, vec2(-0.40, 0.02), vec2(0.40, 0.02), vec2(0.34, -0.72)) - 0.04;
+    float trim = sdBox(q - vec2(0.0, 0.04), vec2(0.47, 0.085), 0.08);
+    float pom = length(q - vec2(0.38, -0.76)) - 0.11;
+    return pick(vec2(cone, 0.0), vec2(min(trim, pom), 1.0));
+  }
+  if (id == 37) {       // a sombrero: a tall round crown, a very wide brim, a band
+    float crown = max(sdEll(q - vec2(0.0, -0.16), vec2(0.30, 0.36)), q.y + 0.0);
+    float brim = sdEll(q - vec2(0.0, 0.02), vec2(0.82, 0.08));   // as wide as its picture's frame allows
+    float band = max(crown, abs(q.y + 0.06) - 0.045);
+    return band < 0.0 ? vec2(band, 1.0) : vec2(min(crown, brim), 0.0);
+  }
+  if (id == 38) {       // a tiara: a fine band over his head, three points, a stone in the middle
+    float band = max(max(abs(length(q - vec2(0.0, 0.70)) - 0.72) - 0.028, q.y - 0.16), abs(q.x) - 0.46);
+    float pts = min(sdTri(q, vec2(-0.09, 0.0), vec2(0.09, 0.0), vec2(0.0, -0.26)),
+                    min(sdTri(q, vec2(-0.30, 0.04), vec2(-0.16, 0.0), vec2(-0.25, -0.16)), sdTri(q, vec2(0.16, 0.0), vec2(0.30, 0.04), vec2(0.25, -0.16)))) - 0.012;
+    float stone = length(q - vec2(0.0, -0.08)) - 0.055;
+    return stone < 0.0 ? vec2(stone, 1.0) : vec2(min(band, pts), 0.0);
+  }
+  if (id == 39) {       // antlers on a band that rests on his head: a beam on each side and the tines off it
+    // the top of the ring only: a ring crosses that strip twice, and its far side hung under him
+    float band = max(max(abs(length(q - vec2(0.0, 0.76)) - 0.72) - 0.03, abs(q.x) - 0.20), q.y - 0.2);
+    float a = band;
+    for (int i = 0; i < 2; i++) {
+      float sd = i == 0 ? -1.0 : 1.0;
+      vec2 m = vec2(sd*q.x, q.y);
+      a = min(a, sdCap(m, vec2(0.15, 0.06), vec2(0.36, -0.42), 0.032));
+      a = min(a, sdCap(m, vec2(0.25, -0.17), vec2(0.46, -0.22), 0.026));
+      a = min(a, sdCap(m, vec2(0.31, -0.33), vec2(0.25, -0.54), 0.024));
+    }
+    return vec2(a, 0.0);
+  }
+  if (id == 40) {       // a unicorn's horn: a slim cone with a spiral stripe
+    float horn = sdTri(q, vec2(-0.11, 0.04), vec2(0.11, 0.04), vec2(0.0, -0.66)) - 0.016;
+    float stripe = step(0.55, fract((q.y + 0.55*q.x)*7.0));
+    return vec2(horn, stripe);
+  }
   if (id == 8) {        // headphones: the band over his head, a cup on each side
     // the band rests on his head and the cups on his sides (both hovered a hair off him until 10-01)
     float band = max(abs(length(q - vec2(0.0, 0.70)) - 0.73) - 0.035, q.y - 0.62);
@@ -401,7 +460,7 @@ vec4 specsSDF(vec2 f){
   float L = clamp(uEyeA.x*1.5, 0.15, 0.25);              // a lens a little bigger than his eye
   float Ly = L*clamp(uEyeA.y*0.85, 1.0, 1.35);           // taller for tall eyes
   float cx = max(uEyeA.z, L + 0.035);                    // far enough apart for a bridge
-  float t = id == 4 || id == 10 ? 0.03 : id == 12 ? 0.042 : 0.02;   // the frame's half-thickness
+  float t = id == 4 || id == 10 ? 0.03 : id == 12 ? 0.042 : id == 20 ? 0.046 : 0.02;   // the frame's half-thickness
   if (id == 6) {        // a monocle: one round lens on his left eye, and its chain
     float d = length(f - vec2(cx, ey)) - L*1.05;
     float chain = sdCap(f, vec2(cx + L*0.74, ey + L*0.74), vec2(cx + L*1.0, ey + 0.50), 0.011);
@@ -431,6 +490,10 @@ vec4 specsSDF(vec2 f){
     else if (id == 14) d = sdBox(v, vec2(L*1.12, Ly*0.62), 0.03);                   // rectangle
     else if (id == 15) d = sdBox(v, vec2(L*1.08, Ly*0.78), 0.06);                   // half-rims (the brow drawn thick below)
     else if (id == 16) d = sdBox(rot(m - vec2(0.03, 0.0), 0.16), vec2(L*1.4, Ly*0.74), 0.15);   // sport: wrapped round, swept out and down
+    else if (id == 18) d = sdEll(v, vec2(L*1.2, Ly*0.72));                          // oval: wide and low
+    else if (id == 19) d = max(abs(v.x)*0.866 + abs(v.y)*0.5, abs(v.y)) - L*1.02;     // hexagon
+    else if (id == 20) d = sdEll(v, vec2(L, Ly)*1.1);                               // bold round: the frame thick
+    else if (id == 21) d = sdEll(rot(m - vec2(0.04, -0.03), 0.34), vec2(L*1.34, Ly*0.86));   // butterfly: swept up and out
     else d = sdEll(v, vec2(L, Ly));                                                 // round, round shades
     lens = min(lens, d);
     // the temples: a short arm from each lens's outer edge back toward his side
@@ -544,13 +607,6 @@ void main(){
   vec2  pb = p*(Rg/Rs);
   float db = length(pb);
   float nd = db/Rg;
-  // his ears, if they are narrow ones (a teddy's, a kitty's, a bunny's: spec.ts hatFit): a hat goes
-  // on his head between them, and they stay in front of it, as if through it. Where his outline
-  // would be without them, and how much of this pixel is ear.
-  float earT = uShapeD.x < 0.3 ? uShapeC.z*(exp(-pow((ang0 + 1.5707963 - uShapeC.w)/uShapeD.x, 2.0)) + exp(-pow((ang0 + 1.5707963 + uShapeC.w)/uShapeD.x, 2.0))) : 0.0;
-  float Rskull = Rs - uShapeD.y*Rg*earT*(1.0 + 0.5*uSquash*cos(2.0*ang0));
-  // (how much of him is there: his ear's soft edge lets the hat behind it show through)
-  float earFront = earT > 0.005 ? smoothstep(Rskull - 1.5, Rskull + 1.5, length(p))*smoothstep(1.0, 1.0 - 2.6/Rg, nd) : 0.0;
 
   if (nd < 1.04) {
     float z = sqrt(max(0.0, 1.0 - min(nd,1.0)*min(nd,1.0)));
@@ -922,8 +978,8 @@ void main(){
       c += PALE*pow(1.0 - N.z, 2.2)*0.35;                          // the rim
       c += vec3(1.0)*pow(max(0.0, dot(N, normalize(Ld + vec3(0.0, 0.0, 1.0)))), 60.0)*0.75;   // the highlight
       if (h.y > 1.5) c += uAccCol2*(0.55 + 0.25*sin(t*2.2));        // a light of his own: it glows, gently
-      col = mix(col, c, aa*(1.0 - earFront));                       // his ears in front of it, the hat behind them
-      A = max(A, aa);                                               // (so where an ear is soft, the hat shows, never a hole)
+      col = mix(col, c, aa);                                        // in front of all of him, his ears too (owner, 10-03)
+      A = max(A, aa);
     }
     if (h.y > 1.5) {                                               // and the bead's glow reaches past it
       float gl = exp(-max(0.0, h.x)/0.10)*0.55;

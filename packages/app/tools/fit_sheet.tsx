@@ -9,8 +9,10 @@ export function mount(kind: "hat" | "glasses", size = 72): void {
   const style = document.createElement("style");
   style.textContent = stylesheet();
   document.head.append(style);
-  const shapes = Object.keys(SHAPES) as ShapeName[];
-  const wears = (kind === "hat" ? Object.keys(HATS).filter((h) => h !== "none") : Object.keys(GLASSES).filter((g) => g !== "none")) as string[];
+  // a part of the sheet (shoot_fit.ts --shapes a,b --wears x,y): what is being changed, quickly
+  const only = (k: string): string[] | null => new URLSearchParams(location.search).get(k)?.split(",") ?? null;
+  const shapes = (Object.keys(SHAPES) as ShapeName[]).filter((x) => !only("shapes") || only("shapes")!.includes(x));
+  const wears = (kind === "hat" ? Object.keys(HATS).filter((h) => h !== "none") : Object.keys(GLASSES).filter((g) => g !== "none")).filter((x) => !only("wears") || only("wears")!.includes(x)) as string[];
   const base: Character = { ...ASH, name: "Fit", finish: "glass" };
   const root = document.createElement("div");
   document.body.append(root);

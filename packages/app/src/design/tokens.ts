@@ -190,6 +190,8 @@ export const MATERIALS = {
   gold: parseHex("#D9AE55"),
   shade: parseHex("#14161C"), // a sunglass lens: near black, a breath of blue
   rose: parseHex("#E8708A"), // heart glasses are pink whatever colour he is
+  white: parseHex("#F4F4F6"), // a hat or frames in white or black (owner, 10-03), lit like the rest
+  black: parseHex("#17181B"),
 } as const;
 export type Material = keyof typeof MATERIALS;
 

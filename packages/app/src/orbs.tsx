@@ -11,7 +11,8 @@
 // makes him wobble.
 import { StrictMode, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
-import { HUES, stylesheet, type HueName } from "./design/tokens.ts";
+import { HUES, MATERIALS, stylesheet, type HueName } from "./design/tokens.ts";
+import { hex } from "./design/color.ts";
 import { Orb } from "./orb/Orb.tsx";
 import { Balanced, OneLine, useMore } from "./ui/Balanced.tsx";
 import { Paged } from "./ui/Paged.tsx";
@@ -42,7 +43,7 @@ import { applyTheme, savedTheme } from "./ui/theme.ts";
 
 applyTheme(savedTheme(), false); // before the first paint: the theme you chose, never a flash of another
 import {
-  ASH, EYES, FAMILIES, FINISHES, GLASSES, HATS, offered, orbName, PERSONALITIES, REPLIES, SHAPES, sheetOf, speaks, SPECIALTIES, surprise, voice, VOICES, withPersonality,
+  ASH, EYES, FAMILIES, FINISHES, GLASSES, HATS, offered, orbName, type AccessoryHue, PERSONALITIES, REPLIES, SHAPES, sheetOf, speaks, SPECIALTIES, surprise, voice, VOICES, withPersonality,
   type Character, type EyesName, type Family, type FinishName, type GlassesName, type HatName, type PersonalityName, type Replies, type ShapeName, type SpecialtyName,
 } from "./orb/spec.ts";
 
@@ -225,7 +226,7 @@ function Thumbs<T extends string>({ c, options, field, label, onPick, face = fal
 
 /** An accessory's colour: its own, or any of his 24 (owner, 10-01: "just like the orb we should be
  * able to change the colors of our accessories"). One line, scrolling sideways on a phone. */
-function AccessoryColour({ what, value, onPick }: { what: string; value: HueName | null; onPick: (h: HueName | null) => void }) {
+function AccessoryColour({ what, value, onPick }: { what: string; value: AccessoryHue | null; onPick: (h: AccessoryHue | null) => void }) {
   return (
     <div style={{ display: "grid", gap: 8 }}>
       <Head>{cap(what)} colour</Head>
@@ -233,6 +234,13 @@ function AccessoryColour({ what, value, onPick }: { what: string; value: HueName
         <button onClick={() => onPick(null)} aria-pressed={value === null} style={{ ...s.chip, ...chosen(value === null), flex: "0 0 auto" }}>
           Its own
         </button>
+        {/* white and black (owner, 10-03), then his 24 colours */}
+        {(["white", "black"] as const).map((m) => (
+          <span key={m} style={{ flex: "0 0 auto", display: "grid" }}>
+            <button aria-label={`${what} in ${m}`} aria-pressed={value === m} title={cap(m)} onClick={() => onPick(m)} data-material={m}
+              style={{ width: 28, height: 28, borderRadius: "50%", border: 0, cursor: "pointer", background: hex(MATERIALS[m]), boxShadow: value === m ? "0 0 0 2px var(--card), 0 0 0 4px var(--text-1)" : "inset 0 0 0 1px var(--hairline)" }} />
+          </span>
+        ))}
         {HUES.map((h) => (
           <span key={h.name} style={{ flex: "0 0 auto", display: "grid" }}>
             <Swatch hue={h.name} size={28} on={value === h.name} label={`${what} in ${h.name}`} onPick={() => onPick(h.name)} />

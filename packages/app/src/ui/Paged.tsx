@@ -9,7 +9,7 @@
 import { useState, type ReactNode } from "react";
 import { ACROSS, pageOf, pagesFor, PER_PAGE } from "./pages.ts";
 
-const step = { font: "800 16px/20px var(--font)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 10, minWidth: 36, minHeight: 36, padding: "0 10px", cursor: "pointer", boxShadow: "inset 0 0 0 .5px var(--hairline)" } as const;
+const step = { font: "800 16px/20px var(--font)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 10, minWidth: 32, minHeight: 34, padding: "0 8px", cursor: "pointer", boxShadow: "inset 0 0 0 .5px var(--hairline)" } as const;
 
 export function Paged({ items, at, label }: { items: ReactNode[]; /** the chosen item's index: the page opens on it */ at: number; label: string }) {
   const pages = pagesFor(items.length);
@@ -52,7 +52,8 @@ export function Paged({ items, at, label }: { items: ReactNode[]; /** the chosen
         );
       })}
       {pages > 1 && (
-        <nav aria-label={`${label} pages`} style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 6 }}>
+        <nav aria-label={`${label} pages`} style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", alignItems: "center", gap: 5, rowGap: 6 }}>
+          {/* as many pages as there are choices (the owner keeps asking for more): a phone's row wraps rather than spill */}
           <button aria-label="Previous page" disabled={page === 0} onClick={() => go(page - 1)} style={{ ...step, opacity: page === 0 ? 0.4 : 1 }}>
             ‹
           </button>

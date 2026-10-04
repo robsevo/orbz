@@ -49,6 +49,16 @@ export const SHAPES = {
   trio: shape({ tall: 0.0, taper: -0.02, points: 3, pointSize: 0.2, pointSharp: 1.6, scale: 0.84 }),
   squircle: shape({ tall: 0.02, squircle: 0.12, scale: 0.86 }),
   blob: shape({ tall: 0.1, taper: 0.04, grow: 0.03, belly: 0.9, blob: 0.08, scale: 0.88 }),
+  // more (owner, 10-03: "and also more shapes"), each from the same terms
+  pear: shape({ tall: 0.32, taper: 0.06, grow: 0.08, belly: 1.0, scale: 0.84 }),
+  fox: shape({ tall: 0.08, taper: 0.06, belly: 0.95, ears: 0.34, earSpread: 0.62, earWidth: 0.09, scale: 0.8 }),
+  owl: shape({ tall: 0.06, belly: 0.95, wide: 0.08, ears: 0.13, earSpread: 0.52, earWidth: 0.07, scale: 0.86 }),
+  sun: shape({ tall: 0.0, points: 10, pointSize: 0.07, pointSharp: 2.2, scale: 0.86 }),
+  pill: shape({ tall: 0.24, belly: 0.0, scale: 0.9 }),
+  flower: shape({ tall: 0.0, bumps: 6, bumpSize: 0.11, scale: 0.86 }),
+  gem: shape({ tall: 0.0, points: 6, pointSize: 0.07, pointSharp: 1.0, scale: 0.88 }),
+  jelly: shape({ tall: 0.12, taper: 0.1, grow: 0.02, belly: 0.95, hem: 0.05, hemFreq: 7, scale: 0.86 }),
+  lemon: shape({ tall: 0.1, belly: 0.95, wide: -0.04, point: 0.22, tip: 0.22, scale: 0.85 }),
 };
 export type ShapeName = keyof typeof SHAPES;
 type ShapeNumbers = ReturnType<typeof shape>;
@@ -175,6 +185,10 @@ export const EYES = {
   wide: { a: [0.13, 1, 0.34, 0.12], b: [1, 0, 0, 0] },
   close: { a: [0.13, 1, 0.18, 0.08], b: [1, 0, 0, 0] },
   low: { a: [0.14, 1, 0.26, 0.22], b: [1, 0, 0, 0] },
+  button: { a: [0.095, 1, 0.22, 0.1], b: [1, 0, 0, 0] },
+  tall: { a: [0.1, 1.9, 0.24, 0.08], b: [1, 0, 0, 0] },
+  high: { a: [0.13, 1, 0.26, 0.0], b: [1, 0, 0, 0] },
+  almond: { a: [0.15, 0.62, 0.27, 0.11], b: [1, 0, 0, 0] },
 } satisfies Record<string, { a: V4; b: V4 }>;
 export type EyesName = keyof typeof EYES;
 
@@ -182,6 +196,10 @@ export type EyesName = keyof typeof EYES;
 // Two choices, not one (owner, 2026-10-01: "what if we want glasses and a hat? make them 2
 // categories ... different glasses, different hats ... can also be sunglasses").
 type Paint = "accent" | Material;
+/** What a hat or frames may be painted: one of his 24 colours, or white or black (owner, 10-03). */
+export type AccessoryHue = HueName | "white" | "black";
+/** An accessory's own colour: white and black are materials, the rest his colours. */
+const tone = (h: AccessoryHue, hue: HueName): [number, number, number] => (h === "white" || h === "black" ? paint(h, hue) : paint("accent", h));
 /** A hat: the shader's shape number, what its two parts are made of, and its slant. */
 export const HATS = {
   none: { id: 0, main: "ink", second: "ink", tilt: 0 },
@@ -217,6 +235,15 @@ export const HATS = {
   "sun visor": { id: 30, main: "cream", second: "accent", tilt: -0.05 },
   "flower crown": { id: 31, main: "rose", second: "gold", tilt: 0 },
   "viking helmet": { id: 32, main: "steel", second: "cream", tilt: 0 },
+  // more (owner, 10-03: "Can we add more accessories in every section?")
+  bowler: { id: 33, main: "ink", second: "accent", tilt: -0.08 },
+  fez: { id: 34, main: "accent", second: "gold", tilt: 0.06 },
+  tricorn: { id: 35, main: "ink", second: "gold", tilt: -0.04 },
+  "Santa hat": { id: 36, main: "accent", second: "cream", tilt: 0.1 },
+  sombrero: { id: 37, main: "gold", second: "accent", tilt: -0.06 },
+  tiara: { id: 38, main: "gold", second: "accent", tilt: 0 },
+  antlers: { id: 39, main: "cream", second: "cream", tilt: 0 },
+  "unicorn horn": { id: 40, main: "gold", second: "cream", tilt: 0 },
 } satisfies Record<string, { id: number; main: Paint; second: Paint; tilt: number }>;
 export type HatName = keyof typeof HATS;
 
@@ -241,6 +268,10 @@ export const GLASSES = {
   "half-rims": { say: "half-rim glasses", id: 15, frame: "ink", second: "ink", lens: "ink", dark: 0 },
   sport: { say: "sport shades", id: 16, frame: "accent", second: "accent", lens: "shade", dark: 0.86 },
   "rose tint": { say: "rose-tinted glasses", id: 17, frame: "gold", second: "gold", lens: "rose", dark: 0.45 },
+  oval: { say: "oval glasses", id: 18, frame: "ink", second: "ink", lens: "ink", dark: 0 },
+  hexagon: { say: "hexagon glasses", id: 19, frame: "gold", second: "gold", lens: "ink", dark: 0 },
+  "bold round": { say: "bold round glasses", id: 20, frame: "accent", second: "accent", lens: "ink", dark: 0 },
+  butterfly: { say: "butterfly shades", id: 21, frame: "ink", second: "ink", lens: "shade", dark: 0.86 },
 } satisfies Record<string, { say: string; id: number; frame: Paint; second: Paint; lens: Paint; dark: number }>;
 export type GlassesName = keyof typeof GLASSES;
 /** Sunglasses: the ones that hide his eyes. */
@@ -538,9 +569,9 @@ export type Character = {
   glasses: GlassesName;
   /** The hat's colour, chosen like his own (owner, 10-01: "change the colors of our accessories"),
    * or none for the hat's own colours. It paints the hat's main part; a trim keeps its colour. */
-  hatHue?: HueName | null;
+  hatHue?: AccessoryHue | null;
   /** The frames' colour (and a strap's), or none for their own. The lenses keep theirs. */
-  glassesHue?: HueName | null;
+  glassesHue?: AccessoryHue | null;
   voice: string;
   goo: number;
 };
@@ -571,10 +602,10 @@ export function lookOf(c: Character): OrbLook {
   return {
     shapeA: [...s.a], shapeB: [...s.b], shapeC: [...s.c], shapeD: [...s.d], shapeE: [...s.e], shapeF: [...s.f],
     eyeA: [...e.a] as V4, eyeB: [...e.b] as V4,
-    acc: w.id, accFit: (({ seat, size, float }) => [c.hat === "halo" ? float : seat, size] as [number, number])(hatFit(c.shape)), accCol: c.hatHue ? paint("accent", c.hatHue) : paint(w.main, c.hue), accCol2: paint(w.second, c.hue), accTilt: w.tilt,
+    acc: w.id, accFit: (({ seat, size, float }) => [c.hat === "halo" ? float : seat, size] as [number, number])(hatFit(c.shape)), accCol: c.hatHue ? tone(c.hatHue, c.hue) : paint(w.main, c.hue), accCol2: paint(w.second, c.hue), accTilt: w.tilt,
     specs: g.id,
-    specsCol: c.glassesHue ? paint("accent", c.glassesHue) : paint(g.frame, c.hue),
-    specsCol2: c.glassesHue ? paint("accent", c.glassesHue) : paint(g.second, c.hue),
+    specsCol: c.glassesHue ? tone(c.glassesHue, c.hue) : paint(g.frame, c.hue),
+    specsCol2: c.glassesHue ? tone(c.glassesHue, c.hue) : paint(g.second, c.hue),
     lensCol: paint(g.lens, c.hue), lensDark: g.dark,
   };
 }
@@ -627,8 +658,8 @@ export function sane(c: Partial<Character> & { name: string }, base: Character):
     eyes: pick("eyes", inside(EYES)),
     hat: pick("hat", inside(HATS)),
     glasses: pick("glasses", inside(GLASSES)),
-    hatHue: typeof c.hatHue === "string" && hues.includes(c.hatHue) ? c.hatHue : c.hatHue === null ? null : base.hatHue ?? null,
-    glassesHue: typeof c.glassesHue === "string" && hues.includes(c.glassesHue) ? c.glassesHue : c.glassesHue === null ? null : base.glassesHue ?? null,
+    hatHue: typeof c.hatHue === "string" && (hues.includes(c.hatHue) || c.hatHue === "white" || c.hatHue === "black") ? (c.hatHue as AccessoryHue) : c.hatHue === null ? null : base.hatHue ?? null,
+    glassesHue: typeof c.glassesHue === "string" && (hues.includes(c.glassesHue) || c.glassesHue === "white" || c.glassesHue === "black") ? (c.glassesHue as AccessoryHue) : c.glassesHue === null ? null : base.glassesHue ?? null,
     voice: pick("voice", (v) => typeof v === "string" && VOICES.some((x) => x.id === v)),
     goo: pick("goo", (v) => typeof v === "number" && v >= 0 && v <= 1),
   };

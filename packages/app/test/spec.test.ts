@@ -3,7 +3,7 @@
 // the sheet stays in range, Ash's bean keeps his numbers, and there is no mouth anywhere.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { HUES } from "../src/design/tokens.ts";
+import { HUES, MATERIALS } from "../src/design/tokens.ts";
 import { ORB_FS } from "../src/orb/glsl.ts";
 import {
   ASH, EYES, FAMILIES, FINISHES, GLASSES, GRADES, hatFit, HATS, isShades, lookOf, NOT_OURS, offered, outline, PEOPLE_NAMES, PERSONALITIES, sane, SHAPES, sheetOf, SPECIALTIES, surprise, voice, VOICES, wearing, withPersonality,
@@ -183,4 +183,40 @@ test("the creator offers no voice Kokoro grades D or F; every personality speaks
   for (let seed = 1; seed <= 200; seed++) assert.ok(offered(voice(surprise(seed).voice)), `surprise(${seed}) speaks with an offered voice`);
   assert.equal(offered(voice("af_nicole")), false, "Whisper is not offered: it whispers (owner, 10-03)");
   assert.equal(sane({ ...ASH, name: "Rex", personality: "brave", voice: "am_adam" }, ASH).voice, "am_adam", "an orb made with a voice no longer offered keeps it");
+});
+
+test("white and black for a hat and frames (owner, 10-03); every hat and pair of glasses has its drawing; no two share a number", () => {
+  const look = lookOf({ ...ASH, hat: "top hat", hatHue: "white", glasses: "round", glassesHue: "black" });
+  assert.deepEqual(look.accCol, [...MATERIALS.white].map((x) => x / 255), "a white hat is the tokens' white");
+  assert.deepEqual([look.specsCol, look.specsCol2], [[...MATERIALS.black].map((x) => x / 255), [...MATERIALS.black].map((x) => x / 255)], "black frames, all of them");
+  assert.equal(sane({ ...ASH, name: "Rex", hatHue: "white" }, ASH).hatHue, "white", "kept when the office loads him");
+  assert.equal(sane({ ...ASH, name: "Rex", glassesHue: "black" }, ASH).glassesHue, "black");
+  assert.equal(sane({ ...ASH, name: "Rex", hatHue: "silver" as never }, ASH).hatHue ?? null, ASH.hatHue ?? null, "a colour that is not one is not taken");
+  // a hat's or glasses' number with no drawing in the shader draws nothing at all. Each is looked
+  // for in its own function: hats and glasses both have an 18 to 21.
+  const body = (head: string): string => {
+    const at = ORB_FS.indexOf(head);
+    assert.ok(at >= 0, `the shader has ${head}`);
+    return ORB_FS.slice(at, ORB_FS.indexOf("\n}\n", at));
+  };
+  const hats = body("vec2 accSDF(vec2 q){"), specs = body("vec4 specsSDF(vec2 f){");
+  for (const [name, h] of Object.entries(HATS)) if (h.id) assert.match(hats, new RegExp(`if \\(id == ${h.id}\\) \\{`), `${name} (${h.id}) is drawn`);
+  const roundish = new Set([1, 11, 17]); // round, round shades and rose tint take the round lens
+  for (const [name, g] of Object.entries(GLASSES)) if (g.id && !roundish.has(g.id)) assert.match(specs, new RegExp(`id == ${g.id}\\b`), `${name} (${g.id}) is drawn`);
+  assert.doesNotMatch(specs, /id == 40\b/, "control: the glasses are read apart from the hats");
+  const ids = (o: Record<string, { id: number }>) => Object.values(o).map((x) => x.id);
+  assert.equal(new Set(ids(HATS)).size, ids(HATS).length, "no two hats share a number");
+  assert.equal(new Set(ids(GLASSES)).size, ids(GLASSES).length, "no two glasses share a number");
+});
+
+test("every shape is its own: no two outlines alike (owner, 10-03: \"more shapes\", each one new)", () => {
+  const names = Object.keys(SHAPES) as ShapeName[];
+  const at = (n: ShapeName) => Array.from({ length: 72 }, (_, i) => SHAPES[n].d[1] * (1 + outline(SHAPES[n], -Math.PI + (i / 72) * 2 * Math.PI))); // (-π..π: his ears sit either side of -π/2)
+  for (let i = 0; i < names.length; i++) {
+    for (let j = i + 1; j < names.length; j++) {
+      const a = at(names[i]!), b = at(names[j]!);
+      const most = Math.max(...a.map((x, k) => Math.abs(x - b[k]!)));
+      assert.ok(most > 0.03, `${names[i]} and ${names[j]} are the same outline (at most ${most.toFixed(3)} apart)`);
+    }
+  }
 });

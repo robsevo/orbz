@@ -1,6 +1,7 @@
 // Every shape in every hat, and in every pair of glasses, on one sheet each (owner, 10-01: "some
 // accessories arent fitting the heads of the orbs right. please fix per shape"):
-// `node tools/shoot_fit.ts <dir>` saves fit-hats.png and fit-glasses.png there.
+// `node tools/shoot_fit.ts <dir> [--shapes a,b] [--wears x,y]` saves fit-hats.png and fit-glasses.png there
+// (with --shapes or --wears, only those: a quick look at what is being changed).
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -17,14 +18,17 @@ await build({
 const site = await serveDir(out);
 const browser = await launch();
 const dir = process.argv[2]!;
+const arg = (k: string): string | undefined => (process.argv.includes(k) ? process.argv[process.argv.indexOf(k) + 1] : undefined);
+const query = new URLSearchParams(Object.entries({ shapes: arg("--shapes"), wears: arg("--wears") }).filter(([, v]) => v) as [string, string][]).toString();
 for (const kind of ["hat", "glasses"] as const) {
   writeFileSync(join(out, `${kind}.html`), `<!doctype html><meta charset="utf-8"><body style="margin:0"><script type="module">import { mount } from "./sheet.js"; mount("${kind}");</script>`);
   const page = await browser.newPage({ viewport: { width: 2600, height: 1600 }, deviceScaleFactor: 2, colorScheme: "dark" });
   await page.addInitScript(() => { (globalThis as { __orbsTime?: number }).__orbsTime = 3.4; });
   page.on("pageerror", (e) => console.error("page error:", e.message));
   page.on("console", (m) => { if (m.type() === "error") console.error("console:", m.text()); });
-  await page.goto(`${site.url}/${kind}.html`);
-  await page.waitForFunction(() => (window as unknown as { ready?: boolean }).ready === true);
+  await page.goto(`${site.url}/${kind}.html${query ? `?${query}` : ""}`);
+  // every shape in every hat is near nine hundred orbs in software WebGL: minutes, not seconds
+  await page.waitForFunction(() => (window as unknown as { ready?: boolean }).ready === true, undefined, { timeout: 300_000 });
   await page.waitForTimeout(1500);
   await page.screenshot({ path: join(dir, `fit-${kind === "hat" ? "hats" : "glasses"}.png`), fullPage: true });
   await page.close();

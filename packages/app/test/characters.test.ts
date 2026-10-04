@@ -254,8 +254,9 @@ test("every finish can be told from every other, by the colour of his glass", { 
 });
 
 // Hats that go on over his head, with an opening (the rest sit on it, clip to it, or float).
-const COVERS = new Set<HatName>(["top hat", "beanie", "party hat", "cap", "wizard hat", "chef hat", "grad cap", "cowboy hat", "beret", "hard hat", "bucket hat", "straw hat", "fedora", "deerstalker", "viking helmet"]);
-const EARED = new Set<ShapeName>(["teddy", "cub", "kitty", "bunny"]);
+const COVERS = new Set<HatName>(["top hat", "beanie", "party hat", "cap", "wizard hat", "chef hat", "grad cap", "cowboy hat", "beret", "hard hat", "bucket hat", "straw hat", "fedora", "deerstalker", "viking helmet", "bowler", "fez", "tricorn", "Santa hat", "sombrero"]);
+const EARED = new Set<ShapeName>(["teddy", "cub", "kitty", "bunny", "fox", "owl"]);
+const WIDEST = new Set<HatName>(["straw hat", "sombrero", "deerstalker", "tricorn"]);
 
 // owner, 10-01: "some accessories arent fitting the heads of the orbs right. please fix per shape".
 // At twice the pixels (a hat's fit is a few pixels at the thumbnails' size), on one page
@@ -348,11 +349,14 @@ for (const shape of Object.keys(SHAPES) as ShapeName[]) {
       });
     }, { hats: (Object.keys(HATS) as HatName[]).filter((h) => h !== "none"), Rfrac: DESIGN.radius / DESIGN.w, cy: DESIGN.cy, skull, eared: EARED.has(shape) });
     if (process.env.ORBS_PRINT) console.log(shape, rows.filter((r) => COVERS.has(r.hat as HatName)).map((r) => `${r.hat} ${r.width.toFixed(2)}`).join(", "));
+    if (process.env.ORBS_PRINT && EARED.has(shape)) console.log(shape, "ears", rows[0]?.ears, rows.filter((r) => COVERS.has(r.hat as HatName)).map((r) => `${r.hat} ${(r.earCovered * 100).toFixed(0)}%`).join(", "));
     for (const r of rows) {
       if (r.pieces !== (r.hat === "halo" ? 2 : 1)) bad.push(`${shape} in a ${r.hat}: ${r.pieces} pieces (it floats off him, or sinks through)`);
       if (COVERS.has(r.hat as HatName) && r.width < 0.45) bad.push(`${shape} in a ${r.hat}: perched (his head is ${r.width.toFixed(2)} of his radius wide under it)`);
       if (EARED.has(shape) && r.ears < 40) bad.push(`control: ${shape}'s ears are not found (${r.ears} pixels)`);
-      if (EARED.has(shape) && COVERS.has(r.hat as HatName) && r.earCovered > 0.15) bad.push(`${shape} in a ${r.hat}: it covers ${Math.round(r.earCovered * 100)}% of his ears`);
+      // a hat is in front of all of him, ears too (owner, 10-03: "we shouldnt see the orbs shape inside of it"):
+      // the widest cover at least 32% of every eared shape's ears (measured 10-03), drawn behind them about none
+      if (EARED.has(shape) && WIDEST.has(r.hat as HatName) && r.earCovered < 0.2) bad.push(`${shape} in a ${r.hat}: his ears show through it (it covers ${Math.round(r.earCovered * 100)}% of them)`);
     }
     // and his close-up (eyes, glasses) holds all of him, a wide shape too
     await p.getByRole("tab", { name: "Glasses" }).click();

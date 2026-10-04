@@ -157,6 +157,17 @@ test("a hat in any colour, like his own: it paints the hat, and Its own puts its
   await page.getByRole("button", { name: "Its own" }).click();
   await page.waitForTimeout(250);
   assert.ok(apart(hatBefore, await meanOf(page, "beanie", 0, 0.35)) < 0.01, "Its own puts its colour back");
+  // white and black too (owner, 10-03: "option to put accesories white or black also")
+  const light = (c: number[]): number => (c[0]! + c[1]! + c[2]!) / 3;
+  await page.getByRole("button", { name: "hat in white" }).click();
+  await page.waitForTimeout(250);
+  const white = await meanOf(page, "beanie", 0, 0.35);
+  await page.getByRole("button", { name: "hat in black" }).click();
+  await page.waitForTimeout(250);
+  const black = await meanOf(page, "beanie", 0, 0.35);
+  assert.ok(light(white) - light(black) > 0.15, `a white beanie is light and a black one dark (${light(white).toFixed(2)} against ${light(black).toFixed(2)})`);
+  await page.getByRole("button", { name: "Its own" }).click();
+  await page.waitForTimeout(250);
 });
 
 test("frames in any colour too; the card says both, and the office keeps them", { skip }, async () => {
