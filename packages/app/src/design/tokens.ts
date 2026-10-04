@@ -300,7 +300,7 @@ export function stylesheet(fontUrl = "fonts/Nunito.ttf"): string {
     `.one-line[data-more="left"] { mask-image: linear-gradient(to left, #000 calc(100% - 28px), transparent); }`,
     // on a phone, a container with too much in it scrolls inside itself (owner, 10-04: "if theres too much info in
     // any container, make it scrollable"), a fade where there is more (ui/Balanced.tsx Tall)
-    `@media (max-width: 760px) { .orbs-tall { max-height: var(--tall, 72dvh); overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-width: thin; }`,
+    `@media (max-width: 760px) { .orbs-tall { max-height: var(--tall, 72dvh); overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-gutter: stable; padding-right: 14px; margin-right: -6px; }`,
     `  .orbs-tall[data-more="down"] { mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent); }`,
     `  .orbs-tall[data-more="up"] { mask-image: linear-gradient(to top, #000 calc(100% - 36px), transparent); }`,
     `  .orbs-tall[data-more="up down"] { mask-image: linear-gradient(to bottom, transparent, #000 36px, #000 calc(100% - 36px), transparent); } }`,

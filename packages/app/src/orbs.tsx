@@ -113,66 +113,102 @@ function DieIcon({ size = 16, spins = 0 }: { size?: number; spins?: number }) {
 }
 
 // ── Roll everything, as a change (owner, 10-04: "a cooler animation when pressing rolling everything?
-// kind of like a pokemon evolving or smt. but quick"): the orb goes white and glowing, flickers
-// between the old and the new faster and faster, bursts in a flash and a ring of sparks, and comes
-// back in the new one's colours with a hop. Under a second; still for anyone who asked for less motion.
-const EVOLVE_MS = 900;
-const FLIPS = [110, 210, 290, 355, 410, 455, 495, 530, 560]; // the new one shows after each odd flip; the last is the new
-const REVEAL = 600; // when the colour starts to come back (and the hop)
+// kind of like a pokemon evolving", then "it like stutters, make it fluid. 3 or four second evolve fade
+// out to the orb"): he goes white and glowing, the old shape melts into the new one as he breathes
+// twice, a soft flash and a ring of sparks, then the white fades away over a second to the new orb, who
+// hops. One smooth line, no flicker; still for anyone who asked for less motion. The frames are set
+// straight on the elements, so nothing is redrawn but what moves.
+const EVOLVE_MS = 3600;
+const REVEAL = 2700; // the hop, as his colours come back
 const calm = (): boolean => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
-const ease = (x: number): number => 1 - (1 - Math.min(1, Math.max(0, x))) ** 3;
+const clamp01 = (x: number): number => Math.min(1, Math.max(0, x));
+const smooth = (x: number): number => { const k = clamp01(x); return k * k * (3 - 2 * k); };
+const easeOut = (x: number): number => 1 - (1 - clamp01(x)) ** 3;
 const SPARK = "M0 -6 C.8 -1.6 1.6 -.8 6 0 C1.6 .8 .8 1.6 0 6 C-.8 1.6 -1.6 .8 -6 0 C-1.6 -.8 -.8 -1.6 0 -6 Z";
+
+/** The change, `t` ms in: how white he is, how much of the new one shows, his size, the flash and sparks. */
+export function evolveAt(t: number): { white: number; next: number; scale: number; glow: number; burst: number } {
+  const white = t < 2600 ? smooth(t / 600) : 1 - easeOut((t - 2600) / 1000); // in over 0.6 s, out over the last second
+  const next = smooth((t - 700) / 1700); // the old shape melting into the new, 0.7 to 2.4 s
+  const env = Math.sin(Math.PI * clamp01((t - 500) / 2000)); // two breaths, swelling and settling
+  const scale = 1 + 0.05 * white + 0.035 * env * Math.sin(((t - 500) / 1000) * 2 * Math.PI);
+  return { white, next, scale, glow: 10 * white + 8 * env, burst: (t - 2350) / 750 };
+}
 
 /** The cradle's orb: as he is, or changing from `from` into him. */
 function Evolving({ me, from, size, state, gesture }: { me: Character; from: { c: Character; n: number } | null; size: number; state: OrbState; gesture: { name: Gesture; n: number } | null }) {
-  const [e, setE] = useState<number | null>(null);
+  // changing from the roll's press until its last frame: worked out as he renders, so the very render
+  // that changes him already knows (no pop, who he was drawn behind)
+  const [done, setDone] = useState(from?.n ?? 0);
+  const was = from && from.n !== done && !calm() ? from.c : null;
+  const mine = useRef<HTMLSpanElement>(null);
+  const old = useRef<HTMLSpanElement>(null);
+  const light = useRef<HTMLSpanElement>(null);
   useEffect(() => {
-    if (!from || calm()) return;
+    if (!from || from.n === done) return;
+    if (calm()) return void setDone(from.n);
     const start = performance.now();
     let raf = 0;
     const tick = (): void => {
-      const d = performance.now() - start;
-      setE(d >= EVOLVE_MS ? null : d);
-      if (d < EVOLVE_MS) raf = requestAnimationFrame(tick);
+      const t = performance.now() - start;
+      const f = evolveAt(t);
+      const look = `contrast(${1 - f.white}) brightness(${1 + f.white}) drop-shadow(0 0 ${f.glow.toFixed(1)}px var(--flash-glow))`;
+      for (const [el, shown] of [[mine.current, f.next], [old.current, 1 - f.next]] as const) {
+        if (!el) continue;
+        el.style.filter = look;
+        el.style.opacity = shown.toFixed(3);
+        el.style.transform = `scale(${f.scale.toFixed(4)})`;
+      }
+      const l = light.current;
+      if (l) {
+        const b = f.burst;
+        l.style.opacity = b > 0 && b < 1 ? "1" : "0";
+        const glow = l.firstElementChild as HTMLElement | null;
+        if (glow) {
+          glow.style.transform = `scale(${(0.3 + 1.7 * easeOut(b)).toFixed(3)})`;
+          glow.style.opacity = (1 - smooth(b)).toFixed(3);
+        }
+        [...l.querySelectorAll<SVGElement>("svg")].forEach((sv, i) => {
+          const a = (i / 8) * Math.PI * 2 + 0.4;
+          const r = 0.18 + 0.52 * easeOut(b * 1.1) * (i % 2 ? 0.82 : 1);
+          sv.style.transform = `translate(${(Math.cos(a) * r * size).toFixed(1)}px, ${(Math.sin(a) * r * size).toFixed(1)}px) scale(${(1.3 - 0.6 * clamp01(b)).toFixed(3)}) rotate(${(clamp01(b) * 90).toFixed(1)}deg)`;
+          sv.style.opacity = (1 - clamp01(b) ** 2).toFixed(3);
+        });
+      }
+      if (t < EVOLVE_MS) raf = requestAnimationFrame(tick);
+      else {
+        for (const el of [mine.current, old.current]) if (el) el.style.filter = el.style.opacity = el.style.transform = "";
+        setDone(from.n);
+      }
     };
-    setE(0);
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+      if (mine.current) mine.current.style.filter = mine.current.style.opacity = mine.current.style.transform = "";
+    };
   }, [from?.n]);
-  const changing = e !== null && from !== null;
-  const t = e ?? EVOLVE_MS;
-  const flipped = FLIPS.filter((f) => t >= f);
-  const showNew = !changing || flipped.length % 2 === 1;
-  // how white he is: in over the first flip, held through the flicker, back to colour after the flash
-  const white = !changing ? 0 : t < FLIPS[0]! ? ease(t / FLIPS[0]!) : t < REVEAL ? 1 : 1 - ease((t - REVEAL) / (EVOLVE_MS - 20 - REVEAL));
-  const kick = flipped.length ? 0.06 * Math.exp(-(t - flipped[flipped.length - 1]!) / 60) : 0;
-  const look: CSSProperties = changing
-    ? { filter: `contrast(${1 - white}) brightness(${1 + white}) drop-shadow(0 0 ${12 * white}px var(--flash-glow))`, transform: `scale(${1 + 0.035 * white + kick})` }
-    : {};
-  const burst = changing ? (t - FLIPS[FLIPS.length - 1]!) / 340 : -1; // the flash and the sparks
   const h = (size * DESIGN.h) / DESIGN.w;
   const cy = h * DESIGN.cy; // his centre, where the flash comes from
   return (
-    <span data-evolve={changing ? (showNew ? "new" : "old") : undefined} style={{ position: "relative", display: "grid", width: size, height: h }}>
-      <Orb character={me} size={size} state={state} gesture={gesture} style={{ gridArea: "1 / 1", ...look, opacity: showNew ? 1 : 0 }} />
-      {changing && (
-        // who he was, for the moment of the change: not pressable, and not read out as a second orb
-        <span aria-hidden style={{ gridArea: "1 / 1", opacity: showNew ? 0 : 1, pointerEvents: "none" }}>
-          <Orb character={from.c} size={size} state={state} poke={false} style={look} />
+    <span data-evolve={was ? "changing" : undefined} style={{ position: "relative", display: "grid", width: size, height: h }}>
+      <span ref={mine} style={{ gridArea: "1 / 1", display: "block", willChange: was ? "transform, opacity, filter" : undefined }}>
+        {/* no pop when he changes: the change is the show */}
+        <Orb character={me} size={size} state={state} gesture={gesture} pop={!was} />
+      </span>
+      {was && (
+        // who he was, for the change: not pressable, and not read out as a second orb
+        <span ref={old} aria-hidden style={{ gridArea: "1 / 1", display: "block", pointerEvents: "none", willChange: "transform, opacity, filter" }}>
+          <Orb character={was} size={size} state={state} poke={false} pop={false} />
         </span>
       )}
-      {burst >= 0 && burst < 1 && (
-        <span aria-hidden style={{ position: "absolute", left: 0, top: 0, width: size, height: h, pointerEvents: "none" }}>
-          <span style={{ position: "absolute", left: size / 2 - size * 0.45, top: cy - size * 0.45, width: size * 0.9, height: size * 0.9, borderRadius: "50%", background: "radial-gradient(circle, var(--flash) 0%, var(--flash-mid) 34%, var(--flash-none) 70%)", transform: `scale(${0.3 + 1.7 * ease(burst)})`, opacity: 1 - burst }} />
-          {Array.from({ length: 8 }, (_, i) => {
-            const a = (i / 8) * Math.PI * 2 + 0.4;
-            const r = size * (0.18 + 0.52 * ease(burst * 1.15)) * (i % 2 ? 0.82 : 1);
-            return (
-              <svg key={i} width="14" height="14" viewBox="-7 -7 14 14" style={{ position: "absolute", left: size / 2 + Math.cos(a) * r - 7, top: cy + Math.sin(a) * r - 7, opacity: 1 - burst * burst, transform: `scale(${1.3 - 0.6 * burst}) rotate(${burst * 90}deg)`, filter: "drop-shadow(0 0 4px var(--accent))", overflow: "visible" }}>
-                <path d={SPARK} fill="var(--flash)" />
-              </svg>
-            );
-          })}
+      {was && (
+        <span ref={light} aria-hidden style={{ position: "absolute", left: 0, top: 0, width: size, height: h, pointerEvents: "none", opacity: 0 }}>
+          <span style={{ position: "absolute", left: size / 2 - size * 0.45, top: cy - size * 0.45, width: size * 0.9, height: size * 0.9, borderRadius: "50%", background: "radial-gradient(circle, var(--flash) 0%, var(--flash-mid) 34%, var(--flash-none) 70%)" }} />
+          {Array.from({ length: 8 }, (_, i) => (
+            <svg key={i} width="14" height="14" viewBox="-7 -7 14 14" style={{ position: "absolute", left: size / 2 - 7, top: cy - 7, filter: "drop-shadow(0 0 4px var(--accent))", overflow: "visible" }}>
+              <path d={SPARK} fill="var(--flash)" />
+            </svg>
+          ))}
         </span>
       )}
     </span>
@@ -229,7 +265,7 @@ function Strand({ c }: { c: Character }) {
     <div data-strand style={{ display: "grid", gap: 4 }}>
       <Head>DNA</Head>
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
-        <span data-dna style={{ font: "600 14px/20px var(--mono)", color: "var(--text-1)", letterSpacing: ".04em", userSelect: "all" }}>{strand}</span>
+        <span data-dna style={{ padding: "6px 12px", borderRadius: 999, background: "var(--fill)", boxShadow: "inset 0 0 0 .5px var(--hairline)", font: "700 13px/20px var(--font)", color: "var(--text-1)", letterSpacing: ".04em", fontVariantNumeric: "tabular-nums", userSelect: "all", overflowWrap: "anywhere" }}>{strand}</span>
         <button onClick={copy} data-sound="pick" style={{ ...s.chip, padding: "4px 12px" }}>{copied ? "Copied" : "Copy"}</button>
       </div>
       <span style={{ font: "400 12px/16px var(--font)", color: "var(--text-3)" }}>Share it: pasted into New orb, it makes {c.name || "this orb"} again, traits and all.</span>
@@ -237,17 +273,25 @@ function Strand({ c }: { c: Character }) {
   );
 }
 
-/** What shaped him: the biggest moves of his DNA, a clash first, each with what it took and gave. */
+/** What shaped him: the biggest moves of his DNA, a clash first, each what it gave and what it took, as
+ * two small tags. */
 function Shaped({ c, moves }: { c: Character; moves: Move[] }) {
   const top = [...moves].sort((a, b) => Number(Boolean(b.clash)) - Number(Boolean(a.clash)) || b.n - a.n).slice(0, 5);
+  const tag: CSSProperties = { display: "inline-block", padding: "1px 7px", borderRadius: 999, font: "700 11px/16px var(--font)", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" };
   return (
-    <div data-shaped style={{ display: "grid", gap: 4 }}>
+    <div data-shaped style={{ display: "grid", gap: 8 }}>
       <Head>What shaped {c.name || "your orb"}</Head>
       {top.map((m, i) => (
-        <span key={i} data-move={m.clash ? "clash" : "choice"} style={{ font: "400 13px/18px var(--font)", color: "var(--text-2)", textWrap: "pretty" }}>
-          {m.clash && <b style={{ color: "var(--accent)", fontWeight: 700 }}>Clash · </b>}
-          {cap(m.why)}: <span className="num">{m.to} +{m.n}, {m.from} −{m.n}</span>
-        </span>
+        <div key={i} data-move={m.clash ? "clash" : "choice"} style={{ display: "grid", gap: 4 }}>
+          <span style={{ font: "400 13px/18px var(--font)", color: "var(--text-2)", textWrap: "pretty" }}>
+            {m.clash && <span style={{ ...tag, marginRight: 6, color: "var(--ground)", background: "var(--accent)" }}>Clash</span>}
+            {cap(m.why)}
+          </span>
+          <span style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            <span style={{ ...tag, color: "var(--accent)", background: "var(--accent-fill)" }}>+{m.n} {m.to}</span>
+            <span style={{ ...tag, color: "var(--text-2)", background: "var(--fill)" }}>−{m.n} {m.from}</span>
+          </span>
+        </div>
       ))}
     </div>
   );

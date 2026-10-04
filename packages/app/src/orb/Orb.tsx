@@ -26,6 +26,8 @@ export type OrbProps = {
   still?: boolean;
   /** "portrait": a close-up of his face (choosing eyes or glasses), instead of his whole window. */
   framing?: "window" | "portrait";
+  /** Whether he pops in as he appears (not when he is changing into someone else: Roll everything). */
+  pop?: boolean;
   /** With `still`: the moment of a gesture he holds (the app's icon). */
   pose?: { gesture: Gesture; into: number };
   style?: CSSProperties;
@@ -33,7 +35,7 @@ export type OrbProps = {
 
 const seedOf = (s: string): number => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 9973, 7) / 97;
 
-export function Orb({ character, size = 120, state = "idle", gesture = null, fidget = true, poke = true, tint = 0.8, every = 1, still = false, framing = "window", pose, style }: OrbProps) {
+export function Orb({ character, size = 120, state = "idle", gesture = null, fidget = true, poke = true, tint = 0.8, every = 1, still = false, framing = "window", pose, pop = true, style }: OrbProps) {
   // the close-up is cut to fit his width: half the frame, less the edge's fade and a little room
   const frame: Framing = useMemo(
     () => (framing === "portrait" ? { ...PORTRAIT, radius: Math.min(PORTRAIT.radius, PORTRAIT.w / 2 / (halfWidth(character.shape) + PORTRAIT.edge + 0.04)) } : DESIGN),
@@ -60,7 +62,7 @@ export function Orb({ character, size = 120, state = "idle", gesture = null, fid
     canvas.width = Math.round(size * dpr);
     canvas.height = Math.round(((size * frame.h) / frame.w) * dpr);
     const own = fidgets(seed, 3600, motionOf(live.current.character));
-    if (globalThis.__orbsTime === undefined && !still) play("pop"); // on a held clock (a render check) the pop would hold at its peak
+    if (globalThis.__orbsTime === undefined && !still && pop) play("pop"); // on a held clock (a render check) the pop would hold at its peak
     const entry = {
       canvas,
       visible: true,
