@@ -24,14 +24,22 @@ for (const [file, size, how] of [["orbs-192.png", 192, "pad=0.06"], ["orbs-512.p
   await page.goto(`${site.url}/icon.html?size=${size}&${how}`);
   await page.waitForFunction(() => document.querySelectorAll("[data-icon] canvas").length >= 3, undefined, { timeout: 20_000 });
   await page.waitForTimeout(800); // each still frame drawn
+  await page.evaluate(() => document.fonts.ready.then(() => undefined)); // the wordmark in its own font, never a stand-in
   await page.locator("[data-icon]").screenshot({ path: join(dir, file), omitBackground: true }); // the card's corners stay clear
   await page.close();
   console.log(`wrote ${join(dir, file)}`);
 }
-// the title bar's sizes, from the 512 card, halved step by step on a canvas
+// the title bar's sizes, from a 512 card without the word (too small to read there), halved step by step on a canvas
 {
+  const plain = join(out, "orbs-512-plain.png");
+  const shot = await browser.newPage({ viewport: { width: 512, height: 512 }, deviceScaleFactor: 1, colorScheme: "dark" });
+  await shot.goto(`${site.url}/icon.html?size=512&pad=0.06&text=0`);
+  await shot.waitForFunction(() => document.querySelectorAll("[data-icon] canvas").length >= 3, undefined, { timeout: 20_000 });
+  await shot.waitForTimeout(800);
+  await shot.locator("[data-icon]").screenshot({ path: plain, omitBackground: true });
+  await shot.close();
   const page = await browser.newPage();
-  const big = `data:image/png;base64,${readFileSync(join(dir, "orbs-512.png")).toString("base64")}`;
+  const big = `data:image/png;base64,${readFileSync(plain).toString("base64")}`;
   for (const size of [32, 16]) {
     const png = await page.evaluate(async ({ src, size }) => {
       const img = new Image();

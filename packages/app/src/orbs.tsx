@@ -114,12 +114,12 @@ function DieIcon({ size = 16, spins = 0 }: { size?: number; spins?: number }) {
 
 // ── Roll everything, as a change (owner, 10-04: "a cooler animation when pressing rolling everything?
 // kind of like a pokemon evolving", then "it like stutters, make it fluid. 3 or four second evolve fade
-// out to the orb"): he goes white and glowing, the old shape melts into the new one as he breathes
-// twice, a soft flash and a ring of sparks, then the white fades away over a second to the new orb, who
-// hops. One smooth line, no flicker; still for anyone who asked for less motion. The frames are set
+// out to the orb", then "just a bit quicker"): he goes white and glowing, the old shape melts into the
+// new one as he breathes twice, a soft flash and a ring of sparks, then the white fades away to the new
+// orb, who hops; 2.4 s in all. One smooth line, no flicker; still for anyone who asked for less motion. The frames are set
 // straight on the elements, so nothing is redrawn but what moves.
-const EVOLVE_MS = 3600;
-const REVEAL = 2700; // the hop, as his colours come back
+const EVOLVE_MS = 2400; // owner, 10-04: "just a bit quicker" than 3.6 s
+const REVEAL = 1800; // the hop, as his colours come back
 const calm = (): boolean => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 const clamp01 = (x: number): number => Math.min(1, Math.max(0, x));
 const smooth = (x: number): number => { const k = clamp01(x); return k * k * (3 - 2 * k); };
@@ -128,15 +128,15 @@ const SPARK = "M0 -6 C.8 -1.6 1.6 -.8 6 0 C1.6 .8 .8 1.6 0 6 C-.8 1.6 -1.6 .8 -6
 
 /** The change, `t` ms in: how white he is, how much of the new one shows, his size, the flash and sparks. */
 export function evolveAt(t: number): { white: number; next: number; scale: number; glow: number; burst: number } {
-  const white = t < 2600 ? smooth(t / 600) : 1 - easeOut((t - 2600) / 1000); // in over 0.6 s, out over the last second
-  const next = smooth((t - 700) / 1700); // the old shape melting into the new, 0.7 to 2.4 s
-  const env = Math.sin(Math.PI * clamp01((t - 500) / 2000)); // two breaths, swelling and settling
-  const scale = 1 + 0.05 * white + 0.035 * env * Math.sin(((t - 500) / 1000) * 2 * Math.PI);
-  return { white, next, scale, glow: 10 * white + 8 * env, burst: (t - 2350) / 750 };
+  const white = t < 1750 ? smooth(t / 420) : 1 - easeOut((t - 1750) / 650); // in over 0.4 s, out over the last 0.65 s
+  const next = smooth((t - 450) / 1150); // the old shape melting into the new, 0.45 to 1.6 s
+  const env = Math.sin(Math.PI * clamp01((t - 350) / 1350)); // two breaths, swelling and settling
+  const scale = 1 + 0.05 * white + 0.035 * env * Math.sin(((t - 350) / 675) * 2 * Math.PI);
+  return { white, next, scale, glow: 10 * white + 8 * env, burst: (t - 1550) / 550 };
 }
 
 /** The cradle's orb: as he is, or changing from `from` into him. */
-function Evolving({ me, from, size, state, gesture }: { me: Character; from: { c: Character; n: number } | null; size: number; state: OrbState; gesture: { name: Gesture; n: number } | null }) {
+function Evolving({ me, from, size, state, gesture, onDone }: { me: Character; from: { c: Character; n: number } | null; size: number; state: OrbState; gesture: { name: Gesture; n: number } | null; onDone?: (n: number) => void }) {
   // changing from the roll's press until its last frame: worked out as he renders, so the very render
   // that changes him already knows (no pop, who he was drawn behind)
   const [done, setDone] = useState(from?.n ?? 0);
@@ -146,7 +146,7 @@ function Evolving({ me, from, size, state, gesture }: { me: Character; from: { c
   const light = useRef<HTMLSpanElement>(null);
   useEffect(() => {
     if (!from || from.n === done) return;
-    if (calm()) return void setDone(from.n);
+    if (calm()) return void (setDone(from.n), onDone?.(from.n));
     const start = performance.now();
     let raf = 0;
     const tick = (): void => {
@@ -179,6 +179,7 @@ function Evolving({ me, from, size, state, gesture }: { me: Character; from: { c
       else {
         for (const el of [mine.current, old.current]) if (el) el.style.filter = el.style.opacity = el.style.transform = "";
         setDone(from.n);
+        onDone?.(from.n);
       }
     };
     raf = requestAnimationFrame(tick);
@@ -748,6 +749,10 @@ function App() {
   const [arrived, setArrived] = useState<string | null>(null);
   const [rolls, setRolls] = useState(0);
   const [evolve, setEvolve] = useState<{ c: Character; n: number } | null>(null); // Roll everything: who he was
+  // his card says who he is only once he has been shown whole (owner, 10-04: "only show the orbs info when the
+  // orb has been shown completely"): until the change is over it still says who he was
+  const [shown, setShown] = useState(0);
+  const before = evolve && evolve.n !== shown ? evolve.c : null;
   const recent = useRef<string[]>([]); // the names rolled lately: a roll brings a new one
   const [strandText, setStrandText] = useState(""); // a DNA strand pasted into the creator
   const [strandSaid, setStrandSaid] = useState<string | null>(null);
@@ -1109,7 +1114,7 @@ function App() {
               <SoundIcon on={sounds} />
             </button>
             <span style={{ ...s.head }}>{making ? "A new orb" : "In the office"}</span>
-            <Evolving me={me} from={evolve} size={176} state={worn} gesture={gesture} />
+            <Evolving me={me} from={evolve} size={176} state={worn} gesture={gesture} onDone={setShown} />
             {live && !picked && WORN[live.mood].words && (
               <span data-mood={live.mood} style={{ font: "600 13px/18px var(--font)", color: "var(--text-2)" }}>
                 {WORN[live.mood].words}
@@ -1175,12 +1180,12 @@ function App() {
               </form>
             )}
             <p style={{ margin: 0, font: "400 13px/18px var(--font)", color: blocked ? "var(--alert)" : "var(--text-3)", textAlign: "center" }}>
-              {blocked ?? `${name || "Your orb"}, ${sheetOf(me).title}. Give a click, or move your pointer: the eyes follow.`}
+              {before ? `${before.name || "Your orb"}, ${sheetOf(before).title}. Give a click, or move your pointer: the eyes follow.` : blocked ?? `${name || "Your orb"}, ${sheetOf(me).title}. Give a click, or move your pointer: the eyes follow.`}
             </p>
           </div>
 
           <div className="orbs-pair" style={{ display: "grid", gap: "var(--s4)", padding: "0 var(--s5)", gridTemplateColumns: "minmax(0, 1fr)", alignItems: "start" }}>
-            <Sheet c={me} onRename={making ? (n) => edit({ name: n }) : undefined} replies={replies} standing={making ? null : standing} startsAs={startsAs} career={making ? null : career} />
+            <Sheet c={before ?? me} key={before ? "was" : "now"} onRename={making ? (n) => edit({ name: n }) : undefined} replies={replies} standing={making ? null : standing} startsAs={startsAs} career={making ? null : career} />
             {making ? <Creator me={me} edit={edit} replies={replies} setReplies={setReplies} first={!office.length} /> : <Card c={me} replies={replies} setReplies={setReplies} onDelete={(handTo) => remove(me.name, handTo)} onChat={() => go({ room: "chat", orb: me.name })} onCareer={() => go({ room: "career", orb: me.name })} others={office.filter((o) => o.name !== me.name)} />}
           </div>
 
