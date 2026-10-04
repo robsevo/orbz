@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 import { after, before, test } from "node:test";
 import { build } from "vite";
 import type { Browser, Page } from "playwright-core";
-import { findChrome, launch, measure, seedOffice, serveDir, SIZES } from "./harness.ts";
+import { choose, findChrome, launch, measure, seedOffice, serveDir, SIZES } from "./harness.ts";
 
 const APP = fileURLToPath(new URL("..", import.meta.url));
 const skip = findChrome() ? false : "no Chromium on this machine";
@@ -66,7 +66,7 @@ test("an orb in the office is fixed: no name to type, no creator, no dice; what 
   }
 });
 
-test("the New orb tile is an empty seat: an orb not made yet, a + on it, filled, its words in its colour; pressed, the creator (owner, 10-03)", { skip }, async () => {
+test("the New orb tile is an empty seat: an orb not made yet, a + on it, filled, its words in its colour; pressed, the creator, and the seat holds the orb being made (owner, 10-03, 10-04)", { skip }, async () => {
   const page = await open();
   try {
     const seat = page.locator("[data-new-orb]");
@@ -95,6 +95,20 @@ test("the New orb tile is an empty seat: an orb not made yet, a + on it, filled,
     await seat.click();
     assert.equal(await page.getByRole("tablist").count(), 1, "pressed, the creator");
     assert.equal(await seat.getAttribute("aria-pressed"), "true", "and the seat says it is the one open");
+    // on the New orb screen the seat holds the orb being made, as it is made (owner, 10-04); anywhere
+    // else, the newborn
+    const looks = (where: string) => page.locator(where).first().evaluate((c) => c.getAttribute("aria-label")!.replace(/, [a-z]+$/, ""));
+    assert.equal(await looks("[data-new-orb] canvas"), await looks("[data-cradle] canvas"), "the seat's orb is the one being made");
+    assert.equal(await seat.getAttribute("data-orb"), await page.locator("[data-cradle]").getAttribute("data-orb"), "in its colour");
+    await page.getByRole("tab", { name: "Shape" }).click();
+    await choose(page, "pear");
+    await page.getByRole("tab", { name: "Hat" }).click();
+    await choose(page, "beanie");
+    assert.match(await looks("[data-new-orb] canvas"), /pear.*beanie/, "and changes as it is made");
+    assert.equal(await looks("[data-new-orb] canvas"), await looks("[data-cradle] canvas"));
+    await page.locator("aside").getByRole("button", { name: /Oscar/ }).click();
+    assert.equal(await seat.getAttribute("aria-pressed"), "false", "control: back in the office");
+    assert.doesNotMatch(await looks("[data-new-orb] canvas"), /pear/, "off the New orb screen, the newborn again");
   } finally {
     await page.close();
   }

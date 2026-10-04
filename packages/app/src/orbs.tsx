@@ -963,18 +963,20 @@ function App() {
               lead={
                 // the empty seat (owner, 10-03: "+ new orb button has to be more inviting than that"): an
                 // orb not made yet sits in it (the first open's newborn), its eyes on you, a + on it; it hops
-                // when the pointer comes
+                // when the pointer comes. On the New orb screen it is the orb being made, as it is made
+                // (owner, 10-04: "can it be the new orb we are creating at the same time that shows? only on new
+                // orb screen")
                 <button
                   aria-pressed={making}
                   aria-label="New orb"
                   data-new-orb
-                  data-orb={NEWBORN.hue}
+                  data-orb={making ? me.hue : NEWBORN.hue}
                   onClick={() => go({ room: "new" })}
                   onPointerEnter={() => setSeatHop((n) => n + 1)}
                   style={{ display: "grid", justifyItems: "center", alignContent: "center", gap: 2, minHeight: 72, padding: "var(--s3) var(--s2)", border: 0, cursor: "pointer", borderRadius: 18, minWidth: 0, background: "radial-gradient(80% 70% at 50% 30%, var(--accent-fill), var(--accent-wash) 75%)", boxShadow: `inset 0 0 0 ${making ? 2 : 1.5}px var(--accent)` }}
                 >
                   <span style={{ position: "relative", display: "grid", marginBottom: -14 }}>
-                    <Orb character={NEWBORN} size={100} poke={false} gesture={seatHop ? { name: "hop", n: seatHop } : null} />
+                    <Orb character={making ? me : NEWBORN} size={100} poke={false} gesture={seatHop ? { name: "hop", n: seatHop } : null} />
                     <span aria-hidden data-plus style={{ position: "absolute", right: 10, bottom: 20, width: 30, height: 30, borderRadius: 15, display: "grid", placeItems: "center", background: "var(--accent)", color: "var(--ground)", font: "800 22px/22px var(--font)", boxShadow: "0 2px 10px var(--accent-glow)" }}>+</span>
                   </span>
                   <span style={{ font: "700 15px/20px var(--font)", color: "var(--accent)" }}>New orb</span>

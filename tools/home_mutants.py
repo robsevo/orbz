@@ -1956,13 +1956,19 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ('<span style={{ font: "700 15px/20px var(--font)", color: "var(--accent)" }}>New orb</span>', '<span style={{ font: "700 15px/20px var(--font)", color: "var(--text-2)" }}>New orb</span>'),
     ], ["office.test.ts"]),
     ("the New orb seat's orb is faint", "src/orbs.tsx", [
-        ('<Orb character={NEWBORN} size={100} poke={false} gesture={seatHop ? { name: "hop", n: seatHop } : null} />', '<Orb character={NEWBORN} size={100} poke={false} gesture={seatHop ? { name: "hop", n: seatHop } : null} style={{ opacity: 0.6 }} />'),
+        ('<Orb character={making ? me : NEWBORN} size={100} poke={false} gesture={seatHop ? { name: "hop", n: seatHop } : null} />', '<Orb character={making ? me : NEWBORN} size={100} poke={false} gesture={seatHop ? { name: "hop", n: seatHop } : null} style={{ opacity: 0.6 }} />'),
     ], ["office.test.ts"]),
     ("the menu's New orb is a plain row", "src/orbs.tsx", [
         ('{ room: "new" }, "+", 0, true)', '{ room: "new" }, "+", 0, false)'),
     ], ["office.test.ts"]),
     ("the menu's New orb looks like the page you are on", "src/orbs.tsx", [
         ('...(invite && { background: "var(--accent)", color: "var(--ground)",', '...(invite && { background: "var(--accent-wash)", color: "var(--text-1)",'),
+    ], ["office.test.ts"]),
+    ("the New orb seat shows the newborn while you make one", "src/orbs.tsx", [
+        ('<Orb character={making ? me : NEWBORN} size={100}', '<Orb character={NEWBORN} size={100}'),
+    ], ["office.test.ts"]),
+    ("the New orb seat keeps the newborn's colour while you make one", "src/orbs.tsx", [
+        ("                  data-orb={making ? me.hue : NEWBORN.hue}\n", "                  data-orb={NEWBORN.hue}\n"),
     ], ["office.test.ts"]),
     # the black line through every hat (owner, 10-04): a GPU paints pow of a negative base NaN, black
     ("a pow's base dips below zero again (the top of his head)", "src/orb/glsl.ts", [
