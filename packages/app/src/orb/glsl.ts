@@ -121,7 +121,11 @@ float fbm(vec2 p){ float s=0.,a=.5; for(int i=0;i<4;i++){ s+=a*vn(p); p*=2.03; a
 // Ridged noise: the ridges are where the noise crosses its own midline, so a high
 // power leaves THIN bright filaments rather than blobs - that is what makes a
 // plasma arc read as an arc. Used only for the weather inside him.
-float galRidge(vec2 p){ float n = fbm(p); return pow(1.0 - abs(2.0*n - 1.0), 6.0); }
+// NO POW OF A BASE THAT CAN DIP BELOW ZERO (owner, 10-04: a black line through every hat). GLSL
+// leaves pow undefined there and a GPU makes it NaN, painted black; on his card |N.y| rounds a
+// hair past 1 at the top of his head. A square is sq(), and every other base is clamped.
+float sq(float x){ return x*x; }
+float galRidge(vec2 p){ float n = fbm(p); return pow(max(0.0, 1.0 - abs(2.0*n - 1.0)), 6.0); }
 
 // The character's silhouette: how far in or out of the circle he is at this angle (0 is the top's
 // -PI/2: p.y is flipped so +y is down the screen). Ash's egg, then the other shapes' terms.
@@ -131,17 +135,17 @@ float shapeR(float a){
   float upward = -s;                                           // +1 at the top
   float belly = 0.5 - 0.5*upward;                              // 0 at the top, 1 at the bottom
   float r = uShapeA.z + uShapeA.x*(1.0 - uShapeA.w*belly)*(s*s - 1.0) - uShapeA.y*(0.5 + 0.5*upward);
-  r -= uShapeB.x*exp(-pow((a - 0.35)/0.55, 2.0));               // Ash's dent
+  r -= uShapeB.x*exp(-sq((a - 0.35)/0.55));               // Ash's dent
   r += uShapeB.y*(c*c - 0.5);                                  // wider than tall
   r += uShapeB.z*pow(max(0.0, upward), 9.0);                   // a drop's tip
   r += uShapeB.w*sin(uShapeD.z*a)*pow(max(0.0, s), 2.0);       // a ghost's hem (or a drip's), on the lower half only
   r += uShapeD.w*pow(max(0.0, s), 9.0);                        // a tip at the bottom
   r += uShapeE.x*0.5*(1.0 - cos(4.0*a));                       // squircle: the corners filled out
-  r -= uShapeE.y*exp(-pow((a - top)/0.20, 2.0));               // a notch at the top
+  r -= uShapeE.y*exp(-sq((a - top)/0.20));               // a notch at the top
   r += uShapeE.z*(0.6*sin(a + 0.8) + 0.4*sin(3.0*a + 2.1));    // lopsided, for good
   if (uShapeF.x > 0.5) r += uShapeF.y*pow(max(0.0, cos(uShapeF.x*(a - top))), uShapeF.z);   // points, one straight up
   r += uShapeC.y*(abs(sin(0.5*uShapeC.x*a + 0.3)) - 0.64);      // a cloud's puffs: round tops, a dip between each
-  r += uShapeC.z*(exp(-pow((a - top - uShapeC.w)/uShapeD.x, 2.0)) + exp(-pow((a - top + uShapeC.w)/uShapeD.x, 2.0)));
+  r += uShapeC.z*(exp(-sq((a - top - uShapeC.w)/uShapeD.x)) + exp(-sq((a - top + uShapeC.w)/uShapeD.x)));
   return r;
 }
 
@@ -260,7 +264,7 @@ vec2 accSDF(vec2 q){
   }
   if (id == 17) {       // a cowboy hat: the brim turned up at the sides, the creased crown, a band
     float brim = sdEll(vec2(q.x, q.y + 0.18*q.x*q.x) - vec2(0.0, 0.0), vec2(0.70, 0.07));
-    float crown = sdBox(q - vec2(0.0, -0.22), vec2(0.30, 0.20), 0.12) + 0.04*exp(-pow(q.x/0.07, 2.0))*step(q.y, -0.30);
+    float crown = sdBox(q - vec2(0.0, -0.22), vec2(0.30, 0.20), 0.12) + 0.04*exp(-sq(q.x/0.07))*step(q.y, -0.30);
     float band = max(crown, abs(q.y + 0.08) - 0.04);
     vec2 h = pick(vec2(brim, 0.0), vec2(crown, 0.0));
     return band < 0.0 ? vec2(band, 1.0) : h;
@@ -327,7 +331,7 @@ vec2 accSDF(vec2 q){
   }
   if (id == 28) {       // a fedora: a brim turned down a touch, a pinched crown, a band
     float brim = sdEll(vec2(q.x, q.y - 0.10*q.x*q.x) - vec2(0.0, 0.03), vec2(0.62, 0.06));
-    float crown = sdBox(q - vec2(0.0, -0.19), vec2(0.31, 0.18), 0.11) + 0.05*exp(-pow(q.x/0.08, 2.0))*step(q.y, -0.28);
+    float crown = sdBox(q - vec2(0.0, -0.19), vec2(0.31, 0.18), 0.11) + 0.05*exp(-sq(q.x/0.08))*step(q.y, -0.28);
     float band = max(crown, abs(q.y + 0.04) - 0.045);
     return band < 0.0 ? vec2(band, 1.0) : vec2(min(brim, crown), 0.0);
   }
@@ -682,11 +686,11 @@ void main(){
     }
     veins = clamp(veins, 0.0, 1.6);
     // veins are brightest where the body is saturated, not on the pale poles
-    float veinMask = pow(1.0 - abs(N.y), 1.1) * (0.55 + 0.45*z);
+    float veinMask = pow(max(0.0, 1.0 - abs(N.y)), 1.1) * (0.55 + 0.45*z);
     // (scaled by core below so veins stay inside the fluid)
 
     // ---- pearlescent structure --------------------------------------------
-    float belt  = pow(1.0 - abs(N.y), 1.35);          // chroma lives at the equator
+    float belt  = pow(max(0.0, 1.0 - abs(N.y)), 1.35);          // chroma lives at the equator
     float upper = smoothstep(-0.05, 0.55, seam);      // above the fold
     float lower = 1.0 - upper;
 
@@ -739,11 +743,11 @@ void main(){
     vec3 litBase = body;
 
     // poles and edge wash further toward white: subsurface, lit from behind
-    float wash = pow(1.0 - belt, 1.45);
+    float wash = pow(max(0.0, 1.0 - belt), 1.45);
     body = mix(body, mix(MIDS, LIGHT, 0.55), clamp(wash*0.50, 0.0, 1.0));
 
     // rim light - a bright halo just inside the silhouette
-    float rim = pow(1.0 - z, 3.4);
+    float rim = pow(max(0.0, 1.0 - z), 3.4);
     body = mix(body, mix(LITE, LIGHT, 0.60), clamp(rim*0.80, 0.0, 1.0));
 
     // caustics on top
@@ -791,10 +795,10 @@ void main(){
     // wave crests: hairline highlights, brightest mid-body where the glass is
     // thickest, so they look like light caught on a surface inside the volume
     body += LIGHT * crest * core * veinMask * (0.20 + 0.26*awake + 0.40*uLevel*speak + 0.20*wt) * (1.0-uBlink*0.7);
-    body += LITE * pow(crest,0.5) * core * 0.07;
+    body += LITE * pow(max(0.0, crest), 0.5) * core * 0.07;
     // and the swell shades the fluid so it has depth between the crests
     body *= 0.90 + 0.20*mix(0.5, swell, core);
-    body += LITE * pow(veins,0.55) * veinMask * core * 0.12;
+    body += LITE * pow(max(0.0, veins), 0.55) * veinMask * core * 0.12;
     // DARK GLASS STAYS DARK WHEN HE TALKS (owner, 2026-09-25: "dark mode, he becomes too light when
     // speaking, cant rly see his face"). body *= uVal darkened only the glass; every light added
     // after it — the wash, the rim, the caustics, the veins and crests that swell with his voice —
@@ -878,7 +882,7 @@ void main(){
     float hot = pow(max(0.0, dot(N, Ld)), 90.0);
     body += vec3(1.0) * hot * 0.95;
     body += PALE * pow(max(0.0, dot(N, normalize(vec3(-0.20,-0.48,0.85)))), 22.0) * 0.18;   // soft halo round it
-    float fres = pow(1.0 - z, 2.3);
+    float fres = pow(max(0.0, 1.0 - z), 2.3);
     body += mix(LITE, hueRim*1.15, vcw*0.9) * fres * (0.30 + 0.35*vcw);
     vec2  away = -normalize(Ld.xy);
     float cres = smoothstep(0.10, 0.0, abs(nd - 0.80)) * pow(max(0.0, dot(normalize(pb + 1e-4), away)), 3.0);
@@ -975,10 +979,11 @@ void main(){
       vec3 base = h.y > 1.5 ? uAccCol2 : h.y > 0.5 ? uAccCol2 : uAccCol;
       float lit = 0.50 + 0.55*max(0.0, dot(N, Ld));
       vec3 c = base*lit;
-      c += PALE*pow(1.0 - N.z, 2.2)*0.35;                          // the rim
+      c += PALE*pow(max(0.0, 1.0 - N.z), 2.2)*0.35;                          // the rim
       c += vec3(1.0)*pow(max(0.0, dot(N, normalize(Ld + vec3(0.0, 0.0, 1.0)))), 60.0)*0.75;   // the highlight
       if (h.y > 1.5) c += uAccCol2*(0.55 + 0.25*sin(t*2.2));        // a light of his own: it glows, gently
-      col = mix(col, c, aa);                                        // in front of all of him, his ears too (owner, 10-03)
+      col = aa >= 1.0 ? c : mix(col, c, aa);                        // in front of all of him, his ears too (owner, 10-03); solid,
+                                                                    // it replaces what is under it (NaN x 0 is NaN: owner, 10-04)
       A = max(A, aa);
     }
     if (h.y > 1.5) {                                               // and the bead's glow reaches past it

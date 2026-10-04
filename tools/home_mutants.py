@@ -1647,10 +1647,10 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ], ["spec.test.ts"]),
     ("his shape shows inside a hat: his ears drawn over it again", "src/orb/glsl.ts", [
         ("  float nd = db/Rg;\n\n  if (nd < 1.04) {", "  float nd = db/Rg;\n  // his ears in front of a hat, as if through it\n  float earT = uShapeD.x < 0.3 ? uShapeC.z*(exp(-pow((ang0 + 1.5707963 - uShapeC.w)/uShapeD.x, 2.0)) + exp(-pow((ang0 + 1.5707963 + uShapeC.w)/uShapeD.x, 2.0))) : 0.0;\n  float Rskull = Rs - uShapeD.y*Rg*earT*(1.0 + 0.5*uSquash*cos(2.0*ang0));\n  float earFront = earT > 0.005 ? smoothstep(Rskull - 1.5, Rskull + 1.5, length(p))*smoothstep(1.0, 1.0 - 2.6/Rg, nd) : 0.0;\n\n  if (nd < 1.04) {"),
-        ("      col = mix(col, c, aa);                                        // in front of all of him, his ears too (owner, 10-03)", "      col = mix(col, c, aa*(1.0 - earFront));"),
+        ("      col = aa >= 1.0 ? c : mix(col, c, aa);                        // in front of all of him, his ears too (owner, 10-03); solid,", "      col = mix(col, c, aa*(1.0 - earFront));"),
     ], ["characters.test.ts"]),
     ("a hat is drawn see-through", "src/orb/glsl.ts", [
-        ("      col = mix(col, c, aa);                                        // in front of all of him, his ears too (owner, 10-03)", "      col = mix(col, c, aa*0.5);"),
+        ("      col = aa >= 1.0 ? c : mix(col, c, aa);                        // in front of all of him, his ears too (owner, 10-03); solid,", "      col = mix(col, c, aa*0.5);"),
     ], ["characters.test.ts"]),
     ("a bunny's hat sits on his ears' tips", "src/orb/spec.ts", [
         ("  const S: ShapeNumbers = ears ? { ...S0, c: [S0.c[0], S0.c[1], 0, S0.c[3]] } : S0;", "  const S: ShapeNumbers = S0;"),
@@ -1964,6 +1964,16 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("the menu's New orb looks like the page you are on", "src/orbs.tsx", [
         ('...(invite && { background: "var(--accent)", color: "var(--ground)",', '...(invite && { background: "var(--accent-wash)", color: "var(--text-1)",'),
     ], ["office.test.ts"]),
+    # the black line through every hat (owner, 10-04): a GPU paints pow of a negative base NaN, black
+    ("a pow's base dips below zero again (the top of his head)", "src/orb/glsl.ts", [
+        ("float veinMask = pow(max(0.0, 1.0 - abs(N.y)), 1.1)", "float veinMask = pow(1.0 - abs(N.y), 1.1)"),
+    ], ["spec.test.ts"]),
+    ("a square is a pow again", "src/orb/glsl.ts", [
+        ("exp(-sq((a - 0.35)/0.55))", "exp(-pow((a - 0.35)/0.55, 2.0))"),
+    ], ["spec.test.ts"]),
+    ("a solid hat lets what is under it through", "src/orb/glsl.ts", [
+        ("      col = aa >= 1.0 ? c : mix(col, c, aa);", "      col = mix(col, c, aa);"),
+    ], ["spec.test.ts"]),
     # school's room: send, rate, a syllabus, a pass mark, the report card (PLAN 5.7)
     ('Send to school does nothing', 'src/rooms/School.tsx', [
         ('onClick={() => void home.sendToSchool(orb, subjects, mark).then(sent, (e: Error) => setSaid(e.message))}', 'onClick={() => undefined}'),

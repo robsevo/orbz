@@ -220,3 +220,25 @@ test("every shape is its own: no two outlines alike (owner, 10-03: \"more shapes
     }
   }
 });
+
+test("no pow of a base that can dip below zero, and a solid hat replaces what is under it (owner, 10-04: a black line through every hat)", () => {
+  // GLSL leaves pow undefined below zero and a GPU makes it NaN, painted black: on the owner's card
+  // |N.y| rounded a hair past 1 at the top of the head, and the hat's mix (col*0 + hat) kept the NaN
+  const code = ORB_FS.split("\n").map((l) => l.replace(/\/\/.*$/, "")).join("\n");
+  const baseOf = (i: number): string => {
+    let d = 0, j = i;
+    for (; j < code.length; j++) {
+      const ch = code[j];
+      if (ch === "(") d++;
+      else if (ch === ")") { if (d === 0) break; d--; }
+      else if (ch === "," && d === 0) break;
+    }
+    return code.slice(i, j).trim();
+  };
+  const bases = [...code.matchAll(/\bpow\(/g)].map((m) => baseOf(m.index + 4));
+  assert.ok(bases.length > 10, `control: the scan finds the shader's pows (${bases.length})`);
+  const safe = (b: string): boolean => /^(max|clamp|smoothstep|exp)\(/.test(b);
+  assert.deepEqual(bases.filter((b) => !safe(b)), [], "a pow's base that can go below zero");
+  assert.ok(!safe("1.0 - abs(N.y)") && !safe("(a - 0.35)/0.55"), "control: the old bases are caught");
+  assert.match(code, /col = aa >= 1\.0 \? c : mix\(col, c, aa\);/, "a solid hat replaces what is under it, a NaN too");
+});
