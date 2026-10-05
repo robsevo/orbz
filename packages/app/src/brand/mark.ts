@@ -22,7 +22,7 @@ export type MarkOptions = {
 export function markSvg(o: MarkOptions = {}): string {
   const { eyes = true, ground = "none", mono = false, scale = 0.62 } = o;
   const R = 50 * scale; // the O's outer edge
-  const r = R * 0.56; // its hole: a thick ring, the weight of a bold O
+  const r = R * 0.68; // its hole: a ring a little lighter than a bold O (owner, 10-04: "make the o thinner :) not too thin")
   const cx = 50;
   const cy = 50;
   const ink = (c: string): string => (mono ? MARK.white : c);
@@ -31,7 +31,7 @@ export function markSvg(o: MarkOptions = {}): string {
       ? ""
       : `<rect width="100" height="100" ${ground === "card" ? 'rx="22.5"' : ""} fill="url(#g)"/><rect width="100" height="100" ${ground === "card" ? 'rx="22.5"' : ""} fill="url(#w)"/>`;
   const eyesSvg = eyes
-    ? [-1, 1].map((s) => `<rect x="${(cx + s * r * 0.36 - r * 0.115).toFixed(2)}" y="${(cy - r * 0.26).toFixed(2)}" width="${(r * 0.23).toFixed(2)}" height="${(r * 0.46).toFixed(2)}" rx="${(r * 0.115).toFixed(2)}" fill="${ink(MARK.eye)}"/>`).join("")
+    ? [-1, 1].map((s) => `<rect x="${(cx + s * R * 0.2 - R * 0.064).toFixed(2)}" y="${(cy - R * 0.145).toFixed(2)}" width="${(R * 0.129).toFixed(2)}" height="${(R * 0.258).toFixed(2)}" rx="${(R * 0.064).toFixed(2)}" fill="${ink(MARK.eye)}"/>`).join("") // sized by the O, not its hole
     : "";
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">`,
