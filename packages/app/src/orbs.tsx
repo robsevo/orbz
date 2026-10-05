@@ -778,6 +778,19 @@ const REACT: [keyof Character, Gesture][] = [["hat", "hop"], ["glasses", "nod"],
 
 type View = { kind: "orb"; name: string } | { kind: "new"; draft: Character };
 
+/** Whether the window is a phone's (the stylesheet's own line, 760px): some things are drawn smaller there. */
+function usePhone(): boolean {
+  const q = typeof matchMedia === "function" ? matchMedia("(max-width: 760px)") : null;
+  const [phone, setPhone] = useState(Boolean(q?.matches));
+  useEffect(() => {
+    if (!q) return;
+    const on = (): void => setPhone(q.matches);
+    q.addEventListener("change", on);
+    return () => q.removeEventListener("change", on);
+  }, []);
+  return phone;
+}
+
 function App() {
   // an office starts with the one orb you make (owner, 10-01: "we should start with only 1 orb,
   // the one we make at the beginning"); until then, the creator, on a newborn
@@ -797,6 +810,7 @@ function App() {
   const [arrived, setArrived] = useState<string | null>(null);
   const [rolls, setRolls] = useState(0);
   const [evolve, setEvolve] = useState<{ c: Character; n: number } | null>(null); // Roll everything: who he was
+  const phone = usePhone(); // the hero's orb smaller on a phone (owner, 10-04: "make hero a bit smaller")
   // his card says who he is only once he has been shown whole (owner, 10-04: "only show the orbs info when the
   // orb has been shown completely"): until the change is over it still says who he was
   const [shown, setShown] = useState(0);
@@ -1052,7 +1066,8 @@ function App() {
       {drawn && !intro && (
       <div className="orbs-window" style={s.window}>
         {/* on a phone: Back, the name, and the menu, which slides in */}
-        <div className="orbs-topbar" style={{ display: "none", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "var(--s3) var(--s4) 0" }}>
+        {/* a band of its own, clear of the hero (owner, 10-04: "the back button and menu buttons kind of bleed into the hero") */}
+        <div className="orbs-topbar" style={{ display: "none", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "var(--s3) var(--s4)", marginBottom: "var(--s3)", boxShadow: "0 1px 0 var(--sep)" }}>
           {backButton({ padding: "6px 12px" })}
           <span style={{ font: "700 12px/20px var(--font)", letterSpacing: ".12em", color: "var(--text-3)" }}>ORBZ</span>
           <button aria-label="Menu" aria-expanded={menu} onClick={() => setMenu(true)} style={{ ...s.btn, padding: "6px 12px", font: "800 16px/20px var(--font)" }}>
@@ -1162,7 +1177,7 @@ function App() {
               <SoundIcon on={sounds} />
             </button>
             <span style={{ ...s.head }}>{making ? "A new orb" : "In the office"}</span>
-            <Evolving me={me} from={evolve} size={176} state={worn} gesture={gesture} onDone={setShown} />
+            <Evolving me={me} from={evolve} size={phone ? 128 : 176} state={worn} gesture={gesture} onDone={setShown} />
             {live && !picked && WORN[live.mood].words && (
               <span data-mood={live.mood} style={{ font: "600 13px/18px var(--font)", color: "var(--text-2)" }}>
                 {WORN[live.mood].words}
