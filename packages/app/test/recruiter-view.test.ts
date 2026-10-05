@@ -49,6 +49,8 @@ test("tick a position, interview, hire, pass; an orb let go applies again; desk 
   t.after(() => h.close());
   h.start();
   h.about.setName("Robin");
+  // the office has its personal assistant: the Recruiter opens only once there is one (owner, 10-04)
+  h.inbox.addOrb("pa", "Pip", "assistant", { shape: "egg", eyes: "classic", hue: "azure" });
   h.inbox.addOrb("cy", "Cy", "writing", { shape: "bean", eyes: "classic", hue: "rose" });
   h.inbox.letGo("cy");
   const d = await serve(h, { port: 0, appDir: dist });
