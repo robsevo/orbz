@@ -1,104 +1,39 @@
-// The app's icon (PLAN 2.7, installable; owner, 10-03: "make the desktop icon please, make it nice. not
-// like the widget one, different"; 10-04: "make the phone app logo much more addicting to want to press
-// and see, it should make you happy to see in your phone"): the office, happy to see you. Ash in front
-// with happy eyes, a mint kitty winking and a violet teddy mid-hop behind him, real orbs drawn still by
-// the real renderer, each holding its happiest moment (`pose`), on a sunny sky with a glow behind them
-// and a few sparkles, and ORBZ across it in Nunito Black, extruded (owner, 10-04: "add our own font on the
-// logo saying ORBZ accross it ... 3d ish, hip"); `&text=0` leaves the word off (the title bar's sizes). `icon.html?size=512&pad=0.06` is the rounded card with clear corners (an "any"
-// icon, and the desktop's); `&bleed=1` fills the square to its edges with the orbs in its safe middle
-// (a maskable icon, which the phone cuts to its own shape, and an iPhone's, which rounds it itself).
-// `tools/shoot_icons.ts` takes the pictures.
+// The app's icon (PLAN 2.7, installable; owner, 10-04: "we need a simpler logo for our app logo and mobile
+// logos, something that fits with 'the crowd' ... use the O and the shape of an orb somehow and keep the app
+// color"): the Orbz mark (brand/mark.ts), the O as an orb on the app's charcoal. `icon.html?size=512&pad=0.06`
+// is the rounded card with clear corners (an "any" icon, and the desktop's); `&bleed=1` fills the square to its
+// edges with the O in its safe middle (a maskable icon, which the phone cuts to its own shape, and an iPhone's,
+// which rounds it itself; `&room=0.88` for the iPhone's); `&text=0` leaves the eyes off (the title bar's tiny
+// sizes); `&lockup=1` is the mark with the word beside it. `tools/shoot_icons.ts` takes the pictures.
 // Not part of the app's build.
 import { createRoot } from "react-dom/client";
 import { stylesheet } from "./design/tokens.ts";
-import { Orb } from "./orb/Orb.tsx";
-import type { Gesture } from "./orb/life.ts";
-import { ASH, type Character } from "./orb/spec.ts";
+import { markSvg } from "./brand/mark.ts";
 
 const q = new URLSearchParams(location.search);
 const size = Number(q.get("size") ?? 512);
 const pad = Number(q.get("pad") ?? 0.06);
 const bleed = q.get("bleed") === "1";
+const room = Number(q.get("room") ?? 0.8); // a maskable icon keeps the O in its middle 80%; an iPhone's a little more
+const eyes = q.get("text") !== "0";
+const lockup = q.get("lockup") === "1";
 const style = document.createElement("style");
-style.textContent = `${stylesheet(`${import.meta.env.BASE_URL}fonts/Nunito.ttf`)} html, body { margin: 0; overflow: hidden; background: transparent; }`;
+style.textContent = `${stylesheet(`${import.meta.env.BASE_URL}fonts/Nunito.ttf`)} html, body { margin: 0; overflow: hidden; background: transparent; } svg { display: block; }`;
 document.head.append(style);
 
-/** Who is on the icon, where (the middle of each, in fractions of the card), how big, and the moment each holds. */
-const words = q.get("text") !== "0"; // the wordmark (the title bar's tiny sizes are drawn without it)
-const TEAM: { c: Character; x: number; y: number; s: number; pose: { gesture: Gesture; into: number }; turn?: number }[] = words
-  ? [
-      { c: { ...ASH, name: "Pip", hue: "mint", shape: "kitty", eyes: "big", finish: "neon" }, x: 0.25, y: 0.27, s: 0.42, pose: { gesture: "wink", into: 0.36 }, turn: -8 },
-      { c: { ...ASH, name: "Bo", hue: "iris", shape: "teddy", eyes: "big", finish: "neon" }, x: 0.75, y: 0.25, s: 0.42, pose: { gesture: "squish", into: 0.4 }, turn: 8 },
-      { c: { ...ASH, eyes: "big", finish: "neon" }, x: 0.5, y: 0.45, s: 0.58, pose: { gesture: "squish", into: 0.4 } },
-    ]
-  : [
-      { c: { ...ASH, name: "Pip", hue: "mint", shape: "kitty", eyes: "big", finish: "neon" }, x: 0.27, y: 0.37, s: 0.48, pose: { gesture: "wink", into: 0.36 }, turn: -8 },
-      { c: { ...ASH, name: "Bo", hue: "iris", shape: "teddy", eyes: "big", finish: "neon" }, x: 0.73, y: 0.35, s: 0.48, pose: { gesture: "squish", into: 0.4 }, turn: 8 },
-      { c: { ...ASH, eyes: "big", finish: "neon" }, x: 0.5, y: 0.6, s: 0.68, pose: { gesture: "squish", into: 0.4 } },
-    ];
-/** ORBZ in rounded letters (owner, 10-04: "more bubbly", then "too much like oreo"): Nunito Black a little
- * rounder by a round-joined stroke of its own colour, a thin dark rim, a shallow depth, filled like the
- * orbs' glass, ice at the top to azure to lavender. */
-function Wordmark({ size }: { size: number }) {
-  const W = 1000;
-  const H = 340;
-  const fs = 250; // the letters, in the drawing's units
-  const puff = 9; // a little rounder than the face itself; more read as a cookie stamp (owner, 10-04: "too much like oreo")
-  const rim = 6; // a thin dark line round it
-  const at = { x: W / 2, y: 238, textAnchor: "middle", style: { font: `900 ${fs}px var(--font)`, letterSpacing: "10px" } } as const;
-  const round = { strokeLinejoin: "round", strokeLinecap: "round" } as const;
-  const depth = Array.from({ length: 4 }, (_, k) => k + 1); // a shallow depth, not a block
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={size * 1.36} style={{ display: "block", overflow: "visible", transform: "rotate(-5deg)", filter: `drop-shadow(0 ${size * 0.07}px ${size * 0.06}px var(--icon-drop))` }}>
-      <defs>
-        <linearGradient id="orbz-face" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0.12" stopColor="var(--icon-face-top)" />
-          <stop offset="0.55" stopColor="var(--icon-face-mid)" />
-          <stop offset="0.92" stopColor="var(--icon-face-low)" />
-        </linearGradient>
-      </defs>
-      {/* the deepest step's rim, then the extrusion stepping down and right */}
-      <text {...at} x={W / 2 + 4 * 3.2} y={238 + 4 * 4.4} fill="var(--icon-outline)" stroke="var(--icon-outline)" strokeWidth={puff + rim * 2} {...round}>ORBZ</text>
-      {depth.reverse().map((k) => (
-        <text key={k} {...at} x={W / 2 + k * 3.2} y={238 + k * 4.4} fill="var(--icon-extrude)" stroke="var(--icon-extrude)" strokeWidth={puff} {...round}>ORBZ</text>
-      ))}
-      {/* the face's rim, and the face (light at its top, as the orbs' glass is) */}
-      <text {...at} fill="var(--icon-outline)" stroke="var(--icon-outline)" strokeWidth={puff + rim * 2} {...round}>ORBZ</text>
-      <text {...at} fill="url(#orbz-face)" stroke="url(#orbz-face)" strokeWidth={puff} {...round}>ORBZ</text>
-    </svg>
-  );
-}
-/** The sparkles: where (fractions of the card) and how big (of the card). */
-const SPARKS: [number, number, number][] = [[0.13, 0.14, 0.085], [0.86, 0.12, 0.06], [0.9, 0.62, 0.075], [0.09, 0.66, 0.05], [0.66, 0.08, 0.04]];
-const SPARK = "M0 -1 C.13 -.27 .27 -.13 1 0 C.27 .13 .13 .27 0 1 C-.13 .27 -.27 .13 -1 0 C-.27 -.13 -.13 -.27 0 -1 Z";
-
 const card = bleed ? size : Math.round(size * (1 - 2 * pad)); // the card's side
-// where the orbs go: a maskable icon keeps them in its middle 80%; an iPhone's (`&room=0.88`), which only
-// rounds the corners, a little more
-const room = bleed ? size * Number(q.get("room") ?? 0.8) : card;
+// the O takes 62% of the card; edge to edge, 70% of the room it is given (an iPhone 62%, a maskable 56%, inside its safe 80%)
+const svg = lockup ? markSvg({ ground: "card", scale: 0.62 }) : markSvg({ ground: bleed ? "bleed" : "card", eyes, scale: bleed ? room * 0.7 : 0.62 });
 createRoot(document.getElementById("root")!).render(
-  <div data-icon style={{ width: size, height: size, display: "grid", placeItems: "center" }}>
-    <div data-orb={ASH.hue} style={{
-      position: "relative", width: card, height: card, borderRadius: bleed ? 0 : card * 0.225, overflow: "hidden",
-      // the app's own dark: its glass card, raised to ground, the azure wash up top, a glow behind the orbs
-      background: "radial-gradient(48% 44% at 50% 46%, var(--icon-glow) 0%, var(--icon-glow-none) 100%), radial-gradient(75% 60% at 50% 18%, var(--accent-wash), transparent 70%), linear-gradient(180deg, var(--raised), var(--ground) 82%)",
-      boxShadow: bleed ? "none" : "inset 0 0 0 1px var(--hairline)",
-    }}>
-      {SPARKS.map(([x, y, s], i) => (
-        <svg key={i} viewBox="-1 -1 2 2" style={{ position: "absolute", left: (x - s / 2) * card, top: (y - s / 2) * card, width: s * card, height: s * card, overflow: "visible", filter: `drop-shadow(0 0 ${s * card * 0.25}px var(--icon-spark))` }}>
-          <path d={SPARK} fill="var(--icon-spark)" />
-        </svg>
-      ))}
-      {TEAM.map(({ c, x, y, s, pose, turn }) => (
-        <div key={c.name} data-orb={c.hue} style={{ position: "absolute", left: (card - room) / 2 + x * room, top: (card - room) / 2 + y * room, transform: `translate(-50%, -50%) rotate(${turn ?? 0}deg)` }}>
-          <Orb character={c} size={Math.round(s * room)} still poke={false} fidget={false} framing="portrait" tint={1} pose={pose} />
-        </div>
-      ))}
-      {words && (
-        <div style={{ position: "absolute", left: (card - room) / 2, width: room, top: (card - room) / 2 + room * 0.67 }}>
-          <Wordmark size={Math.round(room * 0.22)} />
-        </div>
-      )}
+  lockup ? (
+    // the lockup: the icon, and Orbz in the app's own type beside it
+    <div data-icon style={{ display: "inline-flex", alignItems: "center", gap: size * 0.12, padding: size * 0.08 }}>
+      <div style={{ width: size, height: size }} dangerouslySetInnerHTML={{ __html: svg }} />
+      <span style={{ font: `800 ${Math.round(size * 0.62)}px/1 var(--font)`, letterSpacing: "-0.01em", color: "var(--text-1)" }}>Orbz</span>
     </div>
-  </div>,
+  ) : (
+    <div data-icon style={{ width: size, height: size, display: "grid", placeItems: "center" }}>
+      <div style={{ width: card, height: card }} dangerouslySetInnerHTML={{ __html: svg }} />
+    </div>
+  ),
 );

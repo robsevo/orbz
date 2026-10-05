@@ -2,6 +2,7 @@
 // check (a manifest, its icons, served where a browser trusts it), and the manifest's colours are
 // the tokens' (the build writes them; no file names a colour by hand).
 import assert from "node:assert/strict";
+import { MARK } from "../src/design/tokens.ts";
 import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -49,6 +50,16 @@ test("an iPhone's icon and the title bar's: the page names them; the iPhone's is
   const stamp = (f: string): string => createHash("sha256").update(readFileSync(join(dist, "icons", f))).digest("hex").slice(0, 10);
   for (const f of ["orbs-apple-180.png", "orbs-32.png", "orbs-16.png"]) assert.ok(html.includes(`icons/${f}?v=${stamp(f)}"`), `${f} carries its own stamp`);
   assert.ok(!html.includes(`icons/orbs-32.png?v=${stamp("orbs-16.png")}"`), "control: another file's stamp is not its");
+});
+
+test("the logo set: the mark, the icon and the mark in white as SVG, and the lockup, in public/brand", () => {
+  // owner, 10-04: "a simple logo set we can use"
+  const brand = join(APP, "public", "brand");
+  for (const f of ["orbz-mark.svg", "orbz-icon.svg", "orbz-mark-white.svg"]) assert.match(readFileSync(join(brand, f), "utf8"), /^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg" viewBox="0 0 100 100">/, f);
+  const white = readFileSync(join(brand, "orbz-mark-white.svg"), "utf8");
+  assert.ok(!white.includes(MARK.mid) && white.includes(MARK.white), "the white one is one colour");
+  assert.ok(readFileSync(join(brand, "orbz-mark.svg"), "utf8").includes(MARK.mid), "control: the mark is in the app's azure");
+  assert.equal(readFileSync(join(brand, "orbz-lockup.png")).subarray(1, 4).toString(), "PNG");
 });
 
 test("served by a home, the app installs: a manifest from the tokens, its icons, nothing Chromium objects to", { skip, timeout: 120_000 }, async (t) => {

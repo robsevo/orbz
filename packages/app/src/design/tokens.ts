@@ -181,6 +181,22 @@ export const HUES: Hue[] = (() => {
 
 export const hue = (name: HueName): Hue => HUES.find((h) => h.name === name)!;
 
+/** The Orbz mark (brand/mark.ts; owner, 10-04: "a simpler logo ... something that fits with the crowd ... use the
+ * O and the shape of an orb ... keep the app color"): the O as an orb, in Ash's azure, lit like the orbs' glass,
+ * on the app's own charcoal. */
+export const MARK = {
+  light: "#c4e6f7", // the top of the ring, where the light falls
+  mid: hex(AZURE),
+  deep: "#2a76a6", // its foot
+  glow: "rgba(94, 179, 222, 0.38)", // the light inside the O
+  none: "rgba(94, 179, 222, 0)",
+  eye: "#f4faff",
+  shine: "#ffffff",
+  white: "#ffffff", // the one-colour mark
+  ground: "#0e0e10", // the app's ground (dark), and its raised glass
+  raised: "#26272b",
+} as const;
+
 /** What an orb's things are made of, besides his own colour (a hat's band, a crown, a sprout). */
 export const MATERIALS = {
   ink: parseHex("#2B2C30"),
@@ -255,11 +271,6 @@ function staticVars(): string {
   const v: Record<string, string> = { "--margin": `${MARGIN}px`, "--font": FONT, "--mono": MONO, "--qr-ink": hex(QR_COLOURS.ink), "--qr-paper": hex(QR_COLOURS.paper) };
   // the app's icon (owner, 10-04: "make the phone app logo much more addicting to want to press and see, it should
   // make you happy to see in your phone"): a sunny sky behind the orbs, a glow, sparkles
-  // the app's icon in the app's own dark (owner, 10-04: "the color ... doesnt match the app", then "font looks a
-  // little too much like oreo, color too. like the apps native dark color"): its charcoal glass with the azure
-  // wash; ORBZ filled like the orbs' own glass, ice to azure to lavender, a thin dark rim, a shallow depth
-  Object.assign(v, { "--icon-face-top": "#f2f8ff", "--icon-face-mid": "#9fd0ff", "--icon-face-low": "#b9a7ff", "--icon-extrude": "#1c2130", "--icon-outline": "#07080b", "--icon-drop": "rgba(0, 0, 0, 0.55)" });
-  Object.assign(v, { "--icon-glow": "rgba(120, 180, 255, 0.22)", "--icon-glow-none": "rgba(120, 180, 255, 0)", "--icon-spark": "#f4f8ff" });
   // the light of an orb changing (Roll everything, owner 10-04): its glow, the flash and the sparks, the same in every theme
   Object.assign(v, { "--flash": "#ffffff", "--flash-glow": "rgba(255, 255, 255, 0.9)", "--flash-mid": "rgba(255, 255, 255, 0.55)", "--flash-none": "rgba(255, 255, 255, 0)" });
   for (const [k, px] of Object.entries(SPACE)) v[`--s${k}`] = `${px}px`;

@@ -1,4 +1,7 @@
-// The app's icons, drawn by the real orbs (PLAN 2.7; the office on its card, owner 10-03, src/icon.tsx):
+// The app's icons, the Orbz mark (PLAN 2.7; the O as an orb, owner 10-04, src/brand/mark.ts, src/icon.tsx), and
+// the logo set in public/brand/ (the mark, the icon, the mark in white, the lockup). Before 10-04 the icon was
+// the real orbs on a card; owner: "we need a simpler logo ... something that fits with 'the crowd'".
+// The icons:
 // `node tools/shoot_icons.ts` writes public/icons/orbs-192.png and orbs-512.png (the rounded card,
 // its corners clear: the browser's and the desktop's icon, tools/desktop/install.sh) and
 // orbs-maskable-512.png (edge to edge, the orbs inside the safe zone, the middle 80%), orbs-apple-180.png
@@ -11,6 +14,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { build } from "vite";
 import { launch, serveDir } from "../test/harness.ts";
+import { markSvg } from "../src/brand/mark.ts";
 
 const APP = new URL("..", import.meta.url).pathname;
 const out = mkdtempSync(join(tmpdir(), "orbs-shoot-icons-"));
@@ -22,9 +26,7 @@ mkdirSync(dir, { recursive: true });
 for (const [file, size, how] of [["orbs-192.png", 192, "pad=0.06"], ["orbs-512.png", 512, "pad=0.06"], ["orbs-maskable-512.png", 512, "bleed=1"], ["orbs-apple-180.png", 180, "bleed=1&room=0.88"]] as const) {
   const page = await browser.newPage({ viewport: { width: size, height: size }, deviceScaleFactor: 1, colorScheme: "dark" });
   await page.goto(`${site.url}/icon.html?size=${size}&${how}`);
-  await page.waitForFunction(() => document.querySelectorAll("[data-icon] canvas").length >= 3, undefined, { timeout: 20_000 });
-  await page.waitForTimeout(800); // each still frame drawn
-  await page.evaluate(() => document.fonts.ready.then(() => undefined)); // the wordmark in its own font, never a stand-in
+  await page.waitForSelector("[data-icon] svg", { timeout: 20_000 });
   await page.locator("[data-icon]").screenshot({ path: join(dir, file), omitBackground: true }); // the card's corners stay clear
   await page.close();
   console.log(`wrote ${join(dir, file)}`);
@@ -34,8 +36,7 @@ for (const [file, size, how] of [["orbs-192.png", 192, "pad=0.06"], ["orbs-512.p
   const plain = join(out, "orbs-512-plain.png");
   const shot = await browser.newPage({ viewport: { width: 512, height: 512 }, deviceScaleFactor: 1, colorScheme: "dark" });
   await shot.goto(`${site.url}/icon.html?size=512&pad=0.06&text=0`);
-  await shot.waitForFunction(() => document.querySelectorAll("[data-icon] canvas").length >= 3, undefined, { timeout: 20_000 });
-  await shot.waitForTimeout(800);
+  await shot.waitForSelector("[data-icon] svg", { timeout: 20_000 });
   await shot.locator("[data-icon]").screenshot({ path: plain, omitBackground: true });
   await shot.close();
   const page = await browser.newPage();
@@ -62,6 +63,28 @@ for (const [file, size, how] of [["orbs-192.png", 192, "pad=0.06"], ["orbs-512.p
     console.log(`wrote ${join(dir, `orbs-${size}.png`)}`);
   }
   await page.close();
+}
+// the logo set to use anywhere (owner, 10-04: "a simple logo set we can use"): the mark alone, the icon, the
+// mark in white, as SVG; and the lockup, the icon with Orbz beside it, as a picture (its type is the app's font)
+{
+  const brand = join(APP, "public", "brand");
+  mkdirSync(brand, { recursive: true });
+  const files: [string, string][] = [
+    ["orbz-mark.svg", markSvg({ ground: "none" })],
+    ["orbz-icon.svg", markSvg({ ground: "card" })],
+    ["orbz-mark-white.svg", markSvg({ ground: "none", mono: true })],
+  ];
+  for (const [f, svg] of files) {
+    writeFileSync(join(brand, f), `${svg}\n`);
+    console.log(`wrote ${join(brand, f)}`);
+  }
+  const page = await browser.newPage({ viewport: { width: 1200, height: 420 }, deviceScaleFactor: 1, colorScheme: "dark" });
+  await page.goto(`${site.url}/icon.html?size=240&lockup=1`);
+  await page.waitForSelector("[data-icon] svg", { timeout: 20_000 });
+  await page.evaluate(() => document.fonts.ready.then(() => undefined)); // the word in the app's own font, never a stand-in
+  await page.locator("[data-icon]").screenshot({ path: join(brand, "orbz-lockup.png"), omitBackground: true });
+  await page.close();
+  console.log(`wrote ${join(brand, "orbz-lockup.png")}`);
 }
 await browser.close();
 await site.close();
