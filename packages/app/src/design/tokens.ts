@@ -255,11 +255,11 @@ function staticVars(): string {
   const v: Record<string, string> = { "--margin": `${MARGIN}px`, "--font": FONT, "--mono": MONO, "--qr-ink": hex(QR_COLOURS.ink), "--qr-paper": hex(QR_COLOURS.paper) };
   // the app's icon (owner, 10-04: "make the phone app logo much more addicting to want to press and see, it should
   // make you happy to see in your phone"): a sunny sky behind the orbs, a glow, sparkles
-  // the app's icon in the app's own colours (owner, 10-04: "make the phone app logo much more addicting", then
-  // "we like the style just not the color ... it doesnt match the app"): a night sky of the house's azure, a
-  // glow behind the orbs, white sparkles; ORBZ in ice-white bubble letters on a deep azure extrusion
-  Object.assign(v, { "--icon-face-top": "#ffffff", "--icon-face-mid": "#dcefff", "--icon-face-low": "#8ec8ff", "--icon-extrude": "#1f56c4", "--icon-outline": "#071634", "--icon-drop": "rgba(2, 8, 30, 0.55)" });
-  Object.assign(v, { "--icon-sun": "#2f74e0", "--icon-warm": "#163b80", "--icon-hot": "#0b1736", "--icon-deep": "#2a1660", "--icon-glow": "rgba(140, 200, 255, 0.42)", "--icon-glow-none": "rgba(140, 200, 255, 0)", "--icon-spark": "#eef6ff" });
+  // the app's icon in the app's own dark (owner, 10-04: "the color ... doesnt match the app", then "font looks a
+  // little too much like oreo, color too. like the apps native dark color"): its charcoal glass with the azure
+  // wash; ORBZ filled like the orbs' own glass, ice to azure to lavender, a thin dark rim, a shallow depth
+  Object.assign(v, { "--icon-face-top": "#f2f8ff", "--icon-face-mid": "#9fd0ff", "--icon-face-low": "#b9a7ff", "--icon-extrude": "#1c2130", "--icon-outline": "#07080b", "--icon-drop": "rgba(0, 0, 0, 0.55)" });
+  Object.assign(v, { "--icon-glow": "rgba(120, 180, 255, 0.22)", "--icon-glow-none": "rgba(120, 180, 255, 0)", "--icon-spark": "#f4f8ff" });
   // the light of an orb changing (Roll everything, owner 10-04): its glow, the flash and the sparks, the same in every theme
   Object.assign(v, { "--flash": "#ffffff", "--flash-glow": "rgba(255, 255, 255, 0.9)", "--flash-mid": "rgba(255, 255, 255, 0.55)", "--flash-none": "rgba(255, 255, 255, 0)" });
   for (const [k, px] of Object.entries(SPACE)) v[`--s${k}`] = `${px}px`;

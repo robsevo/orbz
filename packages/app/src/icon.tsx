@@ -36,19 +36,18 @@ const TEAM: { c: Character; x: number; y: number; s: number; pose: { gesture: Ge
       { c: { ...ASH, name: "Bo", hue: "iris", shape: "teddy", eyes: "big", finish: "neon" }, x: 0.73, y: 0.35, s: 0.48, pose: { gesture: "squish", into: 0.4 }, turn: 8 },
       { c: { ...ASH, eyes: "big", finish: "neon" }, x: 0.5, y: 0.6, s: 0.68, pose: { gesture: "squish", into: 0.4 } },
     ];
-/** ORBZ as bubble letters (owner, 10-04: "make the writing on the orbs logo more bubbly"): Nunito Black
- * puffed out by a thick stroke of its own colour with round joins (an SVG text's stroke can be round; a
- * CSS text outline cannot), a dark rim round it, a plum extrusion stepping down and right, a white-to-gold
- * face and a gloss along the top. */
+/** ORBZ in rounded letters (owner, 10-04: "more bubbly", then "too much like oreo"): Nunito Black a little
+ * rounder by a round-joined stroke of its own colour, a thin dark rim, a shallow depth, filled like the
+ * orbs' glass, ice at the top to azure to lavender. */
 function Wordmark({ size }: { size: number }) {
   const W = 1000;
   const H = 340;
   const fs = 250; // the letters, in the drawing's units
-  const puff = 20; // how far each letter is blown up (past about 24 the O, R and B close up)
-  const rim = 12; // the dark line round it all
+  const puff = 9; // a little rounder than the face itself; more read as a cookie stamp (owner, 10-04: "too much like oreo")
+  const rim = 6; // a thin dark line round it
   const at = { x: W / 2, y: 238, textAnchor: "middle", style: { font: `900 ${fs}px var(--font)`, letterSpacing: "10px" } } as const;
   const round = { strokeLinejoin: "round", strokeLinecap: "round" } as const;
-  const depth = Array.from({ length: 10 }, (_, k) => k + 1);
+  const depth = Array.from({ length: 4 }, (_, k) => k + 1); // a shallow depth, not a block
   return (
     <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={size * 1.36} style={{ display: "block", overflow: "visible", transform: "rotate(-5deg)", filter: `drop-shadow(0 ${size * 0.07}px ${size * 0.06}px var(--icon-drop))` }}>
       <defs>
@@ -59,14 +58,13 @@ function Wordmark({ size }: { size: number }) {
         </linearGradient>
       </defs>
       {/* the deepest step's rim, then the extrusion stepping down and right */}
-      <text {...at} x={W / 2 + 10 * 3.2} y={238 + 10 * 4.4} fill="var(--icon-outline)" stroke="var(--icon-outline)" strokeWidth={puff + rim * 2} {...round}>ORBZ</text>
+      <text {...at} x={W / 2 + 4 * 3.2} y={238 + 4 * 4.4} fill="var(--icon-outline)" stroke="var(--icon-outline)" strokeWidth={puff + rim * 2} {...round}>ORBZ</text>
       {depth.reverse().map((k) => (
         <text key={k} {...at} x={W / 2 + k * 3.2} y={238 + k * 4.4} fill="var(--icon-extrude)" stroke="var(--icon-extrude)" strokeWidth={puff} {...round}>ORBZ</text>
       ))}
-      {/* the face's rim, the puffed face, and its gloss */}
+      {/* the face's rim, and the face (light at its top, as the orbs' glass is) */}
       <text {...at} fill="var(--icon-outline)" stroke="var(--icon-outline)" strokeWidth={puff + rim * 2} {...round}>ORBZ</text>
       <text {...at} fill="url(#orbz-face)" stroke="url(#orbz-face)" strokeWidth={puff} {...round}>ORBZ</text>
-      <text {...at} y={238 - 34} fill="none" stroke="var(--icon-face-top)" strokeOpacity={0.7} strokeWidth={10} {...round} style={{ ...at.style, clipPath: "inset(0 0 62% 0)" }}>ORBZ</text>
     </svg>
   );
 }
@@ -80,10 +78,11 @@ const card = bleed ? size : Math.round(size * (1 - 2 * pad)); // the card's side
 const room = bleed ? size * Number(q.get("room") ?? 0.8) : card;
 createRoot(document.getElementById("root")!).render(
   <div data-icon style={{ width: size, height: size, display: "grid", placeItems: "center" }}>
-    <div style={{
+    <div data-orb={ASH.hue} style={{
       position: "relative", width: card, height: card, borderRadius: bleed ? 0 : card * 0.225, overflow: "hidden",
-      // a sunny sky: bright up top, warm, then a pink evening at the bottom corner; a glow behind the orbs
-      background: "radial-gradient(48% 44% at 50% 52%, var(--icon-glow) 0%, var(--icon-glow-none) 100%), radial-gradient(140% 120% at 22% 0%, var(--icon-sun) 0%, var(--icon-warm) 48%, var(--icon-hot) 82%, var(--icon-deep) 120%)",
+      // the app's own dark: its glass card, raised to ground, the azure wash up top, a glow behind the orbs
+      background: "radial-gradient(48% 44% at 50% 46%, var(--icon-glow) 0%, var(--icon-glow-none) 100%), radial-gradient(75% 60% at 50% 18%, var(--accent-wash), transparent 70%), linear-gradient(180deg, var(--raised), var(--ground) 82%)",
+      boxShadow: bleed ? "none" : "inset 0 0 0 1px var(--hairline)",
     }}>
       {SPARKS.map(([x, y, s], i) => (
         <svg key={i} viewBox="-1 -1 2 2" style={{ position: "absolute", left: (x - s / 2) * card, top: (y - s / 2) * card, width: s * card, height: s * card, overflow: "visible", filter: `drop-shadow(0 0 ${s * card * 0.25}px var(--icon-spark))` }}>
