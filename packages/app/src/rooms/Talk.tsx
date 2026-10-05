@@ -17,6 +17,7 @@ import type { Character } from "../orb/spec.ts";
 import { idOf, type Card, type Choice, type Message, type Office } from "../home/link.ts";
 import { saying, speak, speaking, stopSpeaking } from "../orb/speech.ts";
 import { type Ears, listenFor, pressToTalk } from "../orb/ears.ts";
+import { Rich } from "../ui/Rich.tsx";
 
 const bubble = (mine: boolean): CSSProperties => ({
   justifySelf: mine ? "end" : "start", maxWidth: "min(80%, 620px)", padding: "10px 14px", borderRadius: 18,
@@ -258,7 +259,8 @@ export function Talk(o: {
             <div key={m.id} style={{ display: "grid", justifyItems: m.role === "user" ? "end" : "start", minWidth: 0 }} data-orb={byId.get(m.orb)?.hue}>
               {m.role === "assistant" && nameplate(m.orb)}
               <div data-role={m.role} data-from={m.role === "assistant" ? m.orb : "you"} style={bubble(m.role === "user")}>
-                {m.content}
+                {/* an orb's reply formatted as it wrote it (owner, 10-05: "**5 people**" showed its asterisks); yours as you typed it */}
+                {m.role === "assistant" ? <Rich text={m.content} /> : m.content}
               </div>
             </div>
           ) : null,
@@ -267,7 +269,7 @@ export function Talk(o: {
           <div key={`live-${orb}`} style={{ display: "grid", justifyItems: "start", minWidth: 0 }} data-orb={byId.get(orb)?.hue}>
             {nameplate(orb)}
             <div data-role="live" data-from={orb} style={{ ...bubble(false), opacity: 0.92 }}>
-              {t}
+              <Rich text={t} />
             </div>
           </div>
         ))}

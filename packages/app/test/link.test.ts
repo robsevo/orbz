@@ -137,7 +137,7 @@ test("a private chat with an orb: your words, his reply as it streams, a card th
   let release!: () => void;
   const held = new Promise<void>((r) => (release = r));
   const model = await fakeModel(t, [
-    { chunks: ["Hello ", "Robin, ", "what are we doing today?"], hold: held },
+    { chunks: ["Hello ", "**Robin**, ", "what are we doing today?"], hold: held },
     { calls: [{ name: "shell", args: { command: "echo planted-from-chat" } }] },
     { chunks: ["Done: it said hello."] },
   ]);
@@ -164,14 +164,18 @@ test("a private chat with an orb: your words, his reply as it streams, a card th
   assert.equal(await page.evaluate(() => location.hash), "#/chat/Ash");
   const box = page.getByRole("textbox", { name: "Message Ash" });
   await page.locator('[data-stream="open"]').waitFor({ timeout: 20_000 });
-  await box.fill("hi");
+  await box.fill("hi **there**");
   await box.press("Enter");
   // his words show as he writes them: the model holds the reply open until they have been seen
   await page.locator('[data-role="live"]', { hasText: "what are we doing today?" }).waitFor({ timeout: 20_000 });
   assert.equal(await page.locator('[data-role="assistant"]').count(), 0, "before the reply is kept");
   release();
-  await page.locator('[data-role="assistant"]', { hasText: "what are we doing today?" }).waitFor({ timeout: 20_000 });
-  assert.equal(await page.locator('[data-role="user"]', { hasText: "hi" }).count(), 1, "your words, yours");
+  const reply = page.locator('[data-role="assistant"]', { hasText: "what are we doing today?" });
+  await reply.waitFor({ timeout: 20_000 });
+  // formatted as he wrote it (owner, 10-05: "**5 people**" showed its asterisks): bold, and no marks left
+  assert.equal(await reply.locator("strong").innerText(), "Robin");
+  assert.equal(await reply.innerText(), "Hello Robin, what are we doing today?");
+  assert.equal(await page.locator('[data-role="user"]', { hasText: "hi **there**" }).count(), 1, "your words, yours, as you typed them");
   // a command waits on a card until you answer it
   await box.fill("say hello in the shell");
   await box.press("Enter");
@@ -182,5 +186,5 @@ test("a private chat with an orb: your words, his reply as it streams, a card th
   await page.locator('[data-role="assistant"]', { hasText: "Done: it said hello." }).waitFor({ timeout: 20_000 });
   assert.equal(await page.locator("[data-card]").count(), 0, "answered, the card is gone");
   // and it is a private chat: no other conversation holds it
-  assert.ok(h.conversations.list("chat:ash").some((m) => m.content === "hi"));
+  assert.ok(h.conversations.list("chat:ash").some((m) => m.content === "hi **there**"));
 });
