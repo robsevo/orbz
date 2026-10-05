@@ -15,7 +15,7 @@ import { HUES, MATERIALS, stylesheet, type HueName } from "./design/tokens.ts";
 import { hex } from "./design/color.ts";
 import { Orb } from "./orb/Orb.tsx";
 import { DESIGN } from "./orb/renderer.ts";
-import { CEILING, grownOf, grownSays, type Move, SKILL_MAX, TOTAL } from "./orb/dna.ts";
+import { CEILING, grownOf, grownSays, type Growth, type Move, TOTAL } from "./orb/dna.ts";
 import { readStrand, shareOf, strandOf } from "./orb/strand.ts";
 import { Balanced, OneLine, Tall, useMore } from "./ui/Balanced.tsx";
 import { Paged } from "./ui/Paged.tsx";
@@ -233,7 +233,7 @@ function Bars({ items, max = CEILING, kind = "traits" }: { items: { name: string
       {items.map((t) => {
         const moved = Math.round((t.value - t.nature) * 10) / 10;
         return (
-          <div key={t.name} data-trait={t.name} style={{ display: "grid", gridTemplateColumns: "84px 1fr 52px", alignItems: "center", gap: 10, minWidth: 0 }}>
+          <div key={t.name} data-trait={t.name} style={{ display: "grid", gridTemplateColumns: "84px 1fr 22px 26px", alignItems: "center", gap: 10, minWidth: 0 }}>
             <span style={{ font: "600 12px/16px var(--font)", color: "var(--text-3)" }}>{t.name}</span>
             <span style={{ display: "grid", alignItems: "center", height: 16 }}>
               <span role="img" aria-label={`${t.name} ${t.value} of ${max}${moved ? `, ${moved > 0 ? "up" : "down"} ${Math.abs(moved)} from ${kind === "traits" ? "its nature" : "where it started"}` : ""}`} style={{ position: "relative", height: 6, borderRadius: 3, background: "var(--fill-2)" }}>
@@ -241,10 +241,9 @@ function Bars({ items, max = CEILING, kind = "traits" }: { items: { name: string
                 <i aria-hidden style={{ position: "absolute", top: -3, bottom: -3, left: `calc(${(t.nature / max) * 100}% - 1px)`, width: 2, borderRadius: 1, background: "var(--text-2)" }} />
               </span>
             </span>
-            <span className="num" style={{ font: "600 12px/16px var(--font)", color: "var(--text-2)", textAlign: "right", whiteSpace: "nowrap" }}>
-              {Math.round(t.value)}
-              {moved !== 0 && <span style={{ color: moved > 0 ? "var(--accent)" : "var(--text-3)" }}>{` ${moved > 0 ? "+" : "−"}${Math.abs(Math.round(moved))}`}</span>}
-            </span>
+            {/* the number in a column of its own, every one under the last; what moved it beside it (owner, 10-04) */}
+            <span className="num" style={{ font: "600 12px/16px var(--font)", color: "var(--text-2)", textAlign: "right", whiteSpace: "nowrap" }}>{Math.round(t.value)}</span>
+            <span className="num" style={{ minHeight: 16, font: "600 12px/16px var(--font)", color: moved > 0 ? "var(--accent)" : "var(--text-3)", whiteSpace: "nowrap" }}>{moved !== 0 ? `${moved > 0 ? "+" : "−"}${Math.abs(Math.round(moved))}` : ""}</span>
           </div>
         );
       })}
@@ -304,11 +303,53 @@ function Shaped({ c, moves }: { c: Character; moves: Move[] }) {
 }
 
 
+/** His level, Pokémon's way (owner, 10-04: "they should level up like pokemon"): Lv. N and how far to the
+ * next; the first time he is seen at a new level, a card says so and what it gave him. Which level was
+ * last seen is this device's. */
+function LevelUp({ c, g }: { c: Character; g: Growth }) {
+  const key = `orbs.seenLevel.${c.name.toLowerCase()}`;
+  const [fresh] = useState(() => {
+    try {
+      const seen = Number(localStorage.getItem(key) ?? "0");
+      localStorage.setItem(key, String(g.level.level));
+      return seen > 0 && g.level.level > seen ? seen : null;
+    } catch {
+      return null;
+    }
+  });
+  const [open, setOpen] = useState(fresh !== null);
+  useEffect(() => {
+    if (!open) return;
+    const t = window.setTimeout(() => setOpen(false), 6000);
+    return () => window.clearTimeout(t);
+  }, [open]);
+  const span = g.level.next === null ? 1 : g.level.next - g.level.at;
+  const into = g.level.next === null ? 1 : (g.level.xp - g.level.at) / span;
+  const gave = [...Object.entries(g.last.traits).map(([k, n]) => `+${n} ${k}`), ...Object.entries(g.last.skills).map(([k, n]) => `+${n} ${k}`)];
+  return (
+    <div data-level={g.level.level} style={{ display: "grid", gap: 6 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={{ padding: "2px 10px", borderRadius: 999, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1px var(--accent)", font: "800 13px/20px var(--font)", color: "var(--text-1)" }}>Lv. {g.level.level}</span>
+        <span role="progressbar" aria-label={`Level ${g.level.level}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(into * 100)} style={{ position: "relative", flex: "1 1 auto", height: 6, borderRadius: 3, background: "var(--fill-2)" }}>
+          <i style={{ position: "absolute", inset: 0, width: `${Math.round(into * 100)}%`, borderRadius: 3, background: "var(--accent)" }} />
+        </span>
+        <span className="num" style={{ font: "600 12px/16px var(--font)", color: "var(--text-3)", whiteSpace: "nowrap" }}>{g.level.next === null ? "top level" : `${(g.level.next - g.level.xp).toLocaleString("en-GB")} XP to Lv. ${g.level.level + 1}`}</span>
+      </div>
+      {open && (
+        <div role="status" data-level-up style={{ display: "grid", gap: 4, padding: "10px 14px", borderRadius: 14, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)", animation: "orbs-stamp 520ms var(--m-spring)" }}>
+          <span style={{ font: "800 16px/22px var(--font)", color: "var(--text-1)" }}>{c.name} grew to Lv. {g.level.level}!</span>
+          {gave.length > 0 && <span style={{ font: "600 13px/18px var(--font)", color: "var(--text-2)" }}>{gave.join(" · ")}</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Sheet({ c, onRename, replies, standing, startsAs, career }: { c: Character; onRename?: (name: string) => void; replies: Replies; standing?: Standing | null; startsAs?: "Junior" | "Senior"; career?: CareerState | null }) {
   const sh = sheetOf(c);
   // what his graded work has grown him into (PLAN 3.11), once a home has some to show
-  const grown = career ? grownOf(c, sh.leans, career.radar, career.niches, sh.dna) : null;
-  const grew = grown?.niche ? grown : null;
+  const grown = career ? grownOf(c, sh.leans, career.radar, career.niches, sh.dna, standing?.xp ?? career.xp) : null;
+  const grew = grown && grown.level.level > 1 ? grown : null; // grown past where every orb starts
   const v = voice(c.voice);
   const name = { font: "800 26px/32px var(--font)", color: "var(--accent)" } satisfies CSSProperties;
   return (
@@ -348,7 +389,8 @@ function Sheet({ c, onRename, replies, standing, startsAs, career }: { c: Charac
       </div>
       {/* on a phone the rest scrolls under his name (owner, 10-04) */}
       <Tall label={`${c.name || "Your orb"}'s card`} style={{ display: "grid", gap: "var(--s4)" }}>
-      <p style={{ margin: 0, font: "400 15px/21px var(--font)", color: "var(--text-2)", textWrap: "pretty" }}>{grew ? `${sh.bio} ${grownSays(grew)}` : sh.bio}</p>
+      {grown && <LevelUp c={c} g={grown} />}
+      <p style={{ margin: 0, font: "400 15px/21px var(--font)", color: "var(--text-2)", textWrap: "pretty" }}>{grew && grownSays(grew) ? `${sh.bio} ${grownSays(grew)}` : sh.bio}</p>
       {/* a role a licence stands behind says so: he is a persona that helps, never the professional */}
       {"limits" in SPECIALTIES[c.specialty] && (
         <p style={{ margin: 0, font: "400 13px/18px var(--font)", color: "var(--text-3)" }}>{(SPECIALTIES[c.specialty] as { limits: string }).limits}</p>
@@ -370,20 +412,21 @@ function Sheet({ c, onRename, replies, standing, startsAs, career }: { c: Charac
       </div>
       <div style={{ display: "grid", gap: "var(--s2)" }}>
         <Head>Traits</Head>
-        <Bars items={grew ? grew.traits : sh.traits} />
+        <Bars items={grew ? grew.traits : sh.traits} max={Math.max(CEILING, ...(grew ? grew.traits : sh.traits).map((t) => t.value))} />
         <span style={{ font: "400 12px/16px var(--font)", color: "var(--text-3)" }}>{TOTAL} points across them, like every orb</span>
       </div>
       <Shaped c={c} moves={grew ? [...grew.moves, ...sh.dna.moves] : sh.dna.moves} />
       <Strand key={c.name + c.seed} c={c} />
       {grew && (
         <div style={{ display: "grid", gap: "var(--s2)" }}>
-          <Head>Grown from work</Head>
-          <Bars kind="skills" max={SKILL_MAX} items={grew.skills.map((k) => ({ name: k.name, value: k.value, nature: k.start }))} />
+          <Head>Grown from work · each skill since it started</Head>
+          <Bars kind="skills" max={Math.max(5, Math.ceil(Math.max(...grew.skills.map((k) => k.value))))} items={grew.skills.map((k) => ({ name: k.name, value: k.value, nature: k.start }))} />
         </div>
       )}
       <div style={{ display: "grid", gap: "var(--s2)" }}>
         <Head>Leans toward</Head>
-        <Radar items={sh.leans} />
+        <Radar items={grew ? grew.skills : sh.leans} />
+        <span style={{ font: "400 12px/16px var(--font)", color: "var(--text-3)" }}>24 points across them, like every orb: its specialty sets the shape, its traits pull it</span>
       </div>
       </Tall>
     </div>

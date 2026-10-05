@@ -9,7 +9,7 @@ import { applyTheme, savedTheme } from "../ui/theme.ts";
 import { baseOf, HUES, SURFACES, THEMES, type ThemeId } from "../design/tokens.ts";
 import { hex } from "../design/color.ts";
 import { checkName, type Person } from "../onboarding/story.ts";
-import type { Office } from "../home/link.ts";
+import type { Office, ProjectsState } from "../home/link.ts";
 import { Devices } from "./Devices.tsx";
 import { Brains } from "./Brains.tsx";
 import { Connections } from "./Connections.tsx";
@@ -29,6 +29,39 @@ function Panel({ title, children }: { title: string; children: ReactNode }) {
       <h3 style={head}>{title}</h3>
       {children}
     </section>
+  );
+}
+
+/** Your projects folder (owner, 10-04: "all projects should also go into a file, add that in settings"):
+ * where the home copies every project's files after each run, on or off, and Copy now. */
+function ProjectsFolder({ home }: { home: Office }) {
+  const [p, setP] = useState<ProjectsState | null>(null);
+  const [dir, setDir] = useState("");
+  const [said, setSaid] = useState<string | null>(null);
+  useEffect(() => {
+    void home.projects().then((x) => (setP(x), setDir(x.dir)), (e: Error) => setSaid(e.message));
+  }, [home]);
+  const act = (f: Promise<ProjectsState>): void => void f.then((x) => (setP(x), setDir(x.dir), setSaid(null)), (e: Error) => setSaid(e.message));
+  if (!p) return null;
+  const ago = p.last ? Math.max(0, Math.round((Date.now() - p.last.at) / 60000)) : null;
+  return (
+    <Panel title="Your projects folder">
+      <span style={{ font: "400 14px/20px var(--font)", color: "var(--text-2)" }}>
+        Every project's files, copied where you can open them: each session under its name, each orb's own work under theirs. After every finished task, and whenever you say. Nothing there is ever deleted.
+      </span>
+      <form onSubmit={(e) => (e.preventDefault(), act(home.setProjects({ dir })))} style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        <input value={dir} onChange={(e) => setDir(e.target.value)} aria-label="Projects folder" size={1} style={{ flex: "1 1 260px", minWidth: 0, font: "500 14px/20px var(--font)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 10, padding: "8px 12px", boxShadow: "inset 0 0 0 1px var(--hairline)" }} />
+        <button type="submit" disabled={dir.trim() === p.dir} style={{ ...button, opacity: dir.trim() === p.dir ? 0.5 : 1 }}>Use this folder</button>
+      </form>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+        <button aria-pressed={p.on} onClick={() => act(home.setProjects({ on: !p.on }))} style={chip(p.on)}>{p.on ? "Copying: on" : "Copying: off"}</button>
+        <button onClick={() => act(home.syncProjects())} disabled={!p.on} style={{ ...button, opacity: p.on ? 1 : 0.5 }}>Copy now</button>
+        <span data-projects-last style={{ font: "400 13px/18px var(--font)", color: "var(--text-3)" }}>
+          {!p.on ? "Off: nothing is copied" : p.last ? `Last copied ${ago === 0 ? "just now" : `${ago} min ago`}: ${p.last.files} ${p.last.files === 1 ? "file" : "files"} new or changed` : "Not copied yet"}
+        </span>
+      </div>
+      {(said ?? p.why) && <span role="alert" style={{ font: "500 13px/18px var(--font)", color: "var(--alert)" }}>{said ?? p.why}</span>}
+    </Panel>
   );
 }
 
@@ -125,6 +158,7 @@ export function Settings(o: {
           </button>
         </Panel>
       )}
+      {o.home && <ProjectsFolder home={o.home} />}
       {o.home ? (
         <Brains home={o.home} />
       ) : (

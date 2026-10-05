@@ -194,7 +194,9 @@ test("frames in any colour too; the card says both, and the office keeps them", 
   assert.match(await page.locator("main").innerText(), /Beanie, coral[\s\S]*Round, honey frames/, "the office keeps it");
 });
 
-test("the first of his kind starts as the Senior, the next of that kind a Junior (owner, 10-02); it fits at both sizes", { skip }, async () => {
+// four minutes: it makes two orbs and measures every element at two sizes, three times; in the gate, beside
+// three other suites drawing in software, that ran past two (10-04)
+test("the first of his kind starts as the Senior, the next of that kind a Junior (owner, 10-02); it fits at both sizes", { skip, timeout: 240_000 }, async () => {
   const page = await open("desk");
   const pick = async (title: string): Promise<void> => {
     await page.getByRole("tab", { name: "Specialty" }).click();

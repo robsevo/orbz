@@ -6,7 +6,7 @@
 // The starter shapes are our own; the owner names and redraws them. No mouth on any of them, no
 // cheeks (owner, 2026-09-24): the eyes carry every mood.
 import { HUES, MATERIALS, type HueName, type Material } from "../design/tokens.ts";
-import { type Dna, dnaOf, dnaSays } from "./dna.ts";
+import { type Dna, dnaOf, dnaSays, leansOf } from "./dna.ts";
 import { ORB_TURNS } from "./hues.ts";
 import type { Gesture } from "./life.ts";
 import type { OrbLook } from "./renderer.ts";
@@ -593,7 +593,7 @@ export function sheetOf(c: Character): Sheet {
   return {
     title: `the ${P.label} ${S.title}`,
     traits: dna.traits,
-    leans: SKILLS.map((name, i) => ({ name, value: clamp(S.lean[i]! + (r() - 0.5) * 0.9) })),
+    leans: leansOf(S.lean, dna.traits, r).map(({ name, value }) => ({ name, value })), // weighed like the traits, pulled by them
     bio: `${c.name} is ${/^[aeiou]/.test(c.hue) ? "an" : "a"} ${c.hue} ${shapeWord}${wear} who handles ${S.focus}. ${P.blurb}. ${dnaSays(c, dna)}`,
     quirk: QUIRKS[Math.floor(r() * QUIRKS.length)]!,
     catchphrase: CATCHPHRASES[c.personality][Math.floor(r() * CATCHPHRASES[c.personality].length)]!,

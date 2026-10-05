@@ -92,43 +92,55 @@ import { SKILLS } from "../src/orb/spec.ts";
 
 /** What is wrong with a growth: no net gain, a give-back over its share (a tenth of the gain, two
  * points a skill), or a skill that went down that its work trained. */
-function growthProblems(before: number[], after: number[], trained: boolean[]): string[] {
+function growthProblems(before: number[], after: number[], trained: boolean[], each = 2): string[] {
   const out: string[] = [];
   const gained = after.reduce((s, v, i) => s + Math.max(0, v - before[i]!), 0);
   const gave = after.reduce((s, v, i) => s + Math.max(0, before[i]! - v), 0);
   if (gained > 0 && gained - gave <= 0) out.push("no net gain");
   if (gave > gained * 0.1 + 1e-9) out.push(`gave back ${gave.toFixed(1)} of ${gained.toFixed(1)}`);
   after.forEach((v, i) => {
-    if (before[i]! - v > 2 + 1e-9) out.push(`${SKILL_NAMES[i]} lost ${(before[i]! - v).toFixed(1)}`);
+    if (before[i]! - v > each + 1e-9) out.push(`${SKILL_NAMES[i]} lost ${(before[i]! - v).toFixed(1)}`);
     if (trained[i] && v < before[i]!) out.push(`${SKILL_NAMES[i]} was trained and went down`);
   });
   return out;
 }
 
-test("work grows an orb into its niche: more gained than given back, the most-worked area most", () => {
-  assert.deepEqual([...SKILL_NAMES], [...SKILLS], "the same skills as the sheet");
+test("levels, Pokémon's way: XP brings a level; each level adds a point to its traits and half a point to its web, its niche most", async () => {
+  const { levelOf, xpFor, TRAIT_PER_LEVEL, SKILL_PER_LEVEL, SKILL_TOTAL } = await import("../src/orb/dna.ts");
+  // the curve: 1 at nothing, 2 at 4, 5 at 256, 10 at 2,916, never past 100, never back
+  assert.deepEqual([0, 3, 4, 255, 256, 2915, 2916, 1e12].map((x) => levelOf(x).level), [1, 1, 2, 4, 5, 9, 10, 100]);
+  for (let l = 1; l < 100; l++) assert.ok(xpFor(l + 1) > xpFor(l), `level ${l + 1} needs more than ${l}`);
+  assert.deepEqual(SKILL_NAMES, SKILLS, "the same skills as the sheet");
   const c = surprise(7);
-  const leans = sheetOf(c).leans;
+  const sheet = sheetOf(c);
   const radar = { finance: { xp: 1800 }, data: { xp: 600 }, research: { xp: 150 } };
-  const g = grownOf(c, leans, radar, [{ word: "invoices" }]);
+  const g = grownOf(c, sheet.leans, radar, [{ word: "invoices" }]);
+  const L = g.level.level;
+  assert.equal(L, levelOf(2550).level);
   const before = g.skills.map((k) => k.start);
   const after = g.skills.map((k) => k.value);
   const trained = SKILL_NAMES.map((n) => n === "Money" || n === "Data" || n === "Research");
-  assert.deepEqual(growthProblems(before, after, trained), []);
+  assert.deepEqual(growthProblems(before, after, trained, 0.3), []);
+  const web = after.reduce((a, b) => a + b, 0);
+  assert.ok(web <= SKILL_TOTAL + SKILL_PER_LEVEL * (L - 1) + 0.05 && web >= SKILL_TOTAL + SKILL_PER_LEVEL * (L - 1) * 0.9 - 0.05, `the web grew by about ${SKILL_PER_LEVEL} a level (${web.toFixed(1)} at Lv. ${L})`);
+  assert.equal(g.traits.reduce((a, t) => a + t.value, 0), TOTAL + TRAIT_PER_LEVEL * (L - 1), "a trait point a level, on the same total every orb began with");
   assert.equal(g.niche?.skill, "Money", "the area it works most in is its niche");
   const grew = (n: string): number => g.skills.find((k) => k.name === n)!.value - g.skills.find((k) => k.name === n)!.start;
   assert.ok(grew("Money") > grew("Data") && grew("Data") > grew("Research"), "and grows most");
-  assert.deepEqual(traitProblems(g.traits.map((t) => t.value)), [], "the trait total holds through growth");
   assert.ok(g.moves.some((m) => m.why === "finance work"), "its traits drift with its work");
+  assert.equal(Object.values(g.last.traits).reduce((a, b) => a + b!, 0), TRAIT_PER_LEVEL, "its last level gave one trait point");
+  assert.ok(Object.keys(g.last.skills).includes("Money"), "and some of its niche");
   assert.equal(grownSays(g), "Grown into money work, invoices above all.");
-  // no work, no growth, nothing given back, nothing said
-  const none = grownOf(c, leans, {});
+  // no work, no level, no change, nothing said
+  const none = grownOf(c, sheet.leans, {});
+  assert.equal(none.level.level, 1);
   assert.deepEqual(none.skills.map((k) => k.value), before);
+  assert.deepEqual(none.traits.map((t) => t.value), sheet.dna.traits.map((t) => t.value));
   assert.equal(grownSays(none), null);
-  // controls: a give-back larger than the gain, a trained skill that fell, a loss past two points
-  assert.ok(growthProblems([10, 10], [12, 7.5], [true, false]).some((p) => p.startsWith("gave back")));
-  assert.ok(growthProblems([10, 10], [9, 10], [true, false]).includes("Planning was trained and went down"));
-  assert.ok(growthProblems([10, 10, 10], [20, 7, 10], [true, false, false]).includes("Building lost 3.0"));
+  // controls: a give-back larger than its share, a trained skill that fell, a loss past the limit
+  assert.ok(growthProblems([3, 3], [4, 2.5], [true, false], 0.3).some((p) => p.startsWith("gave back")));
+  assert.ok(growthProblems([3, 3], [2.9, 3], [true, false], 0.3).includes("Planning was trained and went down"));
+  assert.ok(growthProblems([3, 3, 3], [6, 2.5, 3], [true, false, false], 0.3).includes("Building lost 0.5"));
 });
 
 test("a DNA strand makes the same orb again, name and traits and all; a typo is caught, not read as another", () => {
@@ -167,4 +179,27 @@ test("a DNA strand makes the same orb again, name and traits and all; a typo is 
   }
   assert.equal(readStrand("").ok, false);
   assert.equal(readStrand(`2${flat.slice(1)}`).ok, false, "a newer version is refused, not misread");
+});
+
+test("the skills web is weighed like the traits: 24 points for every orb, pulled by its traits", async () => {
+  const { leansOf, SKILL_TOTAL } = await import("../src/orb/dna.ts");
+  const { SPECIALTIES } = await import("../src/orb/spec.ts");
+  const still = (): number => 0.5; // no dice
+  const traits = (over: Partial<Record<string, number>>) => TRAITS.map((name) => ({ name, value: over[name] ?? 10, nature: 10 }));
+  for (const [k, sp] of Object.entries(SPECIALTIES)) {
+    const web = leansOf(sp.lean, traits({}), still);
+    assert.equal(Math.round(web.reduce((a, s) => a + s.value, 0) * 10), SKILL_TOTAL * 10, `${k} weighs ${SKILL_TOTAL}`);
+    assert.ok(web.every((s) => s.value >= 1 && s.value <= 5), k);
+  }
+  const lean = SPECIALTIES.general.lean;
+  const research = (t: ReturnType<typeof traits>) => leansOf(lean, t, still).find((s) => s.name === "Research")!.value;
+  const care = (t: ReturnType<typeof traits>) => leansOf(lean, t, still).find((s) => s.name === "Care")!.value;
+  assert.ok(research(traits({ Curiosity: 16, Focus: 4 })) > research(traits({ Curiosity: 4, Focus: 16 })), "curiosity pulls toward research");
+  assert.ok(care(traits({ Care: 17, Nerve: 3 })) > care(traits({ Care: 3, Nerve: 17 })), "care pulls toward care");
+  assert.deepEqual(leansOf(lean, traits({ Calm: 14, Pace: 6 }), still), leansOf(lean, traits({ Calm: 14, Pace: 6 }), still), "control: the same traits, the same web");
+  // and on the card: the same orb, two hats, two webs, the same weight
+  const a = sheetOf({ ...ASH, hat: "wizard hat" }).leans;
+  const b = sheetOf({ ...ASH, hat: "eyeshade" }).leans;
+  assert.notDeepEqual(a, b, "a change of traits changes the web");
+  assert.equal(Math.round(a.reduce((x, s) => x + s.value, 0) * 10), Math.round(b.reduce((x, s) => x + s.value, 0) * 10));
 });

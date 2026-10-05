@@ -57,6 +57,7 @@ import { AgentRunner, type AgentOptions } from "./agent/loop.ts";
 import { Background, runCommand, type ToolResult } from "./agent/tools.ts";
 import { sandboxFor, type Wrap } from "./computer/sandbox.ts";
 import { workspaceOf } from "./workspace.ts";
+import { Projects } from "./projects.ts";
 import { feedback } from "./agent/trace.ts";
 import type { Decision, ToolDef } from "./agent/tools.ts";
 import { Guard, Turns } from "./rules/guard.ts";
@@ -73,6 +74,9 @@ import { version } from "./version.ts";
 
 export type HomeOptions = {
   dataDir: string;
+  /** Your projects folder (projects.ts): where, and whether it starts on; off unless asked, so a test never
+   * writes outside its own data (the real home, main.ts, turns it on). */
+  projects?: { dir?: string; on?: boolean };
   /** What does the work of a run. Default: the agent loop (PLAN 1.5) on the preset's big brain. */
   runner?: Runner;
   /** Agent loop settings (tools, step limit, compaction) when the default runner is used. */
@@ -160,6 +164,8 @@ export class Home {
   readonly chatgpt: ChatGPT;
   /** The brain order (PLAN 1.11): ChatGPT, one Gemini key, the preset's key, the local coder. */
   readonly brains: Brains;
+  /** Your projects folder (projects.ts): every session's and every orb's files, copied where you can open them. */
+  readonly projects: Projects;
   /** What each orb has learned, each line approved by the person (PLAN 3.9). */
   readonly learned: Learned;
   /** What happens as it happens, for whoever is watching (the terminal, the web app): every event
@@ -294,6 +300,27 @@ export class Home {
     const { decide: _d, matcher: _m, onText: userOnText, ...agentOpts } = opts.agent ?? {};
     this.live.setMaxListeners(0);
     this.events.listen((e) => this.live.emit("event", e));
+    // every project's files, copied to your folder once a run has finished (a moment after, so a burst of
+    // runs copies once)
+    this.projects = new Projects({
+      dataDir: this.dataDir,
+      now: () => this.clock.now(),
+      ...(opts.projects?.dir && { defaultDir: opts.projects.dir }),
+      defaultOn: opts.projects?.on ?? false,
+      sources: () => [
+        ...this.team.list().map((t) => ({ name: t.title || `Session ${t.id}`, dir: this.sessionWorkspace(t.id) })),
+        ...this.inbox.orbs({ all: true }).map((o) => ({ name: `${o.name}'s work`, dir: workspaceOf(this.dataDir, o.id) })),
+      ],
+    });
+    let copying: ReturnType<typeof setTimeout> | null = null;
+    this.events.listen((e) => {
+      if (e.type !== "run.finished" || copying) return;
+      copying = setTimeout(() => {
+        copying = null;
+        this.projects.sync();
+      }, 1500);
+      copying.unref?.();
+    });
     // Ash's pagecheck, through the kit (PLAN 4.1): what a built page really renders; without the kit, nothing can look
     const pageCheck: PageCheck | null = kit
       ? async (target) => {

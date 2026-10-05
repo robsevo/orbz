@@ -49,7 +49,7 @@ const localPort = Number(process.env.ORBS_PORT ?? 47070);
 
 let home: Home;
 try {
-  home = Home.open({ dataDir, kit: true, ...(choice && { brain: { preset: presets[choice]!() } }) });
+  home = Home.open({ dataDir, kit: true, projects: { on: true }, ...(choice && { brain: { preset: presets[choice]!() } }) });
 } catch (e) {
   if (e instanceof HomeLockedError) {
     console.error(e.message);
@@ -58,6 +58,7 @@ try {
   throw e;
 }
 home.start();
+home.projects.sync(); // your projects folder has what there is at once, then after every finished run
 const door = await serve(home, { port: localPort, portFallback: true, ...(names.length && { remote: { names, cert: readFileSync(certFile!), key: readFileSync(keyFile!), port: remotePort } }) });
 console.log(`orbs home ${version} ready on http://127.0.0.1:${door.port} (data ${home.dataDir}, pid ${process.pid})`);
 // the app, on this machine: a link good once, for five minutes (PLAN 2.4)

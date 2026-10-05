@@ -19,6 +19,7 @@ import { fileURLToPath } from "node:url";
 import type { Home } from "./home.ts";
 import { UnknownOrbError } from "./inbox.ts";
 import { KeyRefusedError } from "./brain/brains.ts";
+import { ProjectsRefused } from "./projects.ts";
 import { SPECIALTY_FAMILIES, type Specialty } from "./brain/constitution.ts";
 import { SpendCapError } from "./brain/spend.ts";
 import { cookieOf, deviceName, SESSION_COOKIE, SESSION_MS, type Sessions } from "./sessions.ts";
@@ -413,6 +414,20 @@ async function handle(
   }
   // The brain order (PLAN 1.11): where each brain stands, the Gemini key, the local coder. A reply
   // never carries the key; a refused key is never kept.
+  // Your projects folder (projects.ts): where every project's files are copied, on or off, copy now
+  if (method === "GET" && url.pathname === "/projects") return { projects: home.projects.state() };
+  if (method === "POST" && url.pathname === "/projects") {
+    const b = await body(req);
+    try {
+      return { projects: home.projects.set({ ...(typeof b.dir === "string" && { dir: b.dir }), ...(typeof b.on === "boolean" && { on: b.on }) }) };
+    } catch (e) {
+      throw e instanceof ProjectsRefused ? new HttpError(400, e.message) : e;
+    }
+  }
+  if (method === "POST" && url.pathname === "/projects/sync") {
+    home.projects.sync();
+    return { projects: home.projects.state() };
+  }
   if (method === "GET" && url.pathname === "/brains") return { brains: home.brains.status() };
   if (parts[0] === "brains" && parts[1] === "gemini" && parts.length === 2) {
     if (method === "DELETE") {

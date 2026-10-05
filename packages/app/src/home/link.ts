@@ -92,6 +92,8 @@ export type Standing = {
   left: number | null;
   now: number;
 };
+/** Your projects folder, as the home has it: where, on or off, the last copy, or why it could not. */
+export type ProjectsState = { dir: string; on: boolean; last: { at: number; files: number } | null; why: string | null };
 /** The brain order (PLAN 1.11), as the home has it: each brain's state, and ChatGPT's own. */
 export type BrainState = { id: "chatgpt" | "gemini" | "key" | "local"; label: string; state: "ready" | "resting" | "absent"; why: string | null; until: number | null; setup: string };
 export type Brains = { order: BrainState[]; gemini: { model: string } | null; local: { baseUrl: string; model: string } | null; search: boolean };
@@ -165,6 +167,10 @@ export interface Office {
   /** The brains (PLAN 1.11): the order and ChatGPT's sign-in; one Gemini key, a web-search key and
    * a local coder, each set or taken away (a key goes to the home's keychain, never back). */
   brains(): Promise<Brains>;
+  /** Your projects folder (the home's projects.ts): where every project's files are copied. */
+  projects(): Promise<ProjectsState>;
+  setProjects(p: { dir?: string; on?: boolean }): Promise<ProjectsState>;
+  syncProjects(): Promise<ProjectsState>;
   chatgpt(): Promise<ChatGPT>;
   chatgptSignIn(): Promise<string>;
   chatgptSignOut(): Promise<void>;
@@ -451,6 +457,15 @@ export function doorOffice(base: Character): Office {
     },
     async brains() {
       return (await call<{ brains: Brains }>("../brains")).brains;
+    },
+    async projects() {
+      return (await call<{ projects: ProjectsState }>("../projects")).projects;
+    },
+    async setProjects(p) {
+      return (await call<{ projects: ProjectsState }>("../projects", { method: "POST", body: JSON.stringify(p) })).projects;
+    },
+    async syncProjects() {
+      return (await call<{ projects: ProjectsState }>("../projects/sync", { method: "POST" })).projects;
     },
     async chatgpt() {
       return (await call<{ chatgpt: ChatGPT }>("../chatgpt")).chatgpt;

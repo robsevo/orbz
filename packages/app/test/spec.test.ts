@@ -79,7 +79,8 @@ test("the character sheet: its traits are its DNA, leanings in 1..5, a title fro
     assert.equal(sh.traits.length, 7);
     assert.equal(sh.leans.length, 8);
     assert.deepEqual(sh.traits, sh.dna.traits, "the sheet's traits are the DNA's");
-    for (const t of sh.leans) assert.ok(t.value >= 1 && t.value <= 5 && Number.isInteger(t.value), `${t.name} ${t.value}`);
+    for (const t of sh.leans) assert.ok(t.value >= 1 && t.value <= 5, `${t.name} ${t.value}`);
+    assert.equal(Math.round(sh.leans.reduce((a, t) => a + t.value, 0) * 10), 240, "the web weighs 24 points, like every orb's");
     assert.equal(sh.title, `the ${PERSONALITIES[c.personality].label} ${SPECIALTIES[c.specialty].title}`);
     assert.doesNotMatch(sh.bio, /\ba [aeiou]/i, sh.bio);
   }

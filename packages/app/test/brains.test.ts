@@ -60,6 +60,40 @@ test("the brains in Settings: the order, a Gemini key kept (never shown back), a
   assert.deepEqual(await order(), ["chatgpt:absent", "gemini:absent", "local:absent"]);
   assert.ok(await brains.getByRole("button", { name: "Continue with ChatGPT" }).isVisible());
 
+  // your projects folder (owner, 10-04): off in a test home, a folder of yours, on, copied now
+  const folder = page.getByRole("region", { name: "Your projects folder" });
+  await folder.waitFor({ timeout: 20_000 });
+  assert.match(await folder.innerText(), /Off: nothing is copied/);
+  const out = mkdtempSync(join(tmpdir(), "orbs-projects-ui-"));
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+  await folder.getByLabel("Projects folder").fill("not/a/whole/path");
+  await folder.getByRole("button", { name: "Use this folder" }).click();
+  await folder.getByRole("alert").waitFor({ timeout: 10_000 });
+  assert.match(await folder.getByRole("alert").innerText(), /whole path/);
+  await folder.getByLabel("Projects folder").fill(out);
+  await folder.getByRole("button", { name: "Use this folder" }).click();
+  await folder.getByRole("button", { name: "Copying: off" }).click();
+  await folder.getByRole("button", { name: "Copying: on" }).waitFor({ timeout: 10_000 });
+  await folder.getByRole("button", { name: "Copy now" }).click();
+  await folder.locator("[data-projects-last]").filter({ hasText: /Last copied just now/ }).waitFor({ timeout: 10_000 });
+  assert.equal(h.projects.state().dir, out);
+
+  // web search: off at a glance until a key is kept, then on, in green (owner, 10-04)
+  assert.equal(await brains.locator("[data-search]").getAttribute("data-search"), "off");
+  await brains.getByLabel("Your Tavily key").fill("tvly-test-not-a-real-key-000000000000");
+  await brains.getByLabel("Your Tavily key").locator("xpath=ancestor::*[.//button[normalize-space()='Keep']][1]").getByRole("button", { name: "Keep" }).click();
+  await brains.locator('[data-search="on"]').waitFor({ timeout: 20_000 });
+  assert.match(await brains.locator("[data-search]").innerText(), /On: your orbs can search the web/);
+  const [shown, green] = await brains.locator("[data-search]").evaluate((el) => {
+    const probe = document.createElement("i");
+    probe.style.color = "var(--ok)";
+    el.append(probe);
+    const want = getComputedStyle(probe).color;
+    probe.remove();
+    return [getComputedStyle(el).color, want];
+  });
+  assert.equal(shown, green, "in the theme's own green");
+
   await brains.getByLabel("Your Gemini key").fill(KEY);
   await brains.getByRole("button", { name: "Keep" }).first().click();
   await brains.locator('[data-brain="gemini"][data-state="ready"]').waitFor({ timeout: 20_000 });

@@ -250,39 +250,59 @@ const AREA_TRAIT: Record<string, Spec> = {
   bookings: "Curiosity>Care 1", teaching: "Nerve>Care 1",
 };
 const HABIT_XP = 400;
-/** A skill's points from its starting lean (1..5): 4 to 20, out of SKILL_MAX once grown. */
-export const SKILL_MAX = 40;
-const GAIN_MAX = 16; // what a skill can gain from work, at most (before its niche)
 const NICHE = 1.25; // the niche gains a quarter more
 const GIVE_BACK = 0.1; // the unused give back at most this share of the gain
-const GIVE_EACH = 2; // and at most this many points each
+const GIVE_EACH = 0.3; // and at most this much each (on the web's 0 to 5)
+
+// ── levels, Pokémon's way (owner, 10-04: "getting experience points should make their web and whatever
+// they are change or add per level they reach. they should level up like pokemon") ──────────────────────
+// Level L needs XP_PER × (L − 1)³ XP in all (2 at 4, 5 at 256, 10 at 2,916, 20 at 27,436), up to 100. Each
+// level past the first adds TRAIT_PER_LEVEL to its traits and SKILL_PER_LEVEL to its skills' web, where its
+// work has been (its niche most); the total it started with is the same for every orb, the growth its own.
+export const XP_PER = 4;
+export const MAX_LEVEL = 100;
+export const TRAIT_PER_LEVEL = 1;
+export const SKILL_PER_LEVEL = 0.5;
+export const xpFor = (level: number): number => XP_PER * (Math.max(1, level) - 1) ** 3;
+/** The level for so much XP, where it began and where the next one is. */
+export function levelOf(xp: number): { level: number; at: number; next: number | null } {
+  let level = Math.max(1, Math.min(MAX_LEVEL, Math.floor(Math.cbrt(Math.max(0, xp) / XP_PER)) + 1));
+  while (level < MAX_LEVEL && xpFor(level + 1) <= xp) level++;
+  while (level > 1 && xpFor(level) > xp) level--;
+  return { level, at: xpFor(level), next: level < MAX_LEVEL ? xpFor(level + 1) : null };
+}
 
 export type Growth = {
+  level: { level: number; at: number; next: number | null; xp: number };
+  /** Its web now, on the web's own scale (it starts at SKILL_TOTAL and grows with each level). */
   skills: { name: Skill; value: number; start: number }[];
   /** The skill it has grown into most, and the word its work is most about, once it has grown. */
   niche: { skill: Skill; word: string | null } | null;
-  /** Its traits after its work, inside the same TOTAL, and what moved them. */
+  /** Its traits now: the same TOTAL it started with, moved by its work, and a point more each level. */
   traits: Dna["traits"];
   moves: Move[];
+  /** What its last level gave it, for the level-up's card. */
+  last: { traits: Partial<Record<Trait, number>>; skills: Partial<Record<Skill, number>> };
 };
 
-/** What an orb has grown into from its earned XP by area (`radar`) and its niche words. */
-export function grownOf(c: Character, leans: { name: string; value: number }[], radar: Record<string, { xp: number }>, niches: { word: string }[] = [], dna: Dna = dnaOf(c)): Growth {
-  const start = SKILL_NAMES.map((n) => (leans.find((l) => l.name === n)?.value ?? 1) * 4);
+/** Its traits and web at a level, from where its XP was earned (`radar`, by area). */
+function grownAt(c: Character, start: number[], radar: Record<string, { xp: number }>, dna: Dna, level: number): { skills: number[]; traits: number[]; moves: Move[]; top: number } {
+  const ups = level - 1;
   const xp = SKILL_NAMES.map((n) => Object.entries(radar).reduce((sum, [area, r]) => sum + (AREA_SKILLS[area]?.[n] ?? 0) * Math.max(0, r.xp), 0));
-  const top = xp.indexOf(Math.max(...xp));
-  const tenth = (x: number): number => Math.floor(x * 10 + 1e-9) / 10; // down to a tenth, so the share is never overshot
-  // what each skill gains, as far as its ceiling lets it
-  const gain = xp.map((x, i) => (x <= 0 ? 0 : tenth(Math.min(SKILL_MAX - start[i]!, GAIN_MAX * (1 - Math.exp(-x / 600)) * (i === top ? NICHE : 1)))));
+  const worked = xp.some((x) => x > 0);
+  const top = worked ? xp.indexOf(Math.max(...xp)) : start.indexOf(Math.max(...start));
+  // the web: SKILL_PER_LEVEL a level, where the work was (its niche a quarter more), else along its shape
+  const weight = (worked ? xp : start).map((x, i) => x * (i === top ? NICHE : 1));
+  const wsum = weight.reduce((a, b) => a + b, 0) || 1;
+  const points = SKILL_PER_LEVEL * ups;
+  const gain = weight.map((w) => (points * w) / wsum);
   const gained = gain.reduce((a, b) => a + b, 0);
-  // the unused give back, evenly, within their share and their own limit
-  const unused = xp.map((x, i) => (x <= 0 ? i : -1)).filter((i) => i >= 0);
-  const each = unused.length ? tenth(Math.min(GIVE_EACH, (gained * GIVE_BACK) / unused.length)) : 0;
-  const skills = SKILL_NAMES.map((name, i) => {
-    const v = start[i]! + gain[i]! - (unused.includes(i) ? Math.min(each, start[i]! - 1) : 0);
-    return { name, value: Math.round(v * 10) / 10, start: start[i]! };
-  });
-  // the traits drift with the work, inside the total
+  const unused = worked ? xp.map((x, i) => (x <= 0 ? i : -1)).filter((i) => i >= 0) : [];
+  // in whole tenths, rounded down, as the card shows them: shown, it never gives back more than its share
+  const each = unused.length ? Math.floor(Math.min(GIVE_EACH, (gained * GIVE_BACK) / unused.length) * 10 + 1e-9) / 10 : 0;
+  const skills = start.map((s, i) => Math.round((s + gain[i]! - (unused.includes(i) ? Math.min(each, s - 1) : 0)) * 100) / 100);
+  // the traits: drifting with the work inside the total, then a point a level, most to what its work
+  // brings out, the rest to what it is most by nature
   const v = dna.traits.map((t) => t.value);
   const moves: Move[] = [];
   for (const [area, r] of Object.entries(radar)) {
@@ -292,10 +312,97 @@ export function grownOf(c: Character, leans: { name: string; value: number }[], 
     const moved = apply(v, { ...m, n: Math.min(3, Math.floor(r.xp / HABIT_XP)) });
     if (moved) moves.push({ from: m.from, to: m.to, n: moved, why: `${area} work` });
   }
-  const niche = gained > 0 ? { skill: SKILL_NAMES[top]!, word: niches[0]?.word ?? null } : null;
-  return { skills, niche, traits: dna.traits.map((t, i) => ({ ...t, value: v[i]! })), moves };
+  const topArea = Object.entries(radar).filter(([, r]) => r.xp > 0).sort((a, b) => b[1].xp - a[1].xp)[0]?.[0];
+  const byWork = topArea && AREA_TRAIT[topArea] ? TRAITS.indexOf(read(AREA_TRAIT[topArea]!).to) : -1;
+  const nature = dna.traits.map((t) => t.nature);
+  const byNature = nature.indexOf(Math.max(...nature));
+  for (let k = 1; k <= ups * TRAIT_PER_LEVEL; k++) {
+    const i = byWork >= 0 && (k % 5 !== 0 && k % 5 !== 3) ? byWork : byNature; // three in five to its work, two to its nature
+    v[i] = v[i]! + 1;
+  }
+  return { skills, traits: v, moves, top };
+}
+
+/** What an orb has grown into: its level from its XP (`xp`, all it earned; else the radar's sum), and
+ * its traits and web at that level, from where the XP was earned. */
+export function grownOf(c: Character, leans: { name: string; value: number }[], radar: Record<string, { xp: number }>, niches: { word: string }[] = [], dna: Dna = dnaOf(c), xp?: number): Growth {
+  const total = xp ?? Object.values(radar).reduce((a, r) => a + Math.max(0, r.xp), 0);
+  const lv = levelOf(total);
+  const start = SKILL_NAMES.map((n) => leans.find((l) => l.name === n)?.value ?? 1);
+  const now = grownAt(c, start, radar, dna, lv.level);
+  const before = grownAt(c, start, radar, dna, Math.max(1, lv.level - 1));
+  const last: Growth["last"] = { traits: {}, skills: {} };
+  TRAITS.forEach((t, i) => (now.traits[i]! > before.traits[i]! ? (last.traits[t] = now.traits[i]! - before.traits[i]!) : undefined));
+  SKILL_NAMES.forEach((sk, i) => (now.skills[i]! - before.skills[i]! >= 0.05 ? (last.skills[sk] = Math.round((now.skills[i]! - before.skills[i]!) * 10) / 10) : undefined));
+  const grew = lv.level > 1;
+  return {
+    level: { ...lv, xp: total },
+    skills: SKILL_NAMES.map((name, i) => ({ name, value: Math.round(now.skills[i]! * 10) / 10, start: start[i]! })),
+    niche: grew && Object.values(radar).some((r) => r.xp > 0) ? { skill: SKILL_NAMES[now.top]!, word: niches[0]?.word ?? null } : null,
+    traits: dna.traits.map((t, i) => ({ ...t, value: now.traits[i]! })),
+    moves: now.moves,
+    last,
+  };
 }
 
 /** What it has grown into, in a sentence, once it has. */
 export const grownSays = (g: Growth): string | null =>
   g.niche ? `Grown into ${g.niche.skill.toLowerCase()} work${g.niche.word ? `, ${g.niche.word} above all` : ""}.` : null;
+
+// ── the skills web, weighed like the traits (owner, 10-04: "when the traits change, so should the web, it
+// should be affected in certain ways but also even and weighed like traits are") ───────────────────────
+// Every orb's eight skills add up to SKILL_TOTAL (an average of 3 on the web's 0 to 5), each between 1
+// and 5: its specialty gives the shape, then its traits move points between skills, never adding any.
+export const SKILL_TOTAL = 24;
+/** How a trait above (or below) the middle pulls the skills: Curiosity toward Research, Care toward Care. */
+const PULL: Record<Trait, Partial<Record<Skill, number>>> = {
+  Pace: { Building: 0.5, Planning: 0.2, Research: -0.4, Design: -0.2 },
+  Care: { Care: 0.8, Words: 0.3, Building: -0.2, Money: -0.1 },
+  Curiosity: { Research: 0.8, Design: 0.3, Data: 0.2, Planning: -0.2 },
+  Humour: { Words: 0.5, Design: 0.3, Care: 0.2, Data: -0.3, Money: -0.2 },
+  Focus: { Data: 0.5, Building: 0.4, Money: 0.3, Design: -0.1, Care: -0.2 },
+  Calm: { Planning: 0.5, Money: 0.3, Care: 0.2, Building: -0.1 },
+  Nerve: { Money: 0.4, Building: 0.3, Planning: 0.2, Care: -0.3 },
+};
+const PULL_STRENGTH = 1.1;
+
+/** Points spread to `total`, each kept within lo..hi, what one gives up going to those with room. */
+function weigh(v: number[], total: number, lo: number, hi: number): number[] {
+  const out = [...v];
+  for (let pass = 0; pass < 20; pass++) {
+    for (let i = 0; i < out.length; i++) out[i] = Math.min(hi, Math.max(lo, out[i]!));
+    const off = total - out.reduce((a, b) => a + b, 0);
+    if (Math.abs(off) < 1e-9) break;
+    const room = out.map((x) => (off > 0 ? hi - x : x - lo));
+    const sum = room.reduce((a, b) => a + b, 0);
+    if (sum <= 0) break;
+    for (let i = 0; i < out.length; i++) out[i] = out[i]! + (off * room[i]!) / sum;
+  }
+  return out;
+}
+
+/** The skills web: the specialty's shape weighed to SKILL_TOTAL, pulled by the traits, a little of the
+ * dice (`r`: eight draws, as the sheet always took them), to a tenth, adding up to SKILL_TOTAL. */
+export function leansOf(lean: readonly number[], traits: Dna["traits"], r: () => number): { name: Skill; value: number; base: number }[] {
+  const sum = lean.reduce((a, b) => a + b, 0) || 1;
+  const base = weigh(lean.map((x) => (x * SKILL_TOTAL) / sum), SKILL_TOTAL, 1, 5);
+  const pull = SKILL_NAMES.map((s) => traits.reduce((acc, t) => acc + ((t.value - TOTAL / TRAITS.length) / 10) * (PULL[t.name][s] ?? 0), 0));
+  const jitter = SKILL_NAMES.map(() => (r() - 0.5) * 0.3);
+  const mean = (xs: number[]): number => xs.reduce((a, b) => a + b, 0) / xs.length;
+  const pm = mean(pull);
+  const jm = mean(jitter);
+  const moved = weigh(base.map((b, i) => b + PULL_STRENGTH * (pull[i]! - pm) + (jitter[i]! - jm)), SKILL_TOTAL, 1, 5);
+  // to a tenth, the total kept: what rounding lost or gained, a tenth at a time, to (or from) the biggest
+  // that has room for it
+  const tenths = moved.map((x) => Math.round(x * 10));
+  let diff = SKILL_TOTAL * 10 - tenths.reduce((a, b) => a + b, 0);
+  while (diff !== 0) {
+    const step = Math.sign(diff);
+    const can = tenths.map((t, i) => (step > 0 ? t < 50 : t > 10) ? i : -1).filter((i) => i >= 0);
+    if (!can.length) break;
+    const i = can.reduce((best, j) => (tenths[j]! > tenths[best]! ? j : best), can[0]!);
+    tenths[i] = tenths[i]! + step;
+    diff -= step;
+  }
+  return SKILL_NAMES.map((name, i) => ({ name, value: tenths[i]! / 10, base: Math.round(base[i]! * 10) / 10 }));
+}

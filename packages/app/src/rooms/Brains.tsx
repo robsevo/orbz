@@ -123,7 +123,14 @@ export function Brains({ home }: { home: Office }) {
         <Key label="Your Gemini key" kept={Boolean(now?.gemini)} save={(k) => act(home.setKey("gemini", k))} clear={() => act(home.setKey("gemini", null))} />
       </div>
       <div style={{ display: "grid", gap: 8 }}>
-        <span style={name}>Web search, for the researchers</span>
+        <span style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+          <span style={name}>Web search, for the researchers</span>
+          {/* on or off at a glance (owner, 10-04: "if the websearch api is active, make sure its shown green") */}
+          <span data-search={now?.search ? "on" : "off"} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "2px 10px", borderRadius: 999, font: "700 12px/18px var(--font)", color: now?.search ? "var(--ok)" : "var(--text-3)", background: "var(--fill)", boxShadow: `inset 0 0 0 1px ${now?.search ? "var(--ok)" : "var(--hairline)"}` }}>
+            <i aria-hidden style={{ width: 8, height: 8, borderRadius: "50%", background: now?.search ? "var(--ok)" : "var(--text-3)" }} />
+            {now?.search ? "On: your orbs can search the web" : "Off: add a Tavily key to turn it on"}
+          </span>
+        </span>
         <Key label="Your Tavily key" kept={Boolean(now?.search)} save={(k) => act(home.setKey("search", k))} clear={() => act(home.setKey("search", null))} />
       </div>
       <form
