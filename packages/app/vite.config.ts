@@ -4,6 +4,8 @@
 // Installable (PLAN 2.7): the build writes the web app manifest and the page's theme colour from
 // the tokens (the only place a colour is written), with icons drawn from the orb itself
 // (`public/icons/`, made by `tools/shoot_icons.ts`).
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import { SURFACES } from "./src/design/tokens.ts";
@@ -12,6 +14,10 @@ import { hex } from "./src/design/color.ts";
 const ground = hex(SURFACES.dark.ground);
 
 function installable(): Plugin {
+  // each icon's address carries a stamp of what is in it: a phone keeps the icon it once fetched for an
+  // address however it is served (owner, 10-04: "orbz logo still not changed for mobile"), so a new icon
+  // needs a new address
+  const icon = (file: string): string => `icons/${file}?v=${createHash("sha256").update(readFileSync(new URL(`./public/icons/${file}`, import.meta.url))).digest("hex").slice(0, 10)}`;
   const manifest = {
     name: "Orbz",
     short_name: "Orbz",
@@ -22,9 +28,9 @@ function installable(): Plugin {
     background_color: ground,
     theme_color: ground,
     icons: [
-      { src: "icons/orbs-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
-      { src: "icons/orbs-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
-      { src: "icons/orbs-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+      { src: icon("orbs-192.png"), sizes: "192x192", type: "image/png", purpose: "any" },
+      { src: icon("orbs-512.png"), sizes: "512x512", type: "image/png", purpose: "any" },
+      { src: icon("orbs-maskable-512.png"), sizes: "512x512", type: "image/png", purpose: "maskable" },
     ],
   };
   return {
@@ -35,7 +41,7 @@ function installable(): Plugin {
         ctx.filename.endsWith("orbs.html")
           ? html.replace(
               "</head>",
-              `    <link rel="manifest" href="manifest.webmanifest" />\n    <meta name="theme-color" content="${ground}" />\n    <link rel="icon" type="image/png" sizes="32x32" href="icons/orbs-32.png" />\n    <link rel="icon" type="image/png" sizes="16x16" href="icons/orbs-16.png" />\n    <link rel="apple-touch-icon" sizes="180x180" href="icons/orbs-apple-180.png" />\n    <meta name="apple-mobile-web-app-title" content="Orbz" />\n  </head>`,
+              `    <link rel="manifest" href="manifest.webmanifest" />\n    <meta name="theme-color" content="${ground}" />\n    <link rel="icon" type="image/png" sizes="32x32" href="${icon("orbs-32.png")}" />\n    <link rel="icon" type="image/png" sizes="16x16" href="${icon("orbs-16.png")}" />\n    <link rel="apple-touch-icon" sizes="180x180" href="${icon("orbs-apple-180.png")}" />\n    <meta name="apple-mobile-web-app-title" content="Orbz" />\n  </head>`,
             )
           : html,
     },

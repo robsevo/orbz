@@ -2,6 +2,7 @@
 // check (a manifest, its icons, served where a browser trusts it), and the manifest's colours are
 // the tokens' (the build writes them; no file names a colour by hand).
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -31,7 +32,7 @@ after(() => {
 
 test("an iPhone's icon and the title bar's: the page names them; the iPhone's is a full square with no clear pixel; the app is Orbz", { skip }, () => {
   const html = readFileSync(join(dist, "orbs.html"), "utf8");
-  assert.match(html, /<link rel="apple-touch-icon" sizes="180x180" href="icons\/orbs-apple-180\.png" \/>/);
+  assert.match(html, /<link rel="apple-touch-icon" sizes="180x180" href="icons\/orbs-apple-180\.png\?v=[0-9a-f]{10}" \/>/); // a stamp of what is in it: a phone keeps an address's icon
   assert.match(html, /<meta name="apple-mobile-web-app-title" content="Orbz" \/>/, "the name under the icon (owner, 10-03)");
   // a PNG's header: its width, height and colour type (2 is RGB, no alpha; 6 has alpha)
   const ihdr = (f: string): number[] => {
@@ -40,15 +41,24 @@ test("an iPhone's icon and the title bar's: the page names them; the iPhone's is
   };
   assert.deepEqual(ihdr("orbs-apple-180.png"), [180, 180, 2], "180 by 180 and opaque: an iPhone rounds it itself and paints a clear pixel black");
   for (const n of [32, 16]) {
-    assert.match(html, new RegExp(`<link rel="icon" type="image/png" sizes="${n}x${n}" href="icons/orbs-${n}\\.png" />`), `the title bar's ${n}`);
+    assert.match(html, new RegExp(`<link rel="icon" type="image/png" sizes="${n}x${n}" href="icons/orbs-${n}\\.png\\?v=[0-9a-f]{10}" />`), `the title bar's ${n}`);
     assert.deepEqual(ihdr(`orbs-${n}.png`).slice(0, 2), [n, n]);
   }
+  // each stamp is what is in its file: a new picture is a new address (owner, 10-04: "orbz logo still not changed
+  // for mobile", an iPhone keeping the old one); control: a stamp from other bytes does not match
+  const stamp = (f: string): string => createHash("sha256").update(readFileSync(join(dist, "icons", f))).digest("hex").slice(0, 10);
+  for (const f of ["orbs-apple-180.png", "orbs-32.png", "orbs-16.png"]) assert.ok(html.includes(`icons/${f}?v=${stamp(f)}"`), `${f} carries its own stamp`);
+  assert.ok(!html.includes(`icons/orbs-32.png?v=${stamp("orbs-16.png")}"`), "control: another file's stamp is not its");
 });
 
 test("served by a home, the app installs: a manifest from the tokens, its icons, nothing Chromium objects to", { skip, timeout: 120_000 }, async (t) => {
   const manifest = JSON.parse(readFileSync(join(dist, "manifest.webmanifest"), "utf8")) as { theme_color: string; background_color: string; icons: { src: string; sizes: string; purpose: string }[]; display: string };
   assert.deepEqual([manifest.theme_color, manifest.background_color, manifest.display], [hex(SURFACES.dark.ground), hex(SURFACES.dark.ground), "standalone"]);
-  for (const i of manifest.icons) assert.ok(readFileSync(join(dist, i.src)).subarray(1, 4).toString() === "PNG", `${i.src} is a picture`);
+  for (const i of manifest.icons) {
+    const [file, v] = i.src.split("?v=");
+    assert.ok(readFileSync(join(dist, file!)).subarray(1, 4).toString() === "PNG", `${i.src} is a picture`);
+    assert.equal(v, createHash("sha256").update(readFileSync(join(dist, file!))).digest("hex").slice(0, 10), `${file} carries its own stamp`);
+  }
   const data = mkdtempSync(join(tmpdir(), "orbs-install-home-"));
   t.after(() => rmSync(data, { recursive: true, force: true }));
   const h = Home.open({ dataDir: data, protect: [], spendCapUsd: null, brains: { store: new MemoryStore() }, chatgpt: { store: new MemoryStore() } });
