@@ -22,17 +22,28 @@ export type MarkOptions = {
 export function markSvg(o: MarkOptions = {}): string {
   const { eyes = true, ground = "none", mono = false, scale = 0.62 } = o;
   const R = 50 * scale; // the O's outer edge
-  const r = R * 0.68; // its hole: a ring a little lighter than a bold O (owner, 10-04: "make the o thinner :) not too thin")
+  // the O is an egg, as the orbs are (owner, 10-04: "make the logo on orbs look more like a pear or egg, and
+  // thinner"): a little wider below its middle than above, the hole the same shape, three quarters across
+  const a = R * 0.86; // its half-width
+  const b = R * 1.05; // its half-height
+  const k = 0.16; // how much wider it is low than high
+  const hole = 0.74;
   const cx = 50;
   const cy = 50;
+  const at = (t: number, f = 1): [number, number] => [cx + f * a * Math.cos(t) * (1 + k * Math.sin(t)), cy + f * b * Math.sin(t)];
+  const egg = (f: number): string => {
+    const pts = Array.from({ length: 96 }, (_, i) => at((i / 96) * 2 * Math.PI, f));
+    return `M${pts.map(([x, y]) => `${x.toFixed(2)} ${y.toFixed(2)}`).join("L")}Z`;
+  };
   const ink = (c: string): string => (mono ? MARK.white : c);
   const bg =
     ground === "none"
       ? ""
       : `<rect width="100" height="100" ${ground === "card" ? 'rx="22.5"' : ""} fill="url(#g)"/><rect width="100" height="100" ${ground === "card" ? 'rx="22.5"' : ""} fill="url(#w)"/>`;
   const eyesSvg = eyes
-    ? [-1, 1].map((s) => `<rect x="${(cx + s * R * 0.2 - R * 0.064).toFixed(2)}" y="${(cy - R * 0.145).toFixed(2)}" width="${(R * 0.129).toFixed(2)}" height="${(R * 0.258).toFixed(2)}" rx="${(R * 0.064).toFixed(2)}" fill="${ink(MARK.eye)}"/>`).join("") // sized by the O, not its hole
+    ? [-1, 1].map((s) => `<rect x="${(cx + s * R * 0.2 - R * 0.064).toFixed(2)}" y="${(cy + R * 0.06 - R * 0.13).toFixed(2)}" width="${(R * 0.128).toFixed(2)}" height="${(R * 0.26).toFixed(2)}" rx="${(R * 0.064).toFixed(2)}" fill="${ink(MARK.eye)}"/>`).join("") // sized by the O, a little low in it
     : "";
+  const [hx, hy] = at(-2.25, (1 + hole) / 2); // the highlight, on the ring, up and to the left
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">`,
     `<defs>`,
@@ -43,10 +54,10 @@ export function markSvg(o: MarkOptions = {}): string {
     `</defs>`,
     bg,
     // the light inside the O, then the ring (an O: the outer circle less the hole)
-    `<circle cx="${cx}" cy="${cy}" r="${r.toFixed(2)}" fill="url(#i)"/>`,
-    `<path fill="url(#o)" fill-rule="evenodd" d="M${cx - R} ${cy}a${R} ${R} 0 1 0 ${2 * R} 0a${R} ${R} 0 1 0 ${-2 * R} 0zM${(cx - r).toFixed(2)} ${cy}a${r.toFixed(2)} ${r.toFixed(2)} 0 1 1 ${(2 * r).toFixed(2)} 0a${r.toFixed(2)} ${r.toFixed(2)} 0 1 1 ${(-2 * r).toFixed(2)} 0z"/>`,
+    `<path d="${egg(hole)}" fill="url(#i)"/>`,
+    `<path fill="url(#o)" fill-rule="evenodd" d="${egg(1)}${egg(hole)}"/>`,
     // the one hard highlight of the orbs' glass, up and to the left on the ring
-    mono ? "" : `<ellipse cx="${(cx - R * 0.5).toFixed(2)}" cy="${(cy - R * 0.62).toFixed(2)}" rx="${(R * 0.24).toFixed(2)}" ry="${(R * 0.12).toFixed(2)}" transform="rotate(-38 ${(cx - R * 0.5).toFixed(2)} ${(cy - R * 0.62).toFixed(2)})" fill="${MARK.shine}" fill-opacity="0.85"/>`,
+    mono ? "" : `<ellipse cx="${hx.toFixed(2)}" cy="${hy.toFixed(2)}" rx="${(R * 0.17).toFixed(2)}" ry="${(R * 0.075).toFixed(2)}" transform="rotate(-42 ${hx.toFixed(2)} ${hy.toFixed(2)})" fill="${MARK.shine}" fill-opacity="0.85"/>`,
     eyesSvg,
     `</svg>`,
   ].join("");

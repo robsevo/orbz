@@ -1048,7 +1048,7 @@ function App() {
       {opening && (
         <Splash
           office={office.length ? office : [NEWBORN]}
-          facts={[office.length ? `${office.length} ${office.length === 1 ? "orb" : "orbs"} in the office` : "A new office", sounds ? "Sounds on" : "Sounds off"]}
+          facts={[office.length ? `${office.length} ${office.length === 1 ? "orb" : "orbs"} in the office` : "A new office"]} // no word on the sounds here (owner, 10-04)
           ready={() => globalThis.__orbsReady ?? Promise.all([document.fonts.ready, link()])}
           onLeaving={() => setDrawn(true)}
           onDone={() => setOpening(false)}

@@ -783,6 +783,48 @@ void main(){
       body += PALE                  * star * amt * (0.22 + 0.30*uLevel*speak);
       body += mix(PALE, LIGHT, 0.4) * arc  * amt * (0.05 + 0.04*awake + 0.22*uLevel*speak);
     }
+    // ---- what hangs in him (owner, 10-04: "add a little more detail into the actual orbs material, jst a
+    // bit more. on the inside as well") ---------------------------------------------------------------
+    // Tiny bubbles caught in the fluid, rising slowly and wandering as they go, at two depths (the far
+    // ones smaller, fainter, bent less by the glass): each a thin skin lit on its upper-left with a pin
+    // of light, which is how a thick liquid shows it is one. The fluid's own surface catches the light
+    // where it faces it, a soft line inside the glass, and the glass itself has a faint grain, as blown
+    // glass does. All of it quiet; at a small size the bubbles fade out rather than fizz.
+    {
+      vec2 bq = pb/Rg - lean*0.5;
+      vec2 up = normalize(vec2(-0.48, -0.88));                 // toward the light (+y is down)
+      float bub = 0.0, pin = 0.0;
+      for (int k = 0; k < 2; k++) {
+        float fk = float(k);
+        float sc = mix(3.6, 6.0, fk);                          // near, then far
+        vec2 bp = bq*(1.0 + 0.16*fk*(1.0 - z))*sc + vec2(fk*3.7, t*(0.10 - 0.035*fk)*rate);   // rising
+        vec2 id = floor(bp);
+        float hs = h1(id + 17.0*fk);
+        if (hs > 0.78) {
+          vec2 c = vec2(h1(id + 3.1), h1(id + 8.7))*0.3 + 0.35;
+          c.x += 0.06*sin(t*0.6*rate + hs*TAU);
+          float r = mix(0.11, 0.24, h1(id + 5.3))*(1.0 - 0.30*fk);
+          vec2 v = fract(bp) - c;
+          float d = length(v);
+          float aa = fwidth(d)*1.2 + 1e-3;
+          float skin = smoothstep(aa, 0.0, abs(d - r) - r*0.20);
+          float lit = clamp(0.30 + 0.70*dot(v/max(d, 1e-4), up), 0.0, 1.0);
+          float w = 1.0 - 0.45*fk;
+          bub += (skin*lit + smoothstep(r, r*0.7, d)*0.30)*w;     // its skin, and the light it holds
+          pin += smoothstep(r*0.34, r*0.10, length(v - up*r*0.52))*w;
+        }
+      }
+      float big = smoothstep(26.0, 60.0, Rg);                  // too small to see, they would only fizz
+      body += mix(PALE, LIGHT, 0.5) * (bub*0.40 + pin*0.70) * core * big * (1.0 - uBlink*0.6);
+      // the fluid's surface, lit where it faces the light
+      float cb = abs(core - 0.32)/(fwidth(core) + 1e-4);
+      float face = pow(clamp(dot(normalize(gp + 1e-4), up), 0.0, 1.0), 1.6);
+      body += mix(LITE, LIGHT, 0.5) * (1.0 - smoothstep(1.5, 5.0, cb)) * face * 0.07;
+      // and, lower down and away from the light, the fluid is deeper, so a touch darker
+      body *= 1.0 - 0.07*core*clamp(-dot(normalize(gp + 1e-4), up), 0.0, 1.0)*smoothstep(0.15, 0.6, gd);
+      // the grain of the glass, held to his body so it moves with him; mostly on the shell
+      body *= 1.0 + (vn(pb/Rg*46.0) - 0.5)*0.06*(1.0 - 0.7*clamp(core, 0.0, 1.0));
+    }
     // the veins, and a soft halo under them so they read as light in a volume
     // ---- the face (owner, 2026-09-24: "cuter … almost like a pet, tamagotchi like") --------
     // It replaces the faint pupil that came and went. What reads as cute is well measured
@@ -882,6 +924,9 @@ void main(){
     float hot = pow(max(0.0, dot(N, Ld)), 90.0);
     body += vec3(1.0) * hot * 0.95;
     body += PALE * pow(max(0.0, dot(N, normalize(vec3(-0.20,-0.48,0.85)))), 22.0) * 0.18;   // soft halo round it
+    // a second, smaller glint low on the right: the light that went through him, caught on the way out
+    // (owner, 10-04: "a little more detail into the actual orbs material")
+    body += PALE * pow(max(0.0, dot(N, normalize(vec3(0.46, 0.58, 0.67)))), 40.0) * 0.42;
     float fres = pow(max(0.0, 1.0 - z), 2.3);
     body += mix(LITE, hueRim*1.15, vcw*0.9) * fres * (0.30 + 0.35*vcw);
     vec2  away = -normalize(Ld.xy);
