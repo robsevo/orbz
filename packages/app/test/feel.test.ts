@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 import { after, before, test } from "node:test";
 import { build } from "vite";
 import type { Browser, Page } from "playwright-core";
-import { choose, findChrome, launch, plainNewOrb, seedOffice, serveDir } from "./harness.ts";
+import { choose, findChrome, launch, plainNewOrb, profile, seedOffice, serveDir } from "./harness.ts";
 
 const APP = fileURLToPath(new URL("..", import.meta.url));
 const skip = findChrome() ? false : "no Chromium on this machine";
@@ -60,6 +60,7 @@ async function open(): Promise<Page> {
   });
   await page.goto(`${site.url}/orbs.html?splash=0&intro=0`);
   await page.waitForSelector("canvas", { state: "attached" });
+  await profile(page, "Ash"); // the office opens on its floor; the cradle's presses are on an orb's profile
   return page;
 }
 const played = (page: Page): Promise<Played[]> => page.evaluate(() => [...(globalThis as { __orbsSounds?: Played[] }).__orbsSounds!]);

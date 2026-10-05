@@ -420,7 +420,7 @@ export const TOOLS: ToolDef[] = [
     name: "remind",
     label: "Keeping a reminder",
     description:
-      "Keep a bill or a reminder for the person: it comes up in their notification centre ahead of time (a bill 3 days before it is due unless you say otherwise; a reminder on its day, or at its time). Use it for a bill you found, a payment to make, a renewal, a deadline, anything they asked you to remember.",
+      "Keep a bill or a reminder for the person: it goes on their calendar in Orbz on its day (at its time, if it has one) and comes up in their notification centre ahead of time (a bill 3 days before it is due unless you say otherwise; a reminder on its day, or at its time). This is how you put something on their calendar: when they ask to add a pick-up, an appointment, a payment or a deadline to their calendar, keep it here (their own Google or Outlook calendars are read only to orbs). Use it too for a bill you found, a renewal, anything they asked you to remember.",
     parameters: obj(
       {
         kind: { type: "string", enum: ["bill", "reminder"] },

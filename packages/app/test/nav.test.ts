@@ -65,7 +65,7 @@ test("the menu goes to each room, and its Back is the browser's Back", { skip },
     await menu(page).getByRole("button", { name: "Back" }).click();
     assert.equal(await page.getByRole("heading", { name: "Settings" }).count(), 1, "Back: Settings again");
     await page.goBack();
-    assert.equal(await page.getByRole("heading", { name: "Ash" }).count(), 1, "the browser's Back: the office");
+    assert.equal(await page.locator("[data-floor]").count(), 1, "the browser's Back: the office, its floor");
     await page.goForward();
     assert.equal(await page.getByRole("heading", { name: "Settings" }).count(), 1, "and Forward");
     await page.locator("aside").getByRole("button", { name: /Oscar/ }).click();
@@ -104,7 +104,7 @@ test("on a phone the menu slides in from the top bar, and closes once you have c
     await page.getByRole("heading", { name: "Settings" }).waitFor();
     await menu(page).waitFor({ state: "hidden" });
     await page.getByRole("button", { name: "Back" }).first().click();
-    assert.equal(await page.getByRole("heading", { name: "Ash" }).count(), 1, "the top bar's Back");
+    assert.equal(await page.locator("[data-floor]").count(), 1, "the top bar's Back: the office floor");
     await page.getByRole("button", { name: "Menu" }).click();
     await menu(page).waitFor();
     await page.keyboard.press("Escape");

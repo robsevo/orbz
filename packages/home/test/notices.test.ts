@@ -5,12 +5,17 @@
 //   - An approval waiting is a notice until it is answered; work finished is one, the newest per
 //     conversation.
 //   - The `remind` tool keeps a bill for the person.
+//   - Asked in a Brainstorm to put a pick-up "at 5 tomorrow" on the calendar, the orb knows the date and
+//     keeps it there and then, and it is on the calendar (owner, 10-05: "why wasnt he able to add things
+//     to my calendar?").
 //   - Through the door: what is out, putting one away (for every device: an event says so), all.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { FakeClock } from "../src/clock.ts";
 import { serve } from "../src/api.ts";
 import { comesUpAt } from "../src/notices.ts";
+import { calendarOf } from "../src/calendar.ts";
+import { TOOLS } from "../src/agent/tools.ts";
 import { agentHome } from "./helpers.ts";
 
 const local = (s: string): number => new Date(s).getTime(); // "2026-10-03T00:30" without a zone is local time
@@ -44,6 +49,31 @@ test("a bill comes up three days ahead, once; a reminder at its time; a day that
   }
   assert.throws(() => h.home.notices.remind({ orb: "juniper", kind: "bill", title: "  ", due: "2026-10-09" }), /needs a title/);
   assert.equal(comesUpAt("2026-10-06", 3), local("2026-10-03T00:00"));
+});
+
+test("asked in a Brainstorm, the orb knows today's date and puts the pick-up on the calendar there and then", async (t) => {
+  const clock = new FakeClock(local("2026-10-05T14:07"));
+  const h = await agentHome(t, [
+    { calls: [{ name: "remind", args: { kind: "reminder", title: "Pick up the kids", due: "2026-10-06T17:00" } }] },
+    { chunks: ["It's on your calendar for tomorrow at 5."] },
+  ], { clock });
+  h.home.inbox.addOrb("ash", "Ash", "assistant");
+  const s = h.home.team.create("test session", { brainstorm: ["ash"] });
+  h.home.team.say(s.id, "brainstorm", "add to my calendar to pick the kids up at 5 tomorrow");
+  for (let i = 0; i < 40 && h.model.agent.length < 2; i++) {
+    await h.home.inbox.idle();
+    await new Promise((r) => setTimeout(r, 30));
+  }
+  const system = String(h.model.agent[0]!.find((m) => m.role === "system")?.content ?? "");
+  assert.match(system, /It is Monday,? 5 October 2026[ ,at]+14:07 where the person is[\s\S]*today is 2026-10-05, tomorrow 2026-10-06/, "the date, and tomorrow's");
+  assert.match(system, /the Brainstorm[\s\S]*what the person asks you for directly \(a reminder/, "the Brainstorm does what is asked of it, not only talks");
+  assert.doesNotMatch(system, /Do not do the work here/);
+  assert.match(TOOLS.find((x) => x.name === "remind")!.description, /This is how you put something on their calendar/, "remind says it is the calendar");
+  assert.deepEqual(calendarOf(h.home, "2026-10-06", "2026-10-06").filter((e) => e.kind === "reminder").map((e) => [e.title, e.day, e.time]), [["Pick up the kids", "2026-10-06", "17:00"]], "on the calendar, tomorrow at 5");
+  // control: with no clock given, the standing context says no date (nothing else adds one)
+  const { standingContext, nowLine } = await import("../src/agent/standing.ts");
+  assert.doesNotMatch(standingContext({ orbName: "Ash", brainDir: "/nonexistent", workspace: "/w" }), /today is/);
+  assert.match(nowLine(local("2026-12-31T23:30")), /today is 2026-12-31, tomorrow 2027-01-01/, "tomorrow across a year's end");
 });
 
 test("an approval waiting is a notice until it is answered; finished work is one, the newest per conversation", async (t) => {

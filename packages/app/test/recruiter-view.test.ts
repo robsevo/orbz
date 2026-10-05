@@ -1,6 +1,10 @@
 // PLAN 5.8_t's view, the recruiter, on a real home with a scripted brain, at desk and phone sizes:
 //   - tick a position: its applicants appear, each a whole orb from its seed, the same on a second
 //     device; untick it and they are out of sight;
+//   - ranked for the team (owner, 10-05: "which ones would best suit our team by rank"): Best for your
+//     team lists them best first, the cards in the same order, each its fit and why;
+//   - an applicant's profile opens from its card (owner, 10-05: "show the orbs profile when we click on
+//     it"): its card as the office shows one, its rank, at desk and phone size; Escape and Close close it;
 //   - interview one: the answer is the applicant's, in the applicant's name;
 //   - hire one: in the office exactly as applied (look, name, kind of work, the Senior), the
 //     interview the first chat, and the other now "a Junior"; pass the other: gone;
@@ -71,17 +75,44 @@ test("tick a position, interview, hire, pass; an orb let go applies again; desk 
   await page.locator('[data-position="frontend"]').click();
   const section = page.locator('[data-applying="frontend"]');
   await section.locator("[data-applicant]").first().waitFor({ timeout: 20_000 });
-  const seeds = h.recruiting().applicants.map((a) => a.seed);
-  const names = seeds.map((s) => applicant(s, "frontend").name);
+  const rolled = h.recruiting().applicants.map((a) => a.seed);
+  const rolledNames = rolled.map((s) => applicant(s, "frontend").name);
+  // the cards in the order shown: the best for the team first
+  const names = (await section.locator("[data-profile-open]").evaluateAll((bs) => bs.map((b) => b.getAttribute("aria-label") ?? ""))).map((l) => /^See (.+)'s profile$/.exec(l)![1]!);
+  assert.deepEqual([...names].sort(), [...rolledNames].sort(), "the applicants who applied, each once");
+  const seeds = names.map((n) => rolled[rolledNames.indexOf(n)]!);
   assert.equal(await section.locator("[data-applicant]").count(), 2);
+  const best = page.locator("[data-best] [data-ranked]");
+  assert.deepEqual((await best.evaluateAll((bs) => bs.map((b) => b.getAttribute("aria-label") ?? ""))).map((l) => /^#(\d): ([^,]+),/.exec(l)!.slice(1).join(" ")), [`1 ${names[0]}`, `2 ${names[1]}`], "Best for your team: ranked, in the cards' order");
+  const fits = await section.locator("[data-fit]").evaluateAll((fs) => fs.map((f) => Number(f.getAttribute("data-fit"))));
+  assert.ok(fits.length === 2 && fits[0]! >= fits[1]!, `the better fit first (${fits.join(", ")})`);
+  assert.match(await section.locator("[data-applicant]").first().innerText(), /#1 for your team[\s\S]*Fit \d+[\s\S]*(brings|its skills)/i, "its rank, its fit and why");
   assert.match(await section.innerText(), new RegExp(`${names[0]}[\\s\\S]*would start as the Senior[\\s\\S]*${names[1]}`), "each by name, and where each would start");
   assert.deepEqual(await measure(page), [], "the recruiter, at desk size");
+
+  // the first one's profile: its card as the office shows one, and its rank
+  await page.getByRole("button", { name: `See ${names[0]}'s profile` }).click();
+  const card = page.getByRole("dialog", { name: `${names[0]}'s profile` });
+  await card.waitFor({ timeout: 20_000 });
+  assert.match(await card.innerText(), new RegExp(`Applying: Frontend Builder[\\s\\S]*#1 for your team[\\s\\S]*${names[0]}[\\s\\S]*Applying · would start as the Senior[\\s\\S]*Traits[\\s\\S]*DNA[\\s\\S]*Leans toward`, "i"));
+  await page.waitForTimeout(400);
+  assert.deepEqual(await measure(page), [], "the profile, at desk size");
+  await page.keyboard.press("Escape");
+  await card.waitFor({ state: "detached", timeout: 5_000 });
 
   // the same applicants on a second device (a phone)
   const phone = await open({ width: 390, height: 844 });
   await phone.locator('[data-applying="frontend"] [data-applicant]').first().waitFor({ timeout: 20_000 });
   assert.match(await phone.locator('[data-applying="frontend"]').innerText(), new RegExp(`${names[0]}[\\s\\S]*${names[1]}`), "the same people on the phone");
   assert.deepEqual(await measure(phone), [], "and at phone size");
+  await phone.getByRole("button", { name: `See ${names[1]}'s profile` }).click();
+  const small = phone.getByRole("dialog", { name: `${names[1]}'s profile` });
+  await small.waitFor({ timeout: 20_000 });
+  assert.match(await small.innerText(), /#2 of 2 for your team/);
+  await phone.waitForTimeout(400);
+  assert.deepEqual(await measure(phone), [], "the profile, at phone size");
+  await small.getByRole("button", { name: "Close" }).click();
+  await small.waitFor({ state: "detached", timeout: 5_000 });
 
   // interview the first: the answer is the applicant's
   model.replies.push(`I like a layout that breathes.`);

@@ -5,24 +5,34 @@
 // ("add the interview part for fun"): the brain answers as the applicant, who can only talk. Hire
 // brings the orb in as it applied, the interview its first chat; Pass sends it on. Orbs you let go
 // apply again for their old kind of work, with their record, the most qualified first.
-import { useEffect, useState, type CSSProperties } from "react";
+// Each applicant's profile opens from its card (owner, 10-05: "recruiter should also be able to show the orbs
+// profile when we click on it, and which ones would best suit our team by rank"), and every applicant is
+// ranked by how well it would suit the office as it is (orb/fit.ts, by code), the best first.
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Orb } from "../orb/Orb.tsx";
 import { applicant, applicationNote, FAMILIES, SPECIALTIES, type Character, type Family } from "../orb/spec.ts";
 import { idOf, type InterviewLine, type Office, type RecruiterState } from "../home/link.ts";
 import { span } from "../orb/age.ts";
 import { Balanced } from "../ui/Balanced.tsx";
+import { fitOf, ranked, type Fit } from "../orb/fit.ts";
 
 const head: CSSProperties = { font: "700 11px/16px var(--font)", letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)" };
 const small: CSSProperties = { font: "500 13px/18px var(--font)", color: "var(--text-3)", textWrap: "pretty", overflowWrap: "anywhere" };
 const button: CSSProperties = { font: "600 13px/18px var(--font)", border: 0, borderRadius: 10, padding: "6px 12px", background: "var(--fill)", color: "var(--text-1)", cursor: "pointer", minHeight: 32 };
+const fits: CSSProperties = { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
 const strong: CSSProperties = { ...button, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)" };
 
 type Kind = keyof typeof SPECIALTIES;
 
-export function RecruiterRoom({ home, office, hired }: { home: Office | null; office: Character[]; hired: () => void }) {
+type Starts = "Senior" | "Junior";
+const startsOf = (s: string): Starts => (s === "Senior" ? "Senior" : "Junior");
+
+export function RecruiterRoom({ home, office, hired, profile }: { home: Office | null; office: Character[]; hired: () => void; profile: (c: Character, startsAs: Starts) => ReactNode }) {
   const [state, setState] = useState<RecruiterState | null>(null);
   const [said, setSaid] = useState<string | null>(null);
   const [open, setOpen] = useState<number | null>(null); // whose interview is open
+  const [seeing, setSeeing] = useState<number | null>(null); // whose profile is open
   useEffect(() => {
     if (!home) return;
     const load = (): void => void home.recruiting().then(setState, (e: Error) => setSaid(e.message));
@@ -34,6 +44,15 @@ export function RecruiterRoom({ home, office, hired }: { home: Office | null; of
   const taken = (name: string): boolean => [...office.map((c) => c.name), ...state.returning.map((r) => r.name)].some((n) => n.toLowerCase() === name.toLowerCase());
   const tick = (k: Kind): void => void home.setPosition(k, !state.positions.includes(k)).then((positions) => setState({ ...state, positions }), (e: Error) => setSaid(e.message));
   const families = Object.keys(FAMILIES) as Family[];
+  // everyone applying for a position you are hiring for, ranked by how well each would suit the office
+  const order = ranked(
+    state.applicants.filter((a) => state.positions.includes(a.specialty)).map((a) => ({ a, c: applicant(a.seed, a.specialty as Kind, taken) })),
+    (x) => fitOf(x.c, office, x.a.startsAs),
+  );
+  const placed = new Map(order.map((r) => [r.item.a.id, r]));
+  const hire = (id: number, c: Character): void => void home.hireApplicant(id, c).then(hired, (e: Error) => setSaid(e.message));
+  const pass = (id: number): void => void home.passApplicant(id).catch((e: Error) => setSaid(e.message));
+  const shown = seeing === null ? undefined : placed.get(seeing);
   return (
     <div data-recruiter style={{ display: "grid", gap: "var(--s5)", padding: "var(--s5)", alignContent: "start", minWidth: 0 }}>
       <h2 style={{ margin: 0, font: "800 22px/28px var(--font)", color: "var(--text-1)" }}>Recruiter</h2>
@@ -55,6 +74,23 @@ export function RecruiterRoom({ home, office, hired }: { home: Office | null; of
           </div>
         ))}
       </section>
+      {order.length > 1 && (
+        <section data-best aria-label="Best for your team" style={{ display: "grid", gap: 8, minWidth: 0 }}>
+          <span style={head}>Best for your team</span>
+          {order.slice(0, 5).map(({ item: { a, c }, fit, rank }) => (
+            <button key={a.id} type="button" data-ranked={rank} data-orb={c.hue} onClick={() => setSeeing(a.id)} aria-label={`#${rank}: ${c.name}, ${SPECIALTIES[c.specialty].title}, fit ${fit.score}. See the profile`}
+              style={{ ...button, display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", borderRadius: 12, textAlign: "left", minWidth: 0 }}>
+              <span className="num" style={{ ...rankChip(rank), flex: "0 0 auto" }}>{`#${rank}`}</span>
+              <Orb character={c} size={36} poke={false} still />
+              <span style={{ flex: "1 1 auto", minWidth: 0, display: "grid" }}>
+                <span style={{ font: "700 14px/19px var(--font)", color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{`${c.name} · ${SPECIALTIES[c.specialty].title}`}</span>
+                <span style={{ ...small, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cap(fit.why[0] ?? "")}</span>
+              </span>
+              <span className="num" style={{ flex: "0 0 auto", font: "700 13px/18px var(--font)", color: "var(--accent)", whiteSpace: "nowrap" }}>{`Fit ${fit.score}`}</span>
+            </button>
+          ))}
+        </section>
+      )}
       {state.returning.length > 0 && (
         <section aria-label="Applied again" style={{ display: "grid", gap: 8, minWidth: 0 }}>
           <span style={head}>Applied again</span>
@@ -72,28 +108,34 @@ export function RecruiterRoom({ home, office, hired }: { home: Office | null; of
         </section>
       )}
       {state.positions.map((k) => {
-        const who = state.applicants.filter((a) => a.specialty === k);
+        const who = state.applicants.filter((a) => a.specialty === k).sort((x, y) => (placed.get(x.id)?.rank ?? 0) - (placed.get(y.id)?.rank ?? 0));
         return (
           <section key={k} data-applying={k} aria-label={`Applying: ${SPECIALTIES[k as Kind]?.title ?? k}`} style={{ display: "grid", gap: 10, minWidth: 0 }}>
             <span style={head}>{`Applying: ${SPECIALTIES[k as Kind]?.title ?? k}`}</span>
             {!who.length && <span style={small}>No one yet: new applicants come each day.</span>}
             {who.map((a) => {
               const c = applicant(a.seed, k as Kind, taken);
+              const r = placed.get(a.id);
               return (
                 <article key={a.id} data-applicant={a.id} data-orb={c.hue} style={{ display: "grid", gap: 8, padding: "var(--s3)", borderRadius: 16, background: "var(--card)", boxShadow: "inset 0 0 0 1px var(--hairline)", minWidth: 0 }}>
-                  <div style={{ display: "flex", gap: 12, alignItems: "center", minWidth: 0 }}>
+                  {/* the orb and its name open its profile */}
+                  <button type="button" data-profile-open={a.id} onClick={() => setSeeing(a.id)} aria-label={`See ${c.name}'s profile`}
+                    style={{ display: "flex", gap: 12, alignItems: "center", minWidth: 0, padding: 0, border: 0, background: "transparent", textAlign: "left", cursor: "pointer", color: "inherit" }}>
                     <Orb character={c} size={64} poke={false} still />
-                    <span style={{ display: "grid", minWidth: 0 }}>
+                    <span style={{ display: "grid", minWidth: 0, flex: "1 1 auto" }}>
                       <span style={{ font: "800 16px/22px var(--font)", color: "var(--accent)" }}>{c.name}</span>
                       <span style={small}>{`${SPECIALTIES[c.specialty].title} · would start as ${a.startsAs === "Senior" ? "the Senior" : "a Junior"}`}</span>
                     </span>
-                  </div>
+                    <span style={{ flex: "0 0 auto", font: "600 13px/18px var(--font)", color: "var(--text-3)", whiteSpace: "nowrap" }}>Profile ›</span>
+                  </button>
+                  {r && <FitLine fit={r.fit} rank={r.rank} of={order.length} />}
                   <span style={{ font: "400 14px/20px var(--font)", color: "var(--text-2)", textWrap: "pretty", overflowWrap: "anywhere" }}>{applicationNote(c)}</span>
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                    <button type="button" aria-expanded={open === a.id} onClick={() => setOpen(open === a.id ? null : a.id)} style={button}>{`Interview ${c.name}`}</button>
-                    <button type="button" data-sound="pick" onClick={() => void home.hireApplicant(a.id, c).then(hired, (e: Error) => setSaid(e.message))} style={strong}>{`Hire ${c.name}`}</button>
-                    <button type="button" onClick={() => void home.passApplicant(a.id).catch((e: Error) => setSaid(e.message))} style={button}>Pass</button>
-                  </div>
+                  {/* a balanced grid: a long name never leaves one button alone on a row (owner, 10-05) */}
+                  <Balanced min={150} gap={6}>
+                    <button type="button" aria-expanded={open === a.id} onClick={() => setOpen(open === a.id ? null : a.id)} style={{ ...button, ...fits }}>{`Interview ${c.name}`}</button>
+                    <button type="button" data-sound="pick" onClick={() => hire(a.id, c)} style={{ ...strong, ...fits }}>{`Hire ${c.name}`}</button>
+                    <button type="button" onClick={() => pass(a.id)} style={{ ...button, ...fits }}>Pass</button>
+                  </Balanced>
                   {open === a.id && <Interview home={home} id={a.id} c={c} />}
                 </article>
               );
@@ -102,7 +144,89 @@ export function RecruiterRoom({ home, office, hired }: { home: Office | null; of
         );
       })}
       {said && <span role="status" style={small}>{said}</span>}
+      {shown && (
+        <Profile
+          c={shown.item.c}
+          title={SPECIALTIES[shown.item.c.specialty].title}
+          fit={shown.fit}
+          rank={shown.rank}
+          of={order.length}
+          sheet={profile(shown.item.c, startsOf(shown.item.a.startsAs))}
+          onClose={() => setSeeing(null)}
+          onInterview={() => { setSeeing(null); setOpen(shown.item.a.id); }}
+          onHire={() => { setSeeing(null); hire(shown.item.a.id, shown.item.c); }}
+          onPass={() => { setSeeing(null); pass(shown.item.a.id); }}
+        />
+      )}
     </div>
+  );
+}
+
+const cap = (t: string): string => t.charAt(0).toUpperCase() + t.slice(1);
+const rankChip = (rank: number): CSSProperties => ({
+  padding: "1px 8px", borderRadius: 999, font: "800 12px/18px var(--font)", whiteSpace: "nowrap",
+  ...(rank === 1 ? { color: "var(--ground)", background: "var(--accent)" } : { color: "var(--text-1)", background: "var(--fill-2)" }),
+});
+
+/** Where it ranks for your team, its fit, and why, in a few words each. */
+function FitLine({ fit, rank, of }: { fit: Fit; rank: number; of: number }) {
+  return (
+    <div data-fit={fit.score} style={{ display: "grid", gap: 4, minWidth: 0 }}>
+      <span style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <span className="num" style={rankChip(rank)}>{rank === 1 ? "#1 for your team" : `#${rank} of ${of} for your team`}</span>
+        <span className="num" style={{ font: "700 13px/18px var(--font)", color: "var(--accent)" }}>{`Fit ${fit.score}`}</span>
+      </span>
+      {/* a reason a line, balanced, so none ends on a word alone */}
+      <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", gap: 2 }}>
+        {fit.why.map((w) => (
+          <li key={w} style={{ ...small, textWrap: "balance" }}>{`· ${cap(w)}`}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** An applicant's profile: the orb, where it ranks for your team, and its card as the office shows one. */
+function Profile({ c, title, fit, rank, of, sheet, onClose, onInterview, onHire, onPass }: { c: Character; title: string; fit: Fit; rank: number; of: number; sheet: ReactNode; onClose: () => void; onInterview: () => void; onHire: () => void; onPass: () => void }) {
+  const close = useRef<HTMLButtonElement>(null);
+  const closing = useRef(onClose); // the room renders again on every home event: focus once, on opening
+  closing.current = onClose;
+  useEffect(() => {
+    close.current?.focus();
+    const key = (e: KeyboardEvent): void => {
+      if (e.key === "Escape") closing.current();
+    };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  }, []);
+  // on the page itself, not inside the app's window, which clips what it holds
+  return createPortal(
+    <div role="dialog" aria-modal="true" aria-label={`${c.name}'s profile`} data-profile={c.name} style={{ position: "fixed", inset: 0, zIndex: 35, display: "grid", placeItems: "center", padding: "var(--s5) var(--margin)" }}>
+      <div aria-hidden onClick={onClose} style={{ position: "absolute", inset: 0, background: "var(--ground)", opacity: 0.78 }} />
+      <div data-orb={c.hue} style={{ position: "relative", width: "min(980px, 100%)", maxHeight: "100%", overflowY: "auto", overscrollBehavior: "contain", borderRadius: 20, background: "var(--card)", boxShadow: "0 0 0 1px var(--hairline), 0 24px 64px var(--shadow)", padding: "var(--s5)", display: "grid", gap: "var(--s4)", alignContent: "start", minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, minWidth: 0 }}>
+          <span style={head}>{`Applying: ${title}`}</span>
+          <button ref={close} type="button" onClick={onClose} style={button}>Close</button>
+        </div>
+        <div style={{ display: "grid", gap: "var(--s4)", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))", alignItems: "start", minWidth: 0 }}>
+          <div style={{ display: "grid", gap: "var(--s3)", justifyItems: "center", alignContent: "start", minWidth: 0 }}>
+            <Orb character={c} size={168} />
+            <div style={{ justifySelf: "stretch" }}>
+              <FitLine fit={fit} rank={rank} of={of} />
+            </div>
+            <div style={{ justifySelf: "stretch" }}>
+              <Balanced min={150} gap={6}>
+                <button type="button" onClick={onInterview} style={{ ...button, ...fits }}>{`Interview ${c.name}`}</button>
+                <button type="button" data-sound="pick" onClick={onHire} style={{ ...strong, ...fits }}>{`Hire ${c.name}`}</button>
+                <button type="button" onClick={onPass} style={{ ...button, ...fits }}>Pass</button>
+              </Balanced>
+            </div>
+          </div>
+          {sheet}
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 }
 

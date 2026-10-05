@@ -257,6 +257,7 @@ export class AgentRunner implements Runner {
         orbName: this.#o.orbName(ctx.orb), brainDir: join(this.#o.dataDir, "brain"), workspace: tctx.workspace,
         specialty: this.#o.orbSpecialty?.(ctx.orb), learned: this.#o.learned?.(ctx.orb), notebook: this.#o.notebook?.(ctx.orb), ...(team && { team }),
         aloud: ctx.items.some((i) => i.data.said === true), // you spoke (PLAN 4.7): his answer is heard, not read
+        now: this.#o.clock.now(),
       });
       await this.#compact(ctx, ep, est(standing));
       if (!own) ep = this.#o.endpoint() ?? ep; // compaction may have met the plan's limit and moved on

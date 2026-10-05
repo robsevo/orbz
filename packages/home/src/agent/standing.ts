@@ -3,7 +3,8 @@
 // lose it nor say it twice (Ash's context-survival lesson: the block that IS the brain was lost
 // after compaction, and duplicated by re-injection).
 //
-// Orbs writes only the first two lines (who the orb is, where it works). Everything else is the
+// Orbs writes only the first lines (who the orb is, where it works, and when it is: owner, 10-05, an orb
+// that did not know the date could not keep "pick the kids up at 5 tomorrow"). Everything else is the
 // owner's, read as it is (CLAUDE.md rule 6): each skill's name and description from
 // <data>/brain/skills/*/SKILL.md, <data>/brain/memory/MEMORY.md, and <data>/brain/CONSTITUTION.md,
 // of which each orb loads his own part (PLAN 3.9, brain/constitution.ts: the core and his
@@ -16,7 +17,9 @@ import { composeConstitution, sectioned, type Specialty } from "../brain/constit
 export type TeamTurn = { session: number; title: string; tab: "brainstorm" | "floor"; with: string[] };
 
 const TAB_RULE: Record<TeamTurn["tab"], string> = {
-  brainstorm: "This is the Brainstorm: ideas, questions, trade-offs, out loud and brief. Build on what the others said instead of repeating it, disagree when you do, and when you all agree on something, record it with the agree tool. Do not do the work here.",
+  // what the person asks of you for themselves is done here, not held over (owner, 10-05: "why wasnt he able to
+  // add things to my calendar?", asked in a Brainstorm that said "do not do the work here")
+  brainstorm: "This is the Brainstorm: ideas, questions, trade-offs, out loud and brief. Build on what the others said instead of repeating it, disagree when you do, and when you all agree on something, record it with the agree tool. The session's bigger work is for the Floor; but what the person asks you for directly (a reminder or a bill to keep, a quick answer, a recipe) do now, with your tools.",
   floor: "This is the Floor: do the agreed work, your part of it, with your tools, and say in a line or two what you did. Ask the person before anything that matters.",
 };
 
@@ -30,12 +33,13 @@ export const ALOUD =
  * orb says is on the person's screen, so it names another orb, as the app does. */
 export const NO_HE_OR_SHE = "No orb is a he or a she: say another orb's name (\"Pip's page\"), never he, she, his or her for an orb.";
 
-export function standingContext(o: { orbName: string; brainDir: string; workspace: string; specialty?: Specialty; learned?: string[]; notebook?: { subject: string; text: string }[]; team?: TeamTurn; aloud?: boolean }): string {
+export function standingContext(o: { orbName: string; brainDir: string; workspace: string; specialty?: Specialty; learned?: string[]; notebook?: { subject: string; text: string }[]; team?: TeamTurn; aloud?: boolean; now?: number }): string {
   const parts = [
     `You are ${o.orbName}, one of the person's orbs: an AI character and assistant that works on its own computer and asks before anything that matters.`,
     NO_HE_OR_SHE,
     `Working directory: ${o.workspace}`,
   ];
+  if (o.now !== undefined) parts.push(nowLine(o.now));
   if (o.aloud) parts.push(ALOUD);
   if (o.team) {
     const others = o.team.with.filter((n) => n !== o.orbName);
@@ -56,6 +60,16 @@ export function standingContext(o: { orbName: string; brainDir: string; workspac
   const memory = read(join(o.brainDir, "memory", "MEMORY.md"));
   if (memory) parts.push(`What you remember (the index):\n${memory}`);
   return parts.join("\n\n");
+}
+
+/** The day and the time where the person is, today's and tomorrow's dates as the tools write them. */
+export function nowLine(now: number): string {
+  const d = new Date(now);
+  const day = (x: Date): string => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+  const next = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
+  const said = d.toLocaleString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  return `It is ${said} where the person is (${zone}): today is ${day(d)}, tomorrow ${day(next)}. Work dates out from this ("the 16th" is the next 16th to come), and ask only when it is truly unclear.`;
 }
 
 function read(file: string): string {

@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 import { after, before, test } from "node:test";
 import { build } from "vite";
 import type { Browser, BrowserContext, Page } from "playwright-core";
-import { findChrome, launch } from "./harness.ts";
+import { findChrome, launch, profile } from "./harness.ts";
 import { Home } from "../../home/src/home.ts";
 import { serve, type HomeDoor } from "../../home/src/api.ts";
 
@@ -159,6 +159,7 @@ test("a private chat with an orb: your words, his reply as it streams, a card th
   const page = await ctx.newPage();
   await page.goto(d.pairLink());
   await page.getByText("CEO Robin").waitFor({ timeout: 30_000 });
+  await profile(page, "Ash"); // the office opens on its floor; the chat is on Ash's profile
   await page.getByRole("button", { name: "Chat with Ash" }).click();
   assert.equal(await page.evaluate(() => location.hash), "#/chat/Ash");
   const box = page.getByRole("textbox", { name: "Message Ash" });

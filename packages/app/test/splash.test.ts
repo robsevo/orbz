@@ -79,7 +79,7 @@ test("it shows when the app opens, the office waking, and leaves once the waking
     // how long past it depends on the machine (a software renderer is slow), so the rule is by
     // what it did: a home that was already there was never waited for
     assert.deepEqual(phases, ["waking", "leaving"], "it went straight from waking to leaving");
-    assert.equal(await page.getByRole("heading", { name: "Ash" }).count(), 1, "and the office is there");
+    assert.equal(await page.locator("[data-floor]").count(), 1, "and the office is there: its floor");
   } finally {
     await page.close();
   }

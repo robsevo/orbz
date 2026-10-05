@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 import { after, before, test } from "node:test";
 import { build } from "vite";
 import type { Browser, Page } from "playwright-core";
-import { choose, findChrome, launch, measure, seedOffice, serveDir, SIZES } from "./harness.ts";
+import { choose, findChrome, launch, measure, profile, seedOffice, serveDir, SIZES } from "./harness.ts";
 
 const APP = fileURLToPath(new URL("..", import.meta.url));
 const skip = findChrome() ? false : "no Chromium on this machine";
@@ -34,7 +34,7 @@ after(async () => {
   if (out) rmSync(out, { recursive: true, force: true });
 });
 
-async function open(size: keyof typeof SIZES = "desk", theme: "dark" | "light" = "dark"): Promise<Page> {
+async function open(size: keyof typeof SIZES = "desk", theme: "dark" | "light" = "dark", o: { floor?: boolean } = {}): Promise<Page> {
   const page = await browser.newPage({ viewport: SIZES[size], deviceScaleFactor: 1, colorScheme: theme });
   await seedOffice(page); // a full office to look round (an office starts with one orb now)
   await page.addInitScript(() => {
@@ -43,6 +43,7 @@ async function open(size: keyof typeof SIZES = "desk", theme: "dark" | "light" =
   await page.goto(`${site.url}/orbs.html?splash=0&intro=0`);
   await page.waitForSelector("canvas", { state: "attached" });
   await page.evaluate(() => document.fonts.ready);
+  if (!o.floor) await profile(page, "Ash"); // the office opens on its floor; these are about an orb's profile
   return page;
 }
 
@@ -190,8 +191,12 @@ test("a role a licence stands behind says so on his sheet; a builder's sheet doe
 for (const theme of ["dark", "light"] as const) {
   for (const size of ["phone", "desk"] as const) {
     test(`the layout rule at ${size} size in ${theme}: the office and every tab of the creator, clean`, { skip }, async () => {
-      const page = await open(size, theme);
+      const page = await open(size, theme, { floor: true });
       try {
+        await page.locator("[data-floor] [data-floor-orb]").first().waitFor();
+        await page.waitForTimeout(600);
+        assert.deepEqual(await measure(page), [], "the office floor (owner, 10-05)");
+        await profile(page, "Ash");
         assert.deepEqual(await measure(page), [], "an orb in the office");
         await page.getByRole("button", { name: "New orb" }).first().click();
         for (const tab of ["Personality", "Specialty", "Shape", "Eyes", "Hat", "Glasses", "Colour", "Voice"]) {

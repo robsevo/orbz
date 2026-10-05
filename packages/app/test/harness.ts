@@ -247,6 +247,12 @@ export async function choose(page: Page, pick: string): Promise<void> {
   await button.click();
 }
 
+/** Opens an orb's profile: the office opens on its floor (owner, 10-05), an orb's card is `#/office/<name>`. */
+export async function profile(page: Page, name: string): Promise<void> {
+  await page.evaluate((n) => (location.hash = `#/office/${encodeURIComponent(n)}`), name);
+  await page.locator(".orbs-sheet").filter({ hasText: name }).first().waitFor({ timeout: 30_000 });
+}
+
 export async function plainNewOrb(page: Page): Promise<void> {
   await page.getByRole("button", { name: "New orb" }).first().click();
   await page.getByRole("tab", { name: "Colour" }).click();

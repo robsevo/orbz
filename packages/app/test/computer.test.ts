@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 import { after, before, test } from "node:test";
 import { build } from "vite";
 import type { Browser, Locator, Page } from "playwright-core";
-import { findChrome, launch, measure } from "./harness.ts";
+import { findChrome, launch, measure, profile } from "./harness.ts";
 import { Home } from "../../home/src/home.ts";
 import { serve } from "../../home/src/api.ts";
 import { fakeModel } from "../../home/test/fakes/model.ts";
@@ -93,6 +93,7 @@ test("his computer: each kind of work as itself, its numbers the file's, him as 
   const page = await ctx.newPage();
   await page.goto(d.pairLink());
   await page.getByText("CEO Robin").waitFor({ timeout: 30_000 });
+  await profile(page, "Hazel"); // the office opens on its floor; the chat is on Hazel's profile
   await page.getByRole("button", { name: "Chat with Hazel" }).click();
   const computer = page.locator('[data-computer="hazel"]');
   await computer.waitFor();

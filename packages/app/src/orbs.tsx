@@ -42,6 +42,7 @@ import { Radar } from "./ui/Radar.tsx";
 import { OrgRoom } from "./rooms/Org.tsx";
 import { CareerRoom } from "./rooms/Career.tsx";
 import { RecruiterRoom } from "./rooms/Recruiter.tsx";
+import { Floor } from "./floor/Floor.tsx";
 import { applyTheme, savedTheme } from "./ui/theme.ts";
 
 applyTheme(savedTheme(), false); // before the first paint: the theme you chose, never a flash of another
@@ -293,7 +294,8 @@ function Shaped({ c, moves }: { c: Character; moves: Move[] }) {
             {cap(m.why)}
           </span>
           <span style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            <span style={{ ...tag, color: "var(--accent)", background: "var(--accent-fill)" }}>+{m.n} {m.to}</span>
+            {/* the text in the body's colour on the orb's tint and ring: the hue itself as text fails contrast on light orbs (honey, 10-05) */}
+            <span style={{ ...tag, color: "var(--text-1)", background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1px var(--accent)" }}>+{m.n} {m.to}</span>
             <span style={{ ...tag, color: "var(--text-2)", background: "var(--fill)" }}>−{m.n} {m.from}</span>
           </span>
         </div>
@@ -345,7 +347,9 @@ function LevelUp({ c, g }: { c: Character; g: Growth }) {
   );
 }
 
-function Sheet({ c, onRename, replies, standing, startsAs, career }: { c: Character; onRename?: (name: string) => void; replies: Replies; standing?: Standing | null; startsAs?: "Junior" | "Senior"; career?: CareerState | null }) {
+// `applying`: an applicant's profile, from the Recruiter (owner, 10-05: "recruiter should also be able to show
+// the orbs profile when we click on it")
+function Sheet({ c, onRename, replies, standing, startsAs, career, applying }: { c: Character; onRename?: (name: string) => void; replies: Replies; standing?: Standing | null; startsAs?: "Junior" | "Senior"; career?: CareerState | null; applying?: boolean }) {
   const sh = sheetOf(c);
   // what his graded work has grown him into (PLAN 3.11), once a home has some to show
   const grown = career ? grownOf(c, sh.leans, career.radar, career.niches, sh.dna, standing?.xp ?? career.xp) : null;
@@ -374,7 +378,9 @@ function Sheet({ c, onRename, replies, standing, startsAs, career }: { c: Charac
         <span style={{ font: "400 13px/18px var(--font)", color: "var(--text-3)" }}>
           {onRename
             ? "Not in the office yet · fixed once created"
-            : `${standing?.level ?? startsAs ?? "Junior"} · ${(standing?.xp ?? 0).toLocaleString("en-GB")} XP · ${standing?.next?.ready ? `ready for ${standing.next.to}` : "levels come from finished work you approve"}`}
+            : applying
+              ? `Applying · would start as ${startsAs === "Senior" ? `the Senior, your first ${SPECIALTIES[c.specialty].title}` : "a Junior"}`
+              : `${standing?.level ?? startsAs ?? "Junior"} · ${(standing?.xp ?? 0).toLocaleString("en-GB")} XP · ${standing?.next?.ready ? `ready for ${standing.next.to}` : "levels come from finished work you approve"}`}
         </span>
         {/* the first of his kind in the office starts as the Senior (owner, 10-02), so the work has someone to lead it */}
         {onRename && startsAs && (
@@ -776,7 +782,11 @@ function SoundIcon({ on }: { on: boolean }) {
 
 const REACT: [keyof Character, Gesture][] = [["hat", "hop"], ["glasses", "nod"], ["personality", "hop"], ["shape", "jelly"], ["goo", "jelly"], ["eyes", "nod"], ["specialty", "nod"], ["hue", "wiggle"], ["hue2", "wiggle"], ["finish", "wiggle"], ["voice", "squish"]];
 
-type View = { kind: "orb"; name: string } | { kind: "new"; draft: Character };
+// "floor": the office itself, everyone at work (owner, 10-05: "the office should be a whole office visual of
+// them working in an office"); "orb": one orb's profile, pressed on the floor or picked in the side menu
+type View = { kind: "orb"; name: string } | { kind: "new"; draft: Character } | { kind: "floor" };
+/** Where an address in the office leads: an orb's profile when it names one, else the floor. */
+const viewOf = (orbs: Character[], r: Route): View => (r.room === "office" && r.orb && orbs.some((c) => c.name === r.orb) ? { kind: "orb", name: r.orb } : { kind: "floor" });
 
 /** Whether the window is a phone's (the stylesheet's own line, 760px): some things are drawn smaller there. */
 function usePhone(): boolean {
@@ -797,7 +807,7 @@ function App() {
   const [office, setOffice] = useState<Character[]>(() => keptOffice(NEWBORN));
   const [view, setView] = useState<View>(() => {
     const kept = keptOffice(NEWBORN);
-    return kept.length ? { kind: "orb", name: kept[0]!.name } : { kind: "new", draft: { ...NEWBORN, seed: roll() } };
+    return kept.length ? viewOf(kept, parseRoute(location.hash)) : { kind: "new", draft: { ...NEWBORN, seed: roll() } };
   });
   const [state, setState] = useState<OrbState>("idle");
   const [picked, setPicked] = useState(false); // a mood you chose by hand stands over his real one
@@ -842,7 +852,7 @@ function App() {
       if (!orbs.length) return v.kind === "new" ? v : { kind: "new", draft: { ...NEWBORN, seed: roll() } }; // an empty office: make the first
       const r = parseRoute(location.hash);
       if (r.room === "new" && v.kind === "new") return v; // the creator, because you asked for it
-      return { kind: "orb", name: r.room === "office" && r.orb && orbs.some((c) => c.name === r.orb) ? r.orb : orbs[0]!.name };
+      return viewOf(orbs, r);
     });
   }).catch((e: unknown) => {
     linked.current = null;
@@ -885,7 +895,7 @@ function App() {
   const making = view.kind === "new";
   const before = making && evolve && evolve.n !== shown ? evolve.c : null;
   const at = view.kind === "orb" ? Math.max(0, office.findIndex((c) => c.name === view.name)) : -1;
-  const me = view.kind === "new" ? view.draft : office[at] ?? NEWBORN;
+  const me = view.kind === "new" ? view.draft : (view.kind === "floor" ? office[0] : office[at]) ?? NEWBORN;
   // his real mood, on a home (PLAN 2.3): what happens to him, worn by the face
   const moodNow = useMood(home, view.kind === "new" ? null : idOf(me.name));
   const live = home && view.kind !== "new" ? moodNow : null;
@@ -967,7 +977,7 @@ function App() {
   // where you are is an address (ui/nav.ts): going somewhere adds it to the history, so the side
   // menu's Back and the browser's Back are the same Back
   const routeOf = (): Route =>
-    room === "settings" ? { room: "settings" } : room === "notices" ? { room: "notices" } : room === "calendar" ? { room: "calendar" } : room === "lab" ? { room: "lab" } : room === "org" ? { room: "org" } : room === "recruiter" ? { room: "recruiter" } : room === "career" && careerOf ? { room: "career", orb: careerOf } : room === "sessions" ? { room: "sessions", ...inSession } : room === "chat" && talking ? { room: "chat", orb: talking } : view.kind === "new" ? { room: "new" } : { room: "office", orb: view.name };
+    room === "settings" ? { room: "settings" } : room === "notices" ? { room: "notices" } : room === "calendar" ? { room: "calendar" } : room === "lab" ? { room: "lab" } : room === "org" ? { room: "org" } : room === "recruiter" ? { room: "recruiter" } : room === "career" && careerOf ? { room: "career", orb: careerOf } : room === "sessions" ? { room: "sessions", ...inSession } : room === "chat" && talking ? { room: "chat", orb: talking } : view.kind === "new" ? { room: "new" } : { room: "office", orb: view.kind === "orb" ? view.name : null };
   const show = (r: Route): void => {
     if (r.room === "settings") setRoom("settings");
     else if (r.room === "notices") setRoom("notices");
@@ -994,7 +1004,7 @@ function App() {
       setRoom("office");
       if (r.room === "new") setView((v) => (v.kind === "new" ? v : { kind: "new", draft: fresh() }));
       else if (!office.length) setView((v) => (v.kind === "new" ? v : { kind: "new", draft: { ...NEWBORN, seed: roll() } })); // an empty office: make the first
-      else setView({ kind: "orb", name: r.orb && office.some((c) => c.name === r.orb) ? r.orb : office[0]!.name });
+      else setView(viewOf(office, r));
     }
   };
   const go = (r: Route): void => {
@@ -1093,7 +1103,7 @@ function App() {
           )}
           <nav aria-label="Rooms" style={{ display: "grid", gap: 4, marginTop: "var(--s2)" }}>
             {backButton({ justifySelf: "start", marginBottom: "var(--s1)" })}
-            {navItem("The office", room === "office" && !making, { room: "office", orb: making ? null : me.name }, "◉")}
+            {navItem("The office", room === "office" && view.kind === "floor", { room: "office", orb: null }, "◉")}
             {navItem("New orb", room === "office" && making, { room: "new" }, "+", 0, true) /* asks to be pressed (owner, 10-03) */}
             {navItem("Sessions", room === "sessions", { room: "sessions", id: null, tab: "brainstorm" }, "▦")}
             {navItem("Notifications", room === "notices", { room: "notices" }, "◔", notices.notices.length)}
@@ -1112,7 +1122,8 @@ function App() {
                 key={c.name}
                 data-orb={c.hue}
                 onClick={() => go({ room: "office", orb: c.name })}
-                style={{ display: "flex", alignItems: "center", gap: 10, padding: "4px 8px", border: 0, borderRadius: 10, cursor: "pointer", textAlign: "left", background: room === "office" && !making && c.name === me.name ? "var(--accent-wash)" : "transparent", color: "var(--text-2)", font: "600 14px/20px var(--font)", minWidth: 0 }}
+                aria-current={room === "office" && view.kind === "orb" && c.name === me.name ? "page" : undefined} // its profile is the page you are on
+                style={{ display: "flex", alignItems: "center", gap: 10, padding: "4px 8px", border: 0, borderRadius: 10, cursor: "pointer", textAlign: "left", background: room === "office" && view.kind === "orb" && c.name === me.name ? "var(--accent-wash)" : "transparent", color: "var(--text-2)", font: "600 14px/20px var(--font)", minWidth: 0 }}
               >
                 <span style={{ position: "relative", flex: "0 0 auto", display: "grid" }}>
                   <Orb character={c} size={30} poke={false} every={3} fidget={false} />
@@ -1123,7 +1134,7 @@ function App() {
                 <span style={{ display: "grid", minWidth: 0 }}>
                   <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
                   {/* on the chosen row's wash the quiet grey falls under AA in light: there it is the reading grey */}
-                  <span style={{ font: "400 11px/14px var(--font)", color: moods[idOf(c.name)] === "waiting" ? "var(--alert)" : room === "office" && !making && c.name === me.name ? "var(--text-2)" : "var(--text-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <span style={{ font: "400 11px/14px var(--font)", color: moods[idOf(c.name)] === "waiting" ? "var(--alert)" : room === "office" && view.kind === "orb" && c.name === me.name ? "var(--text-2)" : "var(--text-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {moods[idOf(c.name)] && moods[idOf(c.name)] !== "idle" ? WORN[moods[idOf(c.name)]!].words : SPECIALTIES[c.specialty].label}
                   </span>
                 </span>
@@ -1133,7 +1144,7 @@ function App() {
         </aside>
 
         {room === "recruiter" && office.length ? (
-          <RecruiterRoom home={home} office={office} hired={() => void home?.orbs().then((o) => o && setOffice(o))} />
+          <RecruiterRoom home={home} office={office} hired={() => void home?.orbs().then((o) => o && setOffice(o))} profile={(c, startsAs) => <Sheet c={c} replies={replies} startsAs={startsAs} applying />} />
         ) : room === "org" ? (
           <OrgRoom home={home} office={office} open={(c) => go({ room: "career", orb: c.name })} rehired={() => void home?.orbs().then((o) => o && setOffice(o))} />
         ) : room === "career" ? (
@@ -1172,6 +1183,8 @@ function App() {
               },
             })}
           />
+        ) : view.kind === "floor" && office.length ? (
+          <Floor home={home} office={office} moods={moods} person={person?.name ?? null} go={go} />
         ) : (
         <section style={{ minWidth: 0, display: "grid", alignContent: "start", gap: "var(--s5)", padding: "0 0 var(--s6)" }}>
           {said && (

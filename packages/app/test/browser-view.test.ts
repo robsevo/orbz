@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 import { after, before, test, type TestContext } from "node:test";
 import { build } from "vite";
 import type { Browser, Page } from "playwright-core";
-import { findChrome, launch, measure } from "./harness.ts";
+import { findChrome, launch, measure, profile } from "./harness.ts";
 import { Home } from "../../home/src/home.ts";
 import { serve } from "../../home/src/api.ts";
 import { MemoryStore } from "../../home/src/chatgpt/store.ts";
@@ -67,6 +67,7 @@ async function onHome(t: TestContext) {
 test("his Browser tab: the still of his screen, its address, his face where he clicked; take over, hand back, a reset in two presses", { skip, ...LONG }, async (t) => {
   const site = await web(t);
   const { h, page } = await onHome(t);
+  await profile(page, "Hazel"); // the office opens on its floor; the chat is on Hazel's profile
   await page.getByRole("button", { name: "Chat with Hazel" }).click();
   const computer = page.locator('[data-computer="hazel"]');
   await computer.getByRole("tab", { name: "Browser" }).click();
