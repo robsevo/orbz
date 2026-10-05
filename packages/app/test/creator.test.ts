@@ -256,3 +256,24 @@ test("the first orb is the assistant: every roll is one, and it is the one offer
     await page.close();
   }
 });
+
+test("before your personal assistant, the Recruiter is greyed out and its address will not open it; after, it opens (owner, 10-04)", { skip, timeout: 240_000 }, async () => {
+  const page = await open("desk"); // nothing in the office yet
+  try {
+    const rec = page.locator("aside").getByRole("button", { name: "Recruiter" });
+    assert.equal(await rec.isDisabled(), true, "greyed out, not pressable");
+    assert.equal(await rec.getAttribute("title"), "Make your personal assistant first");
+    await page.evaluate(() => (location.hash = "#/recruiter"));
+    await page.waitForTimeout(400);
+    assert.equal(await page.locator("[data-recruiter]").count(), 0, "its address does not open it");
+    assert.ok(await page.getByRole("button", { name: /Roll everything/ }).isVisible(), "it opens the making of your first orb");
+    await page.getByRole("textbox", { name: "Name" }).fill("Maya");
+    await page.getByRole("button", { name: "Create Maya" }).click();
+    await page.getByRole("heading", { name: "Maya" }).waitFor();
+    assert.equal(await rec.isDisabled(), false, "control: with an orb, it opens");
+    await rec.click();
+    await page.getByText("The recruiter is the home's", { exact: false }).or(page.locator("[data-recruiter]")).first().waitFor({ timeout: 20_000 });
+  } finally {
+    await page.close();
+  }
+});
