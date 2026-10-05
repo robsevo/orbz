@@ -586,7 +586,7 @@ function Creator({ me, edit, replies, setReplies, first = false }: { me: Charact
       {tab === "Specialty" && first && (
         // the first orb is your assistant (owner, 10-04): the rest you hire after
         <div data-first-assistant style={{ display: "grid", gap: 8 }}>
-          <span style={{ font: "400 14px/20px var(--font)", color: "var(--text-2)" }}>Your first orb is your assistant: they plan everything, your days, your reminders and who does what. Hire the rest after.</span>
+          <span style={{ font: "400 14px/20px var(--font)", color: "var(--text-2)" }}>Your first orb is your personal assistant: they plan everything, your days, your reminders and who does what. Hire the rest after.</span>
           <Cards value={me.specialty} entries={[["assistant", SPECIALTIES.assistant.title, cap(SPECIALTIES.assistant.focus)]]} onPick={(specialty) => edit({ specialty })} />
         </div>
       )}
@@ -974,7 +974,12 @@ function App() {
     else if (r.room === "calendar") setRoom("calendar");
     else if (r.room === "lab") setRoom("lab");
     else if (r.room === "org") setRoom("org");
-    else if (r.room === "recruiter") setRoom("recruiter");
+    else if (r.room === "recruiter" && office.length) setRoom("recruiter");
+    else if (r.room === "recruiter") {
+      // no orbs yet: the recruiter waits for your assistant; its address opens the making of it
+      setRoom("office");
+      setView((v) => (v.kind === "new" ? v : { kind: "new", draft: { ...NEWBORN, seed: roll() } }));
+    }
     else if (r.room === "career") {
       setRoom("career");
       setCareerOf(r.orb);
@@ -1026,8 +1031,9 @@ function App() {
       <span aria-hidden style={{ font: "800 16px/16px var(--font)" }}>‹</span> Back
     </button>
   );
-  const navItem = (label: string, on: boolean, to: Route, mark: ReactNode, count = 0, invite = false): ReactNode => (
-    <button key={label} aria-current={on ? "page" : undefined} aria-label={count ? `${label}, ${count} waiting` : undefined} onClick={() => go(to)} data-invite={invite || undefined} style={{ ...s.btn, display: "flex", alignItems: "center", gap: 10, textAlign: "left", background: on ? "var(--accent-wash)" : "transparent", boxShadow: on ? "inset 0 0 0 1px var(--accent)" : "none", ...(invite && { background: "var(--accent)", color: "var(--ground)", fontWeight: 800, boxShadow: on ? "0 0 0 2px var(--card), 0 0 0 3.5px var(--accent)" : "none" }) }} data-orb={me.hue}>
+  // `locked`: why it is not open yet (greyed, not pressable, its reason on hover)
+  const navItem = (label: string, on: boolean, to: Route, mark: ReactNode, count = 0, invite = false, locked = ""): ReactNode => (
+    <button key={label} aria-current={on ? "page" : undefined} aria-label={count ? `${label}, ${count} waiting` : undefined} onClick={locked ? undefined : () => go(to)} disabled={Boolean(locked)} title={locked || undefined} data-locked={locked ? "" : undefined} data-invite={invite || undefined} style={{ ...s.btn, display: "flex", alignItems: "center", gap: 10, textAlign: "left", background: on ? "var(--accent-wash)" : "transparent", boxShadow: on ? "inset 0 0 0 1px var(--accent)" : "none", ...(locked && { opacity: 0.45, cursor: "not-allowed" }), ...(invite && { background: "var(--accent)", color: "var(--ground)", fontWeight: 800, boxShadow: on ? "0 0 0 2px var(--card), 0 0 0 3.5px var(--accent)" : "none" }) }} data-orb={me.hue}>
       <span aria-hidden style={{ width: 18, display: "grid", placeItems: "center", color: invite ? "var(--ground)" : "var(--accent)", font: invite ? "800 20px/16px var(--font)" : "800 15px/16px var(--font)" }}>{mark}</span>
       {label}
       {count > 0 && (
@@ -1094,7 +1100,9 @@ function App() {
             {navItem("Calendar", room === "calendar", { room: "calendar" }, "▤")}
             {navItem("The lab", room === "lab", { room: "lab" }, "✦")}
             {navItem("Org chart", room === "org", { room: "org" }, "◇")}
-            {navItem("Recruiter", room === "recruiter", { room: "recruiter" }, "✚")}
+            {/* hiring comes after your assistant, the first orb (owner, 10-04: "if you have not created your assistant yet ... you
+                shouldnt be able to see the recruiter page yet, it should be greyed out and inaccesible") */}
+            {navItem("Recruiter", room === "recruiter" && office.length > 0, { room: "recruiter" }, "✚", 0, false, office.length ? "" : "Make your personal assistant first")}
             {navItem("Settings", room === "settings", { room: "settings" }, "⚙")}
           </nav>
           <div style={{ ...s.head, margin: "var(--s3) var(--s2) var(--s1)" }}>The office</div>
@@ -1124,7 +1132,7 @@ function App() {
           </div>
         </aside>
 
-        {room === "recruiter" ? (
+        {room === "recruiter" && office.length ? (
           <RecruiterRoom home={home} office={office} hired={() => void home?.orbs().then((o) => o && setOffice(o))} />
         ) : room === "org" ? (
           <OrgRoom home={home} office={office} open={(c) => go({ room: "career", orb: c.name })} rehired={() => void home?.orbs().then((o) => o && setOffice(o))} />

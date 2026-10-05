@@ -203,7 +203,7 @@ test("the first of his kind starts as the Senior, the next of that kind a Junior
     await page.getByRole("button", { name: new RegExp(`^${title}`) }).click();
   };
   // the first orb is the assistant (owner, 10-04): hired first, the Senior of its kind
-  await page.getByText("Starts as the Senior: your first Assistant", { exact: true }).waitFor();
+  await page.getByText("Starts as the Senior: your first Personal Assistant", { exact: true }).waitFor();
   await page.getByRole("textbox", { name: "Name" }).fill("Maya");
   await page.getByRole("button", { name: "Create Maya" }).click();
   await page.getByRole("heading", { name: "Maya" }).waitFor();
@@ -233,12 +233,12 @@ test("the first orb is the assistant: every roll is one, and it is the one offer
     for (let i = 0; i < 6; i++) {
       await page.getByRole("button", { name: /Roll everything/ }).click();
       await page.waitForTimeout(120);
-      assert.match(await said(), /Assistant\./, `roll ${i}: ${await said()}`);
+      assert.match(await said(), /Personal Assistant\./, `roll ${i}: ${await said()}`);
     }
     await page.getByRole("tab", { name: "Specialty" }).click();
     assert.equal(await page.locator("[data-first-assistant] button").count(), 1, "only the assistant is offered");
     await page.getByRole("button", { name: "Roll specialty" }).click();
-    assert.match(await said(), /Assistant\./, "its own die too");
+    assert.match(await said(), /Personal Assistant\./, "its own die too");
     // hire it; the next orb may be anything
     await page.getByRole("textbox", { name: "Name" }).fill("Maya");
     await page.getByRole("button", { name: "Create Maya" }).click();
