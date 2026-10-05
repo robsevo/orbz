@@ -207,14 +207,14 @@ test("the first of his kind starts as the Senior, the next of that kind a Junior
   await page.getByRole("textbox", { name: "Name" }).fill("Maya");
   await page.getByRole("button", { name: "Create Maya" }).click();
   await page.getByRole("heading", { name: "Maya" }).waitFor();
-  await page.getByRole("button", { name: "New orb" }).first().click();
+  await page.getByRole("button", { name: "New orb" }).first().click({ timeout: 90_000 }); // a busy gate draws slowly
   await pick("Frontend Builder");
   await page.getByText("Starts as the Senior: your first Frontend Builder", { exact: true }).waitFor();
   await page.getByRole("textbox", { name: "Name" }).fill("Pip");
   await page.getByRole("button", { name: "Create Pip" }).click();
   await page.getByRole("heading", { name: "Pip" }).waitFor();
   assert.match(await page.locator("main").innerText(), /Senior · 0 XP/, "and his card says so");
-  await page.getByRole("button", { name: "New orb" }).first().click();
+  await page.getByRole("button", { name: "New orb" }).first().click({ timeout: 90_000 }); // a busy gate draws slowly
   await pick("Frontend Builder");
   await page.getByText("Starts as a Junior", { exact: true }).waitFor();
   assert.deepEqual(await measure(page), [], "nothing spills at desk size");

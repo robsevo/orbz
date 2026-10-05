@@ -56,6 +56,8 @@ function ProjectsFolder({ home }: { home: Office }) {
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
         <button aria-pressed={p.on} onClick={() => act(home.setProjects({ on: !p.on }))} style={chip(p.on)}>{p.on ? "Copying: on" : "Copying: off"}</button>
         <button onClick={() => act(home.syncProjects())} disabled={!p.on} style={{ ...button, opacity: p.on ? 1 : 0.5 }}>Copy now</button>
+      </div>
+      <div>
         <span data-projects-last style={{ font: "400 13px/18px var(--font)", color: "var(--text-3)" }}>
           {!p.on ? "Off: nothing is copied" : p.last ? `Last copied ${ago === 0 ? "just now" : `${ago} min ago`}: ${p.last.files} ${p.last.files === 1 ? "file" : "files"} new or changed` : "Not copied yet"}
         </span>
