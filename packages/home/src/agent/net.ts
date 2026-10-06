@@ -127,15 +127,25 @@ export async function checkUrl(raw: string): Promise<{ ok: true; address: string
 export type Fetched = {
   ok: boolean; status?: number; statusText?: string; url?: string; contentType?: string;
   buffer?: Buffer; body?: string; bytes?: number; truncated?: boolean; reason?: string;
+  /** The answer's headers, names in lower case (the reading library's validators, Retry-After, X-Robots-Tag). */
+  headers?: Record<string, string>;
+  /** A redirect not followed (`maxRedirects` reached): where it pointed, made absolute. */
+  location?: string;
 };
 
-/** A GET with the address check on every hop, a byte cap and a timeout; a stop ends it at once. */
-export async function safeFetch(raw: string, o: { headers?: Record<string, string>; maxBytes?: number; timeoutMs?: number; signal?: AbortSignal } = {}): Promise<Fetched> {
+const headersOf = (res: IncomingMessage): Record<string, string> =>
+  Object.fromEntries(Object.entries(res.headers).filter(([, v]) => v !== undefined).map(([k, v]) => [k.toLowerCase(), Array.isArray(v) ? v.join(", ") : String(v)]));
+
+/** A GET with the address check on every hop, a byte cap and a timeout; a stop ends it at once.
+ * `maxRedirects` 0 returns a redirect instead of following it, for a caller that checks each hop itself
+ * (the reading library: robots.txt and its reach, PLAN 3.12). */
+export async function safeFetch(raw: string, o: { headers?: Record<string, string>; maxBytes?: number; timeoutMs?: number; signal?: AbortSignal; maxRedirects?: number } = {}): Promise<Fetched> {
   const maxBytes = o.maxBytes ?? MAX_BYTES;
   const timeoutMs = o.timeoutMs ?? TIMEOUT_MS;
+  const maxRedirects = Math.min(o.maxRedirects ?? MAX_REDIRECTS, MAX_REDIRECTS);
   const started = Date.now();
   let url = raw;
-  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+  for (let hop = 0; hop <= maxRedirects; hop++) {
     if (o.signal?.aborted) return { ok: false, reason: "stopped by the user" };
     const check = await checkUrl(url);
     if (!check.ok) return { ok: false, reason: check.reason };
@@ -167,11 +177,16 @@ export async function safeFetch(raw: string, o: { headers?: Record<string, strin
     if (status >= 300 && status < 400 && res.headers.location) {
       release();
       res.resume();
+      let next: string;
       try {
-        url = new URL(res.headers.location, url).toString();
+        next = new URL(res.headers.location, url).toString();
       } catch {
         return { ok: false, reason: `bad redirect target from ${url}` };
       }
+      if (hop === maxRedirects && o.maxRedirects !== undefined) {
+        return { ok: false, status, statusText: res.statusMessage ?? "", url, location: next, headers: headersOf(res), reason: `HTTP ${status}: redirected to ${next}` };
+      }
+      url = next;
       continue;
     }
     const chunks: Buffer[] = [];
@@ -199,9 +214,9 @@ export async function safeFetch(raw: string, o: { headers?: Record<string, strin
     const buffer = Buffer.concat(chunks);
     return {
       ok: good, status, statusText: res.statusMessage ?? "", url, contentType: String(res.headers["content-type"] ?? ""),
-      buffer, body: buffer.toString("utf8"), bytes, truncated,
+      buffer, body: buffer.toString("utf8"), bytes, truncated, headers: headersOf(res),
       ...(!good && { reason: `HTTP ${status} ${res.statusMessage ?? ""}`.trim() }),
     };
   }
-  return { ok: false, reason: `too many redirects (more than ${MAX_REDIRECTS}) from ${raw}` };
+  return { ok: false, reason: `too many redirects (more than ${maxRedirects}) from ${raw}` };
 }

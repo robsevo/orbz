@@ -20,6 +20,13 @@ export type Tab = "brainstorm" | "floor";
 export type Entry = { path: string; dir: boolean; size: number; mtime: number };
 export type WorkFile = { path: string; size: number; mtime: number; text: string | null; truncated: boolean };
 /** The lab (PLAN 2.13): every brainstorm and every plan shown, as the home keeps them. */
+/** The reading library (PLAN 3.12): a source the office follows, and a page read from one. */
+export type ReadingSource = {
+  id: number; orb: string; url: string; host: string; prefix: string; title: string; why: string; everyDays: number;
+  addedAt: number; lastReadAt: number | null; nextAt: number; failures: number; lastError: string | null; pages: number;
+};
+export type ReadingHit = { url: string; title: string; snippet: string; readAt: number; changedAt: number; source: number; host: string; orb: string };
+export type ReadingState = { sources: ReadingSource[]; now: { source: number; url: string } | null; hits: ReadingHit[] };
 export type LabSession = { id: number; title: string; createdAt: number; members: string[]; agreed: string[]; lastWords: string | null; plans: number[] };
 export type LabPlan = {
   id: number; title: string; orb: string; conversation: string; session: number | null; status: string; createdAt: number;
@@ -32,7 +39,7 @@ export type CalendarEntry =
   | { kind: "event"; id: string; calendar: string; title: string; day: string; time: string | null; until: string | null; location: string | null };
 /** The notification centre (PLAN 2.11): what needs you or happened, as the home keeps it. */
 export type Notice = {
-  id: number; kind: "bill" | "reminder" | "approval" | "done" | "promotion" | "performance"; orb: string; conversation: string | null; card: number | null; reminder: number | null;
+  id: number; kind: "bill" | "reminder" | "approval" | "done" | "promotion" | "performance" | "reading"; orb: string; conversation: string | null; card: number | null; reminder: number | null;
   title: string; detail: string; due: string | null; at: number;
 };
 /** The morning card (PLAN 3.5): yesterday's work, orb by orb, and the night after it. */
@@ -196,6 +203,10 @@ export interface Office {
   putAwayAll(): Promise<void>;
   /** The lab: what has `q` in it (everything when empty); a brainstorm reopened as a new session. */
   labOf(q?: string): Promise<{ sessions: LabSession[]; plans: LabPlan[] }>;
+  /** The reading library (PLAN 3.12): what is followed, what is read now, and the pages read for a word. */
+  readingOf(q?: string): Promise<ReadingState>;
+  /** Stops following a source; its pages leave the library. */
+  stopFollowing(source: number): Promise<void>;
   reopen(session: number): Promise<Session>;
   /** The calendar: the days from `from` to `to`; your own changes (an orb's go through a card). */
   calendar(from: string, to: string): Promise<CalendarEntry[]>;
@@ -570,6 +581,12 @@ export function doorOffice(base: Character): Office {
     },
     async labOf(q = "") {
       return call<{ sessions: LabSession[]; plans: LabPlan[] }>(`../lab?q=${encodeURIComponent(q)}`);
+    },
+    async readingOf(q = "") {
+      return call<ReadingState>(`../reading?q=${encodeURIComponent(q)}`);
+    },
+    async stopFollowing(source) {
+      await call(`../reading/sources/${source}`, { method: "DELETE" });
     },
     async reopen(session) {
       return (await call<{ session: Session }>(`../lab/sessions/${session}/reopen`, { method: "POST" })).session;

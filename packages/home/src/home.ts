@@ -37,6 +37,8 @@ import type { Undo } from "./gym/card.ts";
 import { type Level, LEVELS, levelOf, nextFor, tenureOf } from "./gym/levels.ts";
 import { orgTools } from "./org.ts";
 import { interviewSystem, Recruiter, RecruiterError } from "./recruiter.ts";
+import { type Fetcher, Reading, type Sleep } from "./reading/reading.ts";
+import { readingTools, withReading } from "./reading/tools.ts";
 import { School, SchoolError, type ReportCard, type SchoolOptions } from "./school/school.ts";
 import type { Kind } from "./school/subjects.ts";
 import { habitsOf, shareHabit } from "./gym/share.ts";
@@ -89,6 +91,8 @@ export type HomeOptions = {
   clock?: Clock;
   /** The longest the home sleeps between ticks (default 30 s). */
   heartbeatMs?: number;
+  /** The reading library's network and its waits (PLAN 3.12): tests stand in for both. */
+  reading?: { fetch?: Fetcher; sleep?: Sleep };
   /** How long a stopped run may take to wind down (default 5 s). */
   graceMs?: number;
   /** School (PLAN 5.7): tonight's share of the brain (tests set less). */
@@ -208,6 +212,8 @@ export class Home {
 
   /** The recruiter (PLAN 5.8): the positions you are hiring for, and who applied. */
   readonly recruiter: Recruiter;
+  /** The reading library (PLAN 3.12): the sources the office follows, read politely each night. */
+  readonly reading: Reading;
   /** School (PLAN 5.7): an orb you let go, learning the subjects you picked, night by night. */
   readonly school: School;
   /** XP from graded evidence only (PLAN 3.6): the ledger, in the event log. */
@@ -245,6 +251,7 @@ export class Home {
     this.events = new EventLog(db, this.clock);
     this.spend = new Spend(this.events, this.clock, opts.spendCapUsd === undefined ? DEFAULT_SPEND_CAP_USD : opts.spendCapUsd);
     this.conversations = new Conversations(db, this.events, this.clock);
+    this.reading = new Reading(db, this.events, this.clock, opts.reading ?? {});
     const big = opts.brain?.preset.big ?? null;
     this.chatgpt = new ChatGPT({ dataDir: this.dataDir, events: this.events, clock: this.clock, ...opts.chatgpt });
     const chatgptReady = this.chatgpt.load().then(() => {}, () => {}); // a home never signed in does not touch the keychain
@@ -334,7 +341,7 @@ export class Home {
         }
       : null;
     const tools = agentOpts.tools ?? [
-      ...TOOLS, planTool(this.plans, (workspace) => [workspace]), ...boardTools(this.board, post, pageCheck, {
+      ...TOOLS.map((t) => withReading(t, this.reading)), planTool(this.plans, (workspace) => [workspace]), ...boardTools(this.board, post, pageCheck, {
         levelOf: (orb) => levelOf(this.events, orb),
         // who may review a junior's row (PLAN 5.4; owner 10-02: the first of a kind is the Senior)
         reviewer: (who, author) =>
@@ -347,6 +354,8 @@ export class Home {
       }),
       ...computerTools(this.computers, this.vault, pageCheck),
       ...lessonTools(this.lessons),
+      // the reading library (PLAN 3.12): the sites the office follows, beside web search
+      ...readingTools(this.reading, (orb) => this.inbox.orb(orb)?.name ?? orb),
       // how the org works (PLAN 5.4): who fits a row, and a Senior passing a habit on (your yes first)
       ...orgTools({
         events: this.events, dataDir: this.dataDir,
@@ -817,6 +826,7 @@ export class Home {
     this.#closed = true;
     this.#cancelTimer?.();
     await this.#ticking;
+    await this.reading.close(); // a read under way ends at once, before the database closes
     await this.gym.close();
     await this.school.close();
     await this.inbox.close();
@@ -845,6 +855,7 @@ export class Home {
     void this.gym.due(); // the night goes on beside the ticks; close() waits for it
     void this.school.due(); // and school's classes (PLAN 5.7)
     this.recruiter.due(); // the Recruiter's list turns over at midnight (PLAN 5.8)
+    void this.reading.due(); // the reading library's next read, one at a time (PLAN 3.12)
     await this.triggers.poll({ all: woke });
   }
 
@@ -853,7 +864,7 @@ export class Home {
     this.#cancelTimer?.();
     const now = this.clock.now();
     let delay = this.#heartbeatMs;
-    for (const at of [this.schedules.nextDueAt(), this.notices.nextDueAt(), this.loops.nextDueAt(), this.triggers.nextPollAt(), this.gym.nextAt(), this.school.nextAt(), this.recruiter.nextAt()]) {
+    for (const at of [this.schedules.nextDueAt(), this.notices.nextDueAt(), this.loops.nextDueAt(), this.triggers.nextPollAt(), this.gym.nextAt(), this.school.nextAt(), this.recruiter.nextAt(), this.reading.nextAt()]) {
       if (at !== null) delay = Math.min(delay, at - now);
     }
     this.#cancelTimer = this.clock.timer(Math.max(MIN_DELAY_MS, delay), () => void this.tick());

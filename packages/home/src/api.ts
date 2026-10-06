@@ -532,6 +532,20 @@ async function handle(
       throw new HttpError(409, e instanceof Error ? e.message : String(e));
     }
   }
+  // the reading library (PLAN 3.12): what the office follows, what is being read now, and, for a
+  // query, the pages read that match; Stop following is yours too
+  if (method === "GET" && url.pathname === "/reading") {
+    const q = (url.searchParams.get("q") ?? "").trim();
+    return { sources: home.reading.sources(), now: home.reading.readingNow(), hits: q ? home.reading.search(q, { limit: 12 }) : [] };
+  }
+  if (method === "DELETE" && parts[0] === "reading" && parts[1] === "sources" && parts.length === 3 && /^\d+$/.test(parts[2]!)) {
+    try {
+      home.reading.unfollow(Number(parts[2]), "you");
+      return { ok: true };
+    } catch (e) {
+      throw new HttpError(404, e instanceof Error ? e.message : String(e));
+    }
+  }
   // the recruiter (PLAN 5.8): the positions you are hiring for, who applied, an interview, hire or pass
   if (method === "GET" && url.pathname === "/recruiter") return home.recruiting();
   if (method === "PUT" && parts[0] === "recruiter" && parts[1] === "positions" && parts.length === 3) {

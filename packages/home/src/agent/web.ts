@@ -42,7 +42,7 @@ for (const [suffix, upper, lower] of [
 
 const safeChar = (code: number): string => (Number.isInteger(code) && code >= 0 && code <= 0x10ffff ? String.fromCodePoint(code) : "");
 
-function decodeEntities(s: string): string {
+export function decodeEntities(s: string): string {
   return s
     .replace(/&#x([0-9a-f]+);/gi, (_, h: string) => safeChar(parseInt(h, 16)))
     .replace(/&#(\d+);/g, (_, d: string) => safeChar(parseInt(d, 10)))

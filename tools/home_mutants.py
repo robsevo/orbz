@@ -1199,6 +1199,100 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("an orb is never told that no orb is a he or a she", "src/agent/standing.ts", [
         ("    NO_HE_OR_SHE,\n", ""),
     ], ["voice.test.ts"]),
+    # the reading library (PLAN 3.12): robots.txt by the RFC, the manners, the reach, the tools
+    ('robots.txt is never consulted', 'src/reading/reading.ts', [
+        ('        if (!allowed(rules, pathOf(url))) {', '        if (false) {'),
+    ], ['reading.test.ts']),
+    ('the first rule found wins, not the longest', 'src/reading/robots.ts', [
+        ('if (!best || r.pattern.length > best.pattern.length ||', 'if (!best || r.pattern.length < best.pattern.length ||'),
+    ], ['reading-rules.test.ts']),
+    ('a tie goes to Disallow', 'src/reading/robots.ts', [
+        (' || (r.pattern.length === best.pattern.length && r.allow && !best.allow)) best = r;', ') best = r;'),
+    ], ['reading-rules.test.ts']),
+    ('our own group is never chosen', 'src/reading/robots.ts', [
+        ('  const chosen = ours.length ? ours : groups.filter((g) => g.agents.includes("*"));', '  const chosen = groups.filter((g) => g.agents.includes("*"));'),
+    ], ['reading-rules.test.ts']),
+    ('$ anchors nothing', 'src/reading/robots.ts', [
+        ('  const anchored = pattern.endsWith("$");', '  const anchored = false;'),
+    ], ['reading-rules.test.ts']),
+    ('the address is compared as it came', 'src/reading/robots.ts', [
+        ('  const path = normalizePath(pathAndQuery || "/");', '  const path = pathAndQuery || "/";'),
+    ], ['reading-rules.test.ts']),
+    ("a site's Crawl-delay is not kept", 'src/reading/reading.ts', [
+        ('const delayOf = (r: Robots): number => Math.max(MIN_DELAY_MS, (r.crawlDelay ?? 0) * 1000);', 'const delayOf = (_r: Robots): number => MIN_DELAY_MS;'),
+    ], ['reading.test.ts']),
+    ('pages are asked with no wait between', 'src/reading/reading.ts', [
+        ('    if (wait > 0 && !signal.aborted) await this.#sleep(wait, signal);', '    void wait;'),
+    ], ['reading.test.ts']),
+    ('the reach is the whole site', 'src/reading/pages.ts', [
+        ('(u.pathname.startsWith(reach.prefix) || u.pathname === reach.prefix.slice(0, -1))', 'true'),
+    ], ['reading.test.ts']),
+    ('the reach is every site', 'src/reading/pages.ts', [
+        ('    return u.hostname.toLowerCase() === reach.host && (', '    return ('),
+    ], ['reading.test.ts']),
+    ('a noindex page is kept', 'src/reading/reading.ts', [
+        ('        if (noindex) {', '        if (false) {'),
+    ], ['reading.test.ts']),
+    ('X-Robots-Tag is not read', 'src/reading/reading.ts', [
+        ('const header = headerDirectives(res.headers?.["x-robots-tag"]);', 'const header = headerDirectives(undefined);'),
+    ], ['reading.test.ts']),
+    ("a nofollow page's links are followed", 'src/reading/reading.ts', [
+        ('        if (!nofollow && depth < MAX_DEPTH)', '        if (depth < MAX_DEPTH)'),
+    ], ['reading.test.ts']),
+    ('a rel=nofollow link is followed', 'src/reading/pages.ts', [
+        ('    if ((a.rel ?? "").toLowerCase().split(/\\s+/).includes("nofollow")) continue;\n', ''),
+    ], ['reading.test.ts', 'reading-rules.test.ts']),
+    ('redirects are followed unchecked', 'src/reading/reading.ts', [
+        ('          maxRedirects: 0,\n', ''),
+    ], ['reading.test.ts']),
+    ('a page is asked again without its ETag', 'src/reading/reading.ts', [
+        ('            ...(had?.etag && { "if-none-match": had.etag }),\n', ''),
+    ], ['reading.test.ts']),
+    ('a 304 is not a read', 'src/reading/reading.ts', [
+        ('        if (status === 304 && had) {', '        if (false) {'),
+    ], ['reading.test.ts']),
+    ("429 does not end a site's read", 'src/reading/reading.ts', [
+        ('        if (status === 429 || status === 503) {', '        if (false) {'),
+    ], ['reading.test.ts']),
+    ('Retry-After is forgotten', 'src/reading/reading.ts', [
+        ('const next = Math.max(nextReadAt(now, src.every_days), retryAt ?? 0);', 'const next = nextReadAt(now, src.every_days);'),
+    ], ['reading.test.ts']),
+    ('a read has no page cap', 'src/reading/reading.ts', [
+        ('      while (queue.length && report.asked < PAGES_PER_READ &&', '      while (queue.length && report.asked < PAGES_PER_READ * 4 &&'),
+    ], ['reading.test.ts']),
+    ('an unreachable robots.txt allows all', 'src/reading/reading.ts', [
+        ('      return status === "ok" ? parseRobots(res.body ?? "") : status === "unavailable" ? ALLOW_ALL : DISALLOW_ALL;', '      return status === "ok" ? parseRobots(res.body ?? "") : ALLOW_ALL;'),
+    ], ['reading.test.ts']),
+    ('a private address is followed', 'src/reading/reading.ts', [
+        ('    if (!check.ok) throw new ReadingError(check.reason);\n', ''),
+    ], ['reading.test.ts']),
+    ('robots.txt is fetched for every read', 'src/reading/reading.ts', [
+        ('    const fresh = kept && now - kept.fetched_at <', '    const fresh = false && kept && now - kept.fetched_at <'),
+    ], ['reading.test.ts']),
+    ('a canonical copy is kept', 'src/reading/reading.ts', [
+        ('        if (page.canonical && page.canonical !== url && inReach(page.canonical, reach)) {', '        if (false) {'),
+    ], ['reading.test.ts']),
+    ('a PDF is kept as text', 'src/reading/reading.ts', [
+        ('        const kind = isText(ct, res.body ?? "");', '        const kind = isText(ct, res.body ?? "") ?? "text";'),
+    ], ['reading.test.ts']),
+    ("the library's search is not fenced", 'src/reading/tools.ts', [
+        ('      describe: (a) => `search the reading library for "${s(a.query)}"`,\n      decision: "allow",\n      untrusted: "page",', '      describe: (a) => `search the reading library for "${s(a.query)}"`,\n      decision: "allow",'),
+    ], ['reading.test.ts']),
+    ('web_search says nothing of the library', 'src/reading/tools.ts', [
+        ('      return hint ? { ...out, content: `${out.content}\\n\\n${hint}` } : out;', '      return hint ? out : out;'),
+    ], ['reading.test.ts']),
+    ("the home does not wake for the night's read", 'src/home.ts', [
+        ('this.recruiter.nextAt(), this.reading.nextAt()]', 'this.recruiter.nextAt()]'),
+    ], ['reading.test.ts']),
+    ('the tick never reads', 'src/home.ts', [
+        ("    void this.reading.due(); // the reading library's next read, one at a time (PLAN 3.12)\n", ''),
+    ], ['reading.test.ts']),
+    ('a first read is a notice', 'src/notices.ts', [
+        ('    } else if (e.type === "reading.read" && e.orb && !e.data.first) {', '    } else if (e.type === "reading.read" && e.orb) {'),
+    ], ['reading.test.ts']),
+    ("an unfollowed source's pages stay", 'src/reading/reading.ts', [
+        ('      this.#db.prepare("DELETE FROM reading_pages WHERE source = ?").run(id);\n', ''),
+    ], ['reading.test.ts']),
     # the recruiter: positions, applicants, an interview, hire and pass (PLAN 5.8)
     ("an unticked position's applicants stay in sight", 'src/recruiter.ts', [
         ('      .filter((r) => open.has(r.specialty))', '      .filter(() => true)'),
@@ -1717,7 +1811,7 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ("set={(time) => act(home.setSchedule(e.id, { time }))}", "set={() => act(Promise.resolve())}"),
     ], ["calendar.test.ts"]),
     ("the lab's search looks for nothing", "src/rooms/Lab.tsx", [
-        ("    if (o.home) o.home.labOf(q).then(setLab, (e: Error) => setSaid(e.message));", "    if (o.home) o.home.labOf(\"\").then(setLab, (e: Error) => setSaid(e.message));"),
+        ("    o.home.labOf(q).then(setLab, (e: Error) => setSaid(e.message));", "    o.home.labOf(\"\").then(setLab, (e: Error) => setSaid(e.message));"),
     ], ["lab.test.ts"]),
     ("Reopen opens the old brainstorm", "src/rooms/Lab.tsx", [
         ('    home.reopen(id).then((s) => o.go({ room: "sessions", id: s.id, tab: "brainstorm" }), (e: Error) => setSaid(e.message));', '    void home; o.go({ room: "sessions", id, tab: "brainstorm" });'),
@@ -1888,6 +1982,28 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ('Pass does nothing', 'src/rooms/Recruiter.tsx', [
         ('const pass = (id: number): void => void home.passApplicant(id).catch((e: Error) => setSaid(e.message));', 'const pass = (_id: number): void => undefined;'),
     ], ['recruiter-view.test.ts']),
+    # the reading library in the lab (PLAN 3.12)
+    ('Stop following does not ask first', 'src/rooms/Lab.tsx', [
+        ('<button onClick={() => setStopping(x.id)} style={{ ...button, justifySelf: "start" }}>', '<button onClick={() => stop(x.id)} style={{ ...button, justifySelf: "start" }}>'),
+    ], ['lab.test.ts']),
+    ("the lab's search finds no read pages", 'src/rooms/Lab.tsx', [
+        ('      {q && reading && reading.hits.length > 0 && (', '      {false && reading && ('),
+    ], ['lab.test.ts']),
+    ('the reading notice leads nowhere', 'src/rooms/Notices.tsx', [
+        ('                      {n.kind === "reading" && (', '                      {false && ('),
+    ], ['lab.test.ts']),
+    ('the lab never loads the reading library', 'src/rooms/Lab.tsx', [
+        ('    o.home.readingOf(q).then(setReading, (e: Error) => setSaid(e.message));\n', ''),
+    ], ['lab.test.ts']),
+    # a window made wide with the phone's menu open (owner, 10-06)
+    ("a window made wide keeps the phone's menu open", 'src/orbs.tsx', [
+        ('    if (!phone) setMenu(false);', '    if (!phone) void 0;'),
+    ], ['nav.test.ts']),
+    ("the phone's scrim stays in a desk's layout", 'src/orbs.tsx', [
+        ('    if (!phone) setMenu(false);', '    if (!phone) void 0;'),
+        ('{menu && phone && <div className="orbs-scrim"', '{menu && <div className="orbs-scrim"'),
+        ('.orbs-scrim { display: none; }\n', ''),
+    ], ['nav.test.ts']),
     # the app opens on the office, never New orb (owner, 10-06)
     ("every launch is kept on New orb", 'src/orbs.tsx', [
         ('    else history.replaceState({ orbs: 0 }, "");', '    else history.replaceState({ orbs: 0 }, "", routeHash(routeOf()));'),

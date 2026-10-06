@@ -5,14 +5,16 @@
 //   - a bill or a reminder an orb keeps for you (the `remind` tool), once, when it comes up: a
 //     bill three days ahead unless he says otherwise, a reminder on its day (or at its time);
 //   - an approval waiting for you (a card), gone once it is answered;
-//   - work finished: a run that ended with a reply (only the newest per conversation stays).
+//   - work finished: a run that ended with a reply (only the newest per conversation stays);
+//   - the reading library's night (PLAN 3.12): pages that changed on a followed site, or a site
+//     that has read nothing three times running, once a source a day.
 // Quiet: a count on the side menu, never a sound. A phone hears only what you choose (with 2.7).
 import type { DatabaseSync } from "node:sqlite";
 import type { Clock } from "./clock.ts";
 import { tx } from "./db.ts";
 import type { EventLog, HomeEvent } from "./events.ts";
 
-export type NoticeKind = "bill" | "reminder" | "approval" | "done" | "promotion" | "performance";
+export type NoticeKind = "bill" | "reminder" | "approval" | "done" | "promotion" | "performance" | "reading";
 export type Notice = {
   id: number; kind: NoticeKind; orb: string; conversation: string | null; card: number | null; reminder: number | null;
   title: string; detail: string; due: string | null; at: number;
@@ -197,6 +199,18 @@ export class Notices {
       const SAY: Record<string, string> = { promote: "ready for a promotion", keep: "keep going", retrain: "some practice", "let go": "give work, or let go" };
       this.#settle("kind = 'performance' AND orb = ?", e.orb);
       this.#add(`performance:${e.seq}`, { kind: "performance", orb: e.orb, conversation: null, title: `${this.#nameOf(e.orb)}'s week: ${SAY[String(e.data.suggest)] ?? String(e.data.suggest)}`, detail: String(e.data.why ?? ""), due: null });
+    } else if (e.type === "reading.read" && e.orb && !e.data.first) {
+      // the reading library (PLAN 3.12): a read of a followed site that changed something says so,
+      // once a source a day; a read with nothing new says nothing
+      const pages = (e.data.changedPages as { title: string }[] | undefined) ?? [];
+      const moved = Number(e.data.changed ?? 0) + Number(e.data.added ?? 0) + Number(e.data.gone ?? 0);
+      const key = `reading:${String(e.data.source)}:${new Date(e.at).toDateString()}`;
+      if (moved > 0) {
+        const parts = [e.data.changed ? `${String(e.data.changed)} changed` : "", e.data.added ? `${String(e.data.added)} new` : "", e.data.gone ? `${String(e.data.gone)} gone` : ""].filter(Boolean);
+        this.#add(key, { kind: "reading", orb: e.orb, conversation: null, title: `${this.#nameOf(e.orb)}'s reading: ${parts.join(", ")} on ${String(e.data.host)}`, detail: pages.map((p) => p.title).join(" · ").slice(0, 300), due: null });
+      } else if (Number(e.data.failures ?? 0) === 3) {
+        this.#add(key, { kind: "reading", orb: e.orb, conversation: null, title: `${this.#nameOf(e.orb)}'s reading: ${String(e.data.host)} has read nothing three times`, detail: String(e.data.stopped ?? "it answered nothing that could be kept"), due: null });
+      }
     } else if ((e.type === "orb.promoted" || e.type === "promotion.declined") && e.orb) {
       this.#settle("kind = 'promotion' AND orb = ?", e.orb);
     } else if (e.type === "run.finished" && e.data.outcome === "ok" && e.orb && e.conversation) {

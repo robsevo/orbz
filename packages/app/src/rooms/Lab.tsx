@@ -2,25 +2,47 @@
 // brainstorms and plans"). Every brainstorm (what was agreed, who was in it, where it was left)
 // and every plan an orb showed you (its rows, how far along), newest first; a search for a word in
 // any of it. A brainstorm opens where it was, or is reopened as a new session that knows it.
+// The reading library (PLAN 3.12; owner, 10-06: a crawler for the research orbs, quiet but never
+// hidden) is here too: every site an orb follows, who follows it and why, how its reads went and
+// what is being read now, Stop following; and the lab's search finds the pages read, dated.
 import { useEffect, useState, type CSSProperties } from "react";
 import { Orb } from "../orb/Orb.tsx";
 import type { Character } from "../orb/spec.ts";
 import { Balanced } from "../ui/Balanced.tsx";
-import { idOf, type LabPlan, type LabSession, type Office } from "../home/link.ts";
+import { idOf, type LabPlan, type LabSession, type Office, type ReadingState } from "../home/link.ts";
 import type { Route } from "../ui/nav.ts";
 
 const button: CSSProperties = { font: "600 13px/18px var(--font)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 10, padding: "6px 12px", cursor: "pointer", boxShadow: "inset 0 0 0 .5px var(--hairline)", minHeight: 32 };
 const BOX: Record<LabPlan["rows"][number]["box"], string> = { "[ ]": "○", "[~]": "◐", "[x]": "●" };
 const STATUS: Record<string, string> = { submitted: "Waiting for your answer", approved: "Approved", changed: "Sent back", saved: "Saved for later", declined: "Declined" };
-const CHANGES = /^(plan\.|board\.|session\.)/;
+const CHANGES = /^(plan\.|board\.|session\.|reading\.)/;
 const when = (t: number): string => new Date(t).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+const day = (t: number): string => new Date(t).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+const head: CSSProperties = { font: "700 11px/16px var(--font)", letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)" };
+const small: CSSProperties = { font: "400 12px/17px var(--font)", color: "var(--text-3)", overflowWrap: "anywhere", textWrap: "pretty" };
+const strong: CSSProperties = { ...button, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)" };
+
+/** A snippet's matched words, marked: the library puts them between « and ». */
+function Snippet({ text }: { text: string }) {
+  return (
+    <span style={{ font: "400 13px/19px var(--font)", color: "var(--text-2)", overflowWrap: "anywhere", textWrap: "pretty" }}>
+      {text.replace(/\s+/g, " ").split(/(«[^»]*»)/).map((part, i) =>
+        part.startsWith("«") ? <mark key={i} style={{ background: "var(--accent-fill)", color: "var(--text-1)", borderRadius: 3, padding: "0 2px" }}>{part.slice(1, -1)}</mark> : <span key={i}>{part}</span>,
+      )}
+    </span>
+  );
+}
 
 export function LabRoom(o: { home: Office | null; office: Character[]; go: (r: Route) => void }) {
   const [q, setQ] = useState("");
   const [lab, setLab] = useState<{ sessions: LabSession[]; plans: LabPlan[] } | null>(null);
+  const [reading, setReading] = useState<ReadingState | null>(null);
+  const [stopping, setStopping] = useState<number | null>(null); // the source whose Stop following waits for a yes
   const [said, setSaid] = useState<string | null>(null);
   const load = (): void => {
-    if (o.home) o.home.labOf(q).then(setLab, (e: Error) => setSaid(e.message));
+    if (!o.home) return;
+    o.home.labOf(q).then(setLab, (e: Error) => setSaid(e.message));
+    o.home.readingOf(q).then(setReading, (e: Error) => setSaid(e.message));
   };
   useEffect(() => {
     const t = setTimeout(load, q ? 200 : 0); // a word typed, then looked for
@@ -43,13 +65,29 @@ export function LabRoom(o: { home: Office | null; office: Character[]; go: (r: R
   const reopen = (id: number): void => {
     home.reopen(id).then((s) => o.go({ room: "sessions", id: s.id, tab: "brainstorm" }), (e: Error) => setSaid(e.message));
   };
-  const empty = lab && !lab.sessions.length && !lab.plans.length;
+  const empty = lab && !lab.sessions.length && !lab.plans.length && !reading?.hits.length;
+  const stop = (id: number): void => {
+    setStopping(null);
+    home.stopFollowing(id).then(load, (e: Error) => setSaid(e.message));
+  };
   return (
     <div style={{ display: "grid", gap: "var(--s5)", padding: "var(--s5)", alignContent: "start", minWidth: 0 }}>
       <h2 style={{ margin: 0, font: "800 28px/34px var(--font)", color: "var(--text-1)" }}>The lab</h2>
       <input type="search" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Look for a word in the lab" placeholder="A word: party, budget, invoices…" size={1} style={{ font: "500 15px/22px var(--font)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 12, padding: "10px 14px", outline: 0, boxShadow: "inset 0 0 0 1px var(--hairline)", minWidth: 0 }} />
       {said && <span role="alert" style={{ color: "var(--alert)" }}>{said}</span>}
       {empty && <span style={{ font: "400 14px/20px var(--font)", color: "var(--text-3)" }}>{q ? `Nothing with "${q}" in it.` : "Nothing yet: a session's brainstorm and the plans your orbs show you are kept here."}</span>}
+      {q && reading && reading.hits.length > 0 && (
+        <section aria-label="From the reading library" style={{ display: "grid", gap: 8, minWidth: 0 }}>
+          <span style={head}>From the reading library</span>
+          {reading.hits.map((h) => (
+            <article key={h.url} data-hit={h.url} style={{ display: "grid", gap: 4, padding: "var(--s3) var(--s4)", borderRadius: 14, background: "var(--card)", boxShadow: "inset 0 0 0 1px var(--hairline)", minWidth: 0 }}>
+              <a href={h.url} target="_blank" rel="noopener noreferrer" style={{ font: "700 15px/21px var(--font)", color: "var(--text-1)", overflowWrap: "anywhere", textWrap: "balance" }}>{h.title || h.url}</a>
+              <span style={small}>{`${h.host} · read ${day(h.readAt)}${h.changedAt !== h.readAt ? ` · changed ${day(h.changedAt)}` : ""}`}</span>
+              <Snippet text={h.snippet} />
+            </article>
+          ))}
+        </section>
+      )}
       {lab && lab.sessions.length > 0 && (
         <section aria-label="Brainstorms" style={{ display: "grid", gap: 8, minWidth: 0 }}>
           <span style={{ font: "700 11px/16px var(--font)", letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)" }}>Brainstorms</span>
@@ -126,6 +164,50 @@ export function LabRoom(o: { home: Office | null; office: Character[]; go: (r: R
               );
             })}
           </Balanced>
+        </section>
+      )}
+      {reading && (
+        <section aria-label="Reading" style={{ display: "grid", gap: 8, minWidth: 0 }}>
+          <span style={head}>Reading</span>
+          <span style={small}>The sites your orbs follow, read each night a page at a time, as each site's robots.txt allows. Their search finds what was read here first, and the web for what is new.</span>
+          {!reading.sources.length && <span style={{ font: "400 14px/20px var(--font)", color: "var(--text-3)" }}>Nothing followed yet: an orb follows a site worth keeping up with (official docs, a changelog, a project's news), and what it reads is kept here.</span>}
+          {reading.sources.length > 0 && (
+            <Balanced min={300} gap={10}>
+              {reading.sources.map((x) => {
+                const c = orbOf(x.orb);
+                const now = reading.now?.source === x.id;
+                return (
+                  <article key={x.id} data-source={x.id} data-orb={c?.hue} style={{ display: "grid", gap: 8, alignContent: "start", padding: "var(--s4)", borderRadius: 16, background: "var(--card)", boxShadow: "inset 0 0 0 1px var(--hairline)", minWidth: 0 }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                      {c && <Orb character={c} size={30} poke={false} still />}
+                      <span style={{ display: "grid", minWidth: 0 }}>
+                        <span style={{ font: "800 16px/22px var(--font)", color: "var(--text-1)", overflowWrap: "anywhere", textWrap: "balance" }}>{x.title || x.host}</span>
+                        <a href={x.url} target="_blank" rel="noopener noreferrer" style={{ ...small, color: "var(--accent)" }}>{`${x.host}${x.prefix}`}</a>
+                      </span>
+                    </span>
+                    {x.why && <span style={{ font: "400 13px/19px var(--font)", color: "var(--text-2)", overflowWrap: "anywhere", textWrap: "pretty" }}>{`${c?.name ?? x.orb}: “${x.why}”`}</span>}
+                    <span data-reading-now={now || undefined} style={{ ...small, color: now ? "var(--accent)" : "var(--text-3)" }}>
+                      {now ? `Reading now · ${x.pages} pages kept` : `${x.pages} ${x.pages === 1 ? "page" : "pages"} · ${x.lastReadAt ? `read ${day(x.lastReadAt)}` : "not read yet"} · next ${day(x.nextAt)}${x.everyDays === 7 ? " (weekly)" : ""}`}
+                    </span>
+                    {x.lastError && <span style={{ ...small, color: "var(--alert)" }}>{`Last read: ${x.lastError}`}</span>}
+                    {stopping === x.id ? (
+                      <span role="group" aria-label={`Stop following ${x.host}?`} style={{ display: "grid", gap: 6 }}>
+                        <span style={small}>{`Stop following ${x.host}${x.prefix}? Its ${x.pages} ${x.pages === 1 ? "page leaves" : "pages leave"} the library.`}</span>
+                        <Balanced min={120} gap={6}>
+                          <button onClick={() => stop(x.id)} style={strong}>Stop following</button>
+                          <button onClick={() => setStopping(null)} style={button}>Keep it</button>
+                        </Balanced>
+                      </span>
+                    ) : (
+                      <button onClick={() => setStopping(x.id)} style={{ ...button, justifySelf: "start" }}>
+                        Stop following…
+                      </button>
+                    )}
+                  </article>
+                );
+              })}
+            </Balanced>
+          )}
         </section>
       )}
     </div>

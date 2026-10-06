@@ -4,6 +4,9 @@
 //   - A word finds a plan by its rows; one that is nowhere says so.
 //   - Reopen starts a new session from the brainstorm, and opens it: it says where it came from.
 //   - Nothing spills at desk or phone size.
+//   - The reading library (PLAN 3.12): each site followed, by whom and why, its pages and its reads; a
+//     word finds the pages read, dated, the word marked; a night's change is a notice that opens the
+//     lab; Stop following asks first, and the pages leave; desk and phone.
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -15,6 +18,8 @@ import type { Browser } from "playwright-core";
 import { findChrome, launch, measure } from "./harness.ts";
 import { Home } from "../../home/src/home.ts";
 import { serve } from "../../home/src/api.ts";
+import { FakeClock } from "../../home/src/clock.ts";
+import { sites } from "../../home/test/fakes/sites.ts";
 
 const APP = fileURLToPath(new URL("..", import.meta.url));
 const skip = findChrome() ? false : "no Chromium on this machine";
@@ -98,4 +103,74 @@ test("the lab: brainstorms and plans kept, found by a word, a brainstorm reopene
   assert.notEqual(id, s.id);
   assert.equal(h.team.get(id)!.title, "A birthday party (reopened)");
   await page.getByText('Reopened from "A birthday party": everyone here knows what was agreed.').waitFor({ timeout: 20_000 });
+});
+
+test("the reading library in the lab: what is followed and why, the pages read for a word, a night's change noticed, Stop following asked first", { skip, ...LONG }, async (t) => {
+  const site = await sites(t);
+  const clock = new FakeClock(new Date(2026, 9, 6, 14, 0).getTime());
+  const data = mkdtempSync(join(tmpdir(), "orbs-lab-home-"));
+  t.after(() => rmSync(data, { recursive: true, force: true }));
+  const h = Home.open({ dataDir: data, protect: [], spendCapUsd: null, clock, reading: { sleep: async (ms: number) => clock.suspend(ms) } });
+  t.after(() => h.close());
+  h.about.setName("Robin");
+  h.inbox.addOrb("milo", "Milo", "research", { shape: "bean", eyes: "classic", hue: "teal" });
+  await h.reading.follow("milo", site.url("docs.test", "/guide/"), "the guide we build against");
+  await h.reading.idle();
+  site.state.bVersion = 2; // a night later, Bravo has changed
+  clock.suspend(h.reading.nextAt()! - clock.now() + 60_000);
+  await h.reading.due();
+  const d = await serve(h, { port: 0, appDir: dist });
+  t.after(() => d.close());
+  const open = async (size: { width: number; height: number }) => {
+    const ctx = await browser.newContext({ viewport: size, colorScheme: "dark" });
+    t.after(() => ctx.close());
+    const page = await ctx.newPage();
+    await page.goto(d.pairLink());
+    await page.locator(".orbs-window").waitFor({ timeout: 30_000 });
+    await page.evaluate(() => (location.hash = "#/lab"));
+    await page.locator('section[aria-label="Reading"] [data-source]').waitFor({ timeout: 20_000 });
+    return page;
+  };
+  const page = await open({ width: 1280, height: 900 });
+  const card = page.locator('section[aria-label="Reading"] [data-source]');
+  assert.match(await card.innerText(), /The guide\s+docs\.test\/guide\/\s+Milo: “the guide we build against”\s+7 pages · read 7 Oct · next 8 Oct/);
+  await page.waitForTimeout(400);
+  assert.deepEqual(await measure(page), [], "the reading library, at desk size");
+
+  // a word finds the pages read, dated, the word marked
+  await page.getByRole("searchbox", { name: "Look for a word in the lab" }).fill("release notes");
+  const hit = page.locator('section[aria-label="From the reading library"] [data-hit]');
+  await hit.first().waitFor({ timeout: 20_000 });
+  assert.equal(await hit.count(), 1);
+  // changed in the read it was last read in: one date says both
+  assert.match(await hit.innerText(), /^Bravo\ndocs\.test · read 7 Oct\nBravo version 2 of the release notes\.$/);
+  assert.deepEqual(await hit.locator("mark").allInnerTexts(), ["release", "notes"]);
+  await page.getByRole("searchbox", { name: "Look for a word in the lab" }).fill("");
+
+  // and on a phone
+  const phone = await open({ width: 390, height: 844 });
+  await phone.waitForTimeout(400);
+  assert.deepEqual(await measure(phone), [], "the reading library, at phone size");
+
+  // the night's change is a notice, and it opens the lab
+  await page.evaluate(() => (location.hash = "#/notices"));
+  const note = page.locator('[data-notice="reading"]');
+  await note.waitFor({ timeout: 20_000 });
+  assert.match(await note.innerText(), /Milo's reading: 1 changed on docs\.test[\s\S]*Reading · Bravo/);
+  await note.getByRole("button", { name: "The reading library" }).click();
+  await page.waitForFunction(() => location.hash === "#/lab", undefined, { timeout: 10_000 });
+
+  // Stop following asks first; then the source and its pages leave
+  await card.waitFor({ timeout: 20_000 });
+  await card.getByRole("button", { name: "Stop following…" }).click();
+  const ask = page.getByRole("group", { name: "Stop following docs.test?" });
+  assert.match(await ask.innerText(), /Its 7 pages leave the library\./);
+  await ask.getByRole("button", { name: "Keep it" }).click();
+  assert.equal(h.reading.sources().length, 1, "Keep it keeps it");
+  await card.getByRole("button", { name: "Stop following…" }).click();
+  await page.getByRole("group", { name: "Stop following docs.test?" }).getByRole("button", { name: "Stop following" }).click();
+  await card.waitFor({ state: "detached", timeout: 20_000 });
+  assert.deepEqual(h.reading.sources(), []);
+  assert.equal(h.reading.search("release notes").length, 0, "its pages left with it");
+  await page.getByText("Nothing followed yet").waitFor({ timeout: 10_000 });
 });

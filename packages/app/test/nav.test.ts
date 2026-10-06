@@ -4,6 +4,8 @@
 //   - the menu goes to each room and Back returns, the same as the browser's Back;
 //   - a link opens straight onto its place;
 //   - on a phone the menu slides in from a top bar and closes once you have chosen;
+//   - the menu open on a phone, then the window made wide: the desk's own layout, and closed when
+//     it is narrow again (owner, 10-06: "when we resize from mobile to desktop with menu open it glitches");
 //   - Settings renames the CEO, switches the sounds and plays the story again;
 //   - the layout rule holds in Settings and with the menu open.
 import assert from "node:assert/strict";
@@ -112,6 +114,37 @@ test("on a phone the menu slides in from the top bar, and closes once you have c
     await menu(page).waitFor({ state: "hidden" });
   } finally {
     await page.context().close();
+  }
+});
+
+test("the menu open on a phone, then the window made wide: the desk's own layout; narrow again, the menu is closed", { skip }, async () => {
+  const boxes = (p: Page) => p.evaluate(() => Object.fromEntries([".orbs-side", "[data-floor]"].map((sel) => {
+    const r = document.querySelector(sel)!.getBoundingClientRect();
+    return [sel, [r.x, r.y, r.width, r.height].map(Math.round)];
+  })));
+  const desk = await open("", "desk");
+  const page = await open("", "phone");
+  try {
+    await desk.locator("[data-floor]").waitFor();
+    await desk.waitForTimeout(600);
+    const want = await boxes(desk);
+    await page.getByRole("button", { name: "Menu" }).click();
+    await menu(page).waitFor();
+    await page.waitForTimeout(500);
+    await page.setViewportSize(SIZES.desk);
+    await page.waitForTimeout(800);
+    assert.equal(await page.locator(".orbs-scrim").count(), 0, "no scrim on a desk");
+    assert.deepEqual(await boxes(page), want, "the side menu and the office where a desk has them");
+    assert.deepEqual(await measure(page), [], "the layout rule, made wide");
+    await page.setViewportSize(SIZES.phone);
+    await page.waitForTimeout(800);
+    assert.equal(await page.getByRole("button", { name: "Menu" }).getAttribute("aria-expanded"), "false", "narrow again: the menu is closed, not open by itself");
+    // out of reach once it has slid away (a count after a fixed wait lost the race under the gate's load)
+    await menu(page).waitFor({ state: "hidden", timeout: 10_000 });
+    assert.deepEqual(await measure(page), [], "the layout rule, narrow again");
+  } finally {
+    await page.context().close();
+    await desk.context().close();
   }
 });
 

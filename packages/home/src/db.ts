@@ -380,6 +380,58 @@ const MIGRATIONS: string[] = [
     starting  INTEGER NOT NULL DEFAULT 0
   );
   `,
+  // v15 (PLAN 3.12): the reading library: the sources an orb follows (each one's reach: a site and a
+  // folder of it), the pages read from them (the words, their validators for a conditional ask, when
+  // each was read and last changed), the words indexed for search (FTS5, kept in step by triggers),
+  // and each site's robots.txt as last fetched (RFC 9309: kept a day).
+  `
+  CREATE TABLE reading_sources (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    orb          TEXT    NOT NULL,
+    url          TEXT    NOT NULL UNIQUE,
+    host         TEXT    NOT NULL,
+    prefix       TEXT    NOT NULL,
+    title        TEXT    NOT NULL DEFAULT '',
+    why          TEXT    NOT NULL DEFAULT '',
+    every_days   INTEGER NOT NULL DEFAULT 1,
+    added_at     INTEGER NOT NULL,
+    last_read_at INTEGER,
+    next_at      INTEGER NOT NULL,
+    failures     INTEGER NOT NULL DEFAULT 0,
+    last_error   TEXT
+  );
+  CREATE TABLE reading_pages (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    source        INTEGER NOT NULL,
+    url           TEXT    NOT NULL UNIQUE,
+    title         TEXT    NOT NULL DEFAULT '',
+    text          TEXT    NOT NULL DEFAULT '',
+    hash          TEXT    NOT NULL DEFAULT '',
+    etag          TEXT,
+    last_modified TEXT,
+    depth         INTEGER NOT NULL DEFAULT 0,
+    fetched_at    INTEGER NOT NULL,
+    changed_at    INTEGER NOT NULL
+  );
+  CREATE INDEX reading_pages_source ON reading_pages (source);
+  CREATE VIRTUAL TABLE reading_text USING fts5(title, text, content = 'reading_pages', content_rowid = 'id', tokenize = 'porter unicode61');
+  CREATE TRIGGER reading_pages_ai AFTER INSERT ON reading_pages BEGIN
+    INSERT INTO reading_text (rowid, title, text) VALUES (new.id, new.title, new.text);
+  END;
+  CREATE TRIGGER reading_pages_ad AFTER DELETE ON reading_pages BEGIN
+    INSERT INTO reading_text (reading_text, rowid, title, text) VALUES ('delete', old.id, old.title, old.text);
+  END;
+  CREATE TRIGGER reading_pages_au AFTER UPDATE OF title, text ON reading_pages BEGIN
+    INSERT INTO reading_text (reading_text, rowid, title, text) VALUES ('delete', old.id, old.title, old.text);
+    INSERT INTO reading_text (rowid, title, text) VALUES (new.id, new.title, new.text);
+  END;
+  CREATE TABLE reading_robots (
+    origin     TEXT    PRIMARY KEY,
+    fetched_at INTEGER NOT NULL,
+    status     TEXT    NOT NULL CHECK (status IN ('ok', 'unavailable', 'unreachable')),
+    body       TEXT    NOT NULL DEFAULT ''
+  );
+  `,
 ];
 
 /** The home's data is the person's: the folder is theirs alone (0700) and so is the database

@@ -1040,6 +1040,12 @@ function App() {
     if (location.hash) history.replaceState({ orbs: 0 }, "", location.hash);
     else history.replaceState({ orbs: 0 }, "");
   }, []);
+  // the menu slides in on a phone only: a window made wide with it open closes it, or its scrim stayed in the
+  // desk's layout as a stray box, and it came back open when the window was narrow again (owner, 10-06:
+  // "when we resize from mobile to desktop with menu open it glitches and looks weird")
+  useEffect(() => {
+    if (!phone) setMenu(false);
+  }, [phone]);
   useEffect(() => {
     if (!menu) return;
     const esc = (e: KeyboardEvent): void => {
@@ -1102,7 +1108,7 @@ function App() {
             ☰
           </button>
         </div>
-        {menu && <div className="orbs-scrim" aria-hidden onClick={() => setMenu(false)} />}
+        {menu && phone && <div className="orbs-scrim" aria-hidden onClick={() => setMenu(false)} />}
         <aside className="orbs-side" data-open={menu} style={s.side}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 var(--s2)", font: "700 12px/20px var(--font)", letterSpacing: ".12em", color: "var(--text-3)" }}>
             <i aria-hidden data-orb={me.hue} style={{ width: 9, height: 9, borderRadius: "50%", background: "radial-gradient(circle at 35% 30%, var(--text-1) 0%, var(--accent) 60%)", boxShadow: "0 0 8px var(--accent-glow)" }} />
@@ -1347,14 +1353,16 @@ function App() {
 
 const style = document.createElement("style");
 style.textContent = `${stylesheet(`${import.meta.env.BASE_URL}fonts/Nunito.ttf`)}
-/* a phone: the side menu slides in from the left, over a scrim, and a top bar holds Back and the menu */
+/* a phone: the side menu slides in from the left, over a scrim, and a top bar holds Back and the menu;
+   wider, there is no scrim, not even for the frame before a widened window closes the menu */
+.orbs-scrim { display: none; }
 @media (max-width: 760px) {
   .orbs-window { grid-template-columns: minmax(0, 1fr) !important; overflow: visible !important; }
   .orbs-topbar { display: flex !important; }
   /* closed, it is hidden once it has slid away (out of Tab's reach and a screen reader's), and shown as it slides in */
   .orbs-side { position: fixed; inset: 0 auto 0 0; z-index: 30; width: min(300px, 86vw); overflow-y: auto; translate: -105% 0; visibility: hidden; transition: translate var(--m-slow) var(--m-spring), visibility 0s linear var(--m-slow); box-shadow: 4px 0 24px var(--shadow) !important; }
   .orbs-side[data-open="true"] { translate: 0 0; visibility: visible; transition: translate var(--m-slow) var(--m-spring), visibility 0s; }
-  .orbs-scrim { position: fixed; inset: 0; z-index: 29; background: var(--ground); opacity: .72; }
+  .orbs-scrim { display: block; position: fixed; inset: 0; z-index: 29; background: var(--ground); opacity: .72; }
 }
 @media (min-width: 1100px) { .orbs-pair { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) !important; } }
 /* side by side, no hole under the shorter one (owner, 10-04: "no dead space please. to industry standards"):
