@@ -114,10 +114,22 @@ test("the office is the floor: an orb at work at its desk, a Brainstorm at the m
   await phone.waitForTimeout(600);
   assert.deepEqual(await measure(phone), [], "the floor, at phone size");
 
-  // pressing an orb opens its profile (once it stands still: the test's clicks wait for a still target)
-  await arrives(page, "Pip", /./);
-  await page.locator('[data-floor-orb="Pip"]').click();
-  await page.waitForFunction(() => location.hash === "#/office/Pip", undefined, { timeout: 10_000 });
+  // pressing an orb opens its profile. Pressed where it stands the moment it arrives: under the gate's
+  // load it could set off again before Playwright saw two still frames, and a click that waits for a still
+  // target then never came (10-06, twice); a press that misses a walking orb is tried again
+  const floorAt = await page.evaluate(() => location.hash);
+  for (let i = 0; ; i++) {
+    await arrives(page, "Pip", /./);
+    await page.locator('[data-floor-orb="Pip"]').click({ force: true, timeout: 5_000 }).catch(() => {});
+    const opened = await page.waitForFunction(() => location.hash === "#/office/Pip", undefined, { timeout: 2_000 }).then(() => true, () => false);
+    if (opened) break;
+    assert.ok(i < 10, "Pip opened on a press");
+    // a press that missed may have opened something else on the floor: back to the floor
+    if ((await page.evaluate(() => location.hash)) !== floorAt) {
+      await page.evaluate((h) => (location.hash = h || "#/office"), floorAt);
+      await page.locator("[data-floor]").waitFor({ timeout: 10_000 });
+    }
+  }
   await page.locator(".orbs-sheet").filter({ hasText: "Pip" }).waitFor({ timeout: 10_000 });
   assert.match(await page.locator(".orbs-sheet").innerText(), /Pip[\s\S]*Personal Assistant[\s\S]*Traits/i, "its profile, stats and all");
   // and The office goes back to the floor

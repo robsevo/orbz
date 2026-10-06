@@ -1209,8 +1209,18 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ('applicants never take other jobs', 'src/recruiter.ts', [
         ('now - WAIT_DAYS * DAY_MS', 'now - 1000 * DAY_MS'),
     ], ['recruiter.test.ts']),
-    ('applicants pile up without end', 'src/recruiter.ts', [
-        ('Math.min(PER_DAY, MOST - waiting)', 'PER_DAY'),
+    # the list turns over once a day (owner, 10-06)
+    ("yesterday's applicants stay through the day's turn", 'src/recruiter.ts', [
+        ('(created_at <= ? OR (day < ? AND id NOT IN (SELECT applicant FROM interviews)))', '(created_at <= ? OR (day < ? AND 0))'),
+    ], ['recruiter.test.ts']),
+    ('an applicant you began to interview leaves at the turn', 'src/recruiter.ts', [
+        ('(day < ? AND id NOT IN (SELECT applicant FROM interviews))', '(day < ?)'),
+    ], ['recruiter.test.ts']),
+    ("the list turns over only when someone looks", 'src/home.ts', [
+        ('    this.recruiter.due(); // the Recruiter\'s list turns over at midnight (PLAN 5.8)\n', ''),
+    ], ['recruiter.test.ts']),
+    ("the home does not wake for the day's turn", 'src/home.ts', [
+        ('this.school.nextAt(), this.recruiter.nextAt()]', 'this.school.nextAt()]'),
     ], ['recruiter.test.ts']),
     ('an applicant is told it may use tools', 'src/recruiter.ts', [
         ('    "You have no tools and no computer yet: you can only talk. Do not offer to do work before you are hired, and never claim to have done something.",\n', ''),
@@ -1873,10 +1883,27 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ('const c = applicant(a.seed, k as Kind, taken);', 'const c = applicant(a.seed + 1, k as Kind, taken);'),
     ], ['recruiter-view.test.ts']),
     ('Hire does nothing', 'src/rooms/Recruiter.tsx', [
-        ('onClick={() => void home.hireApplicant(a.id, c).then(hired, (e: Error) => setSaid(e.message))}', 'onClick={() => undefined}'),
+        ('const hire = (id: number, c: Character): void => void home.hireApplicant(id, c).then(hired, (e: Error) => setSaid(e.message));', 'const hire = (_id: number, _c: Character): void => undefined;'),
     ], ['recruiter-view.test.ts']),
     ('Pass does nothing', 'src/rooms/Recruiter.tsx', [
-        ('onClick={() => void home.passApplicant(a.id).catch((e: Error) => setSaid(e.message))}', 'onClick={() => undefined}'),
+        ('const pass = (id: number): void => void home.passApplicant(id).catch((e: Error) => setSaid(e.message));', 'const pass = (_id: number): void => undefined;'),
+    ], ['recruiter-view.test.ts']),
+    # the app opens on the office, never New orb (owner, 10-06)
+    ("every launch is kept on New orb", 'src/orbs.tsx', [
+        ('    else history.replaceState({ orbs: 0 }, "");', '    else history.replaceState({ orbs: 0 }, "", routeHash(routeOf()));'),
+    ], ['link.test.ts']),
+    # the floor's Hiring tags open on who applied to their department (owner, 10-06)
+    ("the floor's Hiring tag opens the Recruiter's top", 'src/floor/Floor.tsx', [
+        ('onClick={() => go({ room: "recruiter", family: z })}', 'onClick={() => go({ room: "recruiter" })}'),
+    ], ['recruiter-view.test.ts']),
+    ("a department's page shows everyone", 'src/rooms/Recruiter.tsx', [
+        ('const inDept = (k: string): boolean => !dept || familyOf(k) === dept;', 'const inDept = (_k: string): boolean => true;'),
+    ], ['recruiter-view.test.ts']),
+    ("a department's applicants stay below the positions", 'src/rooms/Recruiter.tsx', [
+        ('applying.current?.scrollIntoView({ block: "start" })', 'undefined'),
+    ], ['recruiter-view.test.ts']),
+    ("the department buttons go nowhere", 'src/rooms/Recruiter.tsx', [
+        ('onClick={() => pick(f)}', 'onClick={() => undefined}'),
     ], ['recruiter-view.test.ts']),
     ("an interview's answer is never shown", 'src/rooms/Recruiter.tsx', [
         ('(answer) => setLines((l) => [...l, { role: "orb", text: answer, at: Date.now() }]),', '() => undefined,'),

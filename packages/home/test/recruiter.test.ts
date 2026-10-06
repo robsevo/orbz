@@ -1,7 +1,9 @@
 // PLAN 5.8_t, the recruiter, on a real home:
 //   - only the positions you tick get applicants; one day's are the same however often you look (and
-//     on any device: the home keeps the seeds); the next day brings more, never past MOST waiting;
-//   - a week unanswered, an applicant takes another job; Pass sends one on;
+//     on any device: the home keeps the seeds);
+//   - the list turns over once a day (owner, 10-06): at midnight yesterday's unanswered applicants take
+//     other jobs and today's apply, new people, by the home's own tick with no one looking; one you
+//     have begun to interview waits through the turn, a week at most; Pass sends one on;
 //   - an interview: the brain answers as the applicant, told it can only talk, asked only when you
 //     speak, its cost recorded; hired, the interview is the new orb's first chat;
 //   - the orbs you let go apply again for an open position, the most qualified first;
@@ -9,14 +11,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { FakeClock } from "../src/clock.ts";
-import { MOST, PER_DAY, WAIT_DAYS } from "../src/recruiter.ts";
+import { PER_DAY, WAIT_DAYS } from "../src/recruiter.ts";
 import { levelOf } from "../src/gym/levels.ts";
 import { serve } from "../src/api.ts";
 import { agentHome } from "./helpers.ts";
 
 const DAY = 86_400_000;
 
-test("only ticked positions get applicants; a day's are the same however often you look; more come each day, a week and they are gone", async (t) => {
+test("only ticked positions get applicants; a day's are the same however often you look; each day the list turns over, new people", async (t) => {
   const clock = new FakeClock(new Date(2026, 9, 3, 9, 0).getTime());
   const { home } = await agentHome(t, [], { clock });
   assert.deepEqual(home.recruiting().applicants, [], "no position ticked: no one applies");
@@ -29,20 +31,48 @@ test("only ticked positions get applicants; a day's are the same however often y
   home.inbox.addOrb("ada", "Ada", "frontend");
   assert.ok(home.recruiting().applicants.every((a) => a.startsAs === "Junior"), "with a frontend orb in the office: a Junior");
 
-  clock.suspend(DAY);
-  const second = home.recruiting().applicants;
-  assert.equal(second.length, 2 * PER_DAY, "the next day, more");
-  assert.notDeepEqual(second.slice(PER_DAY).map((a) => a.seed), first.map((a) => a.seed), "new people");
-  for (let i = 0; i < 6; i++) {
+  const seen = new Set(first.map((a) => a.seed));
+  let yesterday = first;
+  for (let d = 1; d <= 3; d++) {
     clock.suspend(DAY);
-    home.recruiting();
+    const today = home.recruiting().applicants;
+    assert.equal(today.length, PER_DAY, `day ${d + 1}: today's applicants only`);
+    assert.ok(!today.some((a) => yesterday.some((y) => y.id === a.id)), `day ${d + 1}: yesterday's took other jobs`);
+    assert.ok(today.every((a) => !seen.has(a.seed)), `day ${d + 1}: new people`);
+    today.forEach((a) => seen.add(a.seed));
+    yesterday = today;
   }
-  assert.ok(home.recruiting().applicants.length <= MOST, "never more than MOST waiting");
-  assert.ok(!home.recruiting().applicants.some((a) => first.some((f) => f.id === a.id)), `a week unanswered (${WAIT_DAYS} days), the first ones took other jobs`);
+  assert.equal(home.events.ofType("applicant.gone").length, 3 * PER_DAY, "each day's left unanswered went at the turn");
 
-  // unticked, the position's applicants are out of sight
+  // unticked, the position's applicants are out of sight; ticked again the same day, the same people
   home.recruiter.setPosition("frontend", false);
   assert.deepEqual(home.recruiting().applicants, []);
+  home.recruiter.setPosition("frontend", true);
+  assert.deepEqual(home.recruiting().applicants.map((a) => a.id), yesterday.map((a) => a.id), "the same day: the same people");
+});
+
+test("the list turns over at midnight by the home's own tick, with no one looking; one you have begun to interview waits a week", async (t) => {
+  const clock = new FakeClock(new Date(2026, 9, 3, 21, 0).getTime());
+  // a heartbeat of a day: only the recruiter's own wake-up at midnight can tick the home before 03:00
+  const { home, model } = await agentHome(t, [], { clock, heartbeatMs: DAY });
+  home.start();
+  home.recruiter.setPosition("design", true);
+  const [kept, other] = home.recruiting().applicants;
+  model.replies.push("Colour is how I think.");
+  await home.interview(kept!.id, { name: "Iris", title: "Designer", focus: "looks", tone: "calm" }, "Why design?");
+  assert.equal(home.recruiter.nextAt(), new Date(2026, 9, 4).getTime(), "the next turn: midnight");
+
+  const applied = home.events.ofType("applicant.applied").length;
+  await clock.advance(3 * 3_600_000 + 60_000); // the home stays awake past midnight; no one opens the Recruiter
+  assert.equal(home.events.ofType("applicant.applied").length, applied + PER_DAY, "today's applied at the turn, by the tick");
+  assert.ok(home.events.ofType("applicant.gone").some((e) => e.data.applicant === other!.id), "yesterday's unanswered one took another job at the turn");
+
+  const now = home.recruiting().applicants.map((a) => a.id);
+  assert.ok(now.includes(kept!.id), "the one you began to interview waits for your answer");
+  assert.ok(!now.includes(other!.id));
+  assert.equal(now.length, PER_DAY + 1);
+  for (let d = 0; d < WAIT_DAYS; d++) clock.suspend(DAY);
+  assert.ok(!home.recruiting().applicants.some((a) => a.id === kept!.id), `after a week (${WAIT_DAYS} days), even an interviewed one takes another job`);
 });
 
 test("Pass sends an applicant on; an interview answers as the applicant, with no tools, and hired, it is the first chat", async (t) => {

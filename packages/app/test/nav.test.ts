@@ -48,7 +48,8 @@ const where = (p: Page) => p.evaluate(() => location.hash);
 const menu = (p: Page) => p.getByRole("navigation", { name: "Rooms" });
 
 test("every place is an address, and back again", () => {
-  for (const r of [{ room: "office", orb: "Ash" }, { room: "office", orb: "Zoë B" }, { room: "new" }, { room: "settings" }] as Route[]) assert.deepEqual(parseRoute(routeHash(r)), r);
+  for (const r of [{ room: "office", orb: "Ash" }, { room: "office", orb: "Zoë B" }, { room: "new" }, { room: "settings" }, { room: "recruiter", family: null }, { room: "recruiter", family: "build" }] as Route[]) assert.deepEqual(parseRoute(routeHash(r)), r);
+  assert.equal(routeHash({ room: "recruiter", family: "think" }), "#/recruiter/think", "who applied to one department is a place of its own");
   assert.deepEqual(parseRoute(""), { room: "office", orb: null }, "nothing: the office");
   assert.deepEqual(parseRoute("#/nonsense"), { room: "office", orb: null }, "an address that is not a place: the office");
 });

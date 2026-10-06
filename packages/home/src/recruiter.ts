@@ -1,13 +1,16 @@
 // The recruiter (PLAN 5.8; owner, 10-03: "recruiter section should show us random new orbs who have
 // applied to our company for positions we are looking for which we tick off in that section").
-// You tick the positions you are hiring for; each day a few new orbs apply for each one. An
-// applicant is a seed: the app's dice (spec.ts `applicant`) make his look, name, personality and
-// voice from it, the same on every device, and the home keeps the seed, so a reload or another
-// device sees the same people. Interview him if you like (owner: "add the interview part for fun"):
-// a chat in which he answers as himself, with no tools; the brain is asked only while you interview.
-// Hire brings him in as he applied, his interview his first chat; Pass sends him on; a week
-// unanswered, he takes another job. Orbs you let go apply again for their old kind of work, with
-// their record (Home.recruiting).
+// You tick the positions you are hiring for; each day a few new orbs apply for each one, and the
+// list turns over once a day (owner, 10-06: "we want the recuiter section to refresh with new
+// combinations once a day"): at the day's turn whoever you left unanswered takes another job and
+// today's apply, new people from new seeds. An applicant is a seed: the app's dice (spec.ts
+// `applicant`) make his look, name, personality and voice from it, the same on every device, and
+// the home keeps the seed, so a reload or another device sees the same people. Interview him if you
+// like (owner: "add the interview part for fun"): a chat in which he answers as himself, with no
+// tools; the brain is asked only while you interview. Hire brings him in as he applied, his
+// interview his first chat; Pass sends him on. One you have begun to interview waits for your
+// answer through the turn, a week at most. Orbs you let go apply again for their old kind of work,
+// with their record (Home.recruiting).
 import { createHash } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import { SPECIALTY_FAMILIES, type Specialty } from "./brain/constitution.ts";
@@ -15,10 +18,9 @@ import type { Clock } from "./clock.ts";
 import { tx } from "./db.ts";
 import type { EventLog } from "./events.ts";
 
-/** New applicants each day for each open position, and how many may wait at once. */
+/** New applicants each day for each open position. */
 export const PER_DAY = 2;
-export const MOST = 6;
-/** Unanswered this long, he takes another job. */
+/** One you have begun to interview waits this long for your answer; the rest go at the day's turn. */
 export const WAIT_DAYS = 7;
 const DAY_MS = 86_400_000;
 
@@ -44,6 +46,7 @@ export class Recruiter {
   readonly #db: DatabaseSync;
   readonly #events: EventLog;
   readonly #clock: Clock;
+  #turned: string | null = null; // the day the tick last turned the list over
 
   constructor(db: DatabaseSync, events: EventLog, clock: Clock) {
     this.#db = db;
@@ -56,7 +59,7 @@ export class Recruiter {
     return (this.#db.prepare("SELECT specialty FROM positions ORDER BY opened_at, specialty").all() as { specialty: string }[]).map((r) => r.specialty as Specialty);
   }
 
-  /** Ticks a position, or unticks it (its applicants wait on, out of sight, until it opens again or their week is up). */
+  /** Ticks a position, or unticks it (its applicants wait on, out of sight, until it opens again the same day or the day turns). */
   setPosition(specialty: string, open: boolean): Specialty[] {
     if (!(specialty in SPECIALTY_FAMILIES)) throw new RecruiterError(`"${specialty}" is not a kind of work`);
     const was = this.positions().includes(specialty as Specialty);
@@ -70,13 +73,38 @@ export class Recruiter {
     return this.positions();
   }
 
-  /** Who is applying now, for the open positions: today's applicants made if they are not yet (a few
-   * a day, never more than MOST waiting), and anyone a week unanswered gone to another job. */
+  /** Who is applying now, for the open positions: the list turned over if the day has turned. */
   applicants(): Applicant[] {
+    this.#turn();
+    const open = new Set<string>(this.positions());
+    return (this.#db.prepare("SELECT id, specialty, seed, day, created_at FROM applicants WHERE state = 'waiting' ORDER BY created_at, id").all() as Row[])
+      .filter((r) => open.has(r.specialty))
+      .map((r) => ({ id: r.id, specialty: r.specialty as Specialty, seed: r.seed, day: r.day, createdAt: r.created_at }));
+  }
+
+  /** When the list next turns over: midnight where the home runs. */
+  nextAt(): number {
+    const d = new Date(this.#clock.now());
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).getTime();
+  }
+
+  /** The tick's: the day's turn as it comes, so an open Recruiter shows the new applicants without
+   * anyone asking (the room reloads on their events). */
+  due(): void {
+    if (this.#turned === dayOf(this.#clock.now())) return;
+    this.#turn();
+  }
+
+  /** The day's turn (once a day, whoever looks first or the tick): anyone left unanswered from an
+   * earlier day takes another job (one you have begun to interview, after a week), and today's
+   * applicants for each open position apply, if they have not yet. */
+  #turn(): void {
     const now = this.#clock.now();
     const day = dayOf(now);
     tx(this.#db, () => {
-      const stale = this.#db.prepare("SELECT id FROM applicants WHERE state = 'waiting' AND created_at <= ?").all(now - WAIT_DAYS * DAY_MS) as { id: number }[];
+      const stale = this.#db
+        .prepare("SELECT id FROM applicants WHERE state = 'waiting' AND (created_at <= ? OR (day < ? AND id NOT IN (SELECT applicant FROM interviews)))")
+        .all(now - WAIT_DAYS * DAY_MS, day) as { id: number }[];
       for (const { id } of stale) {
         this.#db.prepare("UPDATE applicants SET state = 'gone', settled_at = ? WHERE id = ?").run(now, id);
         this.#events.append("applicant.gone", { applicant: id });
@@ -84,17 +112,13 @@ export class Recruiter {
       for (const specialty of this.positions()) {
         const today = (this.#db.prepare("SELECT count(*) AS n FROM applicants WHERE specialty = ? AND day = ?").get(specialty, day) as { n: number }).n;
         if (today > 0) continue; // today's came already
-        const waiting = (this.#db.prepare("SELECT count(*) AS n FROM applicants WHERE specialty = ? AND state = 'waiting'").get(specialty) as { n: number }).n;
-        for (let n = 0; n < Math.min(PER_DAY, MOST - waiting); n++) {
+        for (let n = 0; n < PER_DAY; n++) {
           const r = this.#db.prepare("INSERT INTO applicants (specialty, seed, day, created_at, state) VALUES (?, ?, ?, ?, 'waiting') RETURNING id").get(specialty, seedOf(day, specialty, n), day, now) as { id: number };
           this.#events.append("applicant.applied", { applicant: r.id, specialty });
         }
       }
     });
-    const open = new Set<string>(this.positions());
-    return (this.#db.prepare("SELECT id, specialty, seed, day, created_at FROM applicants WHERE state = 'waiting' ORDER BY created_at, id").all() as Row[])
-      .filter((r) => open.has(r.specialty))
-      .map((r) => ({ id: r.id, specialty: r.specialty as Specialty, seed: r.seed, day: r.day, createdAt: r.created_at }));
+    this.#turned = day;
   }
 
   /** One applicant still waiting. */

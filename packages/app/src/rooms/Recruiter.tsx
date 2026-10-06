@@ -8,6 +8,9 @@
 // Each applicant's profile opens from its card (owner, 10-05: "recruiter should also be able to show the orbs
 // profile when we click on it, and which ones would best suit our team by rank"), and every applicant is
 // ranked by how well it would suit the office as it is (orb/fit.ts, by code), the best first.
+// A department's applicants have an address of their own (owner, 10-06: the floor's Hiring tags "should
+// bring us to those who can build and think"): #/recruiter/build opens on who applied to Build, ranked
+// among themselves, with All and the other departments you are hiring in one press away.
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Orb } from "../orb/Orb.tsx";
@@ -28,25 +31,38 @@ type Kind = keyof typeof SPECIALTIES;
 type Starts = "Senior" | "Junior";
 const startsOf = (s: string): Starts => (s === "Senior" ? "Senior" : "Junior");
 
-export function RecruiterRoom({ home, office, hired, profile }: { home: Office | null; office: Character[]; hired: () => void; profile: (c: Character, startsAs: Starts) => ReactNode }) {
+export function RecruiterRoom({ home, office, family, pick, hired, profile }: { home: Office | null; office: Character[]; family: string | null; pick: (family: Family | null) => void; hired: () => void; profile: (c: Character, startsAs: Starts) => ReactNode }) {
   const [state, setState] = useState<RecruiterState | null>(null);
   const [said, setSaid] = useState<string | null>(null);
   const [open, setOpen] = useState<number | null>(null); // whose interview is open
   const [seeing, setSeeing] = useState<number | null>(null); // whose profile is open
+  const applying = useRef<HTMLElement>(null);
+  const dept = family && family in FAMILIES ? (family as Family) : null; // the department shown, or all
   useEffect(() => {
     if (!home) return;
     const load = (): void => void home.recruiting().then(setState, (e: Error) => setSaid(e.message));
     load();
     return home.watch({ event: (e) => void (/^(position\.|applicant\.|orb\.)/.test(e.type) && load()) });
   }, [home]);
+  // arriving at a department (from the floor's Hiring tag), its applicants come into view, past the positions
+  const loaded = state !== null;
+  useEffect(() => {
+    if (!dept || !loaded) return;
+    // two frames on, once the grids above have measured themselves and stopped moving it
+    let id = requestAnimationFrame(() => (id = requestAnimationFrame(() => applying.current?.scrollIntoView({ block: "start" }))));
+    return () => cancelAnimationFrame(id);
+  }, [dept, loaded]);
   if (!home) return <p style={{ ...small, padding: "var(--s5)" }}>The recruiter is the home's: open the app from your home to see who applied.</p>;
   if (!state) return <p style={{ ...small, padding: "var(--s5)" }}>{said ?? "Loading…"}</p>;
   const taken = (name: string): boolean => [...office.map((c) => c.name), ...state.returning.map((r) => r.name)].some((n) => n.toLowerCase() === name.toLowerCase());
   const tick = (k: Kind): void => void home.setPosition(k, !state.positions.includes(k)).then((positions) => setState({ ...state, positions }), (e: Error) => setSaid(e.message));
   const families = Object.keys(FAMILIES) as Family[];
-  // everyone applying for a position you are hiring for, ranked by how well each would suit the office
+  const familyOf = (k: string): Family | undefined => SPECIALTIES[k as Kind]?.family;
+  const inDept = (k: string): boolean => !dept || familyOf(k) === dept;
+  const hiringIn = families.filter((f) => state.positions.some((k) => familyOf(k) === f)); // the departments you are hiring in
+  // everyone applying for a position you are hiring for (in the department shown), ranked by how well each would suit the office
   const order = ranked(
-    state.applicants.filter((a) => state.positions.includes(a.specialty)).map((a) => ({ a, c: applicant(a.seed, a.specialty as Kind, taken) })),
+    state.applicants.filter((a) => state.positions.includes(a.specialty) && inDept(a.specialty)).map((a) => ({ a, c: applicant(a.seed, a.specialty as Kind, taken) })),
     (x) => fitOf(x.c, office, x.a.startsAs),
   );
   const placed = new Map(order.map((r) => [r.item.a.id, r]));
@@ -74,6 +90,20 @@ export function RecruiterRoom({ home, office, hired, profile }: { home: Office |
           </div>
         ))}
       </section>
+      {(hiringIn.length > 0 || dept) && (
+        <section ref={applying} data-applicants-of={dept ?? "all"} aria-label="Who applied" style={{ display: "grid", gap: 8, minWidth: 0, scrollMarginTop: "var(--s5)" }}>
+          <span style={head}>{dept ? `Who applied: ${FAMILIES[dept]}` : "Who applied"}</span>
+          {/* a balanced grid: never one department alone on a row */}
+          <Balanced min={110} gap={6}>
+            {[null, ...hiringIn].map((f) => (
+              <button key={f ?? "all"} type="button" aria-pressed={dept === f} data-department={f ?? "all"} onClick={() => pick(f)} style={{ ...(dept === f ? strong : button), ...fits }}>
+                {f ? FAMILIES[f] : "All"}
+              </button>
+            ))}
+          </Balanced>
+          {dept && !hiringIn.includes(dept) && <span style={small}>{`You are not hiring in ${FAMILIES[dept]} now: tick a position above.`}</span>}
+        </section>
+      )}
       {order.length > 1 && (
         <section data-best aria-label="Best for your team" style={{ display: "grid", gap: 8, minWidth: 0 }}>
           <span style={head}>Best for your team</span>
@@ -91,10 +121,10 @@ export function RecruiterRoom({ home, office, hired, profile }: { home: Office |
           ))}
         </section>
       )}
-      {state.returning.length > 0 && (
+      {state.returning.some((r) => inDept(r.specialty)) && (
         <section aria-label="Applied again" style={{ display: "grid", gap: 8, minWidth: 0 }}>
           <span style={head}>Applied again</span>
-          {state.returning.map((r) => (
+          {state.returning.filter((r) => inDept(r.specialty)).map((r) => (
             <div key={r.id} data-returning={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", borderRadius: 12, background: "var(--fill)", minWidth: 0 }}>
               <span style={{ flex: "1 1 auto", minWidth: 0, display: "grid" }}>
                 <span style={{ font: "700 14px/19px var(--font)", color: "var(--text-1)" }}>{`${r.name}, ${r.level} ${SPECIALTIES[r.specialty as Kind]?.title ?? r.specialty}`}</span>
@@ -107,7 +137,7 @@ export function RecruiterRoom({ home, office, hired, profile }: { home: Office |
           ))}
         </section>
       )}
-      {state.positions.map((k) => {
+      {state.positions.filter(inDept).map((k) => {
         const who = state.applicants.filter((a) => a.specialty === k).sort((x, y) => (placed.get(x.id)?.rank ?? 0) - (placed.get(y.id)?.rank ?? 0));
         return (
           <section key={k} data-applying={k} aria-label={`Applying: ${SPECIALTIES[k as Kind]?.title ?? k}`} style={{ display: "grid", gap: 10, minWidth: 0 }}>

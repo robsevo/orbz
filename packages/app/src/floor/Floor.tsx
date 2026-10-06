@@ -399,11 +399,11 @@ export function Floor({ home, office, moods, person, go }: { home: Office | null
                 </button>
               );
             })()}
-            {/* an empty desk where you are hiring */}
+            {/* an empty desk where you are hiring: it opens on who applied to that department (owner, 10-06) */}
             {(Object.keys(FAMILIES) as Family[]).map((z) => {
               const d = emptyHiring(z);
               return d ? (
-                <button key={z} type="button" data-hiring={z} onClick={() => go({ room: "recruiter" })} data-orb={ZONES.find((x) => x.id === z)!.hue}
+                <button key={z} type="button" data-hiring={z} onClick={() => go({ room: "recruiter", family: z })} aria-label={`Hiring for ${FAMILIES[z]}: see who applied`} data-orb={ZONES.find((x) => x.id === z)!.hue}
                   style={{ position: "absolute", left: px(d.seat.x), top: px(d.rect.y - 40), translate: "-50% 0", zIndex: d.rect.y + d.rect.h + 1, ...tag, cursor: "pointer", border: 0, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1px var(--accent)", color: "var(--text-1)" }}>
                   + Hiring
                 </button>

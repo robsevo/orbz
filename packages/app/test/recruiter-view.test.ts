@@ -9,6 +9,8 @@
 //   - hire one: in the office exactly as applied (look, name, kind of work, the Senior), the
 //     interview the first chat, and the other now "a Junior"; pass the other: gone;
 //   - an orb you let go applies again for its old kind of work, and is rehired from here;
+//   - the floor's Hiring tags (owner, 10-06: "should bring us to those who can build and think"): each
+//     opens on who applied to its department, in view, with All and the other departments a press away;
 //   - nothing spills.
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -143,4 +145,74 @@ test("tick a position, interview, hire, pass; an orb let go applies again; desk 
   await cy.getByRole("button", { name: "Rehire Cy" }).click();
   await cy.waitFor({ state: "detached", timeout: 20_000 });
   assert.equal(h.inbox.orb("cy")!.letGoAt, null, "rehired");
+});
+
+test("the floor's Hiring tags open on who applied to their department; All and the others a press away; desk and phone", { skip, timeout: 150_000 }, async (t) => {
+  const model = await fakeModel(t, []);
+  const data = mkdtempSync(join(tmpdir(), "orbs-recruiter-home-"));
+  t.after(() => rmSync(data, { recursive: true, force: true }));
+  const h = Home.open({
+    dataDir: data, protect: [], spendCapUsd: null,
+    brain: { preset: { id: "t", title: "t", own: null, big: { name: "big", baseUrl: model.url, model: "m", retries: 0 }, teacher: null } },
+  });
+  t.after(() => h.close());
+  h.start();
+  h.about.setName("Robin");
+  h.inbox.addOrb("pa", "Pip", "assistant", { shape: "egg", eyes: "classic", hue: "azure" });
+  // hiring in two departments, as the owner is: Build (Backend) and Think (Planning)
+  h.recruiter.setPosition("backend", true);
+  h.recruiter.setPosition("planning", true);
+  const d = await serve(h, { port: 0, appDir: dist });
+  t.after(() => d.close());
+  const open = async (size: { width: number; height: number }): Promise<Page> => {
+    const ctx = await browser.newContext({ viewport: size, colorScheme: "dark" });
+    t.after(() => ctx.close());
+    const page = await ctx.newPage();
+    await page.goto(d.pairLink());
+    await page.locator(".orbs-window").waitFor({ timeout: 30_000 });
+    await page.evaluate(() => (location.hash = "#/office"));
+    await page.locator("[data-floor]").waitFor({ timeout: 20_000 });
+    return page;
+  };
+  const shown = (page: Page) => page.locator("[data-applying]").evaluateAll((ss) => ss.map((x) => x.getAttribute("data-applying")));
+  // the department's heading near the top of the screen, and nothing (a phone's top bar) over it
+  const inView = (page: Page) => page.locator("[data-applicants-of]").evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.left + 20, r.top + 8);
+    return r.top >= 0 && r.top < innerHeight / 2 && !!hit && el.contains(hit);
+  });
+
+  const page = await open({ width: 1280, height: 900 });
+  await page.getByRole("button", { name: "Hiring for Build: see who applied" }).click();
+  await page.waitForFunction(() => location.hash === "#/recruiter/build", undefined, { timeout: 10_000 });
+  await page.locator('[data-applying="backend"] [data-applicant]').first().waitFor({ timeout: 20_000 });
+  assert.deepEqual(await shown(page), ["backend"], "Build's tag: only who applied to Build");
+  assert.match(await page.locator("[data-applicants-of]").innerText(), /Who applied: Build/i);
+  assert.equal(await page.locator('[data-department="build"]').getAttribute("aria-pressed"), "true");
+  await page.waitForTimeout(300);
+  assert.ok(await inView(page), "they are in view, past the positions");
+  assert.equal(await page.locator("[data-best] [data-ranked]").count(), 2, "ranked among themselves");
+  assert.deepEqual(await measure(page), [], "a department's applicants, at desk size");
+
+  // Think, a press away; then All; Back returns
+  await page.locator('[data-department="think"]').click();
+  await page.waitForFunction(() => location.hash === "#/recruiter/think", undefined, { timeout: 10_000 });
+  await page.locator('[data-applying="planning"] [data-applicant]').first().waitFor({ timeout: 20_000 });
+  assert.deepEqual(await shown(page), ["planning"], "Think: only who applied to Think");
+  await page.locator('[data-department="all"]').click();
+  await page.waitForFunction(() => location.hash === "#/recruiter", undefined, { timeout: 10_000 });
+  await page.waitForFunction(() => document.querySelectorAll("[data-applying]").length === 2, undefined, { timeout: 10_000 });
+  assert.deepEqual((await shown(page)).sort(), ["backend", "planning"], "All: everyone");
+  await page.goBack();
+  await page.waitForFunction(() => location.hash === "#/recruiter/think" && document.querySelectorAll("[data-applying]").length === 1, undefined, { timeout: 10_000 });
+
+  // the floor's other tag, on a phone
+  const phone = await open({ width: 390, height: 844 });
+  await phone.locator('[data-hiring="think"]').click();
+  await phone.waitForFunction(() => location.hash === "#/recruiter/think", undefined, { timeout: 10_000 });
+  await phone.locator('[data-applying="planning"] [data-applicant]').first().waitFor({ timeout: 20_000 });
+  assert.deepEqual(await shown(phone), ["planning"]);
+  await phone.waitForTimeout(300);
+  assert.ok(await inView(phone), "in view on a phone too");
+  assert.deepEqual(await measure(phone), [], "and at phone size");
 });

@@ -844,6 +844,7 @@ export class Home {
     this.loops.startDue();
     void this.gym.due(); // the night goes on beside the ticks; close() waits for it
     void this.school.due(); // and school's classes (PLAN 5.7)
+    this.recruiter.due(); // the Recruiter's list turns over at midnight (PLAN 5.8)
     await this.triggers.poll({ all: woke });
   }
 
@@ -852,7 +853,7 @@ export class Home {
     this.#cancelTimer?.();
     const now = this.clock.now();
     let delay = this.#heartbeatMs;
-    for (const at of [this.schedules.nextDueAt(), this.notices.nextDueAt(), this.loops.nextDueAt(), this.triggers.nextPollAt(), this.gym.nextAt(), this.school.nextAt()]) {
+    for (const at of [this.schedules.nextDueAt(), this.notices.nextDueAt(), this.loops.nextDueAt(), this.triggers.nextPollAt(), this.gym.nextAt(), this.school.nextAt(), this.recruiter.nextAt()]) {
       if (at !== null) delay = Math.min(delay, at - now);
     }
     this.#cancelTimer = this.clock.timer(Math.max(MIN_DELAY_MS, delay), () => void this.tick());

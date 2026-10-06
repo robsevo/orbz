@@ -870,6 +870,11 @@ function App() {
     const r = parseRoute(location.hash).room;
     return r === "settings" || r === "chat" || r === "sessions" || r === "notices" || r === "calendar" || r === "lab" || r === "org" || r === "career" || r === "recruiter" ? r : "office";
   });
+  // which department's applicants the Recruiter shows (owner, 10-06: the floor's Hiring tags), or all
+  const [hiringFor, setHiringFor] = useState<string | null>(() => {
+    const r = parseRoute(location.hash);
+    return r.room === "recruiter" ? r.family ?? null : null;
+  });
   // whose career page is open (PLAN 5.6)
   const [careerOf, setCareerOf] = useState<string | null>(() => {
     const r = parseRoute(location.hash);
@@ -977,14 +982,17 @@ function App() {
   // where you are is an address (ui/nav.ts): going somewhere adds it to the history, so the side
   // menu's Back and the browser's Back are the same Back
   const routeOf = (): Route =>
-    room === "settings" ? { room: "settings" } : room === "notices" ? { room: "notices" } : room === "calendar" ? { room: "calendar" } : room === "lab" ? { room: "lab" } : room === "org" ? { room: "org" } : room === "recruiter" ? { room: "recruiter" } : room === "career" && careerOf ? { room: "career", orb: careerOf } : room === "sessions" ? { room: "sessions", ...inSession } : room === "chat" && talking ? { room: "chat", orb: talking } : view.kind === "new" ? { room: "new" } : { room: "office", orb: view.kind === "orb" ? view.name : null };
+    room === "settings" ? { room: "settings" } : room === "notices" ? { room: "notices" } : room === "calendar" ? { room: "calendar" } : room === "lab" ? { room: "lab" } : room === "org" ? { room: "org" } : room === "recruiter" ? { room: "recruiter", family: hiringFor } : room === "career" && careerOf ? { room: "career", orb: careerOf } : room === "sessions" ? { room: "sessions", ...inSession } : room === "chat" && talking ? { room: "chat", orb: talking } : view.kind === "new" ? { room: "new" } : { room: "office", orb: view.kind === "orb" ? view.name : null };
   const show = (r: Route): void => {
     if (r.room === "settings") setRoom("settings");
     else if (r.room === "notices") setRoom("notices");
     else if (r.room === "calendar") setRoom("calendar");
     else if (r.room === "lab") setRoom("lab");
     else if (r.room === "org") setRoom("org");
-    else if (r.room === "recruiter" && office.length) setRoom("recruiter");
+    else if (r.room === "recruiter" && office.length) {
+      setRoom("recruiter");
+      setHiringFor(r.family ?? null);
+    }
     else if (r.room === "recruiter") {
       // no orbs yet: the recruiter waits for your assistant; its address opens the making of it
       setRoom("office");
@@ -1026,7 +1034,11 @@ function App() {
   useEffect(() => {
     const r = parseRoute(location.hash);
     if (r.room === "office" || r.room === "new") show(r); // a link straight to an orb, or to a new one
-    history.replaceState({ orbs: 0 }, "", location.hash || routeHash(routeOf()));
+    // an open with no address keeps none: no address is the office, and the home's orbs may not have come
+    // yet. Writing where the page stood then ("#/new", the creator, until they come) kept every launch on
+    // New orb (owner, 10-06: "we always default to new orb when opening")
+    if (location.hash) history.replaceState({ orbs: 0 }, "", location.hash);
+    else history.replaceState({ orbs: 0 }, "");
   }, []);
   useEffect(() => {
     if (!menu) return;
@@ -1144,7 +1156,7 @@ function App() {
         </aside>
 
         {room === "recruiter" && office.length ? (
-          <RecruiterRoom home={home} office={office} hired={() => void home?.orbs().then((o) => o && setOffice(o))} profile={(c, startsAs) => <Sheet c={c} replies={replies} startsAs={startsAs} applying />} />
+          <RecruiterRoom home={home} office={office} family={hiringFor} pick={(family) => go({ room: "recruiter", family })} hired={() => void home?.orbs().then((o) => o && setOffice(o))} profile={(c, startsAs) => <Sheet c={c} replies={replies} startsAs={startsAs} applying />} />
         ) : room === "org" ? (
           <OrgRoom home={home} office={office} open={(c) => go({ room: "career", orb: c.name })} rehired={() => void home?.orbs().then((o) => o && setOffice(o))} />
         ) : room === "career" ? (

@@ -6,6 +6,8 @@
 //   - An orb hired in the creator is the home's, look and all.
 //   - One let go is archived there: out of the office, kept.
 //   - A reload is still paired, and does not play the story again.
+//   - Opened afresh with no address, as the desktop launcher opens it: the office, never New orb
+//     (owner, 10-06: "we always default to new orb when opening").
 //   - A used link, or a browser never paired, is said plainly, not shown as an empty office.
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -97,7 +99,9 @@ test("a hire, and a let-go, are the home's: one let go is archived there, out of
   assert.deepEqual(home.inbox.orbs().map((o) => o.name), ["Pip", "Wren"]);
   await page.getByRole("button", { name: "Let Wren go…" }).click();
   await page.getByRole("group", { name: "Let Wren go?" }).getByRole("button", { name: "Let Wren go" }).click();
-  await page.waitForTimeout(600);
+  // the page moves to Pip on its own timer: under the gate's load a fixed wait ended before it ran, and the
+  // next step reloaded Wren's address (10-06, reproduced by reloading at once)
+  await page.waitForFunction(() => location.hash === "#/office/Pip", undefined, { timeout: 30_000 });
   assert.ok(!home.inbox.orbs().some((o) => o.name === "Wren"), "out of the office");
   assert.ok(home.inbox.orbs({ all: true }).find((o) => o.name === "Wren")?.letGoAt, "archived, kept");
 
@@ -109,7 +113,20 @@ test("a reload is still paired, does not play the story again, and keeps the off
   await page.reload();
   await page.getByText("CEO Robin").waitFor({ timeout: 30_000 });
   assert.equal(await page.locator("[data-onboarding]").count(), 0);
-  assert.equal(await page.getByRole("heading", { name: "Pip" }).count(), 1);
+  // his page once the home has answered (your name shows first, from this browser: counting at once lost the race in the gate)
+  await page.getByRole("heading", { name: "Pip" }).waitFor({ timeout: 30_000 });
+});
+
+test("opened afresh with no address, as the desktop launcher opens it: the office, never New orb", { skip, ...LONG }, async () => {
+  assert.ok(visit, "after the first steps");
+  const { page } = visit;
+  await page.goto(`http://127.0.0.1:${door.port}/app/orbs.html`);
+  await page.getByText("CEO Robin").waitFor({ timeout: 30_000 });
+  await page.locator("[data-floor]").waitFor({ timeout: 30_000 });
+  await page.waitForTimeout(500);
+  assert.equal(await page.getByRole("button", { name: /^Create / }).count(), 0, "not the creator");
+  assert.notEqual(await page.evaluate(() => location.hash), "#/new", "and the address never says New orb");
+  assert.equal(await page.locator("[data-floor]").count(), 1, "the office, with the day at a glance");
 });
 
 test("a used link, or a browser never paired, is said plainly", { skip }, async () => {
