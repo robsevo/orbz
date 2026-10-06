@@ -39,8 +39,22 @@ export type CalendarEntry =
   | { kind: "event"; id: string; calendar: string; title: string; day: string; time: string | null; until: string | null; location: string | null };
 /** The notification centre (PLAN 2.11): what needs you or happened, as the home keeps it. */
 export type Notice = {
-  id: number; kind: "bill" | "reminder" | "approval" | "done" | "promotion" | "performance" | "reading"; orb: string; conversation: string | null; card: number | null; reminder: number | null;
+  id: number; kind: "bill" | "reminder" | "approval" | "done" | "promotion" | "performance" | "reading" | "friends" | "learning"; orb: string; conversation: string | null; card: number | null; reminder: number | null;
   title: string; detail: string; due: string | null; at: number;
+  /** A lesson a friend offered (PLAN 5.9), kept or not from its notice. */
+  lesson?: number | null;
+};
+/** Office life (PLAN 5.9): a meeting the home decided, a friendship, and one orb's colleagues. */
+export type Meeting = {
+  id: number; at: number; until: number; a: string; b: string; kind: "coffee" | "ideas" | "game" | "lesson";
+  place: "coffee" | "cooler" | "bistro1" | "bistro2" | "pingpong" | "arcade" | "desk"; winner: string | null; delta: number; score: number;
+};
+export type FriendWord = "good friends" | "friendly" | "colleagues" | "some friction" | "don't get along";
+export type Friend = { orb: string; name: string; score: number; word: FriendWord; meetings: number; last: Meeting | null };
+export type SocialState = {
+  friendships: { a: string; b: string; score: number; word: FriendWord; meetings: number; lastAt: number | null }[];
+  meetings: Meeting[]; current: Meeting[];
+  lessons: { id: number; at: number; from: string; to: string; line: string; state: string }[];
 };
 /** The morning card (PLAN 3.5): yesterday's work, orb by orb, and the night after it. */
 export type Undo = { kind: "lesson"; orb: string; line: string; index: number } | { kind: "habit"; orb: string; habit: string; version: number };
@@ -207,6 +221,15 @@ export interface Office {
   readingOf(q?: string): Promise<ReadingState>;
   /** Stops following a source; its pages leave the library. */
   stopFollowing(source: number): Promise<void>;
+  /** Office life (PLAN 5.9): the friendships, the meetings (those under way for the floor), the lessons waiting. */
+  socialOf(): Promise<SocialState>;
+  /** One orb's colleagues, best friends first, each with its last moment with it. */
+  friendsOf(orb: string): Promise<Friend[]>;
+  /** An orb's traits as its DNA has them, for the home's meetings (the home cannot read DNA itself). */
+  setTraits(orb: string, traits: Record<string, number>): Promise<void>;
+  /** A lesson a friend offered: kept (the orb learns it) or not. */
+  keepLesson(id: number): Promise<void>;
+  dropLesson(id: number): Promise<void>;
   reopen(session: number): Promise<Session>;
   /** The calendar: the days from `from` to `to`; your own changes (an orb's go through a card). */
   calendar(from: string, to: string): Promise<CalendarEntry[]>;
@@ -587,6 +610,21 @@ export function doorOffice(base: Character): Office {
     },
     async stopFollowing(source) {
       await call(`../reading/sources/${source}`, { method: "DELETE" });
+    },
+    async socialOf() {
+      return call<SocialState>("../social");
+    },
+    async friendsOf(orb) {
+      return (await call<{ friends: Friend[] }>(`../orbs/${encodeURIComponent(orb)}/friends`)).friends;
+    },
+    async setTraits(orb, traits) {
+      await call(`../orbs/${encodeURIComponent(orb)}/traits`, { method: "PUT", body: JSON.stringify({ traits }) });
+    },
+    async keepLesson(id) {
+      await call(`../social/lessons/${id}/keep`, { method: "POST" });
+    },
+    async dropLesson(id) {
+      await call(`../social/lessons/${id}/drop`, { method: "POST" });
     },
     async reopen(session) {
       return (await call<{ session: Session }>(`../lab/sessions/${session}/reopen`, { method: "POST" })).session;

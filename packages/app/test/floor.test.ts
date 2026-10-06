@@ -10,7 +10,7 @@
 //   - each orb's desk is in its department, six to a department, the seventh at a free desk elsewhere.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { CELL, CORRIDOR, DESKS, GH, GRID, GW, POIS, SEATS, ZONES, clear, dice, isMeeting, next, route, seating, sentBy, speed, type PoiId, type Traits } from "../src/floor/plan.ts";
+import { CELL, CORRIDOR, DESKS, GH, GRID, GW, POIS, SEATS, W, ZONES, clear, dice, isMeeting, meetSpot, next, route, seating, sentBy, speed, type PoiId, type Traits } from "../src/floor/plan.ts";
 
 const corridor = { x: 600, y: CORRIDOR.y + CORRIDOR.h / 2 };
 const spots = [...DESKS.map((d) => [`desk ${d.zone}${d.n}`, d.approach] as const), ...SEATS.map((s, i) => [`seat ${i}`, s.approach] as const), ...POIS.map((p) => [`${p.id}`, p.approach] as const)];
@@ -30,6 +30,17 @@ test("every desk, seat and place to go is reachable from the corridor, and no wa
   const cut = DESKS.filter((d) => !route(top, d.approach, walled));
   assert.equal(cut.length, DESKS.length, "with the corridor walled off, no desk is in reach of the rooms");
   assert.equal(walled.length, GW * GH);
+});
+
+test("every side of every meeting place (office life, PLAN 5.9) is inside the floor and reachable, the two apart", () => {
+  for (const place of ["coffee", "cooler", "bistro1", "bistro2", "pingpong", "arcade"] as const) {
+    const [a, b] = [meetSpot(place, 0), meetSpot(place, 1)];
+    for (const [side, x] of [[0, a], [1, b]] as const) {
+      for (const p of [x.approach, x.at]) assert.ok(p.x >= 48 && p.x <= W - 48, `${place}, side ${side}: inside the floor (x ${p.x})`);
+      assert.ok(route(corridor, x.approach), `${place}, side ${side}: reachable`);
+    }
+    assert.ok(Math.hypot(a.at.x - b.at.x, a.at.y - b.at.y) >= 30, `${place}: the two stand apart`);
+  }
 });
 
 test("what an orb's state sends it to", () => {

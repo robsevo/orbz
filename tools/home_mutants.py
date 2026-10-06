@@ -1199,6 +1199,68 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("an orb is never told that no orb is a he or a she", "src/agent/standing.ts", [
         ("    NO_HE_OR_SHE,\n", ""),
     ], ["voice.test.ts"]),
+    # office life (PLAN 5.9): who meets, friendships, lessons on your yes, who fits
+    ('office life is on in a test home', 'src/home.ts', [
+        ('      on: opts.social?.on ?? false,', '      on: opts.social?.on ?? true,'),
+    ], ['social.test.ts']),
+    ('the tick never brings orbs together', 'src/home.ts', [
+        ("    this.social.due(); // two free orbs meet, in the office's day (PLAN 5.9)\n", ''),
+    ], ['social.test.ts']),
+    ('the home does not wake for a meeting', 'src/home.ts', [
+        ('this.reading.nextAt(), this.social.nextAt()]', 'this.reading.nextAt()]'),
+    ], ['social.test.ts']),
+    ('an orb with work waiting meets', 'src/home.ts', [
+        ('      free: (orb) => !db.prepare(', '      free: (orb) => true || !db.prepare('),
+    ], ['social.test.ts']),
+    ('orbs meet at night', 'src/social/social.ts', [
+        ('    if (!inOfficeDay(Math.max(at, this.#clock.now()))) at = nextOpening(Math.max(at, this.#clock.now()));\n', ''),
+        ('    if (now < this.nextAt()! || !inOfficeDay(now)) return null;', '    if (now < this.nextAt()!) return null;'),
+    ], ['social.test.ts']),
+    ('a lesson is learned without your yes', 'src/social/social.ts', [
+        ('        this.#events.append("social.lesson", { lesson: l.id, from, to, line, names: [nameOf(from), nameOf(to)] });', '        this.#o.learned.add(to, line);\n        this.#events.append("social.lesson", { lesson: l.id, from, to, line, names: [nameOf(from), nameOf(to)] });'),
+    ], ['social.test.ts']),
+    ('Not now still teaches', 'src/social/social.ts', [
+        ('    this.#db.prepare("UPDATE shared_lessons SET state = \'dropped\', settled_at = ? WHERE id = ?").run(this.#clock.now(), id);', '    this.#o.learned.add(l.to_orb, (this.#db.prepare("SELECT line FROM shared_lessons WHERE id = ?").get(id) as { line: string }).line);\n    this.#db.prepare("UPDATE shared_lessons SET state = \'dropped\', settled_at = ? WHERE id = ?").run(this.#clock.now(), id);'),
+    ], ['social.test.ts']),
+    ('a lesson is offered again', 'src/social/social.ts', [
+        ('!theirs.has(l) && !offered.has(`${to}\\0${l}`)', '!theirs.has(l)'),
+    ], ['social.test.ts']),
+    ('a lesson between orbs who are not friends', 'src/social/rules.ts', [
+        ('  if (o.lesson && o.score >= 20) kinds.push', '  if (o.lesson) kinds.push'),
+    ], ['social-rules.test.ts']),
+    ('traits get on one way only', 'src/social/rules.ts', [
+        ('w * (over(a[x]) * over(b[y]) + over(b[x]) * over(a[y]))', 'w * (over(a[x]) * over(b[y]))'),
+    ], ['social-rules.test.ts']),
+    ('Nerve against Calm does not rub', 'src/social/rules.ts', [
+        (' - rub("Nerve", "Calm", 0.9)', ''),
+    ], ['social-rules.test.ts']),
+    ('the same two meet twice running', 'src/social/rules.ts', [
+        ('x !== a && !same(x)', 'x !== a'),
+    ], ['social-rules.test.ts']),
+    ('the sociable start no more meetings', 'src/social/rules.ts', [
+        ('    return 1 + (t.Humour + t.Care + t.Pace) / 30;', '    return t ? 1 : 1;'),
+    ], ['social-rules.test.ts']),
+    ('a friend is never likelier to be met', 'src/social/rules.ts', [
+        ('(x) => 1 + Math.max(0, score(a, x)) / 50', '() => 1'),
+    ], ['social-rules.test.ts']),
+    ('friendships never move', 'src/social/social.ts', [
+        ('    const after = clampScore(before + delta);', '    const after = clampScore(before);'),
+    ], ['social.test.ts']),
+    ('good friends go unsaid', 'src/social/social.ts', [
+        ('      if (before < 50 && after >= 50) this.#events.append("social.friends", { a: x, b: y, names: [nameOf(x), nameOf(y)] });\n', ''),
+    ], ['social.test.ts']),
+    ('an orb does not know its friends', 'src/agent/standing.ts', [
+        ('  if (o.colleagues) parts.push(o.colleagues); // its friends and frictions in the office (PLAN 5.9)\n', ''),
+    ], ['social.test.ts']),
+    ('who fits ignores friendships', 'src/org.ts', [
+        (' + gets.get(m.id)!.score * FRIEND_XP;', ';'),
+    ], ['social.test.ts']),
+    ('friendship outranks the work', 'src/org.ts', [
+        ('.sort((a, b) => Number(covers(b)) - Number(covers(a)) || weight(b) - weight(a) ||', '.sort((a, b) => weight(b) - weight(a) || Number(covers(b)) - Number(covers(a)) ||'),
+    ], ['social.test.ts']),
+    ('any traits are taken', 'src/social/rules.ts', [
+        ('    if (typeof n !== "number" || !Number.isFinite(n) || n < 0 || n > 40) return null;\n', ''),
+    ], ['social-rules.test.ts']),
     # the reading library (PLAN 3.12): robots.txt by the RFC, the manners, the reach, the tools
     ('robots.txt is never consulted', 'src/reading/reading.ts', [
         ('        if (!allowed(rules, pathOf(url))) {', '        if (false) {'),
@@ -1982,6 +2044,22 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ('Pass does nothing', 'src/rooms/Recruiter.tsx', [
         ('const pass = (id: number): void => void home.passApplicant(id).catch((e: Error) => setSaid(e.message));', 'const pass = (_id: number): void => undefined;'),
     ], ['recruiter-view.test.ts']),
+    # office life in the app (PLAN 5.9)
+    ("a meeting by a wall stands off the floor", 'src/floor/plan.ts', [
+        ('  const inside = (x: number): number => Math.min(W - 48, Math.max(48, x));\n  const toward = spot.at.x > W - 90 ? -1 : spot.at.x < 90 ? 1 : 0;', '  const inside = (x: number): number => x;\n  const toward = 0;'),
+    ], ['floor.test.ts']),
+    ('the app never tells the home its traits', 'src/orbs.tsx', [
+        ('      home.setTraits(idOf(c.name), traits).catch(() => traitsSent.current.delete(c.name));', '      void traits;'),
+    ], ['social-view.test.ts']),
+    ("the floor ignores the home's meetings", 'src/floor/Floor.tsx', [
+        ('    if (meet) {\n      s.mood = mood;', '    if (false && meet) {\n      s.mood = mood;'),
+    ], ['social-view.test.ts']),
+    ('Keep it does nothing', 'src/rooms/Notices.tsx', [
+        ('<button data-sound="pick" onClick={() => lesson(n, true)}', '<button data-sound="pick" onClick={() => undefined}'),
+    ], ['social-view.test.ts']),
+    ('the profile shows no colleagues', 'src/orbs.tsx', [
+        ('      {friends && friends.length > 0 && <Colleagues', '      {false && friends && <Colleagues'),
+    ], ['social-view.test.ts']),
     # the reading library in the lab (PLAN 3.12)
     ('Stop following does not ask first', 'src/rooms/Lab.tsx', [
         ('<button onClick={() => setStopping(x.id)} style={{ ...button, justifySelf: "start" }}>', '<button onClick={() => stop(x.id)} style={{ ...button, justifySelf: "start" }}>'),

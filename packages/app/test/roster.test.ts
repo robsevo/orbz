@@ -10,3 +10,9 @@ test("the home's roster is the app's: every specialty, in the same family", () =
   const app = Object.fromEntries(Object.entries(SPECIALTIES).map(([k, v]) => [k, (v as { family: string }).family]));
   assert.deepEqual(app, { ...SPECIALTY_FAMILIES });
 });
+
+test("the home's seven traits are the app's DNA's (office life, PLAN 5.9: the app sends them by name)", async () => {
+  const { TRAITS: home } = await import("../../home/src/social/rules.ts");
+  const { TRAITS: app } = await import("../src/orb/dna.ts");
+  assert.deepEqual([...home], [...app]);
+});

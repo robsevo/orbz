@@ -8,8 +8,8 @@ import type { Character } from "../orb/spec.ts";
 import { idOf, type YourDay, type MorningCard, type Notice, type Office, type Undo } from "../home/link.ts";
 import type { Route } from "../ui/nav.ts";
 
-const MARK: Record<Notice["kind"], string> = { bill: "¤", reminder: "◷", approval: "!", done: "✓", promotion: "↑", performance: "◔", reading: "≡" };
-const KIND_WORDS: Record<Notice["kind"], string> = { bill: "Bill", reminder: "Reminder", approval: "Waiting for your OK", done: "Finished", promotion: "Ready for promotion", performance: "Weekly card", reading: "Reading" };
+const MARK: Record<Notice["kind"], string> = { bill: "¤", reminder: "◷", approval: "!", done: "✓", promotion: "↑", performance: "◔", reading: "≡", friends: "♥", learning: "✎" };
+const KIND_WORDS: Record<Notice["kind"], string> = { bill: "Bill", reminder: "Reminder", approval: "Waiting for your OK", done: "Finished", promotion: "Ready for promotion", performance: "Weekly card", reading: "Reading", friends: "Office life", learning: "A lesson from a friend" };
 const button: CSSProperties = { font: "600 13px/18px var(--font)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 10, padding: "6px 12px", cursor: "pointer", boxShadow: "inset 0 0 0 .5px var(--hairline)", minHeight: 32 };
 
 /** What is out, kept up to date as it comes and goes (on this device or another). */
@@ -126,6 +126,11 @@ export function NoticesRoom(o: { home: Office | null; office: Character[]; notic
       .then((st) => (st.next ? (yes ? home.promote(c, st.next.to) : home.notYet(c, st.next.to)) : undefined))
       .then(o.reload, (e: Error) => setSaid(e.message));
   };
+  // a lesson a friend offered (PLAN 5.9): an orb learning is yours to say yes to (the floor, 1.6 and 3.5)
+  const lesson = (n: Notice, keep: boolean): void => {
+    if (!n.lesson) return;
+    (keep ? home.keepLesson(n.lesson) : home.dropLesson(n.lesson)).then(o.reload, (e: Error) => setSaid(e.message));
+  };
   return (
     <div data-stream={o.live ? "open" : "connecting"} style={{ display: "grid", gap: "var(--s5)", padding: "var(--s5)", alignContent: "start", minWidth: 0 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
@@ -170,7 +175,7 @@ export function NoticesRoom(o: { home: Office | null; office: Character[]; notic
                   <button onClick={() => away(n.id)} aria-label={`Put away: ${n.title}`} style={{ ...button, padding: "6px 10px" }}>
                     ✕
                   </button>
-                  {(n.kind === "promotion" || (n.kind === "performance" && c) || n.kind === "reading" || where) && (
+                  {(n.kind === "promotion" || (n.kind === "performance" && c) || n.kind === "reading" || (n.kind === "learning" && n.lesson) || where) && (
                     <span style={{ gridColumn: "1 / -1", paddingLeft: 38, display: "flex", gap: 6, flexWrap: "wrap" }}>
                       {n.kind === "promotion" && (
                         <>
@@ -179,6 +184,16 @@ export function NoticesRoom(o: { home: Office | null; office: Character[]; notic
                           </button>
                           <button onClick={() => promotion(n, false)} style={button}>
                             Not yet
+                          </button>
+                        </>
+                      )}
+                      {n.kind === "learning" && n.lesson && (
+                        <>
+                          <button data-sound="pick" onClick={() => lesson(n, true)} style={{ ...button, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)" }}>
+                            Keep it
+                          </button>
+                          <button onClick={() => lesson(n, false)} style={button}>
+                            Not now
                           </button>
                         </>
                       )}

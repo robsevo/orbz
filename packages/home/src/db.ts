@@ -432,6 +432,48 @@ const MIGRATIONS: string[] = [
     body       TEXT    NOT NULL DEFAULT ''
   );
   `,
+  // v16 (PLAN 5.9): office life: each orb's traits as the app's DNA has them, every friendship (a pair,
+  // in order, its number from -100 to 100), every meeting, and the lessons friends offer each other,
+  // which wait for the person's yes.
+  `
+  CREATE TABLE orb_traits (
+    orb    TEXT    PRIMARY KEY,
+    traits TEXT    NOT NULL,
+    at     INTEGER NOT NULL
+  );
+  CREATE TABLE friendships (
+    a        TEXT    NOT NULL,
+    b        TEXT    NOT NULL,
+    score    INTEGER NOT NULL DEFAULT 0,
+    meetings INTEGER NOT NULL DEFAULT 0,
+    last_at  INTEGER,
+    PRIMARY KEY (a, b),
+    CHECK (a < b)
+  );
+  CREATE TABLE meetings (
+    id     INTEGER PRIMARY KEY AUTOINCREMENT,
+    at     INTEGER NOT NULL,
+    until  INTEGER NOT NULL,
+    a      TEXT    NOT NULL,
+    b      TEXT    NOT NULL,
+    kind   TEXT    NOT NULL CHECK (kind IN ('coffee', 'ideas', 'game', 'lesson')),
+    place  TEXT    NOT NULL,
+    winner TEXT,
+    delta  INTEGER NOT NULL,
+    score  INTEGER NOT NULL
+  );
+  CREATE INDEX meetings_pair ON meetings (a, b);
+  CREATE TABLE shared_lessons (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    at         INTEGER NOT NULL,
+    from_orb   TEXT    NOT NULL,
+    to_orb     TEXT    NOT NULL,
+    line       TEXT    NOT NULL,
+    state      TEXT    NOT NULL CHECK (state IN ('waiting', 'kept', 'dropped')),
+    settled_at INTEGER
+  );
+  ALTER TABLE notices ADD COLUMN lesson INTEGER;
+  `,
 ];
 
 /** The home's data is the person's: the folder is theirs alone (0700) and so is the database

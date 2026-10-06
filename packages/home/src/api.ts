@@ -532,6 +532,35 @@ async function handle(
       throw new HttpError(409, e instanceof Error ? e.message : String(e));
     }
   }
+  // office life (PLAN 5.9): the friendships, the meetings (the floor plays the ones under way), the lessons
+  // waiting for your yes; an orb's traits as the app's DNA has them; Keep or Not now for a lesson
+  if (method === "GET" && url.pathname === "/social") {
+    return { friendships: home.social.friendships(), meetings: home.social.recent(20), current: home.social.current(), lessons: home.social.lessons("waiting") };
+  }
+  if (method === "GET" && parts[0] === "orbs" && parts.length === 3 && parts[2] === "friends") {
+    const id = decodeURIComponent(parts[1]!);
+    if (!home.inbox.orb(id)) throw new HttpError(404, `no orb "${id}"`);
+    return { friends: home.social.of(id) };
+  }
+  if (method === "PUT" && parts[0] === "orbs" && parts.length === 3 && parts[2] === "traits") {
+    const id = decodeURIComponent(parts[1]!);
+    if (!home.inbox.orb(id)) throw new HttpError(404, `no orb "${id}"`);
+    const b = await body(req);
+    try {
+      return { traits: home.social.setTraits(id, b.traits) };
+    } catch (e) {
+      throw new HttpError(400, e instanceof Error ? e.message : String(e));
+    }
+  }
+  if (method === "POST" && parts[0] === "social" && parts[1] === "lessons" && parts.length === 4 && /^\d+$/.test(parts[2]!) && (parts[3] === "keep" || parts[3] === "drop")) {
+    try {
+      if (parts[3] === "keep") return { learned: home.social.keepLesson(Number(parts[2])) };
+      home.social.dropLesson(Number(parts[2]));
+      return { ok: true };
+    } catch (e) {
+      throw new HttpError(409, e instanceof Error ? e.message : String(e));
+    }
+  }
   // the reading library (PLAN 3.12): what the office follows, what is being read now, and, for a
   // query, the pages read that match; Stop following is yours too
   if (method === "GET" && url.pathname === "/reading") {

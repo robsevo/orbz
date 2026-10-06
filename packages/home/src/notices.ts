@@ -7,17 +7,21 @@
 //   - an approval waiting for you (a card), gone once it is answered;
 //   - work finished: a run that ended with a reply (only the newest per conversation stays);
 //   - the reading library's night (PLAN 3.12): pages that changed on a followed site, or a site
-//     that has read nothing three times running, once a source a day.
+//     that has read nothing three times running, once a source a day;
+//   - office life (PLAN 5.9): two orbs who became good friends or fell out, and a lesson a friend
+//     offered, which waits for your Keep or Not now (an orb learning is the floor's, 1.6 and 3.5).
 // Quiet: a count on the side menu, never a sound. A phone hears only what you choose (with 2.7).
 import type { DatabaseSync } from "node:sqlite";
 import type { Clock } from "./clock.ts";
 import { tx } from "./db.ts";
 import type { EventLog, HomeEvent } from "./events.ts";
 
-export type NoticeKind = "bill" | "reminder" | "approval" | "done" | "promotion" | "performance" | "reading";
+export type NoticeKind = "bill" | "reminder" | "approval" | "done" | "promotion" | "performance" | "reading" | "friends" | "learning";
 export type Notice = {
   id: number; kind: NoticeKind; orb: string; conversation: string | null; card: number | null; reminder: number | null;
   title: string; detail: string; due: string | null; at: number;
+  /** A lesson a friend offered (PLAN 5.9), kept or not from the notice. */
+  lesson: number | null;
 };
 export type ReminderKind = "bill" | "reminder";
 export type Reminder = {
@@ -43,7 +47,7 @@ export function comesUpAt(due: string, aheadDays: number): number {
   return at.getTime();
 }
 
-type NoticeRow = { id: number; kind: NoticeKind; orb: string; conversation: string | null; card: number | null; reminder: number | null; title: string; detail: string; due: string | null; at: number };
+type NoticeRow = { id: number; kind: NoticeKind; orb: string; conversation: string | null; card: number | null; reminder: number | null; title: string; detail: string; due: string | null; at: number; lesson: number | null };
 type ReminderRow = { id: number; orb: string; kind: ReminderKind; title: string; due: string; amount: string | null; ahead_days: number; conversation: string | null; created_at: number; done_at: number | null };
 const toReminder = (r: ReminderRow): Reminder => ({ id: r.id, orb: r.orb, kind: r.kind, title: r.title, due: r.due, amount: r.amount, aheadDays: r.ahead_days, conversation: r.conversation, createdAt: r.created_at, doneAt: r.done_at });
 
@@ -147,7 +151,7 @@ export class Notices {
 
   /** What is out, newest first. */
   list(): Notice[] {
-    return this.#db.prepare("SELECT id, kind, orb, conversation, card, reminder, title, detail, due, at FROM notices WHERE put_away_at IS NULL ORDER BY at DESC, id DESC").all() as NoticeRow[];
+    return this.#db.prepare("SELECT id, kind, orb, conversation, card, reminder, title, detail, due, at, lesson FROM notices WHERE put_away_at IS NULL ORDER BY at DESC, id DESC").all() as NoticeRow[];
   }
 
   /** Put away (on every device: the event tells the others). */
@@ -167,10 +171,10 @@ export class Notices {
     return ids.length;
   }
 
-  #add(key: string, n: Omit<Notice, "id" | "at" | "card" | "reminder"> & { card?: number | null; reminder?: number | null }): void {
+  #add(key: string, n: Omit<Notice, "id" | "at" | "card" | "reminder" | "lesson"> & { card?: number | null; reminder?: number | null; lesson?: number | null }): void {
     const r = this.#db
-      .prepare("INSERT OR IGNORE INTO notices (key, kind, orb, conversation, card, reminder, title, detail, due, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id")
-      .get(key, n.kind, n.orb, n.conversation, n.card ?? null, n.reminder ?? null, n.title, n.detail, n.due, this.#clock.now()) as { id: number } | undefined;
+      .prepare("INSERT OR IGNORE INTO notices (key, kind, orb, conversation, card, reminder, title, detail, due, at, lesson) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id")
+      .get(key, n.kind, n.orb, n.conversation, n.card ?? null, n.reminder ?? null, n.title, n.detail, n.due, this.#clock.now(), n.lesson ?? null) as { id: number } | undefined;
     if (r) this.#events.append("notice.added", { notice: r.id, kind: n.kind }, { orb: n.orb, conversation: n.conversation });
   }
 
@@ -211,6 +215,21 @@ export class Notices {
       } else if (Number(e.data.failures ?? 0) === 3) {
         this.#add(key, { kind: "reading", orb: e.orb, conversation: null, title: `${this.#nameOf(e.orb)}'s reading: ${String(e.data.host)} has read nothing three times`, detail: String(e.data.stopped ?? "it answered nothing that could be kept"), due: null });
       }
+    } else if ((e.type === "social.friends" || e.type === "social.fell_out") && Array.isArray(e.data.names)) {
+      // office life (PLAN 5.9): a friendship that crossed a line, once
+      const [x, y] = e.data.names as string[];
+      const fell = e.type === "social.fell_out";
+      this.#add(`${e.type}:${e.seq}`, {
+        kind: "friends", orb: String(e.data.a), conversation: null, due: null,
+        title: fell ? `${x} and ${y} have fallen out` : `${x} and ${y} are good friends now`,
+        detail: fell ? "They still work together; each knows to be kind and plain with the other" : "They work well together, and who fits a team's work weighs it",
+      });
+    } else if (e.type === "social.lesson" && Array.isArray(e.data.names)) {
+      // a lesson a friend offered: an orb learning is the floor's (1.6, 3.5), so it waits for your yes
+      const [from, to] = e.data.names as string[];
+      this.#add(`lesson:${String(e.data.lesson)}`, { kind: "learning", orb: String(e.data.to), conversation: null, lesson: Number(e.data.lesson), title: `${to} could learn this from ${from}`, detail: String(e.data.line ?? ""), due: null });
+    } else if ((e.type === "social.lesson_kept" || e.type === "social.lesson_dropped")) {
+      this.#settle("lesson = ?", Number(e.data.lesson));
     } else if ((e.type === "orb.promoted" || e.type === "promotion.declined") && e.orb) {
       this.#settle("kind = 'promotion' AND orb = ?", e.orb);
     } else if (e.type === "run.finished" && e.data.outcome === "ok" && e.orb && e.conversation) {

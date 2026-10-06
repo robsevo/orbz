@@ -15,7 +15,7 @@ import { HUES, MATERIALS, stylesheet, type HueName } from "./design/tokens.ts";
 import { hex } from "./design/color.ts";
 import { Orb } from "./orb/Orb.tsx";
 import { DESIGN } from "./orb/renderer.ts";
-import { CEILING, grownOf, grownSays, type Growth, type Move, TOTAL } from "./orb/dna.ts";
+import { CEILING, dnaOf, grownOf, grownSays, type Growth, type Move, TOTAL } from "./orb/dna.ts";
 import { readStrand, shareOf, strandOf } from "./orb/strand.ts";
 import { Balanced, OneLine, Tall, useMore } from "./ui/Balanced.tsx";
 import { Paged } from "./ui/Paged.tsx";
@@ -31,7 +31,7 @@ import { NoticesRoom, useNotices } from "./rooms/Notices.tsx";
 import { CalendarRoom } from "./rooms/Calendar.tsx";
 import { LabRoom } from "./rooms/Lab.tsx";
 import { Chat } from "./rooms/Chat.tsx";
-import { type CareerState, connect, idOf, keepOffice, keptOffice, type Office, passkeysHere, signInWithPasskey, type Standing, type Tab as SessionTab } from "./home/link.ts";
+import { type CareerState, connect, type Friend, idOf, keepOffice, keptOffice, type Office, passkeysHere, signInWithPasskey, type Standing, type Tab as SessionTab } from "./home/link.ts";
 import { DEMO_CREW } from "./orb/demo.ts";
 import { NEWBORN } from "./onboarding/story.ts";
 import type { Gesture, OrbState } from "./orb/life.ts";
@@ -228,6 +228,41 @@ function Head({ children }: { children: ReactNode }) {
 
 /** His traits (his DNA, orb/dna.ts): each out of the ceiling, a tick where his nature put it, and how
  * far everything he is moved it. They always add up to the same total. */
+/** Office life (PLAN 5.9): how it gets on with each colleague, from their time together (the home's),
+ * best friends first; a bar from the middle, the accent for friends and the alert for friction. */
+const MOMENT: Record<string, string> = { coffee: "Had a coffee together", ideas: "Swapped ideas", game: "Played a game", lesson: "A lesson between them" };
+function Colleagues({ me, friends }: { me: string; friends: Friend[] }) {
+  const day = (t: number): string => new Date(t).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  const momentOf = (f: Friend): string | null => {
+    const m = f.last;
+    if (!m) return null;
+    const what = m.kind === "game" ? `${m.place === "arcade" ? "Played at the arcade" : "Played ping-pong"}${m.winner ? `: ${m.winner === f.orb ? f.name : me} won` : ""}` : MOMENT[m.kind] ?? "Met";
+    return `${what} · ${day(m.at)}`;
+  };
+  return (
+    <div data-colleagues style={{ display: "grid", gap: "var(--s2)" }}>
+      <Head>In the office</Head>
+      {friends.map((f) => {
+        const half = Math.min(50, Math.abs(f.score) / 2);
+        const tone = f.score >= 20 ? "var(--accent)" : f.score <= -20 ? "var(--alert)" : "var(--text-3)";
+        return (
+          <div key={f.orb} data-friend={f.name} data-score={f.score} style={{ display: "grid", gap: 3, minWidth: 0 }}>
+            <span style={{ display: "flex", justifyContent: "space-between", gap: 8, font: "600 13px/18px var(--font)", color: "var(--text-1)", minWidth: 0 }}>
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</span>
+              <span style={{ color: tone, whiteSpace: "nowrap" }}>{f.word.charAt(0).toUpperCase() + f.word.slice(1)}</span>
+            </span>
+            <span aria-hidden style={{ position: "relative", height: 6, borderRadius: 3, background: "var(--fill)" }}>
+              <i style={{ position: "absolute", top: 0, bottom: 0, left: f.score >= 0 ? "50%" : `${50 - half}%`, width: `${half}%`, borderRadius: 3, background: tone }} />
+              <i style={{ position: "absolute", top: -1, bottom: -1, left: "50%", width: 1, background: "var(--hairline)" }} />
+            </span>
+            {momentOf(f) && <span style={{ font: "400 12px/16px var(--font)", color: "var(--text-3)" }}>{momentOf(f)}</span>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function Bars({ items, max = CEILING, kind = "traits" }: { items: { name: string; value: number; nature: number }[]; max?: number; kind?: "traits" | "skills" }) {
   return (
     <div data-traits={kind === "traits" ? "" : undefined} data-skills={kind === "skills" ? "" : undefined} style={{ display: "grid", gap: 6 }}>
@@ -349,7 +384,7 @@ function LevelUp({ c, g }: { c: Character; g: Growth }) {
 
 // `applying`: an applicant's profile, from the Recruiter (owner, 10-05: "recruiter should also be able to show
 // the orbs profile when we click on it")
-function Sheet({ c, onRename, replies, standing, startsAs, career, applying }: { c: Character; onRename?: (name: string) => void; replies: Replies; standing?: Standing | null; startsAs?: "Junior" | "Senior"; career?: CareerState | null; applying?: boolean }) {
+function Sheet({ c, onRename, replies, standing, startsAs, career, applying, friends }: { c: Character; onRename?: (name: string) => void; replies: Replies; standing?: Standing | null; startsAs?: "Junior" | "Senior"; career?: CareerState | null; applying?: boolean; friends?: Friend[] | null }) {
   const sh = sheetOf(c);
   // what his graded work has grown him into (PLAN 3.11), once a home has some to show
   const grown = career ? grownOf(c, sh.leans, career.radar, career.niches, sh.dna, standing?.xp ?? career.xp) : null;
@@ -434,6 +469,7 @@ function Sheet({ c, onRename, replies, standing, startsAs, career, applying }: {
         <Radar items={grew ? grew.skills : sh.leans} />
         <span style={{ font: "400 12px/16px var(--font)", color: "var(--text-3)" }}>24 points across them, like every orb: its specialty sets the shape, its traits pull it</span>
       </div>
+      {friends && friends.length > 0 && <Colleagues me={c.name} friends={friends} />}
       </Tall>
     </div>
   );
@@ -908,16 +944,37 @@ function App() {
   // where he stands, on a home (PLAN 3.8): his level and XP, kept up as they change
   const [standing, setStanding] = useState<Standing | null>(null);
   const [career, setCareer] = useState<CareerState | null>(null); // what his work has grown him into (PLAN 3.11)
+  const [friends, setFriends] = useState<Friend[] | null>(null); // how it gets on with the office (PLAN 5.9)
   useEffect(() => {
-    if (!home || view.kind === "new") return void (setStanding(null), setCareer(null));
+    if (!home || view.kind === "new") return void (setStanding(null), setCareer(null), setFriends(null));
     const c = me;
     const load = (): void => {
       void home.standing(c).then(setStanding, () => setStanding(null));
       void home.career(c).then(setCareer, () => setCareer(null));
     };
+    const loadFriends = (): void => void home.friendsOf(idOf(c.name)).then(setFriends, () => setFriends(null));
     load();
-    return home.watch({ event: (e) => void (e.orb === idOf(c.name) && /^(xp\.|orb\.promoted|promotion\.)/.test(e.type) && load()) });
+    loadFriends();
+    return home.watch({
+      event: (e) => {
+        if (e.orb === idOf(c.name) && /^(xp\.|orb\.promoted|promotion\.)/.test(e.type)) load();
+        if (/^social\.met$/.test(e.type) && (e.data?.a === idOf(c.name) || e.data?.b === idOf(c.name))) loadFriends();
+      },
+    });
   }, [home, view.kind === "new" ? "" : me.name]);
+  // the home's meetings go by how the orbs' traits get on (PLAN 5.9): it is told each one's DNA, which only the
+  // app can read, once a load and whenever it changes
+  const traitsSent = useRef(new Map<string, string>());
+  useEffect(() => {
+    if (!home) return;
+    for (const c of office) {
+      const traits = Object.fromEntries(dnaOf(c).traits.map((t) => [t.name, t.value]));
+      const json = JSON.stringify(traits);
+      if (traitsSent.current.get(c.name) === json) continue;
+      traitsSent.current.set(c.name, json);
+      home.setTraits(idOf(c.name), traits).catch(() => traitsSent.current.delete(c.name));
+    }
+  }, [home, office]);
   const worn: OrbState = live && !picked ? WORN[live.mood].state : state; // what his face wears, and the chip that says so
   useEffect(() => {
     if (live?.moment && !picked) play(live.moment.name); // his moments play through the face's one gesture line
@@ -1287,7 +1344,7 @@ function App() {
           </div>
 
           <div className="orbs-pair" style={{ display: "grid", gap: "var(--s4)", padding: "0 var(--s5)", gridTemplateColumns: "minmax(0, 1fr)", alignItems: "start" }}>
-            <Sheet c={before ?? me} key={before ? "was" : "now"} onRename={making ? (n) => edit({ name: n }) : undefined} replies={replies} standing={making ? null : standing} startsAs={startsAs} career={making ? null : career} />
+            <Sheet c={before ?? me} key={before ? "was" : "now"} onRename={making ? (n) => edit({ name: n }) : undefined} replies={replies} standing={making ? null : standing} startsAs={startsAs} career={making ? null : career} friends={making ? null : friends} />
             {making ? <Creator me={me} edit={edit} replies={replies} setReplies={setReplies} first={!office.length} /> : <Card c={me} replies={replies} setReplies={setReplies} onDelete={(handTo) => remove(me.name, handTo)} onChat={() => go({ room: "chat", orb: me.name })} onCareer={() => go({ room: "career", orb: me.name })} others={office.filter((o) => o.name !== me.name)} />}
           </div>
 

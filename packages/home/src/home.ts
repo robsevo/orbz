@@ -39,6 +39,7 @@ import { orgTools } from "./org.ts";
 import { interviewSystem, Recruiter, RecruiterError } from "./recruiter.ts";
 import { type Fetcher, Reading, type Sleep } from "./reading/reading.ts";
 import { readingTools, withReading } from "./reading/tools.ts";
+import { Social, type SocialOptions } from "./social/social.ts";
 import { School, SchoolError, type ReportCard, type SchoolOptions } from "./school/school.ts";
 import type { Kind } from "./school/subjects.ts";
 import { habitsOf, shareHabit } from "./gym/share.ts";
@@ -93,6 +94,9 @@ export type HomeOptions = {
   heartbeatMs?: number;
   /** The reading library's network and its waits (PLAN 3.12): tests stand in for both. */
   reading?: { fetch?: Fetcher; sleep?: Sleep };
+  /** Office life (PLAN 5.9): on for the real home (main.ts), off in a test home unless it says so (so
+   * no other test's orbs wander off to meet); `dice` pinned by its own tests. */
+  social?: { on?: boolean } & Pick<SocialOptions, "dice">;
   /** How long a stopped run may take to wind down (default 5 s). */
   graceMs?: number;
   /** School (PLAN 5.7): tonight's share of the brain (tests set less). */
@@ -214,6 +218,8 @@ export class Home {
   readonly recruiter: Recruiter;
   /** The reading library (PLAN 3.12): the sources the office follows, read politely each night. */
   readonly reading: Reading;
+  /** Office life (PLAN 5.9): who meets, what they do, and the friendships it makes. */
+  readonly social: Social;
   /** School (PLAN 5.7): an orb you let go, learning the subjects you picked, night by night. */
   readonly school: School;
   /** XP from graded evidence only (PLAN 3.6): the ledger, in the event log. */
@@ -371,6 +377,7 @@ export class Home {
         habits: (orb) => habitsOf(this.events, this.dataDir, orb),
         share: (from, to, task) => shareHabit(this.events, this.dataDir, { from, to, task, why: "mentoring" }),
         diplomas: (orb) => this.school.diplomas(orb), // school (PLAN 5.7): who is more qualified for a row
+        affinity: (orb, others) => this.social.affinity(orb, others), // friendships (PLAN 5.9): who works well together
       }),
     ];
     this.agent = opts.runner
@@ -419,6 +426,7 @@ export class Home {
           orbSpecialty: (orb) => this.inbox.orb(orb)?.specialty ?? "general",
           learned: (orb) => this.learned.list(orb),
           notebook: (orb) => this.school.notebook(orb), // what it kept at school (PLAN 5.7) goes to work with it
+          colleagues: (orb) => this.social.colleaguesLine(orb), // its friends and frictions (PLAN 5.9)
           searchKey: () => this.brains.searchKey(),
           remind: (orb, conversation, r) => {
             const keeper = this.plannerFor(orb, r.kind);
@@ -476,6 +484,14 @@ export class Home {
         });
     this.inbox = new Inboxes(db, this.events, this.clock, opts.runner ?? this.agent!, opts.graceMs);
     this.recruiter = new Recruiter(db, this.events, this.clock);
+    // office life (PLAN 5.9): an orb is free with no work queued or under way and no card waiting for you
+    this.social = new Social(db, this.events, this.clock, {
+      office: () => this.inbox.orbs().map((o) => ({ id: o.id, name: o.name })),
+      free: (orb) => !db.prepare("SELECT 1 FROM inbox WHERE orb = ? AND state IN ('queued', 'running') LIMIT 1").get(orb) && !this.conversations.pendingCards().some((c) => c.orb === orb),
+      learned: { list: (orb) => this.learned.list(orb), add: (orb, line) => this.learned.add(orb, line) },
+      on: opts.social?.on ?? false,
+      ...(opts.social?.dice && { dice: opts.social.dice }),
+    });
     this.school = new School(db, this.events, this.clock, {
       // the teacher is the preset's teacher, else the big brain; the orb at school is the shared big brain
       // (no local model yet); every ask checks the spend cap and is recorded with the orb
@@ -856,6 +872,7 @@ export class Home {
     void this.school.due(); // and school's classes (PLAN 5.7)
     this.recruiter.due(); // the Recruiter's list turns over at midnight (PLAN 5.8)
     void this.reading.due(); // the reading library's next read, one at a time (PLAN 3.12)
+    this.social.due(); // two free orbs meet, in the office's day (PLAN 5.9)
     await this.triggers.poll({ all: woke });
   }
 
@@ -864,7 +881,7 @@ export class Home {
     this.#cancelTimer?.();
     const now = this.clock.now();
     let delay = this.#heartbeatMs;
-    for (const at of [this.schedules.nextDueAt(), this.notices.nextDueAt(), this.loops.nextDueAt(), this.triggers.nextPollAt(), this.gym.nextAt(), this.school.nextAt(), this.recruiter.nextAt(), this.reading.nextAt()]) {
+    for (const at of [this.schedules.nextDueAt(), this.notices.nextDueAt(), this.loops.nextDueAt(), this.triggers.nextPollAt(), this.gym.nextAt(), this.school.nextAt(), this.recruiter.nextAt(), this.reading.nextAt(), this.social.nextAt()]) {
       if (at !== null) delay = Math.min(delay, at - now);
     }
     this.#cancelTimer = this.clock.timer(Math.max(MIN_DELAY_MS, delay), () => void this.tick());

@@ -287,7 +287,39 @@ export type Plan =
   | { kind: "desk"; why: "work" | "think" | "wait" | "gym" | "tidy"; label: string; mark: string }
   | { kind: "meeting"; seat: number; label: string; mark: string }
   | { kind: "poi"; poi: PoiId; label: string; mark: string; with?: string }
-  | { kind: "visit"; who: string; label: string; mark: string };
+  | { kind: "visit"; who: string; label: string; mark: string }
+  /** A meeting the home decided (PLAN 5.9): the two go to its place together, side 0 and side 1. */
+  | { kind: "meet"; with: string; place: MeetPlace; side: 0 | 1; until: number; label: string; mark: string };
+
+/** Where the home's meetings happen (home/src/social/rules.ts Place). */
+export type MeetPlace = "coffee" | "cooler" | "bistro1" | "bistro2" | "pingpong" | "arcade" | "desk";
+export type MeetKind = "coffee" | "ideas" | "game" | "lesson";
+
+/** Where one side of a meeting stands at a spot (not a desk: that is the teacher's own): the two ends of
+ * the ping-pong table, or side by side, kept inside the floor (a spot by a wall puts both on its inner side). */
+export function meetSpot(place: Exclude<MeetPlace, "desk">, side: 0 | 1): { approach: Spot; at: Spot } {
+  if (place === "pingpong") {
+    const end = POIS.find((q) => q.id === (side ? "ping2" : "ping1"))!;
+    return { approach: end.approach, at: end.at };
+  }
+  const spot = POIS.find((q) => q.id === place)!;
+  const inside = (x: number): number => Math.min(W - 48, Math.max(48, x));
+  const toward = spot.at.x > W - 90 ? -1 : spot.at.x < 90 ? 1 : 0;
+  const dx = toward ? toward * (side ? 46 : 12) : side ? 22 : -22;
+  return { approach: { x: inside(spot.approach.x + dx), y: spot.approach.y }, at: { x: inside(spot.at.x + dx), y: spot.at.y } };
+}
+
+/** One orb's part in a meeting the home decided: where it stands and what its tag says. `a` started it
+ * (for a lesson, the one who teaches); `until` is when it ends, by the wall clock. */
+export function meetPlan(m: { a: string; b: string; kind: MeetKind; place: MeetPlace; winner: string | null; until: number }, me: string): Extract<Plan, { kind: "meet" }> {
+  const side: 0 | 1 = me === m.a ? 0 : 1;
+  const other = side === 0 ? m.b : m.a;
+  const base = { kind: "meet" as const, with: other, place: m.place, side, until: m.until };
+  if (m.kind === "lesson") return { ...base, label: side === 0 ? `Showing ${other} something` : `Learning from ${other}`, mark: "📚" };
+  if (m.kind === "ideas") return { ...base, label: `Swapping ideas with ${other}`, mark: "💡" };
+  if (m.kind === "game") return { ...base, label: m.place === "arcade" ? `At the arcade with ${other}` : `Playing ping-pong with ${other}`, mark: m.place === "arcade" ? "🕹" : "🏓" };
+  return { ...base, label: m.place === "cooler" ? `At the cooler with ${other}` : `Having a coffee with ${other}`, mark: "☕" };
+}
 
 const AT_DESK: Partial<Record<Mood, Extract<Plan, { kind: "desk" }>>> = {
   working: { kind: "desk", why: "work", label: "Working", mark: "⌨" },
