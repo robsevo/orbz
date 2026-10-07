@@ -150,8 +150,8 @@ test("several positions at once: every kind of work, or a department's, each ope
   assert.equal(home.recruiting().applicants.length, every.length * PER_DAY, "and today's applicants for each");
   assert.throws(() => home.recruiter.setPositions(["frontend", "wizardry"], false), /"wizardry" is not a kind of work/);
   assert.equal(home.recruiter.positions().length, every.length, "a wrong name in the list: none closed");
-  const business = every.filter((k) => SPECIALTY_FAMILIES[k as keyof typeof SPECIALTY_FAMILIES] === "business");
-  assert.ok(business.includes("fundamentals"), "the fundamental analyst is Business's (owner, 10-07)");
+  const business = every.filter((k) => SPECIALTY_FAMILIES[k as keyof typeof SPECIALTY_FAMILIES] === "finance"); // a department's all: Finance's
+  assert.ok(business.includes("fundamentals"), "the fundamental analyst is Finance's (owner, 10-07)");
   home.recruiter.setPositions(business, false);
   assert.deepEqual(home.recruiter.positions().filter((k) => business.includes(k)), [], "a department closed in one go");
   assert.equal(home.recruiter.positions().length, every.length - business.length, "and only it");

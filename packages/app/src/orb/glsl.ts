@@ -427,6 +427,26 @@ vec2 accSDF(vec2 q){
     float stripe = step(0.55, fract((q.y + 0.55*q.x)*7.0));
     return vec2(horn, stripe);
   }
+  // rank you can see (owner, 10-07: "when it comes to CEO orbs or CFO orbs, we need new Accessories")
+  if (id == 41) {       // a laurel wreath, the CEO's: gold leaves round the top of his head, a gem at its front
+    float leaves = 1e5;
+    for (int i = 0; i < 5; i++) {
+      for (int s = -1; s <= 1; s += 2) {
+        float a = float(s)*(0.18 + 0.24*float(i));
+        vec2 p = vec2(0.0, 0.52) + 0.62*vec2(sin(a), -cos(a));
+        leaves = min(leaves, sdEll(rot(q - p, a + float(s)*0.9), vec2(0.115, 0.05)));
+      }
+    }
+    return pick(vec2(leaves, 0.0), vec2(length(q - vec2(0.0, -0.10)) - 0.055, 1.0));
+  }
+  if (id == 42) {       // a quill, the CFO's: a feather tucked at one side, its nib in gold; the books are kept
+    vec2 f = rot(q - vec2(0.30, -0.22), -0.45);
+    float vane = sdEll(f, vec2(0.10, 0.36));
+    float shaft = sdCap(f, vec2(0.0, 0.42), vec2(0.0, -0.34), 0.016);
+    float nib = sdTri(f, vec2(-0.035, 0.38), vec2(0.035, 0.38), vec2(0.0, 0.52));
+    vec2 h = pick(vec2(vane, 0.0), vec2(shaft, 1.0));
+    return pick(h, vec2(nib, 1.0));
+  }
   if (id == 8) {        // headphones: the band over his head, a cup on each side
     // the band rests on his head and the cups on his sides (both hovered a hair off him until 10-01)
     float band = max(abs(length(q - vec2(0.0, 0.70)) - 0.73) - 0.035, q.y - 0.62);

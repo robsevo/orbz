@@ -39,7 +39,8 @@ const ZONE_H = 196;
 const COLS = [12, 420, 828] as const;
 const ZONE_W = 360;
 const zone = (id: Zone["id"], name: string, hue: HueName, col: number, y: number): Zone => ({ id, name, hue, rect: { x: COLS[col]!, y, w: ZONE_W, h: ZONE_H }, door: { x: COLS[col]! + ZONE_W / 2 - 45, w: 90 } });
-/** The five departments (spec.ts FAMILIES), and the games corner among them. */
+/** The departments with a zone of their own (spec.ts FAMILIES; the Executive and Finance work beside Think and
+ * Business, `zoneOf`), and the games corner among them. */
 export const ZONES: Zone[] = [
   zone("build", FAMILIES.build, "cornflower", 0, ROW_A),
   zone("think", FAMILIES.think, "violet", 1, ROW_A),
@@ -290,13 +291,17 @@ export function clear(a: Spot, b: Spot, grid: Uint8Array = GRID): boolean {
 }
 
 // ── who sits where ────────────────────────────────────────────────────────────────────────────────
+/** Where a department works on the floor: its own zone; the Executive with Think and Finance with Business, until the
+ * Board room and their own places come (PLAN 5.17). */
+export const zoneOf = (f: Family): Family => (f === "exec" ? "think" : f === "finance" ? "business" : f);
+
 /** Each orb's desk: in its department, in the office's order; past six, the first desk free anywhere. */
 export function seating(orbs: { name: string; family: Family }[]): Map<string, Desk> {
   const out = new Map<string, Desk>();
   const taken = new Set<Desk>();
   const later: { name: string; family: Family }[] = [];
   for (const o of orbs) {
-    const d = DESKS.find((x) => x.zone === o.family && !taken.has(x));
+    const d = DESKS.find((x) => x.zone === zoneOf(o.family) && !taken.has(x));
     if (d) {
       out.set(o.name, d);
       taken.add(d);

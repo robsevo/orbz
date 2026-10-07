@@ -177,13 +177,20 @@ test("the roster: five families, wide enough to staff an office, the real-life r
   }
   assert.equal(new Set(all.map((x) => SPECIALTIES[x].title)).size, all.length, "no two share a title");
   // a role a licence stands behind says so on his sheet, and the rest do not pretend to need it
-  for (const k of ["accountant", "dietitian", "trainer", "health", "coach", "money", "paperwork", "investor", "crypto", "fundamentals"] as SpecialtyName[]) assert.match((SPECIALTIES[k] as { limits?: string }).limits ?? "", /^Not a/, `${k} says what he is not`);
+  for (const k of ["accountant", "dietitian", "trainer", "health", "coach", "money", "paperwork", "investor", "crypto", "fundamentals", "cfo"] as SpecialtyName[]) assert.match((SPECIALTIES[k] as { limits?: string }).limits ?? "", /^Not a/, `${k} says what he is not`);
   assert.equal((SPECIALTIES.frontend as { limits?: string }).limits, undefined, "control: a builder needs no such line");
   // owner, 10-02: a quality assurance persona, a builder beside the Bug Hunter
   assert.deepEqual([SPECIALTIES.qa.family, SPECIALTIES.qa.title], ["build", "QA Lead"]);
   // owner, 10-02: an investor, and one for crypto; each says every trade is yours
   // owner, 10-07: the fundamental analyst too, in Business, the last of the list (a strand keeps a specialty by its place)
-  assert.deepEqual([SPECIALTIES.fundamentals.family, SPECIALTIES.fundamentals.title, Object.keys(SPECIALTIES).at(-1)], ["business", "Fundamental Analyst", "fundamentals"]);
+  assert.deepEqual([SPECIALTIES.fundamentals.family, SPECIALTIES.fundamentals.title], ["finance", "Fundamental Analyst"]);
+  // owner, 10-07: Finance holds every money orb, and the Executive its six heads, last in the list (a strand keeps a
+  // specialty by its place, so every addition goes at the end)
+  for (const k of ["accountant", "money", "investor", "crypto", "fundamentals"] as SpecialtyName[]) assert.equal(SPECIALTIES[k].family, "finance", k);
+  assert.deepEqual(Object.keys(SPECIALTIES).slice(-6), ["ceo", "cfo", "coo", "cto", "cmo", "chiefofstaff"]);
+  assert.deepEqual((Object.keys(SPECIALTIES) as SpecialtyName[]).slice(-6).map((k) => [SPECIALTIES[k].family, SPECIALTIES[k].title]), [
+    ["exec", "Chief Executive Officer"], ["exec", "Chief Financial Officer"], ["exec", "Chief Operating Officer"], ["exec", "Chief Technology Officer"], ["exec", "Chief Marketing Officer"], ["exec", "Chief of Staff"],
+  ]);
   for (const k of ["investor", "crypto", "fundamentals"] as SpecialtyName[]) assert.match((SPECIALTIES[k] as { limits?: string }).limits ?? "", /financial adviser[\s\S]*yours/, `${k}: not an adviser, and the trades are yours`);
   assert.ok(Object.keys(FINISHES).length >= 9 && Object.keys(HATS).length >= 30 && Object.keys(GLASSES).length >= 17, "more colours, hats and glasses to suit them");
 });

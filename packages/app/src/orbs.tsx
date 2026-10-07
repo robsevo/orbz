@@ -1202,7 +1202,7 @@ function App() {
           </div>
           {person && (
             <div style={{ padding: "0 var(--s2)", font: "600 13px/18px var(--font)", color: "var(--text-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              CEO {person.name}
+              Founder {person.name}
             </div>
           )}
           <nav aria-label="Rooms" style={{ display: "grid", gap: 4, marginTop: "var(--s2)" }}>

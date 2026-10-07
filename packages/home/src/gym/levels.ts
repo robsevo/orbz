@@ -30,7 +30,9 @@ export const AREAS_OF: Partial<Record<Specialty, Area[]>> = {
   devops: ["devops"], testing: ["backend", "frontend"], qa: ["backend", "frontend", "writing"], data: ["data"], ai: ["data", "backend"], security: ["devops", "backend"],
   automation: ["devops", "backend"], design: ["design", "frontend"], writing: ["writing"], editing: ["writing"], marketing: ["writing", "research"],
   social: ["writing"], research: ["research"], factcheck: ["research"], analyst: ["research", "data"], product: ["research", "writing"],
-  accountant: ["finance"], money: ["finance"], investor: ["finance", "research"], crypto: ["finance", "research"], fundamentals: ["finance", "research"], office: ["inbox", "scheduling"], paperwork: ["inbox", "finance"], support: ["inbox"],
+  accountant: ["finance"], money: ["finance"], investor: ["finance", "research"], crypto: ["finance", "research"], fundamentals: ["finance", "research"],
+  // the executives (owner, 10-07): the CEO, the COO and the Chief of Staff count every area
+  cfo: ["finance"], cto: ["backend", "frontend", "devops"], cmo: ["writing", "research", "design"], office: ["inbox", "scheduling"], paperwork: ["inbox", "finance"], support: ["inbox"],
   assistant: ["inbox", "scheduling"], operations: ["scheduling", "inbox"], events: ["scheduling", "bookings"], travel: ["bookings"],
   tutor: ["teaching"], language: ["teaching"], coach: ["teaching"],
 };

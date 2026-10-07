@@ -108,9 +108,13 @@ export function Orb({ character, size = 120, state = "idle", gesture = null, fid
     };
   }, [size, seed, every, still, frame, ...(still ? [JSON.stringify(character)] : [])]);
 
+  // the CEO and the CFO glow (owner, 10-07: "a special glow or smt to let you know theyre the CEO or CFO"), by their post
+  const rank = character.specialty === "ceo" ? "ceo" : character.specialty === "cfo" ? "cfo" : null;
   return (
     <canvas
       ref={ref}
+      className={rank ? `orb-rank orb-rank-${rank}` : undefined}
+      data-rank={rank ?? undefined}
       role="img"
       aria-label={`${describe(character)}, ${state}`}
       onClick={poke ? () => play(Math.random() < 0.65 ? "hop" : "squish") : undefined}

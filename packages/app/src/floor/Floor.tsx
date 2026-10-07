@@ -28,7 +28,7 @@ const ORB = 84;
 const head: CSSProperties = { font: "700 11px/16px var(--font)", letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)" };
 const small: CSSProperties = { font: "500 13px/18px var(--font)", color: "var(--text-3)", textWrap: "pretty", overflowWrap: "anywhere" };
 const panel: CSSProperties = { display: "grid", gap: 10, alignContent: "start", padding: "var(--s4)", borderRadius: 18, background: "var(--fill)", boxShadow: "inset 0 0 0 1px var(--hairline)", minWidth: 0 };
-const ICON: Record<Family | "play", string> = { build: "🛠", think: "💡", make: "🎨", business: "📈", life: "🌿", play: "🎮" };
+const ICON: Record<Family | "play", string> = { exec: "👑", build: "🛠", think: "💡", make: "🎨", finance: "💰", business: "📈", life: "🌿", play: "🎮" };
 
 type Sim = {
   c: Character; id: string; x: number; y: number; path: Spot[]; i: number; plan: Plan | null;

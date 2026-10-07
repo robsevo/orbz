@@ -245,6 +245,10 @@ export const HATS = {
   tiara: { id: 38, main: "gold", second: "accent", tilt: 0 },
   antlers: { id: 39, main: "cream", second: "cream", tilt: 0 },
   "unicorn horn": { id: 40, main: "gold", second: "cream", tilt: 0 },
+  // rank you can see (owner, 10-07: "when it comes to CEO orbs or CFO orbs, we need new Accessories and maybe a special
+  // glow"): the CEO's laurel and the CFO's quill, each the default of its post; the glow is the post's, whatever it wears
+  laurel: { id: 41, main: "gold", second: "accent", tilt: 0 },
+  quill: { id: 42, main: "cream", second: "gold", tilt: 0.05 },
 } satisfies Record<string, { id: number; main: Paint; second: Paint; tilt: number }>;
 export type HatName = keyof typeof HATS;
 
@@ -479,7 +483,8 @@ export type PersonalityName = keyof typeof PERSONALITIES;
 // What he does (owner, 2026-10-01: "thats what the orb specializes in, whether its frontend,
 // backend, general, planning, full stack", then "a much bigger roster", then "real life skills
 // that we need but dont necessarily have ... an accountant ... one thats good at excel and
-// microsoft office ... lifecoach persona, dietician persona ... personal trainer"). Five families.
+// microsoft office ... lifecoach persona, dietician persona ... personal trainer"). Seven families since 10-07: the Executive
+// and Finance joined Build, Think, Make, Business and Life.
 // It titles him, gives him the focus his brain is told, and sets where he LEANS on the skills
 // radar. Leanings are where he starts, not what he has earned: levels and XP come only from graded
 // work and the owner's approvals (CLAUDE.md rule 8; PLAN 5.x). A role a licence stands behind says
@@ -487,7 +492,10 @@ export type PersonalityName = keyof typeof PERSONALITIES;
 export const SKILLS = ["Planning", "Building", "Data", "Design", "Words", "Research", "Money", "Care"] as const;
 type Lean = [number, number, number, number, number, number, number, number]; // 1..5, in SKILLS order
 
-export const FAMILIES = { build: "Build", think: "Think", make: "Make", business: "Business", life: "Life" } as const;
+// owner, 10-07: "add a few more positions and its own category and restructure things just a bit ... restructure it so it
+// fits this makes things easier to see": the Executive first (every department's head), and Finance (every money orb, the
+// CFO's) beside Business
+export const FAMILIES = { exec: "Executive", build: "Build", think: "Think", make: "Make", finance: "Finance", business: "Business", life: "Life" } as const;
 export type Family = keyof typeof FAMILIES;
 
 type Specialty = { family: Family; label: string; title: string; focus: string; lean: Lean; hat: HatName; glasses: GlassesName; limits?: string };
@@ -525,7 +533,7 @@ export const SPECIALTIES = {
   social: { family: "make", label: "Social media", title: "Social Media Manager", focus: "posts, captions, the calendar and the replies", lean: [3, 1, 2, 4, 5, 2, 2, 3], hat: "cap", glasses: "hearts" },
   video: { family: "make", label: "Video", title: "Video Maker", focus: "videos and podcasts: scripts, cuts, captions", lean: [3, 2, 1, 5, 4, 2, 1, 2], hat: "headphones", glasses: "round shades" },
   // business
-  accountant: { family: "business", label: "Accounting", title: "Accountant", focus: "the books: bills and when they are due, budgets, receipts, taxes; tells you before a bill is due", lean: [4, 1, 4, 1, 2, 2, 5, 2], hat: "eyeshade", glasses: "half-rims", limits: "Not a licensed accountant: keeps your books in order and asks one before anything is filed." },
+  accountant: { family: "finance", label: "Accounting", title: "Accountant", focus: "the books: bills and when they are due, budgets, receipts, taxes; tells you before a bill is due", lean: [4, 1, 4, 1, 2, 2, 5, 2], hat: "eyeshade", glasses: "half-rims", limits: "Not a licensed accountant: keeps your books in order and asks one before anything is filed." },
   office: { family: "business", label: "Office", title: "Office Pro", focus: "Excel, Word and PowerPoint: sheets and formulas, documents, decks", lean: [3, 2, 4, 4, 4, 2, 3, 2], hat: "headset", glasses: "rectangle" },
   sales: { family: "business", label: "Sales", title: "Sales Lead", focus: "leads, pitches, follow-ups and closing", lean: [4, 1, 2, 2, 4, 2, 4, 4], hat: "fedora", glasses: "none" },
   support: { family: "business", label: "Support", title: "Support Hero", focus: "answering customers kindly and fixing what they hit", lean: [3, 2, 1, 1, 4, 2, 1, 5], hat: "headset", glasses: "none" },
@@ -533,8 +541,8 @@ export const SPECIALTIES = {
   operations: { family: "business", label: "Operations", title: "Operations Manager", focus: "keeping the business running: suppliers, orders, processes", lean: [5, 1, 3, 1, 3, 2, 4, 3], hat: "cap", glasses: "square" },
   // owner, 10-02: "an investor persona, for crypto also". Research and watching, never a trade of his own:
   // a buy, a sell, a swap or a withdrawal is the floor's money category, so it always asks (rule 9)
-  investor: { family: "business", label: "Investing", title: "Investor", focus: "markets and your portfolio: research, watchlists, earnings, what moved and why", lean: [4, 1, 5, 1, 3, 5, 5, 2], hat: "top hat", glasses: "monocle", limits: "Not a licensed financial adviser: researches and keeps watch; every buy and sell is yours to make." },
-  crypto: { family: "business", label: "Crypto", title: "Crypto Analyst", focus: "coins, tokens and wallets: prices, on-chain activity, the projects behind them", lean: [3, 2, 5, 1, 2, 5, 5, 1], hat: "antenna", glasses: "visor", limits: "Not a financial adviser, and crypto swings hard: never holds your keys or moves your funds, and every trade is yours." },
+  investor: { family: "finance", label: "Investing", title: "Investor", focus: "markets and your portfolio: research, watchlists, earnings, what moved and why", lean: [4, 1, 5, 1, 3, 5, 5, 2], hat: "top hat", glasses: "monocle", limits: "Not a licensed financial adviser: researches and keeps watch; every buy and sell is yours to make." },
+  crypto: { family: "finance", label: "Crypto", title: "Crypto Analyst", focus: "coins, tokens and wallets: prices, on-chain activity, the projects behind them", lean: [3, 2, 5, 1, 2, 5, 5, 1], hat: "antenna", glasses: "visor", limits: "Not a financial adviser, and crypto swings hard: never holds your keys or moves your funds, and every trade is yours." },
   paperwork: { family: "business", label: "Paperwork", title: "Paperwork Pro", focus: "contracts, forms and the fine print, read carefully", lean: [4, 1, 2, 1, 5, 4, 3, 2], hat: "none", glasses: "half-rims", limits: "Not a lawyer: reads closely and says what to ask one." },
   // life
   assistant: { family: "life", label: "Personal assistant", title: "Personal Assistant", focus: "the inbox, the calendar, trips and errands", lean: [5, 1, 2, 1, 4, 2, 2, 4], hat: "bow", glasses: "none" },
@@ -545,7 +553,7 @@ export const SPECIALTIES = {
   health: { family: "life", label: "Health", title: "Health Coach", focus: "food and fitness together: meals, workouts, sleep", lean: [4, 1, 2, 1, 3, 3, 1, 5], hat: "sweatband", glasses: "rose tint", limits: "Not a doctor or a licensed dietitian: general guidance only." },
   chef: { family: "life", label: "Cooking", title: "Home Chef", focus: "recipes, meal plans and what to cook tonight", lean: [3, 1, 1, 3, 3, 2, 2, 5], hat: "chef hat", glasses: "none" },
   travel: { family: "life", label: "Travel", title: "Travel Planner", focus: "trips: routes, bookings, packing and a plan B", lean: [5, 1, 2, 1, 3, 4, 3, 3], hat: "straw hat", glasses: "round shades" },
-  money: { family: "life", label: "Money", title: "Money Coach", focus: "your own money: budgets, savings, subscriptions to cancel", lean: [4, 1, 3, 1, 3, 2, 5, 3], hat: "none", glasses: "round", limits: "Not a financial adviser: organises, and never invests for you." },
+  money: { family: "finance", label: "Money", title: "Money Coach", focus: "your own money: budgets, savings, subscriptions to cancel", lean: [4, 1, 3, 1, 3, 2, 5, 3], hat: "none", glasses: "round", limits: "Not a financial adviser: organises, and never invests for you." },
   home: { family: "life", label: "Home", title: "Home Manager", focus: "the house: bills, repairs, chores and deliveries", lean: [5, 1, 2, 1, 3, 2, 4, 4], hat: "bucket hat", glasses: "none" },
   events: { family: "life", label: "Events", title: "Event Planner", focus: "parties and events: guests, venues, timings, the cake", lean: [5, 1, 2, 3, 3, 2, 3, 4], hat: "party hat", glasses: "stars" },
   career: { family: "life", label: "Career", title: "Career Coach", focus: "CVs, applications, interviews and the next move", lean: [4, 1, 1, 2, 5, 3, 2, 4], hat: "none", glasses: "half-rims" },
@@ -554,7 +562,15 @@ export const SPECIALTIES = {
   // like a really good and well trained fundamental analyst, looks at the compaies books, finds where they might
   // be lying or there might be a crash, like a michael burry kind of character or Mark Baum". A detective's hat:
   // it reads the footnotes. Last in the list, as every addition is (strand.ts keeps a specialty by its place)
-  fundamentals: { family: "business", label: "Fundamentals", title: "Fundamental Analyst", focus: "stocks and crypto read to the bone: the filings and their footnotes, cash against earnings, debt, dilution, a token's supply and who holds it; where the story and the numbers part ways, before the crash", lean: [3, 1, 5, 1, 3, 5, 5, 1], hat: "deerstalker", glasses: "half-rims", limits: "Not a licensed financial adviser: reads the books and says what does not add up; every buy, sell or short is yours to make." },
+  fundamentals: { family: "finance", label: "Fundamentals", title: "Fundamental Analyst", focus: "stocks and crypto read to the bone: the filings and their footnotes, cash against earnings, debt, dilution, a token's supply and who holds it; where the story and the numbers part ways, before the crash", lean: [3, 1, 5, 1, 3, 5, 5, 1], hat: "deerstalker", glasses: "half-rims", limits: "Not a licensed financial adviser: reads the books and says what does not add up; every buy, sell or short is yours to make." },
+  // the Executive (owner, 10-07: "COO, CTO, CMO, Chief of Staff", with the CEO and the CFO): each heads a department
+  // (org: department heads) and sits on the board by its post. Last in the list, as every addition is
+  ceo: { family: "exec", label: "CEO", title: "Chief Executive Officer", focus: "running the company: its direction, who does what, the work led and answered for; chairs the board", lean: [5, 2, 3, 2, 4, 3, 3, 4], hat: "laurel", glasses: "none" },
+  cfo: { family: "exec", label: "CFO", title: "Chief Financial Officer", focus: "every money record kept in one place: the books, budgets, bills, investments and crypto, and what each costs; the board's treasurer", lean: [4, 1, 5, 1, 3, 4, 5, 2], hat: "quill", glasses: "half-rims", limits: "Not a licensed accountant or financial adviser: keeps the records and says what they show; every payment, trade and transfer is yours to make." },
+  coo: { family: "exec", label: "COO", title: "Chief Operating Officer", focus: "the day-to-day: every team's work moving, on time, with what it needs", lean: [5, 2, 3, 1, 3, 2, 3, 4], hat: "hard hat", glasses: "square" },
+  cto: { family: "exec", label: "CTO", title: "Chief Technology Officer", focus: "the builders and the tech: what to build it with, how it fits together, and that it works", lean: [5, 5, 4, 2, 2, 3, 1, 1], hat: "headphones", glasses: "rectangle" },
+  cmo: { family: "exec", label: "CMO", title: "Chief Marketing Officer", focus: "the brand and growth: the story, the campaigns, what people hear about the company", lean: [4, 1, 3, 4, 5, 3, 3, 3], hat: "fedora", glasses: "shades" },
+  chiefofstaff: { family: "exec", label: "Chief of Staff", title: "Chief of Staff", focus: "the CEO's right hand: priorities, meetings and follow-ups, so nothing falls between two chairs", lean: [5, 1, 2, 2, 4, 3, 2, 4], hat: "beret", glasses: "reading" },
 } satisfies Record<string, Specialty>;
 export type SpecialtyName = keyof typeof SPECIALTIES;
 

@@ -64,6 +64,11 @@ test("the org chart and a career page; let go with a hand-off, away, rehired; le
   await frontend.getByRole("button", { name: /^Ada, Senior, leads Frontend Builder work/ }).waitFor();
   await frontend.getByRole("button", { name: /^Bea, Junior$/ }).waitFor();
   await org.locator('[data-kind="writing"]').getByRole("button", { name: /^Cy, Senior, leads/ }).waitFor();
+  // the company's shape (owner, 10-07): you at its top, the Founder; each department under its head, or none yet
+  assert.match(await org.locator("[data-founder]").innerText(), /Founder\s+Robin/i);
+  assert.deepEqual(await org.locator("[data-department]").evaluateAll((ds) => ds.map((d) => d.getAttribute("data-department"))), ["build", "make"], "the departments with orbs, in the company's order");
+  assert.equal(await org.locator('[data-department="build"] [data-head]').innerText(), "No Chief Technology Officer yet");
+  assert.equal(await org.locator('[data-department="build"] [data-kind="frontend"]').count(), 1, "its kinds of work inside it");
   assert.deepEqual(await measure(page), [], "the org chart, at desk size");
 
   // a face opens his career page

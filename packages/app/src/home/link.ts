@@ -77,7 +77,7 @@ export type SessionBoard = { plans: { id: number; title: string; status: string;
 /** The org chart (PLAN 5.6): the office with levels and how long each has been about, who leads each
  * kind of work, and who was let go (to rehire). */
 export type OrgOrb = { id: string; name: string; specialty: string; level: string; createdAt: number; born: number; hired: number; left: number | null; now: number };
-export type OrgState = { chief: string | null; leads: Record<string, string>; orbs: OrgOrb[]; away: (OrgOrb & { xp: number; diplomas: string[]; atSchool: boolean })[] };
+export type OrgState = { chief: string | null; leads: Record<string, string>; heads?: Record<string, string | null>; founder?: string | null; orbs: OrgOrb[]; away: (OrgOrb & { xp: number; diplomas: string[]; atSchool: boolean })[] };
 /** School (PLAN 5.7): an orb's report card, the term now or the last. */
 export type SchoolAnswer = { n: number; ask: string; answer: string; ok: boolean | null; why?: string; up?: boolean | null };
 export type SchoolSubject = {

@@ -108,7 +108,7 @@ test("a first open plays the story: your first orb asks your name, makes you CEO
     await page.getByRole("button", { name: "Create Pip" }).click();
     await page.getByRole("heading", { name: "Pip" }).waitFor();
     assert.deepEqual(await page.locator("aside button[data-orb] span span:first-child").allTextContents(), ["Pip"], "the office: him, and only him");
-    assert.equal(await page.getByText("CEO Robin").count(), 1, "and the office knows its CEO");
+    assert.equal(await page.getByText("Founder Robin").count(), 1, "and the office knows its Founder (owner, 10-07)");
     await page.reload();
     await page.waitForSelector("canvas", { state: "attached" });
     assert.equal(await page.locator("[data-onboarding]").count(), 0, "a second open does not play it again");
@@ -149,7 +149,7 @@ test("'Skip the story' still asks what to call you, then lets you in", { skip },
     await until(page, "hire");
     await page.getByRole("button", { name: "Make me" }).click();
     await page.locator("[data-onboarding]").waitFor({ state: "detached" });
-    assert.equal(await page.getByText("CEO Sam").count(), 1);
+    assert.equal(await page.getByText("Founder Sam").count(), 1);
     assert.equal(await page.getByRole("tablist").count(), 1, "in the creator, making him");
   } finally {
     await page.context().close();

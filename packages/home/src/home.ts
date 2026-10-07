@@ -39,6 +39,7 @@ import { orgTools, whoFits } from "./org.ts";
 import { recital } from "./plans/recite.ts";
 import { recentWork } from "./worklog.ts";
 import { ambitionLine } from "./agent/standing.ts";
+import { companyLine, whyNot } from "./company.ts";
 import { interviewSystem, Recruiter, RecruiterError } from "./recruiter.ts";
 import { type Fetcher, Reading, type Sleep } from "./reading/reading.ts";
 import { readingTools, withReading } from "./reading/tools.ts";
@@ -212,6 +213,9 @@ export class Home {
    * keeps stays with the accountant, who holds the bills; with no assistant in the office, the orb. */
   plannerFor(orb: string, kind: "bill" | "reminder"): { id: string; name: string } {
     const me = this.inbox.orb(orb);
+    // a bill is the CFO's to keep, with every money record (owner, 10-07: "the role of the CFO is to keep all info there for you")
+    const cfo = kind === "bill" ? this.inbox.orbs().find((o) => o.specialty === "cfo") : undefined;
+    if (cfo && me) return { id: cfo.id, name: cfo.name };
     if (!me || me.specialty === "assistant" || (kind === "bill" && me.specialty === "accountant")) return { id: orb, name: me?.name ?? orb };
     const assistant = this.inbox.orbs().find((o) => o.specialty === "assistant");
     return assistant ? { id: assistant.id, name: assistant.name } : { id: orb, name: me.name };
@@ -440,6 +444,10 @@ export class Home {
           notebook: (orb) => this.school.notebook(orb), // what it kept at school (PLAN 5.7) goes to work with it
           colleagues: (orb) => this.social.colleaguesLine(orb), // its friends and frictions (PLAN 5.9)
           ambition: (orb) => ambitionLine(orb, this.ranking()), // to top the office (owner, 10-07)
+          company: (orb) => {
+            const me = this.inbox.orb(orb);
+            return me ? companyLine({ me, founder: this.about.get().name, office: this.inbox.orbs() }) : null;
+          },
           searchKey: () => this.brains.searchKey(),
           remind: (orb, conversation, r) => {
             const keeper = this.plannerFor(orb, r.kind);
@@ -803,6 +811,8 @@ export class Home {
    * interview his first chat with you. */
   hireApplicant(applicant: number, orb: { id: string; name: string; look: Record<string, unknown> }): ReturnType<Inboxes["addOrb"]> {
     const a = this.recruiter.waiting(applicant);
+    const why = whyNot(a.specialty, this.inbox.orbs().map((o) => o.specialty)); // the founding three first; money with a CFO
+    if (why) throw new Error(why);
     const made = this.inbox.addOrb(orb.id, orb.name, a.specialty, orb.look);
     this.recruiter.hired(applicant, made.id);
     for (const m of this.recruiter.interview(applicant)) {

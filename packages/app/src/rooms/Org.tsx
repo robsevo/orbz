@@ -1,14 +1,20 @@
 // The org chart (PLAN 5.6): everyone in the office by the kind of work they do, the one who leads
 // each kind first (its top-ranked orb; the first of a kind starts as its Senior, owner 10-02), the
 // Chief above them all when there is one. A face is a press away from his career page.
+// The company's shape (PLAN 5.12; owner, 10-07: "restructure it so it fits this makes things easier to see"): you, the
+// Founder, at its top; then each department under its head (the Executive the CEO, Build the CTO, Think the Chief of
+// Staff, Make the CMO, Finance the CFO, Business the COO, Life your personal assistant), its kinds of work inside it.
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { Orb } from "../orb/Orb.tsx";
-import { SPECIALTIES, type Character } from "../orb/spec.ts";
+import { FAMILIES, SPECIALTIES, type Character, type Family } from "../orb/spec.ts";
 import { idOf, type OrgState, type Office } from "../home/link.ts";
 import { Balanced } from "../ui/Balanced.tsx";
 import { ReportCard, SchoolSheet } from "./School.tsx";
 
 const small: CSSProperties = { font: "500 12px/16px var(--font)", color: "var(--text-3)", textWrap: "pretty" };
+const head: CSSProperties = { font: "700 11px/16px var(--font)", letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)" };
+/** Each department's head's post (home org.ts HEAD_OF). */
+const HEAD_OF: Record<Family, keyof typeof SPECIALTIES> = { exec: "ceo", build: "cto", think: "chiefofstaff", make: "cmo", finance: "cfo", business: "coo", life: "assistant" };
 
 export function OrgRoom({ home, office, open, rehired, school = null }: { home: Office | null; office: Character[]; open: (c: Character) => void; rehired: () => void; school?: string | null }) {
   const [org, setOrg] = useState<OrgState | null>(null);
@@ -33,6 +39,7 @@ export function OrgRoom({ home, office, open, rehired, school = null }: { home: 
   if (!org) return <p style={{ ...small, padding: "var(--s5)" }}>{said ?? "Loading the office…"}</p>;
   const face = (id: string): Character | undefined => office.find((c) => idOf(c.name) === id);
   const kinds = [...new Set(org.orbs.map((o) => o.specialty))];
+  const familyOf = (k: string): Family => (SPECIALTIES[k as keyof typeof SPECIALTIES]?.family ?? "think") as Family;
   const card = (id: string, lead: boolean): ReactNode => {
     const o = org.orbs.find((x) => x.id === id);
     const c = face(id);
@@ -49,6 +56,13 @@ export function OrgRoom({ home, office, open, rehired, school = null }: { home: 
   return (
     <div data-org style={{ display: "grid", gap: "var(--s5)", padding: "var(--s5)", alignContent: "start", minWidth: 0 }}>
       <h2 style={{ margin: 0, font: "800 22px/28px var(--font)", color: "var(--text-1)" }}>The org chart</h2>
+      {/* you, at its top (owner, 10-07: "You are the Founder of a brand new Orb startup") */}
+      {org.founder && (
+        <section aria-label="Founder" data-founder style={{ display: "grid", justifyItems: "center", gap: 2 }}>
+          <span style={head}>Founder</span>
+          <span style={{ font: "800 18px/24px var(--font)", color: "var(--text-1)" }}>{org.founder}</span>
+        </section>
+      )}
       {org.chief && (
         <section aria-label="Chief" style={{ display: "grid", justifyItems: "center", gap: 6 }}>
           <span style={{ font: "700 11px/16px var(--font)", letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)" }}>Chief</span>
@@ -82,15 +96,29 @@ export function OrgRoom({ home, office, open, rehired, school = null }: { home: 
           ))}
         </section>
       )}
-      {kinds.map((k) => {
-        const lead = org.leads[k];
-        const rest = org.orbs.filter((o) => o.specialty === k && o.id !== lead && o.id !== org.chief).map((o) => o.id);
+      {/* each department under its head, its kinds of work inside it */}
+      {(Object.keys(FAMILIES) as Family[]).filter((f) => kinds.some((k) => familyOf(k) === f) || org.heads?.[f]).map((f) => {
+        const headId = org.heads?.[f] ?? null;
+        const headPost = SPECIALTIES[HEAD_OF[f]].title;
+        const headName = headId ? org.orbs.find((o) => o.id === headId)?.name : null;
         return (
-          <section key={k} data-kind={k} aria-label={SPECIALTIES[k as keyof typeof SPECIALTIES]?.title ?? k} style={{ display: "grid", gap: 8, minWidth: 0 }}>
-            <span style={{ font: "700 11px/16px var(--font)", letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)" }}>{SPECIALTIES[k as keyof typeof SPECIALTIES]?.title ?? k}</span>
-            <Balanced min={120}>
-              {[lead && lead !== org.chief ? card(lead, true) : null, ...rest.map((id) => card(id, false))].filter(Boolean)}
-            </Balanced>
+          <section key={f} data-department={f} aria-label={FAMILIES[f]} style={{ display: "grid", gap: "var(--s3)", padding: "var(--s4)", borderRadius: 18, background: "var(--fill)", boxShadow: "inset 0 0 0 .5px var(--hairline)", minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, flexWrap: "wrap", minWidth: 0 }}>
+              <span style={{ font: "800 17px/22px var(--font)", color: "var(--text-1)" }}>{FAMILIES[f]}</span>
+              <span data-head={headId ?? "none"} style={small}>{headName ? `Headed by ${headName}, ${headPost}` : `No ${headPost} yet`}</span>
+            </div>
+            {kinds.filter((k) => familyOf(k) === f).map((k) => {
+              const lead = org.leads[k];
+              const rest = org.orbs.filter((o) => o.specialty === k && o.id !== lead && o.id !== org.chief).map((o) => o.id);
+              return (
+                <section key={k} data-kind={k} aria-label={SPECIALTIES[k as keyof typeof SPECIALTIES]?.title ?? k} style={{ display: "grid", gap: 8, minWidth: 0 }}>
+                  <span style={head}>{SPECIALTIES[k as keyof typeof SPECIALTIES]?.title ?? k}</span>
+                  <Balanced min={120}>
+                    {[lead && lead !== org.chief ? card(lead, true) : null, ...rest.map((id) => card(id, false))].filter(Boolean)}
+                  </Balanced>
+                </section>
+              );
+            })}
           </section>
         );
       })}

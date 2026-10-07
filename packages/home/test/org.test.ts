@@ -24,7 +24,7 @@ import { habitDir } from "../src/gym/compile.ts";
 import { Gym } from "../src/gym/night.ts";
 import { habitsOf, shareHabit } from "../src/gym/share.ts";
 import { promotedFor } from "../src/gym/steps.ts";
-import { leadsOf, whoFits, type Member } from "../src/org.ts";
+import { headsOf, leadsOf, whoFits, type Member } from "../src/org.ts";
 import { serve } from "../src/api.ts";
 import { ambitionLine } from "../src/agent/standing.ts";
 import type { Home } from "../src/home.ts";
@@ -245,4 +245,11 @@ test("let go the lead, and the next one up leads: the most experienced in the po
   const org = await call("GET", "/org");
   assert.equal(org.leads.frontend, "cy", "Ada let go: Cy, the more experienced of the two, though Bea joined first");
   assert.deepEqual(org.orbs.map((o) => [o.id, o.xp]).filter(([id]) => id !== "juniper"), [["bea", 30], ["cy", 70]], "each with its experience");
+});
+
+test("each department's head, by its post (owner, 10-07): the Executive the CEO, Build the CTO, Finance the CFO, Life the assistant; no one yet where none is appointed", () => {
+  const team = [m("cleo", "ceo", "Senior", 1), m("pip", "assistant", "Senior", 2), m("fin", "cfo", "Senior", 3), m("tess", "cto", "Junior", 4), m("tom", "cto", "Senior", 5), m("ada", "frontend", "Senior", 6)];
+  const heads = headsOf(team);
+  assert.deepEqual(heads, { exec: "cleo", build: "tom", think: null, make: null, finance: "fin", business: null, life: "pip" }, "the top-ranked of the post heads it; a department without its head's post has none (control)");
+  assert.equal(headsOf([]).exec, null, "an empty office: no heads");
 });

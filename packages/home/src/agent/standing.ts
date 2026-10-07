@@ -75,7 +75,7 @@ export function ambitionLine(me: string, board: { orb: string; name: string; xp:
 
 const ordinal = (n: number): string => `${n}${n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
 
-export function standingContext(o: { orbName: string; brainDir: string; workspace: string; specialty?: Specialty; learned?: string[]; notebook?: { subject: string; text: string }[]; colleagues?: string | null; ambition?: string | null; team?: TeamTurn; aloud?: boolean; now?: number }): string {
+export function standingContext(o: { orbName: string; brainDir: string; workspace: string; specialty?: Specialty; learned?: string[]; notebook?: { subject: string; text: string }[]; colleagues?: string | null; ambition?: string | null; company?: string | null; team?: TeamTurn; aloud?: boolean; now?: number }): string {
   const role = o.team?.role ?? (o.team ? "lead" : null);
   const light = isLight(o.team);
   const parts = [
@@ -83,6 +83,8 @@ export function standingContext(o: { orbName: string; brainDir: string; workspac
     NO_HE_OR_SHE,
     `Working directory: ${o.workspace}`,
   ];
+  // the company and its part in it (PLAN 5.14: the CEO and the assistant in tandem, the CFO's books), by code
+  if (o.company) parts.push(o.company);
   if (o.aloud) parts.push(ALOUD);
   if (o.team && role) {
     const others = o.team.with.filter((n) => n !== o.orbName);

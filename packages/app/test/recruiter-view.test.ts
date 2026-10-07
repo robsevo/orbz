@@ -247,28 +247,28 @@ test("the positions in their departments, each named; one department's or All; e
   const groups = (page: Page) => page.locator("[data-position-group]").evaluateAll((gs) => gs.map((g) => g.getAttribute("data-position-group")));
   const all = (page: Page) => page.locator("[data-tick-shown]");
   const page = await open({ width: 1280, height: 900 });
-  assert.deepEqual(await groups(page), ["build", "think", "make", "business", "life"], "All: every department");
-  const business = Object.entries(SPECIALTIES).filter(([, v]) => v.family === "business").map(([k]) => k);
-  assert.match(await page.locator('[data-position-group="business"]').innerText(), new RegExp(`^Business\\s+0 of ${business.length}`), "each named, with how many are ticked");
-  assert.equal(await page.locator('[data-position-group="business"] [data-position="fundamentals"]').innerText(), "Fundamental Analyst");
+  assert.deepEqual(await groups(page), ["exec", "build", "think", "make", "finance", "business", "life"], "All: every department, the Executive and Finance among them (10-07)");
+  const finance = Object.entries(SPECIALTIES).filter(([, v]) => v.family === "finance").map(([k]) => k);
+  assert.match(await page.locator('[data-position-group="finance"]').innerText(), new RegExp(`^Finance\\s+0 of ${finance.length}`), "each named, with how many are ticked");
+  assert.equal(await page.locator('[data-position-group="finance"] [data-position="fundamentals"]').innerText(), "Fundamental Analyst");
 
   // one department: its positions alone, and all of them in one press, one request
-  await page.locator('[data-position-filter="business"]').click();
-  assert.deepEqual(await groups(page), ["business"], "Business alone");
+  await page.locator('[data-position-filter="finance"]').click();
+  assert.deepEqual(await groups(page), ["finance"], "Finance alone");
   const puts: string[] = [];
   page.on("request", (r) => void (r.method() === "PUT" && /\/recruiter\/positions/.test(r.url()) && puts.push(r.url())));
-  assert.equal(await all(page).innerText(), "All of Business");
+  assert.equal(await all(page).innerText(), "All of Finance");
   await all(page).click();
   await page.waitForFunction(() => document.querySelector("[data-tick-shown]")?.getAttribute("aria-pressed") === "true", undefined, { timeout: 10_000 });
-  assert.deepEqual(new Set(h.recruiter.positions()), new Set(business), "every Business position, and only those");
+  assert.deepEqual(new Set(h.recruiter.positions()), new Set(finance), "every Finance position, and only those");
   assert.equal(puts.length, 1, "in one request, not one each");
-  assert.equal(await all(page).innerText(), "✓ All of Business");
+  assert.equal(await all(page).innerText(), "✓ All of Finance");
   await page.locator('[data-applying="fundamentals"] [data-applicant]').first().waitFor({ timeout: 20_000 });
   assert.deepEqual(await measure(page), [], "a department's positions, at desk size");
 
   // All: every position in one press, then none
   await page.locator('[data-position-filter="all"]').click();
-  assert.equal((await groups(page)).length, 5);
+  assert.equal((await groups(page)).length, 7);
   assert.equal(await all(page).innerText(), "All positions", "not all of them yet");
   await all(page).click();
   await page.waitForFunction(() => document.querySelector("[data-tick-shown]")?.textContent === "✓ All positions", undefined, { timeout: 20_000 });

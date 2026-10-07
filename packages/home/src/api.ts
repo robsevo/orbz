@@ -46,8 +46,9 @@ import { labOf, reopen } from "./lab.ts";
 import { morningCard } from "./gym/card.ts";
 import { LEVELS, levelOf, nextFor, tenureOf } from "./gym/levels.ts";
 import type { Kind } from "./school/subjects.ts";
-import { leadsOf } from "./org.ts";
+import { headsOf, leadsOf } from "./org.ts";
 import { dashboardOf } from "./dashboard.ts";
+import { whyNot } from "./company.ts";
 import { habitsOf } from "./gym/share.ts";
 import { findHotPaths } from "./gym/finder.ts";
 import { nichesOf, radarOf } from "./gym/specialty.ts";
@@ -481,6 +482,9 @@ async function handle(
     const b = await body(req);
     const specialty = typeof b.specialty === "string" ? b.specialty : "general";
     if (!(specialty in SPECIALTY_FAMILIES)) throw new HttpError(400, `"${specialty}" is not a specialty`);
+    // the founding three first, in order, and a money orb only with a CFO (PLAN 5.13)
+    const why = whyNot(specialty, home.inbox.orbs().map((o) => o.specialty));
+    if (why) throw new HttpError(409, why);
     const look = b.look && typeof b.look === "object" && !Array.isArray(b.look) ? (b.look as Record<string, unknown>) : {};
     try {
       return { orb: home.inbox.addOrb(text(b, "id"), text(b, "name"), specialty as Specialty, look) };
@@ -584,6 +588,10 @@ async function handle(
     // several at once: All, or a department's all (owner, 10-07)
     const b = await body(req);
     if (!Array.isArray(b.specialties) || !b.specialties.every((s) => typeof s === "string")) throw new HttpError(400, "specialties: a list of kinds of work");
+    // hiring opens once the founding three are in, and money with a CFO (PLAN 5.13)
+    const office = home.inbox.orbs().map((o) => o.specialty);
+    const closed = b.open === true ? (b.specialties as string[]).map((s) => whyNot(s, office)).find(Boolean) : null;
+    if (closed) throw new HttpError(409, closed);
     try {
       return { positions: home.recruiter.setPositions(b.specialties as string[], b.open === true) };
     } catch (e) {
@@ -592,6 +600,8 @@ async function handle(
   }
   if (method === "PUT" && parts[0] === "recruiter" && parts[1] === "positions" && parts.length === 3) {
     const b = await body(req);
+    const why = b.open === true ? whyNot(decodeURIComponent(parts[2]!), home.inbox.orbs().map((o) => o.specialty)) : null;
+    if (why) throw new HttpError(409, why);
     try {
       return { positions: home.recruiter.setPosition(decodeURIComponent(parts[2]!), b.open === true) };
     } catch (e) {
@@ -635,7 +645,8 @@ async function handle(
       .map((o) => ({ id: o.id, name: o.name, specialty: o.specialty, level: levelOf(home.events, o.id), createdAt: o.createdAt, ...tenureOf(home.events, o), now,
         xp: home.xp.of(o.id, now).total, diplomas: home.school.diplomas(o.id).map((d) => d.name), atSchool: home.school.term(o.id) !== null }))
       .sort((a, b) => LEVELS.indexOf(b.level) - LEVELS.indexOf(a.level) || b.diplomas.length - a.diplomas.length || b.xp - a.xp);
-    return { chief, leads: Object.fromEntries(bySpecialty), orbs: team.map((m) => ({ ...m, ...tenureOf(home.events, home.inbox.orb(m.id)!), now })), away };
+    // the departments' heads (owner, 10-07) and you, the Founder
+    return { chief, leads: Object.fromEntries(bySpecialty), heads: headsOf(team), founder: home.about.get().name, orbs: team.map((m) => ({ ...m, ...tenureOf(home.events, home.inbox.orb(m.id)!), now })), away };
   }
   // a career page (PLAN 5.6): read off the log by code
   if (method === "GET" && parts[0] === "orbs" && parts.length === 3 && parts[2] === "career") {

@@ -73,6 +73,8 @@ export type AgentOptions = {
   colleagues?: (orb: string) => string | null;
   /** What it wants most, and where it stands on the office's XP table (owner, 10-07), or null. */
   ambition?: (orb: string) => string | null;
+  /** The company and its part in it (PLAN 5.14), or null. */
+  company?: (orb: string) => string | null;
   /** The person's web-search key, when a search needs it (PLAN 3.10). */
   searchKey?: () => Promise<SearchKey | null>;
   /** Keeps a bill or a reminder for the person (the notification centre, PLAN 2.11). */
@@ -159,7 +161,7 @@ export const REPEAT_LIMIT = 4;
 const teamOf = (ctx: RunContext): TeamTurn | undefined => ctx.items.map((i) => i.data.team as TeamTurn | undefined).find(Boolean);
 
 export class AgentRunner implements Runner {
-  readonly #o: Required<Omit<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned" | "notebook" | "colleagues" | "ambition" | "searchKey" | "remind" | "reminders" | "moveReminder" | "lessonGate" | "learn" | "habits" | "own" | "templates" | "schedule" | "extraTools" | "sandbox" | "onTerminal" | "workspaceFor" | "heldBy" | "pulse" | "recite">> & Pick<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned" | "notebook" | "colleagues" | "ambition" | "searchKey" | "remind" | "reminders" | "moveReminder" | "lessonGate" | "learn" | "habits" | "own" | "templates" | "schedule" | "extraTools" | "sandbox" | "onTerminal" | "workspaceFor" | "heldBy" | "pulse" | "recite">;
+  readonly #o: Required<Omit<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned" | "notebook" | "colleagues" | "ambition" | "company" | "searchKey" | "remind" | "reminders" | "moveReminder" | "lessonGate" | "learn" | "habits" | "own" | "templates" | "schedule" | "extraTools" | "sandbox" | "onTerminal" | "workspaceFor" | "heldBy" | "pulse" | "recite">> & Pick<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned" | "notebook" | "colleagues" | "ambition" | "company" | "searchKey" | "remind" | "reminders" | "moveReminder" | "lessonGate" | "learn" | "habits" | "own" | "templates" | "schedule" | "extraTools" | "sandbox" | "onTerminal" | "workspaceFor" | "heldBy" | "pulse" | "recite">;
   readonly #tools: Map<string, ToolDef>;
   /** Each run's calls so far, by name and arguments (the repeat guard). */
   readonly #repeats = new WeakMap<RunContext, Map<string, number>>();
@@ -312,7 +314,7 @@ export class AgentRunner implements Runner {
       }
       const standing = standingContext({
         orbName: this.#o.orbName(ctx.orb), brainDir: join(this.#o.dataDir, "brain"), workspace: tctx.workspace,
-        specialty: this.#o.orbSpecialty?.(ctx.orb), learned: this.#o.learned?.(ctx.orb), notebook: this.#o.notebook?.(ctx.orb), colleagues: this.#o.colleagues?.(ctx.orb) ?? null, ambition: this.#o.ambition?.(ctx.orb) ?? null, ...(team && { team }),
+        specialty: this.#o.orbSpecialty?.(ctx.orb), learned: this.#o.learned?.(ctx.orb), notebook: this.#o.notebook?.(ctx.orb), colleagues: this.#o.colleagues?.(ctx.orb) ?? null, ambition: this.#o.ambition?.(ctx.orb) ?? null, company: this.#o.company?.(ctx.orb) ?? null, ...(team && { team }),
         aloud: ctx.items.some((i) => i.data.said === true), // you spoke (PLAN 4.7): his answer is heard, not read
         now: runNow,
       });

@@ -289,6 +289,9 @@ function staticVars(): string {
   // make you happy to see in your phone"): a sunny sky behind the orbs, a glow, sparkles
   // the light of an orb changing (Roll everything, owner 10-04): its glow, the flash and the sparks, the same in every theme
   Object.assign(v, { "--flash": "#ffffff", "--flash-glow": "rgba(255, 255, 255, 0.9)", "--flash-mid": "rgba(255, 255, 255, 0.55)", "--flash-none": "rgba(255, 255, 255, 0)" });
+  // rank you can see (owner, 10-07: "maybe a special glow or smt to let you know theyre the CEO or CFO"): the CEO's gold
+  // and the CFO's green, the same in every theme
+  Object.assign(v, { "--rank-ceo": "rgba(255, 198, 66, 0.95)", "--rank-ceo-soft": "rgba(255, 198, 66, 0.42)", "--rank-cfo": "rgba(56, 214, 150, 0.95)", "--rank-cfo-soft": "rgba(56, 214, 150, 0.42)" });
   for (const [k, px] of Object.entries(SPACE)) v[`--s${k}`] = `${px}px`;
   for (const [k, px] of Object.entries(RADIUS)) v[`--r-${k}`] = `${px}px`;
   for (const [k, [size, line, weight]] of Object.entries(TYPE)) v[`--t-${k}`] = `${weight} ${size}px/${line}px ${FONT}`;
@@ -353,6 +356,13 @@ export function stylesheet(fontUrl = "fonts/Nunito.ttf"): string {
     `.side-arrow > span { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--card); box-shadow: 0 1px 3px var(--shadow), inset 0 0 0 .5px var(--hairline); }`,
     `.side-arrow::after { content: ""; position: absolute; top: -6px; bottom: -6px; left: 0; right: 0; }`,
     `.side-arrow:disabled { opacity: .35; cursor: default; }`,
+    // the glow round the CEO and the CFO (owner, 10-07), following its outline and its hat, whatever it wears; breathing
+    // slowly (orb/Orb.tsx, by its post)
+    `.orb-rank-ceo { --rank: var(--rank-ceo); --rank-soft: var(--rank-ceo-soft); }`,
+    `.orb-rank-cfo { --rank: var(--rank-cfo); --rank-soft: var(--rank-cfo-soft); }`,
+    `.orb-rank { filter: drop-shadow(0 0 2px var(--rank)) drop-shadow(0 0 9px var(--rank-soft)); animation: orb-rank 3.6s ease-in-out infinite; }`,
+    `@keyframes orb-rank { 50% { filter: drop-shadow(0 0 3px var(--rank)) drop-shadow(0 0 15px var(--rank-soft)); } }`,
+    `@media (prefers-reduced-motion: reduce) { .orb-rank { animation: none; } }`,
     `.num { font-variant-numeric: tabular-nums; }`,
     // a press you can feel (owner, 10-01): down it squishes at once, up it springs back past where
     // it was; a thing just chosen bounces. The press is `translate` and `scale`, the bounce is

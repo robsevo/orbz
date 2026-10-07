@@ -79,6 +79,7 @@ const HAT: Record<HatName, Spec> = {
   "sun visor": "Calm>Pace 1 hot", "flower crown": "Nerve>Care 2 soft", "viking helmet": "Calm>Nerve 3 bold", bowler: "Humour>Care 1", fez: "Focus>Humour 2 loud",
   tricorn: "Care>Nerve 2 bold", "Santa hat": "Focus>Care 2 loud", sombrero: "Focus>Humour 2 loud", tiara: "Calm>Nerve 1 bold", antlers: "Calm>Curiosity 1",
   "unicorn horn": "Focus>Curiosity 3 loud",
+  laurel: "Nerve>Calm 2 bold", quill: "Focus>Pace 2 soft", // the CEO's and the CFO's (10-07): a leader's nerve, a keeper's care
 };
 const GLASSES: Record<GlassesName, Spec> = {
   none: "Nerve>Pace 1", round: "Pace>Curiosity 1", square: "Humour>Focus 1", "cat-eye": "Care>Humour 2 bold", "big round": "Pace>Curiosity 2",
