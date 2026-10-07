@@ -11,8 +11,8 @@ import { test, type TestContext } from "node:test";
 import { serve } from "../src/api.ts";
 import { FakeClock } from "../src/clock.ts";
 import { whoFits } from "../src/org.ts";
-import { MOMENT_KINDS, NEUTRAL, pickMoment, type Traits } from "../src/social/rules.ts";
-import { MEETING_MS, MOMENT_GAP_MAX_MS, MOMENT_GAP_MIN_MS } from "../src/social/social.ts";
+import { inOfficeDay, MOMENT_KINDS, NEUTRAL, pickMoment, type Traits } from "../src/social/rules.ts";
+import { MEETING_MS } from "../src/social/social.ts";
 import { agentHome } from "./helpers.ts";
 
 const HOUR = 3_600_000;
@@ -108,9 +108,12 @@ test("moments: one every 6 to 12 minutes in the office's day between two free or
   const ms = home.events.ofType("social.moment");
   assert.ok(ms.length >= 12 && ms.length <= 31, `every 6 to 12 minutes, alongside the meetings (${ms.length} in three hours)`);
   const gaps = ms.slice(1).map((e, i) => e.at - ms[i]!.at);
+  // the owner's "every 6 to 12 minutes", written out here: read from the code under test, they moved with it (10-07, a
+  // planted gap of one minute went unseen)
+  const [six, twelve] = [6 * 60_000, 12 * 60_000];
   // one due while the two are in a meeting waits for it to end (looked at again every five minutes)
-  assert.ok(gaps.every((g) => g >= MOMENT_GAP_MIN_MS && g <= MOMENT_GAP_MAX_MS + MEETING_MS + 5 * 60_000 + 60_000), `6 to 12 minutes apart, or once the two are out of a meeting (${gaps.map((g) => Math.round(g / 60_000)).join(", ")} min)`);
-  assert.ok(gaps.filter((g) => g <= MOMENT_GAP_MAX_MS + 60_000).length >= gaps.length / 2, "mostly within 12 minutes");
+  assert.ok(gaps.every((g) => g >= six && g <= twelve + MEETING_MS + 5 * 60_000 + 60_000), `6 to 12 minutes apart, or once the two are out of a meeting (${gaps.map((g) => Math.round(g / 60_000)).join(", ")} min)`);
+  assert.ok(gaps.filter((g) => g <= twelve + 60_000).length >= gaps.length / 2, "mostly within 12 minutes");
   for (const e of ms) assert.deepEqual([e.data.a, e.data.b].sort(), ["ada", "bo"], "Cy has work waiting: only Ada and Bo are free");
   // never with one in a meeting under way
   const met = home.events.ofType("social.met");
@@ -120,9 +123,12 @@ test("moments: one every 6 to 12 minutes in the office's day between two free or
   assert.equal(home.social.score("ada", "bo"), Math.max(-100, Math.min(100, sum)), "each moment moved it by its own delta");
   assert.match(String(ms[0]!.data.lines), /\w/);
   assert.deepEqual(ms[0]!.data.names, [ms[0]!.data.a === "ada" ? "Ada" : "Bo", ms[0]!.data.a === "ada" ? "Bo" : "Ada"]);
-  await clock.advance(11 * 3_600_000); // to 23:00
-  const night = home.events.ofType("social.moment").filter((e) => new Date(e.at).getHours() >= 23 || new Date(e.at).getHours() < 7);
-  assert.equal(night.length, 0, "none at night");
+  // on through the office's evening and its night, to 04:00 (10-07: looking only from 23:00, a moment after the day's
+  // end at 22:30 went unseen)
+  await clock.advance(16 * 3_600_000);
+  const all = home.events.ofType("social.moment");
+  assert.ok(all.some((e) => new Date(e.at).getHours() >= 21), "control: the evening has its moments, so the clock ran on");
+  assert.deepEqual(all.filter((e) => !inOfficeDay(e.at)).map((e) => new Date(e.at).toTimeString().slice(0, 5)), [], "none outside the office's day (07:00 to 22:30)");
 });
 
 test("off in a test home: no moments, and the timer does not wake for them", async (t) => {

@@ -1294,7 +1294,11 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("a moment moves no friendship", "src/social/social.ts", [
         ("    const after = clampScore(before + m.delta);", "    const after = clampScore(before);"),
     ], ["social.test.ts"]),
+    # both night checks (10-07): either alone keeps the night quiet (nextMomentAt moves a moment due at night to the
+    # morning, momentDue refuses one at night), so a defect in one only was no defect at all
     ("orbs run into each other at night", "src/social/social.ts", [
+        ("    let at = Math.max(last ? last.at + Math.round(gap) : 0, this.#momentRetryAt);\n    if (!inOfficeDay(Math.max(at, this.#clock.now()))) at = nextOpening(Math.max(at, this.#clock.now()));\n",
+         "    let at = Math.max(last ? last.at + Math.round(gap) : 0, this.#momentRetryAt);\n"),
         ("    if (now < this.nextMomentAt()! || !inOfficeDay(now)) return null;\n    const m = this.moment();", "    if (now < this.nextMomentAt()!) return null;\n    const m = this.moment();"),
     ], ["social.test.ts"]),
     ("a moment pulls an orb out of a meeting", "src/social/social.ts", [
