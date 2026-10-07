@@ -135,8 +135,10 @@ test("the menu open on a phone, then the window made wide: the desk's own layout
     await menu(page).waitFor();
     await page.waitForTimeout(500);
     await page.setViewportSize(SIZES.desk);
+    // no scrim on a desk: gone once the window is wide (a count after a fixed 800 ms lost the race under
+    // the gate's load, 10-07, as the menu's did below); one that stays still fails, at the wait's end
+    await page.locator(".orbs-scrim").waitFor({ state: "detached", timeout: 10_000 });
     await page.waitForTimeout(800);
-    assert.equal(await page.locator(".orbs-scrim").count(), 0, "no scrim on a desk");
     assert.deepEqual(await boxes(page), want, "the side menu and the office where a desk has them");
     assert.deepEqual(await measure(page), [], "the layout rule, made wide");
     await page.setViewportSize(SIZES.phone);
