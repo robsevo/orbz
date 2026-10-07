@@ -69,6 +69,15 @@ test("each is told its part: the CEO and the assistant in tandem, the CFO the bo
   assert.deepEqual(home.about.get().company, "Acme Orbs");
 });
 
+test("your company's name, through the door, is kept beside yours", async (t) => {
+  const { home } = await agentHome(t, []);
+  const d = await serve(home, { port: 0 });
+  t.after(() => d.close());
+  const r = await fetch(`http://127.0.0.1:${d.port}/me`, { method: "PUT", headers: { authorization: `Bearer ${d.token}`, "content-type": "application/json" }, body: JSON.stringify({ name: "Robin", company: "Acme Orbs" }) });
+  assert.equal(r.status, 200);
+  assert.deepEqual([home.about.get().name, home.about.get().company], ["Robin", "Acme Orbs"]);
+});
+
 test("a bill is the CFO's to keep, a reminder the assistant's", async (t) => {
   const { home } = await agentHome(t, []);
   home.inbox.addOrb("max", "Max", "ceo");

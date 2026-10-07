@@ -29,7 +29,8 @@ test("its seats are always odd and never more than the office, growing with it",
 
 test("the officers by their posts, then the elected: the Vice Chair, then directors; everyone votes, never for itself", () => {
   const office = [m("max", "ceo", 50, 1), m("pip", "assistant", 40, 2), m("fin", "cfo", 30, 3), m("ada", "frontend", 90, 4), m("bo", "design", 20, 5), m("cy", "writing", 60, 6), m("di", "data", 10, 7)];
-  const recent: Record<string, number> = { ada: 40, cy: 25, bo: 5, di: 0 };
+  // the CFO had the best fortnight of all: were the officers candidates, the votes would go to Fin
+  const recent: Record<string, number> = { fin: 90, ada: 40, cy: 25, bo: 5, di: 0 };
   const r = election(office, { recent: (id) => recent[id] ?? 0, gets: () => 0 });
   assert.equal(r.votes.length, office.length, "everyone votes");
   assert.ok(r.votes.every((v) => v.voter !== v.for), "never for itself");
