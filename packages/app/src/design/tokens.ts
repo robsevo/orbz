@@ -341,6 +341,18 @@ export function stylesheet(fontUrl = "fonts/Nunito.ttf"): string {
     `.orbs-tall[data-more="up"] { mask-image: linear-gradient(to top, #000 calc(100% - 36px), transparent); }`,
     `.orbs-tall[data-more="up down"] { mask-image: linear-gradient(to bottom, transparent, #000 36px, #000 calc(100% - 36px), transparent); }`,
     `.one-line[data-more="left right"] { mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); }`,
+    // a row too wide for its room (owner, 10-07: "change the containers and add arrows to every side scroll"): it sits in
+    // a rounded track with an arrow at each end, dimmed where there is no more (ui/Balanced.tsx SideScroll); a bare one (a
+    // scroller that is its own box: the creator's tab bar, a code block, a table) has the arrows and no track. An arrow is
+    // 32 wide on a desk and 44 on a touch screen (the touch rules' min-width), its hit area 12 taller than it (WCAG 2.5.5)
+    `.side-scroll { position: relative; display: flex; align-items: center; gap: 2px; min-width: 0; max-width: 100%; }`,
+    `.side-scroll > :not(.side-arrow) { flex: 1 1 auto; min-width: 0; }`,
+    `.side-scroll[data-over] { padding: 4px; }`,
+    `.side-scroll[data-over]:not([data-bare]) { border-radius: 16px; background: var(--fill); box-shadow: inset 0 0 0 .5px var(--hairline); }`,
+    `.side-arrow { position: relative; flex: 0 0 auto; align-self: stretch; width: 32px; min-height: 32px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 12px; background: transparent; color: var(--text-1); font: 800 20px/1 var(--font); cursor: pointer; }`,
+    `.side-arrow > span { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--card); box-shadow: 0 1px 3px var(--shadow), inset 0 0 0 .5px var(--hairline); }`,
+    `.side-arrow::after { content: ""; position: absolute; top: -6px; bottom: -6px; left: 0; right: 0; }`,
+    `.side-arrow:disabled { opacity: .35; cursor: default; }`,
     `.num { font-variant-numeric: tabular-nums; }`,
     // a press you can feel (owner, 10-01): down it squishes at once, up it springs back past where
     // it was; a thing just chosen bounces. The press is `translate` and `scale`, the bounce is

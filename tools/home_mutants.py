@@ -1154,7 +1154,7 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ('    const a = BY_EXTENSION[m[1]!.toLowerCase()];\n    if (a) return a;', '    const a = undefined;\n    if (a) return a;'),
     ], ['org.test.ts']),
     ('a kind is led by whoever joined last', 'src/org.ts', [
-        ('  for (const m of [...team].sort((a, b) => rank(b) - rank(a) || a.createdAt - b.createdAt)) if (!by.has(m.specialty)) by.set(m.specialty, m.id);', '  for (const m of [...team].sort((a, b) => rank(b) - rank(a) || b.createdAt - a.createdAt)) if (!by.has(m.specialty)) by.set(m.specialty, m.id);'),
+        ('rank(b) - rank(a) || (b.xp ?? 0) - (a.xp ?? 0) || a.createdAt - b.createdAt)) if (!by.has(m.specialty))', 'rank(b) - rank(a) || (b.xp ?? 0) - (a.xp ?? 0) || b.createdAt - a.createdAt)) if (!by.has(m.specialty))'),
     ], ['org.test.ts']),
     ('a junior passes habits on', 'src/org.ts', [
         ('        if (LEVELS.indexOf(me.level) < LEVELS.indexOf("Senior")) return "Mentoring is a Senior\'s: pass habits on once you are one.";\n', ''),
@@ -1256,6 +1256,10 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ('good friends go unsaid', 'src/social/social.ts', [
         ('      if (before < 50 && after >= 50) this.#events.append("social.friends", { a: x, b: y, names: [nameOf(x), nameOf(y)] });\n', ''),
     ], ['social.test.ts']),
+    # the lead let go (owner, 10-07): the next one up, the most experienced of a level
+    ("the lead goes to who joined first, not the most experienced", "src/org.ts", [
+        (" || (b.xp ?? 0) - (a.xp ?? 0) || a.createdAt - b.createdAt)", " || a.createdAt - b.createdAt)"),
+    ], ["org.test.ts"]),
     # what every orb wants (owner, 10-07): the top of the office's XP table
     ("an orb does not want to be the best", "src/agent/standing.ts", [
         ("  if (o.ambition) parts.push(o.ambition);\n", ""),
@@ -1846,6 +1850,36 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("the click is a high tok again", "src/ui/sound.ts", [
         ("      return click(0, 170, 0.25);", "      return click(0, 540, 0.25);"),
     ], ["feel.test.ts"]),
+    # every side scroll, in a track with arrows (owner, 10-07)
+    ("a side scroll has no arrows", "src/ui/Balanced.tsx", [
+        ("      {over && arrow(-1, left)}", "      {null}"),
+        ("      {over && arrow(1, right)}", "      {null}"),
+    ], ["phones.test.ts"]),
+    ("an arrow does not move its row", "src/ui/Balanced.tsx", [
+        ("    el.scrollBy({ left: dir * Math.max(120, el.clientWidth * 0.8),", "    el.scrollBy({ left: 0,"),
+    ], ["phones.test.ts"]),
+    ("an arrow is never dimmed where there is no more", "src/ui/Balanced.tsx", [
+        ("tabIndex={-1} disabled={!on}", "tabIndex={-1} disabled={false}"),
+    ], ["phones.test.ts"]),
+    ("an arrow's hit area reaches past its row", "src/design/tokens.ts", [
+        ('top: -6px; bottom: -6px; left: 0; right: 0; }', 'top: -6px; bottom: -6px; left: -6px; right: -6px; }'),
+    ], ["phones.test.ts"]),
+    # the phone's rooms, less zoomed (owner, 10-07)
+    ("a phone's room fills the screen again", "src/floor/plan.ts", [
+        ("export const VIEW_PAD = { x: 50, y: 30 };", "export const VIEW_PAD = { x: 10, y: 10 };"),
+    ], ["floor-view.test.ts"]),
+    # no zoom into a text box on an iPhone (owner, 10-07)
+    ("an iPhone zooms into a text box", "src/ui/zoom.ts", [
+        ("  meta.content = `${meta.content}, maximum-scale=1`;\n", ""),
+    ], ["zoom.test.ts", "phones.test.ts"]),
+    ("Android loses pinch-to-zoom", "src/ui/zoom.ts", [
+        ("  if (!meta || !isIOS(nav) || /maximum-scale/.test(meta.content)) return false;", "  if (!meta || /maximum-scale/.test(meta.content)) return false;"),
+    ], ["zoom.test.ts", "phones.test.ts"]),
+    # Chat and the career, right above who the orb is (owner, 10-07)
+    ("Chat sits below the sheet again", "src/orbs.tsx", [
+        ("                <Sheet c={before ?? me} key={before ? \"was\" : \"now\"} replies={replies} standing={standing} startsAs={startsAs} career={career} friends={friends} />\n              </div>", "              </div>"),
+        ("              <div data-orb={me.hue} style={{ display: \"grid\", gap: \"var(--s3)\", alignContent: \"start\", minWidth: 0 }}>", "              <div data-orb={me.hue} style={{ display: \"grid\", gap: \"var(--s3)\", alignContent: \"start\", minWidth: 0 }}>\n                <Sheet c={before ?? me} key={before ? \"was\" : \"now\"} replies={replies} standing={standing} startsAs={startsAs} career={career} friends={friends} />"),
+    ], ["phones.test.ts"]),
     # the Recruiter's departments and All (owner, 10-07)
     ("a department shows every department's positions", "src/rooms/Recruiter.tsx", [
         ("        {(group ? [group] : families).map((f) => {", "        {families.map((f) => {"),

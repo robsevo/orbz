@@ -1,6 +1,8 @@
 // PLAN 5.4_t, 5.5_t (and 5.6's door), on a real home:
 //   - rows go to the best fit on a fixture team (its kind of work, the XP earned there, the level);
-//     each kind of work is led by its top-ranked orb, the first to join on a tie;
+//     each kind of work is led by its top-ranked orb, the most experienced (its XP) of those at that level, the
+//     first to join on a tie of both; let go the lead, and the next one up leads (owner, 10-07: "the next one up
+//     becomes the lead. with most experience in that position");
 //   - mentoring: a Senior passes a habit to a junior of his own kind (your yes first); it answers
 //     the junior's task, and its calls meet the JUNIOR's rules, not the Senior's;
 //   - the night practises each orb's promotion gap first;
@@ -39,7 +41,11 @@ test("rows go to the best fit: its kind of work first, then the XP earned there,
   assert.equal(whoFits(home.events, "the landing page's numbers, in sales.csv", team)[0]!.orb, "cy", "a file's kind counts first, before the words");
   assert.match(whoFits(home.events, "the landing page", team)[0]!.why, /frontend is Bea's kind of work/);
   const leads = leadsOf([...team, m("dee", "frontend", "Senior", 0)]);
-  assert.equal(leads.bySpecialty.get("frontend"), "dee", "two Seniors of a kind: the first to join leads");
+  assert.equal(leads.bySpecialty.get("frontend"), "dee", "two Seniors of a kind, as experienced: the first to join leads");
+  // the most experienced of a level leads; a level above outranks experience
+  const xp = (x: Member, n: number): Member => ({ ...x, xp: n });
+  assert.equal(leadsOf([xp(m("dee", "frontend", "Senior", 0), 40), xp(m("bea", "frontend", "Senior", 3), 90)]).bySpecialty.get("frontend"), "bea", "the more experienced Senior, though she joined later");
+  assert.equal(leadsOf([xp(m("ada", "frontend", "Junior", 2), 500), xp(m("bea", "frontend", "Senior", 3), 90)]).bySpecialty.get("frontend"), "bea", "a Senior over a Junior, however much the Junior has done");
   assert.equal(leads.chief, null);
   assert.equal(leadsOf([...team, m("max", "general", "Chief", 9)]).chief, "max");
 });
@@ -218,4 +224,25 @@ test("the ambition, by code: the leader, the rest, an office of one, and an orb 
   assert.match(ambitionLine("x", board), /say plainly what went wrong\.$/, "not on the table (let go): the wish, and no place");
   const many = Array.from({ length: 13 }, (_, i) => ({ orb: `o${i}`, name: `O${i}`, xp: 100 - i }));
   assert.deepEqual(["o0", "o1", "o2", "o10", "o11", "o12"].map((o) => /You (lead|are (\d+\w\w))/.exec(ambitionLine(o, many))![2] ?? "lead"), ["lead", "2nd", "3rd", "11th", "12th", "13th"]);
+});
+
+test("let go the lead, and the next one up leads: the most experienced in the position, through the door", async (t) => {
+  const { home } = await agentHome(t, []);
+  home.inbox.addOrb("ada", "Ada", "frontend"); // the first of its kind: the Senior, and the lead
+  home.inbox.addOrb("bea", "Bea", "frontend"); // Juniors
+  home.inbox.addOrb("cy", "Cy", "frontend");
+  const now = home.clock.now();
+  home.events.append("xp.earned", { amount: 30, reason: "a run you approved", source: 1, at: now }, { orb: "bea" });
+  home.events.append("xp.earned", { amount: 70, reason: "a run you approved", source: 2, at: now }, { orb: "cy" });
+  const d = await serve(home, { port: 0 });
+  t.after(() => d.close());
+  const call = async (method: string, path: string) => {
+    const r = await fetch(`http://127.0.0.1:${d.port}${path}`, { method, headers: { authorization: `Bearer ${d.token}` } });
+    return (await r.json()) as { leads: Record<string, string>; orbs: { id: string; xp: number }[] };
+  };
+  assert.equal((await call("GET", "/org")).leads.frontend, "ada", "the Senior leads");
+  await call("DELETE", "/orbs/ada");
+  const org = await call("GET", "/org");
+  assert.equal(org.leads.frontend, "cy", "Ada let go: Cy, the more experienced of the two, though Bea joined first");
+  assert.deepEqual(org.orbs.map((o) => [o.id, o.xp]).filter(([id]) => id !== "juniper"), [["bea", 30], ["cy", 70]], "each with its experience");
 });

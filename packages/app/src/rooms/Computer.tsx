@@ -19,7 +19,7 @@ import type { Gesture } from "../orb/life.ts";
 import { type ComputerState, type Hands, idOf, type Entry, type LessonState, type Message, type Office, type WorkFile } from "../home/link.ts";
 import { LessonView } from "./Lesson.tsx";
 import { play } from "../ui/sound.ts";
-import { OneLine } from "../ui/Balanced.tsx";
+import { OneLine, SideScroll } from "../ui/Balanced.tsx";
 import { ACT_WORDS, actsOf, chartOf, docBlocks, filesOf, icsEvents, kindOf, parseCsv, type Act, type Kind } from "./work.ts";
 
 type Tab = "Work" | "Browser" | "Files" | "Terminal" | "Activity" | "Lesson";
@@ -223,7 +223,7 @@ function Work({ open, file, acts, touched }: { open: string | null; file: WorkFi
         <span data-counts style={{ display: "block", font: "600 12px/16px var(--font)", color: "var(--text-3)", marginBottom: 6 }}>
           {body.length} {body.length === 1 ? "row" : "rows"} · {cols} {cols === 1 ? "column" : "columns"}
         </span>
-        <div style={{ overflowX: "auto", borderRadius: 10, boxShadow: "inset 0 0 0 1px var(--hairline)" }}>
+        <SideScroll bare style={{ overflowX: "auto", borderRadius: 10, boxShadow: "inset 0 0 0 1px var(--hairline)" }}>
           <table style={{ borderCollapse: "collapse", font: "500 12px/18px var(--font)", color: "var(--text-1)", minWidth: "100%" }}>
             <thead>
               <tr>
@@ -242,7 +242,7 @@ function Work({ open, file, acts, touched }: { open: string | null; file: WorkFi
               ))}
             </tbody>
           </table>
-        </div>
+        </SideScroll>
         {body.length > 60 && <span style={{ font: "500 11px/16px var(--font)", color: "var(--text-3)" }}>The first 60 of {body.length} rows.</span>}
         {cut}
       </div>

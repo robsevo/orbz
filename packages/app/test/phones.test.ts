@@ -7,6 +7,12 @@
 //   - a finger's targets under 1024: every control at least 44 by 44 (WCAG 2.5.5, Apple's 44 pt); a floor
 //     tag counts the hit area drawn round it (its ::after); a month's day at least 24 wide (WCAG 2.5.8) and 44 tall;
 //   - a phone's text fields at 16 px or more (an iPhone zooms into a smaller one);
+//   - and an iPhone never zooms into one (owner, 10-07: "when pressing on a text box, dont zoom in"): as an iPhone,
+//     the page's viewport caps its scale; as an Android phone, it does not (it would lose pinch-to-zoom);
+//   - a row too wide for a phone (owner, 10-07: "change the containers and add arrows to every side scroll") sits in
+//     a track with an arrow at each end, dimmed where there is no more, a press moving it; a row that fits has none;
+//   - an orb's profile (10-07: "put the chat with OrbName right above the container containing their name etc
+//     level", "make the career page button more visible"): Chat and its career side by side, right above it;
 //   - under 480, the app edge to edge.
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -145,3 +151,61 @@ for (const width of [320, 390, 768, 1280]) {
     }
   });
 }
+
+test("an iPhone never zooms into a text box: as an iPhone the page caps its scale; as an Android phone it does not", { skip, timeout: 120_000 }, async () => {
+  const viewport = async (userAgent: string): Promise<string> => {
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, userAgent });
+    try {
+      const page = await ctx.newPage();
+      await page.goto(door.pairLink().replace("orbs.html", "orbs.html?splash=0"));
+      await page.locator(".orbs-window").waitFor({ timeout: 30_000 });
+      return await page.locator('meta[name="viewport"]').getAttribute("content") ?? "";
+    } finally {
+      await ctx.close();
+    }
+  };
+  assert.match(await viewport("Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1"), /maximum-scale=1/);
+  assert.doesNotMatch(await viewport("Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36"), /maximum-scale/, "control: Android keeps pinch-to-zoom");
+});
+
+test("a row too wide for a phone sits in a track with an arrow at each end, dimmed where there is no more; a row that fits has none; Chat and the career right above the sheet", { skip, timeout: 120_000 }, async () => {
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: "dark", hasTouch: true, isMobile: true });
+  try {
+    const page = await ctx.newPage();
+    await page.goto(door.pairLink().replace("orbs.html", "orbs.html?splash=0"));
+    await page.locator(".orbs-window").waitFor({ timeout: 30_000 });
+    await page.evaluate(() => (location.hash = "#/office/Ada"));
+    const moves = page.locator(".side-scroll", { has: page.getByRole("button", { name: "Wiggle", exact: true }) });
+    await moves.waitFor({ timeout: 20_000 });
+    await page.waitForTimeout(500);
+    assert.equal(await moves.getAttribute("data-over"), "true", "the moves are wider than a phone: in a track");
+    const left = moves.getByRole("button", { name: "Scroll left" });
+    const right = moves.getByRole("button", { name: "Scroll right" });
+    assert.deepEqual([await left.isDisabled(), await right.isDisabled()], [true, false], "at its start: more only to the right");
+    const at = () => moves.locator(".one-line").evaluate((el) => el.scrollLeft);
+    await right.click();
+    await page.waitForFunction(() => {
+      const row = [...document.querySelectorAll(".side-scroll")].find((t) => t.textContent?.includes("Wiggle"))!.querySelector(".one-line")!;
+      return row.scrollLeft > 40;
+    }, undefined, { timeout: 5_000 });
+    assert.equal(await left.isDisabled(), false, "moved on: more to the left now");
+    for (let i = 0; i < 12 && !(await right.isDisabled()); i++) {
+      await right.click();
+      await page.waitForTimeout(500);
+    }
+    assert.equal(await right.isDisabled(), true, `at its end: no more to the right (at ${await at()})`);
+    // control: the moods fit a phone, so they are a plain row
+    const moods = page.locator(".side-scroll", { has: page.getByRole("button", { name: "Listening" }) });
+    assert.equal(await moods.getAttribute("data-over"), null);
+    assert.equal(await moods.locator(".side-arrow").count(), 0, "no arrows on a row that fits");
+    // Chat and its career, side by side, right above the sheet with its name and level
+    const chat = (await page.locator("[data-chat-with]").boundingBox())!;
+    const career = (await page.locator("[data-career-open]").boundingBox())!;
+    const sheet = (await page.locator(".orbs-sheet").boundingBox())!;
+    assert.ok(Math.abs(chat.y - career.y) < 2, "side by side");
+    assert.ok(chat.y + chat.height <= sheet.y && sheet.y - (chat.y + chat.height) <= 24, `right above the sheet (${Math.round(chat.y + chat.height)} then ${Math.round(sheet.y)})`);
+    assert.equal(await page.locator("[data-career-open]").innerText(), "Ada's career");
+  } finally {
+    await ctx.close();
+  }
+});

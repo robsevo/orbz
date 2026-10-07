@@ -67,14 +67,20 @@ export const VIEWS: { id: ViewId; name: string; hue: HueName }[] = [
   ...ROOMS.map((r) => ({ id: r.id, name: r.name, hue: r.hue })),
   ...ZONES.map((z) => ({ id: z.id, name: z.name, hue: z.hue })),
 ];
-/** A view's part of the floor, with a little room round it so nothing at its edge is cut; the whole office has none. */
+/** How much floor a phone shows round a room (owner, 10-07: "a little too zoomed in on the rooms in mobile"): 50
+ * to each side and 30 above and below, so a room sits among its neighbours' edges at about four fifths of the size
+ * it filled the screen at. */
+export const VIEW_PAD = { x: 50, y: 30 };
+/** A view's part of the floor, the room and some floor round it; the whole office has none. At the floor's edge the
+ * window moves in rather than shrinks, so every room is shown at the same size. */
 export function viewRect(id: ViewId): Rect | null {
   const r = ROOMS.find((x) => x.id === id)?.rect ?? ZONES.find((x) => x.id === id)?.rect;
   if (!r) return null;
-  const pad = 10;
-  const x = Math.max(0, r.x - pad);
-  const y = Math.max(0, r.y - pad - 18); // room above for the names over the orbs at its top
-  return { x, y, w: Math.min(W, r.x + r.w + pad) - x, h: Math.min(H, r.y + r.h + pad) - y };
+  const w = Math.min(W, r.w + 2 * VIEW_PAD.x);
+  const h = Math.min(H, r.h + 2 * VIEW_PAD.y + 18); // and room above for the names over the orbs at its top
+  const x = Math.min(Math.max(0, r.x - VIEW_PAD.x), W - w);
+  const y = Math.min(Math.max(0, r.y - VIEW_PAD.y - 18), H - h);
+  return { x, y, w, h };
 }
 /** The department most of the office sits in (a phone opens on it); the whole office when no one does. */
 export function busiest(desks: Map<string, Desk>): ViewId {

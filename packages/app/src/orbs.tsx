@@ -17,9 +17,10 @@ import { Orb } from "./orb/Orb.tsx";
 import { DESIGN } from "./orb/renderer.ts";
 import { CEILING, dnaOf, grownOf, grownSays, type Growth, type Move, TOTAL } from "./orb/dna.ts";
 import { readStrand, shareOf, strandOf } from "./orb/strand.ts";
-import { Balanced, OneLine, Tall, useMore } from "./ui/Balanced.tsx";
+import { Balanced, OneLine, SideScroll, Tall } from "./ui/Balanced.tsx";
 import { Paged } from "./ui/Paged.tsx";
 import { installFeel } from "./ui/feel.ts";
+import { noFieldZoom } from "./ui/zoom.ts";
 import { setSounds, soundsOn } from "./ui/sound.ts";
 import { Splash, splashWanted } from "./ui/Splash.tsx";
 import { Onboarding } from "./onboarding/Onboarding.tsx";
@@ -46,6 +47,7 @@ import { Floor } from "./floor/Floor.tsx";
 import { applyTheme, savedTheme } from "./ui/theme.ts";
 
 applyTheme(savedTheme(), false); // before the first paint: the theme you chose, never a flash of another
+noFieldZoom(document, navigator); // an iPhone does not zoom into a text box (owner, 10-07)
 import {
   ASH, EYES, FAMILIES, FINISHES, GLASSES, HATS, offered, orbName, partnerOf, type Scheme, SCHEMES, type AccessoryHue, PERSONALITIES, REPLIES, SHAPES, sheetOf, speaks, SPECIALTIES, surprise, voice, VOICES, withPersonality,
   type Character, type EyesName, type Family, type FinishName, type GlassesName, type HatName, type PersonalityName, type Replies, type ShapeName, type SpecialtyName,
@@ -558,7 +560,6 @@ function Swatch({ hue, on, size, label, onPick }: { hue: HueName; on: boolean; s
 function Tabs({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
   const bar = useRef<HTMLDivElement>(null);
   const [pill, setPill] = useState<{ x: number; w: number } | null>(null);
-  useMore(bar);
   useLayoutEffect(() => {
     const el = bar.current!;
     const place = (): void => {
@@ -575,7 +576,8 @@ function Tabs({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
     return () => ro.disconnect();
   }, [tab]);
   return (
-    <div ref={bar} role="tablist" className="one-line" style={{ position: "relative", display: "flex", flexWrap: "nowrap", overflowX: "auto", gap: 3, padding: 3, borderRadius: 12, background: "var(--fill)", scrollbarWidth: "none" }}>
+    // its own track already: on a phone, the arrows beside it (owner, 10-07: "add arrows to every side scroll")
+    <SideScroll scrollRef={bar} bare role="tablist" className="one-line" style={{ position: "relative", display: "flex", flexWrap: "nowrap", overflowX: "auto", gap: 3, padding: 3, borderRadius: 12, background: "var(--fill)", scrollbarWidth: "none" }}>
       {pill && (
         <i
           aria-hidden
@@ -587,7 +589,7 @@ function Tabs({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
           {t}
         </button>
       ))}
-    </div>
+    </SideScroll>
   );
 }
 
@@ -739,7 +741,7 @@ function RepliesRow({ replies, setReplies }: { replies: Replies; setReplies: (r:
 }
 
 /** An orb in the office: what he is made of, fixed, and the one thing you can still do (let him go). */
-function Card({ c, replies, setReplies, onDelete, onChat, onCareer, others }: { c: Character; replies: Replies; setReplies: (r: Replies) => void; onDelete: (handTo?: string, school?: boolean) => void; onChat: () => void; onCareer: () => void; others: Character[] }) {
+function Card({ c, replies, setReplies, onDelete, others }: { c: Character; replies: Replies; setReplies: (r: Replies) => void; onDelete: (handTo?: string, school?: boolean) => void; others: Character[] }) {
   const [asking, setAsking] = useState(false);
   const [handTo, setHandTo] = useState(""); // whose his habits become when he goes, if anyone's
   useEffect(() => {
@@ -759,12 +761,6 @@ function Card({ c, replies, setReplies, onDelete, onChat, onCareer, others }: { 
   ];
   return (
     <div data-orb={c.hue} style={{ ...s.panel, display: "grid", gap: "var(--s4)", alignContent: "start" }}>
-      <button data-sound="pick" onClick={onChat} style={{ ...s.btn, justifySelf: "stretch", background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)", fontWeight: 800 }}>
-        Chat with {c.name}
-      </button>
-      <button onClick={onCareer} style={{ ...s.btn, justifySelf: "start" }}>
-        {c.name}'s career
-      </button>
       <span style={{ font: "700 17px/22px var(--font)", color: "var(--text-1)" }}>Made of</span>
       <Balanced min={100}>
         {facts.map(([k, v]) => (
@@ -1361,8 +1357,24 @@ function App() {
           </div>
 
           <div className="orbs-pair" style={{ display: "grid", gap: "var(--s4)", padding: "0 var(--s5)", gridTemplateColumns: "minmax(0, 1fr)", alignItems: "start" }}>
-            <Sheet c={before ?? me} key={before ? "was" : "now"} onRename={making ? (n) => edit({ name: n }) : undefined} replies={replies} standing={making ? null : standing} startsAs={startsAs} career={making ? null : career} friends={making ? null : friends} />
-            {making ? <Creator me={me} edit={edit} replies={replies} setReplies={setReplies} first={!office.length} /> : <Card c={me} replies={replies} setReplies={setReplies} onDelete={(handTo, school) => remove(me.name, handTo, school)} onChat={() => go({ room: "chat", orb: me.name })} onCareer={() => go({ room: "career", orb: me.name })} others={office.filter((o) => o.name !== me.name)} />}
+            {making ? (
+              <Sheet c={before ?? me} key={before ? "was" : "now"} onRename={(n) => edit({ name: n })} replies={replies} standing={null} startsAs={startsAs} career={null} friends={null} />
+            ) : (
+              <div data-orb={me.hue} style={{ display: "grid", gap: "var(--s3)", alignContent: "start", minWidth: 0 }}>
+                {/* what you do with an orb, right above who it is (owner, 10-07: "put the chat with OrbName right above the
+                    container containing their name etc level", "make the career page button more visible") */}
+                <Balanced min={150} gap={8}>
+                  <button data-sound="pick" data-chat-with onClick={() => go({ room: "chat", orb: me.name })} style={{ ...s.btn, background: "var(--accent)", color: "var(--ground)", fontWeight: 800 }}>
+                    Chat with {me.name}
+                  </button>
+                  <button data-career-open onClick={() => go({ room: "career", orb: me.name })} style={{ ...s.btn, background: "var(--accent-wash)", boxShadow: "inset 0 0 0 1.5px var(--accent)", color: "var(--text-1)", fontWeight: 800 }}>
+                    {me.name}'s career
+                  </button>
+                </Balanced>
+                <Sheet c={before ?? me} key={before ? "was" : "now"} replies={replies} standing={standing} startsAs={startsAs} career={career} friends={friends} />
+              </div>
+            )}
+            {making ? <Creator me={me} edit={edit} replies={replies} setReplies={setReplies} first={!office.length} /> : <Card c={me} replies={replies} setReplies={setReplies} onDelete={(handTo, school) => remove(me.name, handTo, school)} others={office.filter((o) => o.name !== me.name)} />}
           </div>
 
           <div style={{ padding: "0 var(--s5)" }}>

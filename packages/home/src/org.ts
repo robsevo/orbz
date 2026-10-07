@@ -18,7 +18,8 @@ import type { Diploma } from "./school/school.ts";
 import { inSubject } from "./school/subjects.ts";
 import { FRIEND_XP } from "./social/social.ts";
 
-export type Member = { id: string; name: string; specialty: Specialty; level: Level; createdAt: number };
+/** An orb of the office, as the org reads it; `xp`, its experience in its position (the ledger's total). */
+export type Member = { id: string; name: string; specialty: Specialty; level: Level; createdAt: number; xp?: number };
 
 /** Work words, in the order they are tried; a file a row names counts first. */
 const WORK: [RegExp, Area][] = [
@@ -47,12 +48,14 @@ export function areaOfText(text: string): Area | null {
 
 const rank = (m: Member): number => LEVELS.indexOf(m.level);
 
-/** Who leads what: the Chief (if there is one), and per specialty its top-ranked orb, the first to
- * join on a tie. */
+/** Who leads what: the Chief (if there is one), and per specialty its top-ranked orb; of those at the same
+ * level the most experienced in the position, by its XP (owner, 10-07: "Lets say we let go of our lead, the next
+ * one up becomes the lead. with most experience in that position"), and the first to join on a tie of both. An
+ * orb let go is not in the team, so its position's next one up leads from then on, with nothing to hand over. */
 export function leadsOf(team: Member[]): { chief: string | null; bySpecialty: Map<Specialty, string> } {
   const chief = team.find((m) => m.level === "Chief")?.id ?? null;
   const by = new Map<Specialty, string>();
-  for (const m of [...team].sort((a, b) => rank(b) - rank(a) || a.createdAt - b.createdAt)) if (!by.has(m.specialty)) by.set(m.specialty, m.id);
+  for (const m of [...team].sort((a, b) => rank(b) - rank(a) || (b.xp ?? 0) - (a.xp ?? 0) || a.createdAt - b.createdAt)) if (!by.has(m.specialty)) by.set(m.specialty, m.id);
   return { chief, bySpecialty: by };
 }
 

@@ -624,7 +624,7 @@ async function handle(
   // the org chart (PLAN 5.6): who is in the office, at what level, how long, and who leads each kind of work
   if (method === "GET" && url.pathname === "/org") {
     const now = home.clock.now();
-    const team = home.inbox.orbs().map((o) => ({ id: o.id, name: o.name, specialty: o.specialty, level: levelOf(home.events, o.id), createdAt: o.createdAt }));
+    const team = home.inbox.orbs().map((o) => ({ id: o.id, name: o.name, specialty: o.specialty, level: levelOf(home.events, o.id), createdAt: o.createdAt, xp: home.xp.of(o.id, now).total }));
     const { chief, bySpecialty } = leadsOf(team);
     // who is away, the most qualified first (school, PLAN 5.7: a diploma counts, never promotes): level, diplomas, XP
     const away = home.inbox.orbs({ all: true }).filter((o) => o.letGoAt !== null)

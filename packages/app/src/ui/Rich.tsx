@@ -2,6 +2,7 @@
 // links, as elements of the page's own type and colours. Never HTML from the text: a reply cannot become
 // markup, and a link opens only an http or https address, in a new tab, with nothing passed along.
 import type { CSSProperties, ReactNode } from "react";
+import { SideScroll } from "./Balanced.tsx";
 import { blocks, type Block, type Span } from "./markdown.ts";
 
 const code: CSSProperties = { font: "500 .92em/1.4 var(--mono)", padding: "1px 5px", borderRadius: 5, background: "var(--fill-2)", overflowWrap: "anywhere" };
@@ -50,9 +51,10 @@ function block(b: Block, i: number): ReactNode {
       return <blockquote key={i} style={{ margin: 0, paddingLeft: 12, boxShadow: "inset 3px 0 0 var(--hairline)", color: "var(--text-2)" }}>{inline(b.c)}</blockquote>;
     case "pre":
       return (
-        <pre key={i} data-lang={b.lang || undefined} style={{ margin: 0, padding: "10px 12px", borderRadius: 10, background: "var(--fill)", boxShadow: "inset 0 0 0 .5px var(--hairline)", font: "500 13px/19px var(--mono)", color: "var(--text-1)", whiteSpace: "pre", overflowX: "auto", maxWidth: "100%" }}>
+        // a long line scrolls sideways, with arrows (owner, 10-07)
+        <SideScroll as="pre" bare key={i} data-lang={b.lang || undefined} style={{ margin: 0, padding: "10px 12px", borderRadius: 10, background: "var(--fill)", boxShadow: "inset 0 0 0 .5px var(--hairline)", font: "500 13px/19px var(--mono)", color: "var(--text-1)", whiteSpace: "pre", overflowX: "auto", maxWidth: "100%" }}>
           {b.v}
-        </pre>
+        </SideScroll>
       );
     case "hr":
       return <hr key={i} style={{ width: "100%", height: 1, border: 0, margin: "2px 0", background: "var(--hairline)" }} />;

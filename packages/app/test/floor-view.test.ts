@@ -18,6 +18,7 @@ import { findChrome, launch, measure } from "./harness.ts";
 import { Home } from "../../home/src/home.ts";
 import { serve } from "../../home/src/api.ts";
 import { fakeModel } from "../../home/test/fakes/model.ts";
+import { viewRect } from "../src/floor/plan.ts";
 
 const APP = fileURLToPath(new URL("..", import.meta.url));
 const skip = findChrome() ? false : "no Chromium on this machine";
@@ -166,16 +167,23 @@ test("on a phone the office goes room by room: it opens on the busiest departmen
   });
   await page.locator('[data-view-choice="build"][aria-pressed="true"]').waitFor();
   let a = await at();
-  // Build is { x: 12, y: 352, w: 360, h: 196 }, shown with 10 round it and 18 above for the names
+  // Build is { x: 12, y: 352, w: 360, h: 196 }, shown with floor round it (owner, 10-07: "a little too zoomed in on
+  // the rooms"): 50 to each side, the window moved in at the floor's left edge, 30 above and below, 18 more for the names
+  const onBuild = viewRect("build")!;
+  assert.deepEqual(onBuild, { x: 0, y: 304, w: 460, h: 274 });
   assert.equal(a.room, "room");
-  assert.ok(Math.abs(a.left - 2 * a.k) <= 1 && Math.abs(a.top - 324 * a.k) <= 1, `the window on Build (${JSON.stringify(a)})`);
-  assert.ok(Math.abs(380 * a.k - a.w) <= 1, "Build the width of the screen");
+  assert.ok(Math.abs(a.left - onBuild.x * a.k) <= 1 && Math.abs(a.top - onBuild.y * a.k) <= 1, `the window on Build (${JSON.stringify(a)})`);
+  assert.ok(Math.abs(onBuild.w * a.k - a.w) <= 1, "the window the width of the screen");
+  assert.ok(360 * a.k <= 0.8 * a.w, `Build at most four fifths of it, floor round it (${Math.round(360 * a.k)} of ${a.w})`);
   assert.deepEqual(await measure(page), [], "nothing spills, a room at a time");
   // the kitchen
   await page.locator('[data-view-choice="kitchen"]').click();
   await page.waitForTimeout(300);
   a = await at();
-  assert.ok(Math.abs(a.left - 798 * a.k) <= 1 && Math.abs(a.top - 56 * a.k) <= 1, `the window on the kitchen (${JSON.stringify(a)})`);
+  // at the floor's right edge: moved in, not shrunk, so the kitchen has the same floor round it
+  const onKitchen = viewRect("kitchen")!;
+  assert.deepEqual(onKitchen, { x: 708, y: 36, w: 492, h: 294 });
+  assert.ok(Math.abs(a.left - onKitchen.x * a.k) <= 1 && Math.abs(a.top - onKitchen.y * a.k) <= 1, `the window on the kitchen (${JSON.stringify(a)})`);
   // kept on this device
   await page.reload();
   await page.locator('[data-view-choice="kitchen"][aria-pressed="true"]').waitFor({ timeout: 30_000 });
