@@ -93,6 +93,12 @@ export type CareerState = Standing & {
   habits: { task: string; version: number; shared: { from: string } | null }[];
   reviews: { given: number; received: number };
   performance: { suggest: string; why: string } | null;
+  /** Its growth with the others (owner, 10-07): its latest work, its meetings and the ideas traded in them,
+   * its friends, the lessons passed between them. Older homes leave these out. */
+  work?: { at: number; summary: string; conversation: string | null }[];
+  meetings?: { at: number; with: string; kind: string; place: string; word: string; delta: number; won: boolean | null; brought: string | null; heard: string | null }[];
+  friends?: { name: string; word: string; score: number; meetings: number }[];
+  lessons?: { at: number; from: string; to: string; line: string; state: string }[];
 };
 
 /** The recruiter (PLAN 5.8): the positions you are hiring for, who applied (a seed each, made whole

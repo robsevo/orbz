@@ -43,6 +43,8 @@ export type SocialOptions = {
   free: (orb: string) => boolean;
   /** Its approved lessons (brain/learned.ts), and adding one (only on the person's yes). */
   learned: { list: (orb: string) => string[]; add: (orb: string, line: string) => string[] };
+  /** What an orb last finished, in a sentence (worklog.ts): what it brings to an exchange of ideas. */
+  workOf?: (orb: string) => string | null;
   /** The dice (tests pin them). */
   dice?: () => number;
   /** Whether orbs meet on their own (the real home: yes; a test home: only when it says so). */
@@ -60,7 +62,7 @@ export class Social {
     this.#db = db;
     this.#events = events;
     this.#clock = clock;
-    this.#o = { ...o, dice: o.dice ?? Math.random, on: o.on ?? false };
+    this.#o = { ...o, dice: o.dice ?? Math.random, on: o.on ?? false, workOf: o.workOf ?? (() => null) };
   }
 
   // ── traits, from the app ──────────────────────────────────────────────────────────────────
@@ -200,7 +202,9 @@ export class Social {
       const m = this.#db
         .prepare("INSERT INTO meetings (at, until, a, b, kind, place, winner, delta, score) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *")
         .get(now, now + MEETING_MS, x, y, kind, place, winner, delta, after) as MeetingRow;
-      this.#events.append("social.met", { meeting: m.id, a: x, b: y, kind, place, winner, delta, score: after, word: wordOf(after), until: m.until });
+      // ideas: what each brought, its own latest work (owner, 10-07: "what are those ideas?"), by code
+      const ideas = kind === "ideas" ? [x, y].map((o) => ({ orb: o, text: this.#o.workOf(o) })).filter((i) => i.text) : [];
+      this.#events.append("social.met", { meeting: m.id, a: x, b: y, kind, place, winner, delta, score: after, word: wordOf(after), until: m.until, ...(ideas.length && { ideas }) });
       if (before < 50 && after >= 50) this.#events.append("social.friends", { a: x, b: y, names: [nameOf(x), nameOf(y)] });
       if (before > -50 && after <= -50) this.#events.append("social.fell_out", { a: x, b: y, names: [nameOf(x), nameOf(y)] });
       if (kind === "lesson") {

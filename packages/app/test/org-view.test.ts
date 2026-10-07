@@ -76,6 +76,11 @@ test("the org chart and a career page; let go with a hand-off, away, rehired; le
   assert.match(words, /Age 0 days · 0 days in the company/);
   assert.match(words, /trigger:t1/, "his habit is on his page");
   await career.getByRole("img", { name: /Leans toward/ }).waitFor();
+  // richer (owner, 10-07): the ladder with its rung, its seven traits, its level; the whole orb, hat and all
+  await career.locator('[data-rung="Senior"][aria-current="step"]').waitFor();
+  assert.equal(await career.locator("[data-trait]").count(), 7);
+  assert.match(await career.locator("[data-level]").innerText(), /^Lv\. \d+$/);
+  assert.equal(await career.locator("[data-career-portrait]").evaluate((el) => getComputedStyle(el.querySelector("canvas")!.parentElement!).overflow === "hidden" ? "cut" : "whole"), "whole");
   assert.deepEqual(await measure(page), [], "his career page, at desk size");
 
   // his week: a notice for you, a press from his career page

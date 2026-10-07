@@ -1564,6 +1564,13 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("a part's summary goes missing from what the model reads", "src/agent/conversation.ts", [
         ("    return [...(whole ? [whole] : []), ...parts, ...live.filter", "    return [...(whole ? [whole] : []), ...live.filter"),
     ], ["survive.test.ts"]),
+    # the career page's growth (owner, 10-07)
+    ("an exchange of ideas records nothing of what was said", "src/social/social.ts", [
+        ("      const ideas = kind === \"ideas\" ? [x, y].map", "      const ideas = false ? [x, y].map"),
+    ], ["social.test.ts"]),
+    ("a pass counts as work", "src/worklog.ts", [
+        ("    if (!s || NOT_WORK.test(s)) continue;", "    if (!s) continue;"),
+    ], ["social.test.ts"]),
     # the team's notes on what it read (owner, 10-07)
     ("a teammate reads the same page again", "src/agent/tools.ts", [
         ("      if (notes && kept && kept.by !== ctx.orb) {", "      if (false) {"),

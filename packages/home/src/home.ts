@@ -37,6 +37,7 @@ import type { Undo } from "./gym/card.ts";
 import { type Level, LEVELS, levelOf, nextFor, tenureOf } from "./gym/levels.ts";
 import { orgTools, whoFits } from "./org.ts";
 import { recital } from "./plans/recite.ts";
+import { recentWork } from "./worklog.ts";
 import { interviewSystem, Recruiter, RecruiterError } from "./recruiter.ts";
 import { type Fetcher, Reading, type Sleep } from "./reading/reading.ts";
 import { readingTools, withReading } from "./reading/tools.ts";
@@ -501,6 +502,8 @@ export class Home {
       office: () => this.inbox.orbs().map((o) => ({ id: o.id, name: o.name })),
       free: (orb) => !db.prepare("SELECT 1 FROM inbox WHERE orb = ? AND state IN ('queued', 'running') LIMIT 1").get(orb) && !this.conversations.pendingCards().some((c) => c.orb === orb),
       learned: { list: (orb) => this.learned.list(orb), add: (orb, line) => this.learned.add(orb, line) },
+      // what it brings to an exchange of ideas: its latest finished work this week, in its own words
+      workOf: (orb) => recentWork(this.events, orb, { since: this.clock.now() - 7 * 86_400_000, limit: 1 })[0]?.summary ?? null,
       on: opts.social?.on ?? false,
       ...(opts.social?.dice && { dice: opts.social.dice }),
     });

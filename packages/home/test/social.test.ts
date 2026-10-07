@@ -172,3 +172,40 @@ test("an orb knows its friends and frictions; who fits weighs them, never over t
   assert.equal((await call("PUT", "/orbs/ada/traits", { traits: { Pace: 10 } })).status, 400);
   assert.equal((await call("PUT", "/orbs/nobody/traits", { traits: NEUTRAL })).status, 404);
 });
+
+// PLAN 5.9 and 5.6 (owner, 10-07: "beatrix exchanged ideas with another orb, what are those ideas? put it in the
+// career section too, its where we see the orbs growth")
+test("an exchange of ideas is each orb's own latest work, by code; the career page has its work, meetings, friends and lessons", async (t) => {
+  const { plain, recentWork } = await import("../src/worklog.ts");
+  assert.equal(plain("**Kits sell for $39 to $60**, and six to eight players is the norm. Two sources agree."), "Kits sell for $39 to $60, and six to eight players is the norm.");
+  assert.equal(plain("x".repeat(300)).length, 160, "cut to a line");
+  const { home } = await agentHome(t, [], { heartbeatMs: 86_400_000, social: { dice: dice(5) } });
+  home.inbox.addOrb("beatrix", "Beatrix", "research");
+  home.inbox.addOrb("darius", "Darius", "backend");
+  home.inbox.letGo("juniper"); // the test home's own: two in the office, so they meet each other
+  home.events.append("run.finished", { run: 1, outcome: "ok", summary: "**Mystery kits sell for $39 to $60.** Two sources agree." }, { orb: "beatrix", conversation: "team:1:brainstorm" });
+  home.events.append("run.finished", { run: 2, outcome: "ok", summary: "no brain answered" }, { orb: "darius", conversation: "chat:darius" });
+  home.events.append("run.finished", { run: 3, outcome: "ok", summary: "Set up the kit's folders and a check that every file is there." }, { orb: "darius", conversation: "team:1:floor" });
+  home.events.append("run.finished", { run: 4, outcome: "ok", summary: "passed" }, { orb: "darius", conversation: "team:1:brainstorm" });
+  assert.deepEqual(recentWork(home.events, "darius").map((w) => w.summary), ["Set up the kit's folders and a check that every file is there."], "a pass or a run with no brain is not work");
+  let ideas: { orb: string; text: string }[] | null = null;
+  for (let i = 0; i < 40 && !ideas; i++) {
+    const m = home.social.meet();
+    if (m?.kind === "ideas") ideas = home.events.ofType("social.met").at(-1)!.data.ideas as { orb: string; text: string }[];
+  }
+  assert.ok(ideas, "an exchange of ideas came round");
+  assert.deepEqual(Object.fromEntries(ideas!.map((i) => [i.orb, i.text])), {
+    beatrix: "Mystery kits sell for $39 to $60.",
+    darius: "Set up the kit's folders and a check that every file is there.",
+  }, "each brought its own latest work");
+  const door = await serve(home, { port: 0 });
+  t.after(() => door.close());
+  const c = (await (await fetch(`http://127.0.0.1:${door.port}/orbs/beatrix/career`, { headers: { authorization: `Bearer ${door.token}` } })).json()) as {
+    work: { summary: string }[]; meetings: { kind: string; with: string; brought: string | null; heard: string | null }[]; friends: { name: string }[]; lessons: unknown[];
+  };
+  assert.deepEqual(c.work.map((w) => w.summary), ["Mystery kits sell for $39 to $60."]);
+  const traded = c.meetings.find((m) => m.kind === "ideas")!;
+  assert.deepEqual([traded.with, traded.brought, traded.heard], ["Darius", "Mystery kits sell for $39 to $60.", "Set up the kit's folders and a check that every file is there."]);
+  assert.deepEqual(c.friends.map((f) => f.name), ["Darius"]);
+  assert.deepEqual(c.lessons, []);
+});

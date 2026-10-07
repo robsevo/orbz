@@ -10,6 +10,7 @@
 // answers only to those names (a rebound hostname is refused), never takes the loopback token
 // (that stays for local tools), and lets in only a session: a pairing link (a QR code on a phone)
 // or a passkey, each a device that can be revoked.
+import { recentWork } from "./worklog.ts";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { existsSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
@@ -642,6 +643,22 @@ async function handle(
         received: home.events.ofType("board.review_asked").filter((e) => e.data.by === orb).length,
       },
       performance: home.events.ofType("performance.card").findLast((e) => e.orb === orb)?.data ?? null,
+      // its growth with the others (owner, 10-07: "put it in the career section too, its where we see the orbs
+      // growth"): its latest work, its meetings and the ideas traded in them, its friends, the lessons passed
+      work: recentWork(home.events, orb, { limit: 6 }),
+      meetings: home.events.ofType("social.met").filter((e) => e.data.a === orb || e.data.b === orb).slice(-8).reverse().map((e) => {
+        const other = String(e.data.a === orb ? e.data.b : e.data.a);
+        const ideas = (Array.isArray(e.data.ideas) ? e.data.ideas : []) as { orb: string; text: string }[];
+        return {
+          at: e.at, with: home.inbox.orb(other)?.name ?? other, kind: String(e.data.kind), place: String(e.data.place), word: String(e.data.word ?? ""), delta: Number(e.data.delta ?? 0),
+          won: e.data.winner ? e.data.winner === orb : null,
+          brought: ideas.find((i) => i.orb === orb)?.text ?? null, heard: ideas.find((i) => i.orb === other)?.text ?? null,
+        };
+      }),
+      friends: home.social.of(orb).map((f) => ({ name: f.name, word: f.word, score: f.score, meetings: f.meetings })),
+      lessons: (["waiting", "kept", "dropped"] as const).flatMap((st) => home.social.lessons(st)).filter((l) => l.from === orb || l.to === orb).sort((a, b) => b.at - a.at).slice(0, 6).map((l) => ({
+        at: l.at, from: home.inbox.orb(l.from)?.name ?? l.from, to: home.inbox.orb(l.to)?.name ?? l.to, line: l.line, state: l.state,
+      })),
     };
   }
   if (method === "POST" && parts[0] === "orbs" && parts.length === 3 && parts[2] === "rehire") return { orb: home.rehire(decodeURIComponent(parts[1]!)) };
