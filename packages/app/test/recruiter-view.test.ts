@@ -195,7 +195,9 @@ test("the floor's Hiring tags open on who applied to their department; All and t
 
   const page = await open({ width: 1280, height: 900 });
   // a tag above every orb, wherever an orb walks or sits (10-07: in a busy gate an orb passing over Think's tag took its
-  // press): every tag stacks above every orb on the floor
+  // press): every tag stacks above every orb on the floor. The tags come with the office's hiring, a moment after the
+  // floor: in a busy gate the stacking was read before they came (10-07, "( over 516)": no tag at all)
+  await page.locator("[data-hiring]").nth(1).waitFor({ timeout: 20_000 });
   const stacking = await page.evaluate(() => {
     const zOf = (el: Element): number => {
       for (let e: Element | null = el; e && !e.hasAttribute("data-floor-plan"); e = e.parentElement) {

@@ -158,6 +158,16 @@ test("a moment on the floor (owner, 10-07: \"micro interactions ... goofy and fu
   await page.locator(".orbs-window").waitFor({ timeout: 30_000 });
   await page.evaluate(() => (location.hash = "#/office"));
   await page.locator("[data-floor]").waitFor({ timeout: 20_000 });
+  // every line said on the floor, kept as it is said: a line stays five seconds, and in a busy gate both orbs' walks can
+  // take longer than that (10-07: red in a full gate, green alone), so the lines are looked for in what was said
+  await page.evaluate(() => {
+    const said: string[] = ((window as unknown as { said: string[] }).said = []);
+    new MutationObserver(() => {
+      document.querySelectorAll("[data-speech]").forEach((el) => {
+        if (el.textContent && !said.includes(el.textContent)) said.push(el.textContent);
+      });
+    }).observe(document.body, { subtree: true, childList: true, characterData: true });
+  });
 
   const before = h.social.score("ada", "bo");
   const mo = h.social.moment()!;
@@ -179,7 +189,7 @@ test("a moment on the floor (owner, 10-07: \"micro interactions ... goofy and fu
   }
   // each says its line there, the second a beat after the first
   for (const line of mo.lines) {
-    await page.waitForFunction((line) => [...document.querySelectorAll("[data-speech]")].some((el) => el.textContent === line), line, { timeout: 15_000 });
+    await page.waitForFunction((line) => (window as unknown as { said: string[] }).said.includes(line), line, { timeout: 30_000 });
   }
   assert.match(await page.locator('[aria-label="Activity"]').innerText(), new RegExp(`${name(mo.a)}: “`), "the feed has it");
   assert.deepEqual(await measure(page), [], "the floor, with a moment on it");

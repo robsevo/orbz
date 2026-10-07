@@ -181,8 +181,16 @@ test("a row too wide for a phone sits in a track with an arrow at each end, dimm
     await page.evaluate(() => (location.hash = "#/office"));
     const moves = page.locator(".side-scroll", { has: page.locator("[data-view-choice]") });
     await moves.waitFor({ timeout: 20_000 });
-    await moves.locator(".one-line").evaluate((el) => void (el.scrollLeft = 0));
-    await page.waitForTimeout(500);
+    // at its start, and settled there: in a busy gate the row's own scroll to the chosen room can land after ours, and the
+    // arrows follow a scroll a frame or more later (10-07: red in a full gate, green alone), so it is set again until the
+    // left arrow says it is at the start
+    await page.waitForFunction(() => {
+      const track = [...document.querySelectorAll(".side-scroll")].find((t) => t.querySelector("[data-view-choice]"));
+      const row = track?.querySelector(".one-line");
+      if (!track || !row) return false;
+      row.scrollLeft = 0;
+      return track.querySelector<HTMLButtonElement>('.side-arrow[data-side="left"]')?.disabled === true;
+    }, undefined, { timeout: 15_000 });
     assert.equal(await moves.getAttribute("data-over"), "true", "the rooms are wider than a phone: in a track");
     const left = moves.getByRole("button", { name: "Scroll left" });
     const right = moves.getByRole("button", { name: "Scroll right" });
