@@ -1035,6 +1035,7 @@ function App() {
     setOffice((o) => [...o, made]);
     home?.add(made).catch((e: Error) => setSaid(`${made.name} was not hired: ${e.message}`));
     setArrived(made.name);
+    setRoom("office"); // its profile, whichever room it was made from (an empty office's home page opens the creator)
     setView({ kind: "orb", name: made.name });
     // the creator's address becomes his: a reload shows him, and Back does not reopen a creator for him
     history.replaceState(history.state, "", routeHash({ room: "office", orb: made.name }));
