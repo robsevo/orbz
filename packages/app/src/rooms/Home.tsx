@@ -73,7 +73,7 @@ function Tile({ id, label, value, sub, alert = false, go }: { id: string; label:
     <>
       <span style={head}>{label}</span>
       <span className="num" style={{ font: "800 30px/36px var(--font)", color: alert ? "var(--alert)" : "var(--text-1)" }}>{value}</span>
-      <span style={{ ...small, color: "var(--text-2)" }}>{sub}</span>
+      <span style={{ ...small, color: "var(--text-2)", textWrap: "balance" }}>{sub}</span>
     </>
   );
   const style: CSSProperties = { ...card, gap: 2, textAlign: "left", border: 0, cursor: go ? "pointer" : "default", boxShadow: alert ? "inset 0 0 0 1.5px var(--alert)" : card.boxShadow, color: "inherit", font: "inherit" };
