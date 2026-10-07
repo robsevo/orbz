@@ -288,3 +288,83 @@ esac
   writeFileSync(join(dir, "broken"), "");
   assert.equal(await k.available(), false, "no Secret Service: the home falls back to a file and says so");
 });
+
+// PLAN 5.10_t: what the plan costs (10-06: five orbs on the flagship spent a plan's limit in a quarter of an hour)
+const PLAN_MODELS = ["gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5"].map((slug) => ({ slug, display_name: slug, visibility: "list" }));
+
+test("a usage limit sent as an `error` event, its code inside `error`, is a usage limit: said, paused, the next brain answers", async (t) => {
+  const h = await home(t, [{ chunks: ["from the router"] }]);
+  await signIn(h);
+  h.openai.script = [{ error: "subscription_sharing_usage_limit_exceeded" }];
+  h.home.inbox.send("juniper", "chat:1", "hello");
+  await h.home.inbox.idle();
+  const rows = h.home.conversations.list("chat:1").filter((m) => m.role !== "user");
+  assert.equal(rows[0]!.content, "Usage limit reached. Review your plan or this app's limit in ChatGPT settings.", "10-06: it came back as \"the stream reported an error\", and nothing paused");
+  assert.equal((await h.home.chatgpt.status()).paused?.why, "usage-limit");
+  assert.equal(rows.at(-1)!.content, "from the router");
+});
+
+test("until you choose, the main model is a middle one, never the first-listed flagship; the light one is the newest Luna", async (t) => {
+  const h = await home(t);
+  h.openai.models = [...PLAN_MODELS, { slug: "gpt-6-luna", display_name: "GPT-6 Luna", visibility: "list" }];
+  await signIn(h);
+  assert.equal((await h.home.chatgpt.status()).model, "gpt-5.6-terra");
+  assert.equal(h.home.chatgpt.endpoint({ light: true })?.model, "gpt-6-luna");
+  assert.equal(h.home.chatgpt.endpoint()?.model, "gpt-5.6-terra");
+  h.home.chatgpt.setModel("gpt-6-astra");
+  assert.equal(h.home.chatgpt.endpoint()?.model, "gpt-6-astra", "what you choose is yours");
+  assert.equal(h.home.chatgpt.endpoint({ light: true })?.model, "gpt-6-luna", "and the helpers stay light");
+});
+
+test("at one model's usage limit a lighter one of the plan answers, saying so; the model that met it rests until you resume", async (t) => {
+  const h = await home(t, [{ chunks: ["from the router"] }]);
+  h.openai.models = PLAN_MODELS;
+  await signIn(h);
+  h.openai.script = [{ failed: "subscription_sharing_usage_limit_exceeded" }, { chunks: ["from luna"] }, { chunks: ["luna again"] }];
+  h.home.inbox.send("juniper", "chat:1", "hello");
+  await h.home.inbox.idle();
+  assert.deepEqual(h.openai.responses.map((r) => r.body.model), ["gpt-5.6-terra", "gpt-5.6-luna"]);
+  const rows = h.home.conversations.list("chat:1").filter((m) => m.role !== "user");
+  assert.equal(rows[0]!.content, "Usage limit reached for gpt-5.6-terra on your ChatGPT plan. Answering with gpt-5.6-luna until it resets.");
+  assert.deepEqual(rows[0]!.meta.action, { label: "Manage usage", url: MANAGE_USAGE });
+  assert.deepEqual([rows[1]!.content, rows[1]!.meta.plan], ["from luna", "chatgpt"], "still the plan");
+  assert.equal(h.model.agent.length, 0, "the plan's other model answered: the router was not asked");
+  assert.equal((await h.home.chatgpt.status()).paused, null, "the plan is not paused");
+  h.home.inbox.send("juniper", "chat:1", "and again");
+  await h.home.inbox.idle();
+  assert.equal(h.openai.responses.at(-1)!.body.model, "gpt-5.6-luna", "the main model rests: not knocked on again");
+  h.home.chatgpt.resume();
+  assert.equal(h.home.chatgpt.endpoint()?.model, "gpt-5.6-terra", "resumed: the main model again");
+});
+
+test("a chime-in on the plan goes to the light model, thinking little and saying little; a field the plan refuses is dropped and never sent again", async (t) => {
+  const h = await home(t, [], { agent: { decide: () => "allow" } });
+  h.openai.models = PLAN_MODELS;
+  await signIn(h);
+  const { forgetRefused } = await import("../src/agent/responses.ts");
+  forgetRefused();
+  t.after(forgetRefused);
+  h.home.inbox.addOrb("hazel", "Hazel", "planning");
+  h.home.inbox.addOrb("milo", "Milo", "research");
+  h.home.inbox.addOrb("pip", "Pip", "writing");
+  h.openai.script = [{ chunks: ["Saturday."], cached: 100 }, { status: 400, code: "subscription_sharing_unsupported_capability", param: "text.verbosity" }, { chunks: ["Book a shelter."] }, { chunks: ["pass"] }];
+  const s = h.home.team.create("A party", { brainstorm: ["hazel", "milo", "pip"] });
+  h.home.team.say(s.id, "brainstorm", "Plan it");
+  for (let i = 0; i < 60 && h.openai.responses.length < 4; i++) {
+    await h.home.inbox.idle();
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  await h.home.inbox.idle();
+  const [lead, refused, milo, pip] = h.openai.responses.map((r) => r.body);
+  assert.equal(lead!.model, "gpt-5.6-terra", "the lead: the main model");
+  assert.equal(lead!.reasoning, undefined, "the lead thinks as it will");
+  assert.ok((lead!.tools as unknown[]).length > 10);
+  assert.equal(refused!.model, "gpt-5.6-luna", "a chime-in: the light model");
+  assert.deepEqual([refused!.reasoning, refused!.text, refused!.tools], [{ effort: "low" }, { verbosity: "low" }, undefined]);
+  assert.deepEqual([milo!.reasoning, milo!.text], [{ effort: "low" }, undefined], "refused once: sent again without it");
+  assert.deepEqual([pip!.reasoning, pip!.text], [{ effort: "low" }, undefined], "and never asked for again");
+  const said = h.home.conversations.list(`team:${s.id}:brainstorm`).filter((m) => m.role === "assistant" || m.role === "notice").map((m) => m.content);
+  assert.deepEqual(said, ["Saturday.", "Book a shelter.", "Pip passed."]);
+  const spend = h.home.events.ofType("brain.spend").map((e) => [e.data.model, e.data.turn, e.data.cached_tokens ?? 0]);
+  assert.deepEqual(spend, [["gpt-5.6-terra", "lead", 100], ["gpt-5.6-luna", "chime", 0], ["gpt-5.6-luna", "chime", 0]], "each call's model, kind and cache, measured");
+});

@@ -27,6 +27,10 @@ export type SpendRecord = {
   costSource: CostSource;
   promptTokens: number;
   completionTokens: number;
+  /** Of the prompt, how much the provider served from its cache (PLAN 5.10: measured, not assumed). */
+  cachedTokens?: number;
+  /** A session turn's kind (lead, chime, asked, work), so a session's cost can be read by kind. */
+  turn?: string;
   orb?: string | null;
   conversation?: string | null;
 };
@@ -88,6 +92,8 @@ export class Spend {
         cost_source: r.costSource,
         prompt_tokens: r.promptTokens,
         completion_tokens: r.completionTokens,
+        ...(r.cachedTokens && { cached_tokens: r.cachedTokens }),
+        ...(r.turn && { turn: r.turn }),
       },
       { orb: r.orb ?? null, conversation: r.conversation ?? null },
     );

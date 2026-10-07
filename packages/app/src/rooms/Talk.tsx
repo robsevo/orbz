@@ -19,8 +19,12 @@ import { saying, speak, speaking, stopSpeaking } from "../orb/speech.ts";
 import { type Ears, listenFor, pressToTalk } from "../orb/ears.ts";
 import { Rich } from "../ui/Rich.tsx";
 
+/** How tall a message may be before it scrolls inside itself (owner, 10-06: "too long of messages
+ * ... when it gets too long, make it scrollable"): the conversation stays readable at a glance. */
+export const LONG = "min(45dvh, 360px)";
+
 const bubble = (mine: boolean): CSSProperties => ({
-  justifySelf: mine ? "end" : "start", maxWidth: "min(80%, 620px)", padding: "10px 14px", borderRadius: 18,
+  justifySelf: mine ? "end" : "start", maxWidth: "min(80%, 620px)", maxHeight: LONG, overflowY: "auto", overscrollBehavior: "contain", padding: "10px 14px", borderRadius: 18,
   borderBottomRightRadius: mine ? 6 : 18, borderBottomLeftRadius: mine ? 18 : 6,
   background: mine ? "var(--accent-fill)" : "var(--raised)", boxShadow: mine ? "inset 0 0 0 1px var(--accent)" : "inset 0 0 0 .5px var(--hairline)",
   font: "400 15px/22px var(--font)", color: "var(--text-1)", whiteSpace: "pre-wrap", overflowWrap: "anywhere", minWidth: 0,
@@ -258,19 +262,19 @@ export function Talk(o: {
           ) : m.content.trim() ? (
             <div key={m.id} style={{ display: "grid", justifyItems: m.role === "user" ? "end" : "start", minWidth: 0 }} data-orb={byId.get(m.orb)?.hue}>
               {m.role === "assistant" && nameplate(m.orb)}
-              <div data-role={m.role} data-from={m.role === "assistant" ? m.orb : "you"} style={bubble(m.role === "user")}>
+              <Bubble data-role={m.role} data-from={m.role === "assistant" ? m.orb : "you"} style={bubble(m.role === "user")}>
                 {/* an orb's reply formatted as it wrote it (owner, 10-05: "**5 people**" showed its asterisks); yours as you typed it */}
                 {m.role === "assistant" ? <Rich text={m.content} /> : m.content}
-              </div>
+              </Bubble>
             </div>
           ) : null,
         )}
         {Object.entries(live).filter(([, t]) => t).map(([orb, t]) => (
           <div key={`live-${orb}`} style={{ display: "grid", justifyItems: "start", minWidth: 0 }} data-orb={byId.get(orb)?.hue}>
             {nameplate(orb)}
-            <div data-role="live" data-from={orb} style={{ ...bubble(false), opacity: 0.92 }}>
+            <Bubble data-role="live" data-from={orb} style={{ ...bubble(false), opacity: 0.92 }} follow>
               <Rich text={t} />
-            </div>
+            </Bubble>
           </div>
         ))}
         {card && (
@@ -355,16 +359,35 @@ export function Talk(o: {
           style={{ flex: "1 1 auto", minWidth: 0, resize: "none", font: "400 15px/22px var(--font)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 14, padding: "10px 14px", outline: 0, boxShadow: "inset 0 0 0 1px var(--hairline)", maxHeight: 160 }}
         />
         {o.voice && (talking || Object.keys(busy).length > 0) && !draft.trim() ? (
-          <button type="button" onClick={stop} style={{ ...button, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)" }}>
+          <button type="button" onClick={stop} style={{ ...button, flexShrink: 0, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)" }}>
             Stop
           </button>
         ) : (
-          <button type="submit" data-sound="pick" disabled={!draft.trim() && !given.length} style={{ ...button, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)", opacity: draft.trim() || given.length ? 1 : 0.5 }}>
+          <button type="submit" data-sound="pick" disabled={!draft.trim() && !given.length} style={{ ...button, flexShrink: 0, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)", opacity: draft.trim() || given.length ? 1 : 0.5 }}>
             Send
           </button>
         )}
         </div>
       </form>
+    </div>
+  );
+}
+
+/** A message's bubble: past `LONG` it scrolls inside itself, marked so (`data-long`) and reachable by
+ * the keyboard; `follow` (a reply still arriving) keeps its newest line in view unless you scrolled up. */
+function Bubble({ children, style, follow, ...rest }: { children: ReactNode; style: CSSProperties; follow?: boolean; "data-role": string; "data-from": string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [long, setLong] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const over = el.scrollHeight > el.clientHeight + 1;
+    setLong(over);
+    if (follow && over && el.scrollHeight - el.scrollTop - el.clientHeight < 80) el.scrollTop = el.scrollHeight;
+  });
+  return (
+    <div ref={ref} {...rest} {...(long && { "data-long": true, tabIndex: 0, "aria-label": "A long message: scroll it" })} style={{ ...style, ...(long && { boxShadow: `${style.boxShadow ?? "none"}, inset 0 -14px 12px -12px var(--shadow)` }) }}>
+      {children}
     </div>
   );
 }

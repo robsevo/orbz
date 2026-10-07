@@ -52,6 +52,8 @@ export type Meeting = {
 export type FriendWord = "good friends" | "friendly" | "colleagues" | "some friction" | "don't get along";
 export type Friend = { orb: string; name: string; score: number; word: FriendWord; meetings: number; last: Meeting | null };
 export type SocialState = {
+  /** The home's clock when it answered: meetings are timed by it, not by this device's. */
+  now: number;
   friendships: { a: string; b: string; score: number; word: FriendWord; meetings: number; lastAt: number | null }[];
   meetings: Meeting[]; current: Meeting[];
   lessons: { id: number; at: number; from: string; to: string; line: string; state: string }[];
@@ -182,6 +184,8 @@ export interface Office {
   newSession(title: string, members: Partial<Record<Tab, string[]>>): Promise<Session>;
   bring(session: number, tab: Tab, orbs: string[]): Promise<Session>;
   sayIn(session: number, tab: Tab, text: string): Promise<void>;
+  /** Deletes a session: its work stops and its chats are gone (owner, 10-06). */
+  deleteSession(session: number): Promise<void>;
   answer(card: number, choice: Choice, text?: string): Promise<void>;
   /** The notification centre: what is out; putting one away, or all, for every device. */
   notices(): Promise<Notice[]>;
@@ -479,6 +483,9 @@ export function doorOffice(base: Character): Office {
     },
     async sayIn(session, tab, text) {
       await call(`../sessions/${session}/${tab}/messages`, { method: "POST", body: JSON.stringify({ text }) });
+    },
+    async deleteSession(session) {
+      await call(`../sessions/${session}`, { method: "DELETE" });
     },
     async say(c, text, o) {
       await call(`../orbs/${encodeURIComponent(idOf(c.name))}/messages`, { method: "POST", body: JSON.stringify({ conversation: chatOf(c), text, ...(o?.said && { said: true }) }) });

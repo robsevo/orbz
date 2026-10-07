@@ -162,7 +162,7 @@ test("letting an orb go asks first; 'Keep Gus' keeps Gus, and 'Let Gus go' lets 
     await ask.getByRole("button", { name: "Keep Gus" }).click();
     assert.ok((await sidebar(page)).includes("Gus"), "kept");
     await page.getByRole("button", { name: "Let Gus go…" }).click();
-    await page.getByRole("group", { name: "Let Gus go?" }).getByRole("button", { name: "Let Gus go" }).click();
+    await page.getByRole("group", { name: "Let Gus go?" }).getByRole("button", { name: "Let Gus go", exact: true }).click();
     await page.waitForTimeout(450);
     assert.ok(!(await sidebar(page)).includes("Gus"), "gone");
     assert.equal(await page.getByRole("heading", { name: "Gus" }).count(), 0, "and someone else is shown");

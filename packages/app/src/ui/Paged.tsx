@@ -54,12 +54,13 @@ export function Paged({ items, at, label }: { items: ReactNode[]; /** the chosen
       {pages > 1 && (
         <nav aria-label={`${label} pages`} style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", alignItems: "center", gap: 5, rowGap: 6 }}>
           {/* as many pages as there are choices (the owner keeps asking for more): a phone's row wraps rather than spill */}
-          <button aria-label="Previous page" disabled={page === 0} onClick={() => go(page - 1)} style={{ ...step, opacity: page === 0 ? 0.4 : 1 }}>
+          <button className="orbs-narrow" aria-label="Previous page" disabled={page === 0} onClick={() => go(page - 1)} style={{ ...step, opacity: page === 0 ? 0.4 : 1 }}>
             ‹
           </button>
           {Array.from({ length: pages }, (_, p) => (
             <button
               key={p}
+              className="orbs-narrow"
               data-sound="pick"
               aria-label={`Page ${p + 1}`}
               aria-current={p === page ? "page" : undefined}
@@ -69,7 +70,7 @@ export function Paged({ items, at, label }: { items: ReactNode[]; /** the chosen
               {p + 1}
             </button>
           ))}
-          <button aria-label="Next page" disabled={page === pages - 1} onClick={() => go(page + 1)} style={{ ...step, opacity: page === pages - 1 ? 0.4 : 1 }}>
+          <button className="orbs-narrow" aria-label="Next page" disabled={page === pages - 1} onClick={() => go(page + 1)} style={{ ...step, opacity: page === pages - 1 ? 0.4 : 1 }}>
             ›
           </button>
         </nav>

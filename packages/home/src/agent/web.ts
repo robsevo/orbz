@@ -13,7 +13,10 @@
 import { spawn } from "node:child_process";
 import { safeFetch, type Fetched } from "./net.ts";
 
-export const MAX_CHARS = 60_000;
+/** How much of a page reaches the model (focused on the question when it is longer). 60,000 until
+ * 10-06, when 29 pages read in one session were a seventh of its 1.54M tokens: every later step of
+ * the run carries each page again. */
+export const MAX_CHARS = 24_000;
 const SEARCH_TIMEOUT_MS = 20_000;
 
 // ── HTML → text ─────────────────────────────────────────────────────────────────────────────

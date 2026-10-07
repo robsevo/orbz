@@ -26,7 +26,7 @@ import { BrainCallError, chat, type Endpoint, type Limited } from "../brain/open
 import { type BrainChain, explain, type LinkId, restFor } from "../brain/chain.ts";
 import type { Specialty } from "../brain/constitution.ts";
 import type { SearchKey } from "./web.ts";
-import type { TeamTurn } from "./standing.ts";
+import { isLight, isPass, type TeamTurn } from "./standing.ts";
 import { MANAGE_USAGE } from "../chatgpt/chatgpt.ts";
 import type { Spend } from "../brain/spend.ts";
 import type { Card, Conversations, Message, ToolCall } from "./conversation.ts";
@@ -47,11 +47,12 @@ export type AgentOptions = {
   dataDir: string;
   background: Background;
   /** The brain the loop talks to, asked again at every step: the ChatGPT plan when it can serve,
-   * else the preset's big brain. */
-  endpoint: () => Endpoint | null;
-  /** A plan brain could not serve (PLAN 1.10): it pauses or forgets itself, so the next
-   * `endpoint()` is the next brain. */
-  planLimited?: (why: Limited) => Promise<void>;
+   * else the preset's big brain. `light`: a helper's turn in a session (PLAN 5.10), on the plan's
+   * lightest model. */
+  endpoint: (o?: { light?: boolean }) => Endpoint | null;
+  /** A plan brain could not serve (PLAN 1.10): it pauses or forgets itself (at a usage limit, only
+   * the model that met it rests), so the next `endpoint()` is the next model or brain. */
+  planLimited?: (why: Limited, model?: string) => Promise<void>;
   /** Resolves once the brains are known (the ChatGPT sign-in read from the keychain). */
   ready?: () => Promise<void>;
   /** The brain order (PLAN 1.11): a brain that cannot answer rests and the next answers; after
@@ -125,9 +126,17 @@ export const PLAN_ANSWERS = {
   changed: (x: string, _plan?: number) => `The person said: go with it, but ${x}. Add rows for that (each with its _t test row) and show the plan again with propose_plan.`,
   saved: (_x?: string, _plan?: number) => "The person saved the plan without running it. Don't build it now; say it is saved.",
   denied: (_x?: string, _plan?: number) => "The person declined the plan. Don't build it; ask what they want instead.",
+  dealt: (plan: number, mine: string[], others: string) =>
+    `The person approved the plan (plan ${plan}), and its rows were dealt evenly across the team${others ? ` (${others}: they are building theirs now)` : ""}. ${mine.length ? `Yours are ${mine.join(", ")}: build only those, start_row(plan=${plan}, row, test_command), build it, then check_row, and hand_off when they are done.` : "None are yours: say so in a line, and let the others work."}`,
 } as const;
 
 const est = (text: string): number => Math.ceil(text.length / 4) + 4;
+
+/** How many steps an orb asked by another may take (PLAN 5.10): a report, not a project. */
+export const ASKED_STEPS = 15;
+
+/** The session turn a run is for, if any (team.ts). */
+const teamOf = (ctx: RunContext): TeamTurn | undefined => ctx.items.map((i) => i.data.team as TeamTurn | undefined).find(Boolean);
 
 export class AgentRunner implements Runner {
   readonly #o: Required<Omit<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned" | "notebook" | "colleagues" | "searchKey" | "remind" | "reminders" | "moveReminder" | "lessonGate" | "learn" | "habits" | "own" | "templates" | "schedule" | "extraTools" | "sandbox" | "onTerminal" | "workspaceFor" | "heldBy" | "pulse">> & Pick<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned" | "notebook" | "colleagues" | "searchKey" | "remind" | "reminders" | "moveReminder" | "lessonGate" | "learn" | "habits" | "own" | "templates" | "schedule" | "extraTools" | "sandbox" | "onTerminal" | "workspaceFor" | "heldBy" | "pulse">;
@@ -232,9 +241,16 @@ export class AgentRunner implements Runner {
     let own = this.#ownFor(ctx, seen); // a task its own brain earned: the own brain, with its playbook
     await this.#o.ready?.();
     let passes = 0;
-    for (let n = 0; n < this.#o.maxSteps; n++) {
+    // a session's turn (PLAN 5.10): a chime-in has no tools and a short view; an asked orb a few steps
+    const team = teamOf(ctx);
+    const role = team?.role;
+    const light = isLight(team);
+    const steps = role === "asked" ? Math.min(ASKED_STEPS, this.#o.maxSteps) : this.#o.maxSteps;
+    const tools = role === "chime" ? [] : this.#all();
+    const runNow = this.#o.clock.now(); // once a run: the standing context stays the same from step to step
+    for (let n = 0; n < steps; n++) {
       if (ctx.signal.aborted) return this.#ended("stopped", ctx);
-      let ep = own?.ep ?? this.#o.endpoint(); // every step: a plan at its limit since the last one has stepped aside
+      let ep = own?.ep ?? this.#o.endpoint({ light }); // every step: a plan at its limit since the last one has stepped aside
       if (!ep) {
         const chain = this.#o.chain;
         const states = chain?.states() ?? [];
@@ -254,27 +270,27 @@ export class AgentRunner implements Runner {
         step("no-brain", { brains: chain.states().map((s) => ({ id: s.id, state: s.state, why: s.why })) });
         return { outcome: "ok", summary: "no brain answered" };
       }
-      const team = ctx.items.map((i) => i.data.team as TeamTurn | undefined).find(Boolean);
       const standing = standingContext({
         orbName: this.#o.orbName(ctx.orb), brainDir: join(this.#o.dataDir, "brain"), workspace: tctx.workspace,
         specialty: this.#o.orbSpecialty?.(ctx.orb), learned: this.#o.learned?.(ctx.orb), notebook: this.#o.notebook?.(ctx.orb), colleagues: this.#o.colleagues?.(ctx.orb) ?? null, ...(team && { team }),
         aloud: ctx.items.some((i) => i.data.said === true), // you spoke (PLAN 4.7): his answer is heard, not read
-        now: this.#o.clock.now(),
+        now: runNow,
       });
       await this.#compact(ctx, ep, est(standing));
-      if (!own) ep = this.#o.endpoint() ?? ep; // compaction may have met the plan's limit and moved on
+      if (!own) ep = this.#o.endpoint({ light }) ?? ep; // compaction may have met the plan's limit and moved on
       this.#o.spend.check(); // SpendCapError: the inbox stops the run cleanly ("capped")
-      const messages = [{ role: "system" as const, content: own ? `${standing}\n\n${own.system}` : standing }, ...conv.toModel(conv.history(ctx.conversation), { me: ctx.orb, nameOf: this.#o.orbName })];
+      const messages = [{ role: "system" as const, content: own ? `${standing}\n\n${own.system}` : standing }, ...conv.toModel(conv.history(ctx.conversation), { me: ctx.orb, nameOf: this.#o.orbName, talk: role === "chime", brief: role === "asked" })];
       ctx.activity("Thinking");
       const r = await streamChat(
         ep,
-        { messages, tools: toolSpecs(this.#all()) },
+        { messages, tools: toolSpecs(tools), brief: role === "chime" },
         { signal: ctx.signal, onText: (delta) => this.#o.onText?.({ orb: ctx.orb, conversation: ctx.conversation, run: ctx.run, delta }) },
       );
       if (r.promptTokens || r.completionTokens || r.costUsd) {
         this.#o.spend.record({
           tier: own ? "own" : "big", model: ep.model, costUsd: r.costUsd, costSource: r.costSource,
-          promptTokens: r.promptTokens, completionTokens: r.completionTokens, orb: ctx.orb, conversation: ctx.conversation,
+          promptTokens: r.promptTokens, completionTokens: r.completionTokens, cachedTokens: r.cachedTokens, orb: ctx.orb, conversation: ctx.conversation,
+          ...(role && { turn: role }),
         });
       }
       step("model", {
@@ -288,8 +304,8 @@ export class AgentRunner implements Runner {
         return this.#ended("stopped", ctx);
       }
       if (r.limited && ep.plan) {
-        // the plan cannot serve this: say so (Manage usage first), then the same step on the next brain
-        const next = await this.#limited(ctx, r.limited);
+        // the plan cannot serve this: say so (Manage usage first), then the same step on the next model or brain
+        const next = await this.#limited(ctx, r.limited, ep);
         if (next) {
           n--;
           continue;
@@ -317,6 +333,13 @@ export class AgentRunner implements Runner {
       }
       // `plan` marks a reply the ChatGPT plan served to completion: the only replies that carry its badge
       const meta = { ...(ep.plan && { plan: ep.plan }), ...(own && { own: own.kind, ownTask: own.task }) };
+      if (role === "chime" && r.toolCalls.length) r.toolCalls = []; // a chime-in has no tools: a call it made up is not run
+      if (role === "chime" && (isPass(r.text) || !r.text.trim())) {
+        // nothing new to add: nothing is posted but a quiet line saying so (owner, 10-06)
+        conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "notice", run: ctx.run, content: `${this.#o.orbName(ctx.orb)} passed.`, meta: { passed: true } });
+        step("output", { text: r.text, passed: true });
+        return { outcome: "ok", summary: "passed" };
+      }
       const msg = conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "assistant", run: ctx.run, content: r.text, toolCalls: r.toolCalls, ...(Object.keys(meta).length && { meta }) });
       if (!r.toolCalls.length) {
         step("output", { text: r.text });
@@ -326,7 +349,7 @@ export class AgentRunner implements Runner {
       const calls = await this.#calls(msg, 0, ctx, tctx, step, at);
       if (calls !== "done") return this.#ended(calls, ctx);
     }
-    conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "notice", run: ctx.run, content: `I stopped after ${this.#o.maxSteps} steps. Say "go on" and I'll continue.` });
+    conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "notice", run: ctx.run, content: `I stopped after ${steps} steps. Say "go on" and I'll continue.` });
     return { outcome: "ok", summary: "step limit" };
   }
 
@@ -506,7 +529,12 @@ export class AgentRunner implements Runner {
     const call = calls[i]!;
     const args = parseArgs(call) ?? {};
     let result: ToolResult;
-    if (card.kind === "plan") result = { content: PLAN_ANSWERS[card.status as keyof typeof PLAN_ANSWERS]?.(card.answer ?? "", Number(card.meta.plan)) ?? DENIED };
+    if (card.kind === "plan" && card.status === "approved" && card.meta.dealt && typeof card.meta.dealt === "object") {
+      // in a session the rows were dealt evenly (PLAN 5.10): the lead builds only its own
+      const dealt = card.meta.dealt as Record<string, string[]>;
+      const others = Object.entries(dealt).filter(([o, r]) => o !== ctx.orb && r.length).map(([o, r]) => `${this.#o.orbName(o)} ${r.join(", ")}`).join("; ");
+      result = { content: PLAN_ANSWERS.dealt(Number(card.meta.plan), dealt[ctx.orb] ?? [], others) };
+    } else if (card.kind === "plan") result = { content: PLAN_ANSWERS[card.status as Exclude<keyof typeof PLAN_ANSWERS, "dealt">]?.(card.answer ?? "", Number(card.meta.plan)) ?? DENIED };
     else if (card.status === "answered") result = { content: `The person answered: ${card.answer ?? ""}` };
     else if (card.status === "denied") result = { content: DENIED };
     else {
@@ -575,11 +603,21 @@ export class AgentRunner implements Runner {
    * summary. The newest turns stay as they are; a cut never falls inside a tool exchange. */
   /** A plan brain could not serve: the person is told why, first, with what to do about it; then the
    * plan steps aside. Returns the brain that answers instead, or null when there is none. */
-  async #limited(ctx: RunContext, why: Limited): Promise<Endpoint | null> {
+  async #limited(ctx: RunContext, why: Limited, from?: Endpoint): Promise<Endpoint | null> {
     const conv = this.#o.conversations;
     const say = (content: string, meta: Record<string, unknown>): void => {
       conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "notice", run: ctx.run, content, meta });
     };
+    if (why === "usage-limit" && from) {
+      // ChatGPT's limits are each model's (10-06: the flagship ran out while the smaller ones still
+      // answered): the model that met its limit rests, and a lighter one of the plan answers first
+      await this.#o.planLimited?.(why, from.model);
+      const next = this.#o.endpoint({ light: isLight(teamOf(ctx)) });
+      if (next?.plan && next.model !== from.model) {
+        say(`Usage limit reached for ${from.model} on your ChatGPT plan. Answering with ${next.model} until it resets.`, { limit: why, model: from.model, fallback: next.model, action: { label: "Manage usage", url: MANAGE_USAGE } });
+        return next;
+      }
+    }
     if (why === "usage-limit") {
       say("Usage limit reached. Review your plan or this app's limit in ChatGPT settings.", { limit: why, action: { label: "Manage usage", url: MANAGE_USAGE } });
     } else if (why === "not-eligible") {
@@ -587,8 +625,8 @@ export class AgentRunner implements Runner {
     } else {
       say("The ChatGPT sign-in has lapsed. Sign in again to use your plan (/chatgpt).", { limit: why });
     }
-    await this.#o.planLimited?.(why);
-    const next = this.#o.endpoint();
+    if (why !== "usage-limit" || !from) await this.#o.planLimited?.(why);
+    const next = this.#o.endpoint({ light: isLight(teamOf(ctx)) });
     if (next && !next.plan) {
       const label = next.chain && this.#o.chain ? this.#o.chain.labelOf(next.chain) : next.name === "big" ? "my other brain" : next.name;
       say(`Answering with ${label} until then.`, { fallback: next.chain ?? next.name });
@@ -628,6 +666,7 @@ export class AgentRunner implements Runner {
       .join("\n");
     this.#o.spend.check();
     ctx.activity("Tidying the conversation");
+    if (ep.plan === "chatgpt") ep = this.#o.endpoint({ light: true }) ?? ep; // a summary is the plan's light model's work (PLAN 5.10)
     const ask = [{ role: "user" as const, content: `Summarise this conversation so far, keeping every decision, fact, file and open task:\n\n${text}` }];
     let r: Awaited<ReturnType<typeof chat>>;
     try {
@@ -635,10 +674,10 @@ export class AgentRunner implements Runner {
     } catch (e) {
       if (!(e instanceof BrainCallError)) throw e;
       let next: Endpoint | null = null;
-      if (e.limited && ep.plan) next = await this.#limited(ctx, e.limited);
+      if (e.limited && ep.plan) next = await this.#limited(ctx, e.limited, ep);
       else if (ep.chain && this.#o.chain) {
         this.#stepAside(ctx, ep.chain, { status: e.status, message: e.message, retryAfterS: null });
-        next = this.#o.endpoint();
+        next = this.#o.endpoint({ light: true });
       }
       if (!next) throw e;
       ep = next;

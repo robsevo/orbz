@@ -13,11 +13,21 @@ import { emptyStreamed, transportCause, type Streamed, type ToolSpec } from "./s
 
 const LIMITS: Record<string, Limited> = {
   subscription_sharing_usage_limit_exceeded: "usage-limit",
+  usage_limit_reached: "usage-limit",
   subscription_sharing_user_not_eligible: "not-eligible",
   chatpass_v2_scope_not_authorized: "not-eligible",
   chatpass_v2_invalid_authorization_context: "not-eligible",
   subscription_sharing_invalid_user: "signed-out",
 };
+
+/** What a brief reply asks of the model (PLAN 5.10): a chime-in thinks a little and says little.
+ * OpenAI bills reasoning as output; the plan's preview turns some fields down with
+ * `subscription_sharing_unsupported_capability` (naming the field), so one it refuses is dropped and
+ * the request sent again, and never asked for again while the home runs. */
+export const BRIEF_FIELDS: Record<string, unknown> = { reasoning: { effort: "low" }, text: { verbosity: "low" } };
+const refused = new Set<string>();
+/** Forgets what the plan refused (a test's fresh start). */
+export const forgetRefused = (): void => refused.clear();
 
 /** The chat-shaped history as Responses input: system text becomes the instructions, a tool call
  * and its result become a function_call and its function_call_output. */
@@ -37,9 +47,25 @@ export function toResponsesInput(messages: ModelMessage[]): { instructions: stri
 
 export async function streamResponses(
   ep: Endpoint,
-  body: { messages: ModelMessage[]; tools?: ToolSpec[] },
+  body: { messages: ModelMessage[]; tools?: ToolSpec[]; brief?: boolean },
   opts: { signal?: AbortSignal; onText?: (delta: string) => void } = {},
 ): Promise<Streamed> {
+  const asked = body.brief ? Object.keys(BRIEF_FIELDS).filter((k) => !refused.has(k)) : [];
+  const first = await streamOnce(ep, body, asked, opts);
+  const field = first.refusedField;
+  if (field && asked.includes(field)) {
+    refused.add(field);
+    return streamResponses(ep, body, opts);
+  }
+  return first;
+}
+
+async function streamOnce(
+  ep: Endpoint,
+  body: { messages: ModelMessage[]; tools?: ToolSpec[] },
+  brief: string[],
+  opts: { signal?: AbortSignal; onText?: (delta: string) => void },
+): Promise<Streamed & { refusedField?: string }> {
   const out = emptyStreamed();
   const calls = new Map<string, { callId: string; name: string; arguments: string }>();
   let completed = false;
@@ -72,12 +98,15 @@ export async function streamResponses(
         ...(body.tools?.length && { tools: body.tools.map((t) => ({ type: "function", name: t.function.name, description: t.function.description, parameters: t.function.parameters })) }),
         store: false,
         stream: true,
+        ...Object.fromEntries(brief.map((k) => [k, BRIEF_FIELDS[k]])),
         ...ep.extra,
       }),
     });
     if (!res.ok || !res.body) {
-      const j = (await res.json().catch(() => ({}))) as { error?: { code?: unknown; message?: unknown } };
+      const j = (await res.json().catch(() => ({}))) as { error?: { code?: unknown; message?: unknown; param?: unknown } };
       const code = typeof j.error?.code === "string" ? j.error.code : null;
+      const param = typeof j.error?.param === "string" ? j.error.param.split(".")[0]! : null;
+      if (res.status === 400 && param && brief.includes(param)) return { ...fail(`HTTP 400 ${code ?? ""}: ${param} refused`, code), refusedField: param };
       const said = typeof j.error?.message === "string" ? `: ${j.error.message.slice(0, 200)}` : "";
       return fail(`HTTP ${res.status}${code ? ` ${code}` : ""}${said}`, code, code ? (LIMITS[code] ?? null) : res.status === 401 ? "signed-out" : null);
     }
@@ -113,14 +142,17 @@ export async function streamResponses(
           completed = true;
           out.promptTokens = Number(e.response?.usage?.input_tokens ?? 0);
           out.completionTokens = Number(e.response?.usage?.output_tokens ?? 0);
+          out.cachedTokens = Number(e.response?.usage?.input_tokens_details?.cached_tokens ?? 0);
         } else if (e.type === "response.failed") {
-          const code = typeof e.response?.error?.code === "string" ? e.response.error.code : null;
-          return fail(`the reply failed${code ? ` (${code})` : ""}`, code);
+          const { code, said } = errorOf(e.response?.error);
+          return fail(`the reply failed${code ? ` (${code})` : ""}${said}`, code);
         } else if (e.type === "response.incomplete") {
           return fail(`the reply was cut off (${String(e.response?.incomplete_details?.reason ?? "incomplete")})`, null);
         } else if (e.type === "error") {
-          const code = typeof e.code === "string" ? e.code : null;
-          return fail(`the stream reported an error${code ? ` (${code})` : ""}`, code);
+          // the code and words come at the top of the event, or inside an `error` of it (10-06: a
+          // usage limit read only at the top came back codeless, so the plan was never paused)
+          const { code, said } = errorOf({ code: e.code ?? e.error?.code, type: e.error?.type, message: e.message ?? e.error?.message });
+          return fail(`the stream reported an error${code ? ` (${code})` : ""}${said}`, code);
         }
       }
     }
@@ -142,15 +174,23 @@ export async function streamResponses(
   }
 }
 
+/** A reported error's code (its `code`, else its `type`) and its words, cut short. */
+function errorOf(err: { code?: unknown; type?: unknown; message?: unknown } | undefined): { code: string | null; said: string } {
+  const code = typeof err?.code === "string" ? err.code : typeof err?.type === "string" ? err.type : null;
+  return { code, said: typeof err?.message === "string" && err.message ? `: ${err.message.slice(0, 200)}` : "" };
+}
+
 type ResponseEvent = {
   type?: string;
   delta?: unknown;
   item_id?: string;
   code?: unknown;
+  message?: unknown;
+  error?: { code?: unknown; type?: unknown; message?: unknown };
   item?: { type?: string; id?: string; call_id?: string; name?: string; arguments?: unknown };
   response?: {
-    usage?: { input_tokens?: number; output_tokens?: number };
-    error?: { code?: unknown; message?: unknown };
+    usage?: { input_tokens?: number; output_tokens?: number; input_tokens_details?: { cached_tokens?: number } };
+    error?: { code?: unknown; type?: unknown; message?: unknown };
     incomplete_details?: { reason?: unknown };
   };
 };

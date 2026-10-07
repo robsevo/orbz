@@ -22,8 +22,8 @@ import { actsOf } from "./work.ts";
 const button: CSSProperties = { font: "600 14px/20px var(--font)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 10, padding: "8px 14px", cursor: "pointer", boxShadow: "inset 0 0 0 .5px var(--hairline)", minHeight: 36 };
 const strong: CSSProperties = { ...button, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)", fontWeight: 800 };
 const TAB_WORDS: Record<Tab, { label: string; about: string; empty: string }> = {
-  brainstorm: { label: "Brainstorm", about: "Ideas and the debate. A decision lands as ✓ Agreed.", empty: "Throw out an idea, a question, a goal: everyone here takes a turn on it." },
-  floor: { label: "Floor", about: "The agreed work, done. Watch each one's computer.", empty: "Say what to build: everyone here does their part, and asks before anything that matters." },
+  brainstorm: { label: "Brainstorm", about: "Ideas and the debate. The lead answers, everyone adds a line. A decision lands as ✓ Agreed.", empty: "Throw out an idea, a question, a goal: the lead answers, then everyone adds a line (or passes). @Name asks one of them." },
+  floor: { label: "Floor", about: "The agreed work, done, split evenly. Watch each one's computer.", empty: "Say what to build: an approved plan's rows are dealt evenly, and each asks before anything that matters." },
 };
 
 export function SessionsRoom(o: { home: Office | null; office: Character[]; open: number | null; tab: Tab; go: (id: number | null, tab?: Tab) => void }) {
@@ -44,11 +44,17 @@ export function SessionsRoom(o: { home: Office | null; office: Character[]; open
   if (o.open !== null && sessions === null && !said) return null; // a link straight to a session: his page, once the sessions are in
   const current = o.open !== null ? sessions?.find((s) => s.id === o.open) : undefined;
   if (current) return <SessionView home={o.home} office={o.office} session={current} tab={o.tab} go={o.go} changed={(s) => setSessions((all) => all?.map((x) => (x.id === s.id ? s : x)) ?? [s])} />;
-  return <SessionList home={o.home} office={o.office} sessions={sessions} said={said ?? (o.open !== null ? `There is no session ${o.open}.` : null)} made={(s) => { setSessions((all) => [s, ...(all ?? [])]); o.go(s.id, "brainstorm"); }} open={(s) => o.go(s.id, "brainstorm")} />;
+  return <SessionList home={o.home} office={o.office} sessions={sessions} said={said ?? (o.open !== null ? `There is no session ${o.open}.` : null)} made={(s) => { setSessions((all) => [s, ...(all ?? [])]); o.go(s.id, "brainstorm"); }} open={(s) => o.go(s.id, "brainstorm")} gone={(id) => setSessions((all) => all?.filter((x) => x.id !== id) ?? null)} />;
 }
 
-function SessionList(o: { home: Office; office: Character[]; sessions: Session[] | null; said: string | null; made: (s: Session) => void; open: (s: Session) => void }) {
+function SessionList(o: { home: Office; office: Character[]; sessions: Session[] | null; said: string | null; made: (s: Session) => void; open: (s: Session) => void; gone: (id: number) => void }) {
   const [title, setTitle] = useState("");
+  // deleting asks once, on the card itself (never a browser dialog): "Delete" then "Delete it" or "Keep"
+  const [asking, setAsking] = useState<number | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
+  const remove = (id: number): void => {
+    o.home.deleteSession(id).then(() => { setAsking(null); o.gone(id); }, (e: Error) => setFailed(e.message));
+  };
   const [crew, setCrew] = useState<string[]>(() => o.office.slice(0, 1).map((c) => idOf(c.name)));
   const [why, setWhy] = useState<string | null>(null);
   const start = (): void => {
@@ -71,19 +77,41 @@ function SessionList(o: { home: Office; office: Character[]; sessions: Session[]
         </button>
       </section>
       {o.said && <span role="alert" style={{ color: "var(--alert)" }}>{o.said}</span>}
+      {failed && <span role="alert" style={{ color: "var(--alert)" }}>{failed}</span>}
       {o.sessions && o.sessions.length > 0 && (
         <Balanced min={240} gap={12}>
           {o.sessions.map((s) => {
             const who = [...new Set([...s.brainstorm, ...s.floor])].map((id) => o.office.find((c) => idOf(c.name) === id)).filter((c): c is Character => Boolean(c));
             return (
-              <button key={s.id} onClick={() => o.open(s)} style={{ ...button, display: "grid", gap: 6, padding: "var(--s4)", borderRadius: 18, textAlign: "left", minWidth: 0 }}>
-                <span style={{ font: "800 16px/22px var(--font)", color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.title}</span>
-                <span style={{ display: "flex", gap: 2 }}>
-                  {who.slice(0, 6).map((c) => (
-                    <Orb key={c.name} character={c} size={34} poke={false} every={3} fidget={false} still />
-                  ))}
-                </span>
-              </button>
+              <div key={s.id} data-session-card={s.id} style={{ position: "relative", display: "grid", minWidth: 0 }}>
+                <button onClick={() => o.open(s)} style={{ ...button, display: "grid", gap: 6, padding: "var(--s4)", paddingRight: 56, borderRadius: 18, textAlign: "left", minWidth: 0 }}>
+                  <span style={{ font: "800 16px/22px var(--font)", color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.title}</span>
+                  <span style={{ display: "flex", gap: 2 }}>
+                    {who.slice(0, 6).map((c) => (
+                      <Orb key={c.name} character={c} size={34} poke={false} every={3} fidget={false} still />
+                    ))}
+                  </span>
+                </button>
+                {asking === s.id ? (
+                  <div role="group" aria-label={`Delete ${s.title}?`} style={{ position: "absolute", inset: 0, display: "grid", alignContent: "center", gap: 8, padding: "var(--s3) var(--s4)", borderRadius: 18, background: "var(--card)", boxShadow: "inset 0 0 0 1.5px var(--alert)" }}>
+                    <span style={{ font: "600 14px/19px var(--font)", color: "var(--text-1)" }}>Delete this session? Its chats go with it.</span>
+                    <OneLine style={{ justifyContent: "flex-start" }} gap={8}>
+                      <button data-delete-yes onClick={() => remove(s.id)} style={{ ...button, color: "var(--alert)", fontWeight: 800 }}>
+                        Delete it
+                      </button>
+                      <button onClick={() => setAsking(null)} style={button}>
+                        Keep
+                      </button>
+                    </OneLine>
+                  </div>
+                ) : (
+                  <button data-delete={s.id} aria-label={`Delete ${s.title}`} title="Delete this session" onClick={() => { setFailed(null); setAsking(s.id); }} style={{ ...button, position: "absolute", top: 6, right: 6, width: 44, height: 44, minHeight: 44, padding: 0, display: "grid", placeItems: "center", borderRadius: 12, color: "var(--text-3)", background: "transparent", boxShadow: "none" }}>
+                    <svg aria-hidden width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" />
+                    </svg>
+                  </button>
+                )}
+              </div>
             );
           })}
         </Balanced>

@@ -9,7 +9,8 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { test, type TestContext } from "node:test";
 import { serve } from "../src/api.ts";
-import { pickGeminiModel } from "../src/brain/brains.ts";
+import { pickGeminiLite, pickGeminiModel } from "../src/brain/brains.ts";
+import { FOREIGN_SIGNATURE } from "../src/agent/stream.ts";
 import { MemoryStore } from "../src/chatgpt/store.ts";
 import { browse, fakeChatGPT } from "./fakes/chatgpt.ts";
 import { fakeModel, type Turn } from "./fakes/model.ts";
@@ -146,4 +147,37 @@ test("an AQ. key, the kind AI Studio makes now, is checked and kept like the old
   const asked = h.gemini.keys.length;
   await assert.rejects(h.home.brains.setGemini("my key is AQ.test-gemini-auth-key"), /doesn't look like a Gemini API key \(they start with AIza or AQ\.\)/);
   assert.equal(h.gemini.keys.length, asked, "nothing sent for it");
+});
+
+// PLAN 5.10_t and 1.11: Gemini as the turn passes to it (10-06: every turn of Gemini's with a tool
+// failed on its second step, "Function call is missing a thought_signature")
+test("Gemini's thought signature goes back with its call; a call another brain made carries Google's stand-in; no other brain is sent either", async (t) => {
+  const h = await home(t, { gemini: [{ calls: [{ name: "list_files", args: { path: "." }, sig: "SIG-A" }] }, { chunks: ["It's empty."] }] });
+  // a call ChatGPT made earlier in this conversation, before the turn passed to Gemini
+  h.home.conversations.add({ conversation: "chat:1", orb: "juniper", role: "user", content: "start" });
+  h.home.conversations.add({ conversation: "chat:1", orb: "juniper", role: "assistant", content: "", toolCalls: [{ id: "call_from_chatgpt", name: "list_files", arguments: "{}" }] });
+  h.home.conversations.add({ conversation: "chat:1", orb: "juniper", role: "tool", toolCallId: "call_from_chatgpt", content: "(empty)" });
+  h.home.inbox.send("juniper", "chat:1", "what's in the folder?");
+  await h.home.inbox.idle();
+  assert.equal(said(h).at(-1), "assistant: It's empty.", "Gemini went on past its tool call");
+  const second = h.gemini.bodies[1]!.messages as { role: string; tool_calls?: { id: string; extra_content?: { google?: { thought_signature?: string } } }[] }[];
+  const calls = second.flatMap((m) => m.tool_calls ?? []);
+  assert.equal(calls.find((c) => c.id !== "call_from_chatgpt")?.extra_content?.google?.thought_signature, "SIG-A", "its own, as it came");
+  assert.equal(calls.find((c) => c.id === "call_from_chatgpt")?.extra_content?.google?.thought_signature, FOREIGN_SIGNATURE, "another brain's: the stand-in");
+  assert.ok(!JSON.stringify(second).includes('"sig"'), "the home's own field never goes on the wire");
+  // control: a brain that is not Gemini gets the calls without any of it
+  const local = await home(t, { local: [{ calls: [{ name: "list_files", args: { path: "." } }] }, { chunks: ["done"] }] });
+  local.home.inbox.send("juniper", "chat:1", "look");
+  await local.home.inbox.idle();
+  assert.ok(!JSON.stringify(local.local!.bodies[1]).includes("thought_signature"));
+});
+
+test("a light turn on Gemini is on its newest flash-lite, which a free key gets many more of a day", async (t) => {
+  assert.equal(pickGeminiLite(["models/gemini-3.5-flash-lite", "models/gemini-3.8-flash-lite", "models/gemini-3.8-flash", "models/gemini-3.9-flash-lite-preview"]), "gemini-3.8-flash-lite");
+  assert.equal(pickGeminiLite(["models/gemini-3.8-flash"]), null);
+  const h = await home(t, { gemini: [] });
+  const ep = h.home.brains.chain.current()!.ep;
+  assert.equal(ep.model, "gemini-3.8-flash");
+  assert.equal(h.home.brains.light(ep).model, "gemini-3.8-flash-lite");
+  assert.equal(h.home.brains.light({ ...ep, chain: "local" }).model, "gemini-3.8-flash", "only Gemini's own turn is made light");
 });

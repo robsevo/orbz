@@ -255,7 +255,7 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ('    if (res.status === 400 || res.status === 401 || res.status === 403) throw new KeyRefusedError("Gemini refused that key.");\n', ""),
     ], ["brains.test.ts"]),
     ("the Gemini key is written into brains.json", "src/brain/brains.ts", [
-        ("    this.#saved = { ...this.#saved, gemini: { model } };", "    this.#saved = { ...this.#saved, gemini: { model, key: k } as { model: string } };"),
+        ("    this.#saved = { ...this.#saved, gemini: { model, lite } };", "    this.#saved = { ...this.#saved, gemini: { model, lite, key: k } as { model: string } };"),
     ], ["brains.test.ts"]),
     ("an AQ. key, AI Studio's kind now, is turned away as not a key", "src/brain/brains.ts", [
         ("    if (!/^[\\w.-]{20,}$/.test(k))", "    if (!/^[\\w-]{20,}$/.test(k))"),
@@ -300,7 +300,7 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ], ["app-door.test.ts"]),
     # sessions (PLAN 2.9)
     ("a session's orbs all speak at once", "src/team.ts", [
-        ('    this.#inbox.enqueue(left[0]!, conversation, "turn", "", { data: { team } });', '    for (const o of left.splice(0)) this.#inbox.enqueue(o, conversation, "turn", "", { data: { team } });'),
+        ('    this.#inbox.enqueue(left[0]!.orb, conversation, "turn", "", { data: { team } });', '    for (const o of left.splice(0)) this.#inbox.enqueue(o.orb, conversation, "turn", "", { data: { team: { ...team, role: o.role } } });'),
     ], ["team.test.ts"]),
     ("another orb's words reach him as his own", "src/agent/conversation.ts", [
         ("      if (o.me && m.orb !== o.me && (m.role === \"assistant\" || m.role === \"tool\")) {", "      if (false) {"),
@@ -929,7 +929,7 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ("  if (block.length) results = results.filter((r) => !block.some((d) => domainMatch(hostOf(String(r.url)), d)));\n", ""),
     ], ["web.test.ts"]),
     ("researchers lose their method", "src/brain/constitution.ts", [
-        ("  if (RESEARCHERS.includes(o.specialty)) parts.push(RESEARCH_METHOD);\n", ""),
+        ("  if (!o.mini && RESEARCHERS.includes(o.specialty)) parts.push(RESEARCH_METHOD);\n", ""),
     ], ["web.test.ts"]),
     # his computer (PLAN 4.1): his own browser, its proxy, the vault, a page checked before it is done
     ('his browser is given your home folder', 'src/computer/browser.ts', [
@@ -1344,7 +1344,7 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ('      return hint ? { ...out, content: `${out.content}\\n\\n${hint}` } : out;', '      return hint ? out : out;'),
     ], ['reading.test.ts']),
     ("the home does not wake for the night's read", 'src/home.ts', [
-        ('this.recruiter.nextAt(), this.reading.nextAt()]', 'this.recruiter.nextAt()]'),
+        ('this.recruiter.nextAt(), this.reading.nextAt(), this.social.nextAt()]', 'this.recruiter.nextAt(), this.social.nextAt()]'),
     ], ['reading.test.ts']),
     ('the tick never reads', 'src/home.ts', [
         ("    void this.reading.due(); // the reading library's next read, one at a time (PLAN 3.12)\n", ''),
@@ -1376,7 +1376,7 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ('    this.recruiter.due(); // the Recruiter\'s list turns over at midnight (PLAN 5.8)\n', ''),
     ], ['recruiter.test.ts']),
     ("the home does not wake for the day's turn", 'src/home.ts', [
-        ('this.school.nextAt(), this.recruiter.nextAt()]', 'this.school.nextAt()]'),
+        ('this.school.nextAt(), this.recruiter.nextAt(), this.reading', 'this.school.nextAt(), this.reading'),
     ], ['recruiter.test.ts']),
     ('an applicant is told it may use tools', 'src/recruiter.ts', [
         ('    "You have no tools and no computer yet: you can only talk. Do not offer to do work before you are hired, and never claim to have done something.",\n', ''),
@@ -1460,6 +1460,79 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("the door's thumb marks another answer", 'src/api.ts', [
         ('home.school.thumb(Number(parts[2]), Number(parts[4]), b.up === true);', 'home.school.thumb(Number(parts[2]), Number(parts[4]) + 1, b.up === true);'),
     ], ['school.test.ts']),
+    # sessions that cost little and say little (PLAN 5.10, owner 10-06)
+    ('every orb takes a whole turn again (10-06: five full turns a message)', 'src/team.ts', [
+        ('role: named.length || i === 0 ? "lead" : "chime"', 'role: "lead" as const'),
+    ], ['team.test.ts']),
+    ('a chime-in is handed every tool', 'src/agent/loop.ts', [
+        ('const tools = role === "chime" ? [] : this.#all();', 'const tools = this.#all();'),
+    ], ['team.test.ts']),
+    ('a pass is posted as a reply', 'src/agent/loop.ts', [
+        ('if (role === "chime" && (isPass(r.text) || !r.text.trim())) {', 'if (role === "chime" && !r.text.trim()) {'),
+    ], ['team.test.ts']),
+    ('a chime-in reads the whole history, calls and results', 'src/agent/loop.ts', [
+        ('talk: role === "chime", brief: role === "asked" })];', 'talk: false, brief: role === "asked" })];'),
+    ], ['team.test.ts']),
+    ('an approved session plan is not dealt (10-06: Ash took all nine rows)', 'src/home.ts', [
+        ('        this.#deal(card, plan);\n', ''),
+    ], ['session-cost.test.ts']),
+    ('rows dealt to the best fit, however many it has', 'src/team.ts', [
+        ('const to = ranked.find((m) => out[m]!.length < floor || (out[m]!.length < share && over > 0))!;', 'const to = ranked[0]!;'),
+    ], ['session-cost.test.ts']),
+    ('claim_rows takes any number of rows', 'src/team-tools.ts', [
+        ('if (members.length > 1 && would.size > share) {', 'if (false) {'),
+    ], ['session-cost.test.ts']),
+    ("an earlier turn's results go to the model whole", 'src/agent/conversation.ts', [
+        ('return at < turnAt ? trimOld(r) : r;', 'return r;'),
+    ], ['session-cost.test.ts']),
+    ("a request to another orb begins this orb's turn", 'src/agent/conversation.ts', [
+        ('m.role === "user" && (m.meta.asked === undefined || m.meta.asked === o.me));', 'm.role === "user");'),
+    ], ['session-cost.test.ts']),
+    ('a deleted session keeps its chats', 'src/team.ts', [
+        ('        this.#db.prepare("DELETE FROM messages WHERE conversation = ?").run(conversation);\n', ''),
+    ], ['session-cost.test.ts']),
+    ("a deleted session's last run writes after it is gone", 'src/team.ts', [
+        ('await Promise.all(TABS.map((tab) => this.#inbox.drop(tabConversation(id, tab))));', 'void Promise.all(TABS.map((tab) => this.#inbox.drop(tabConversation(id, tab))));'),
+    ], ['session-cost.test.ts']),
+    ('the clock in the middle of the standing context', 'src/agent/standing.ts', [
+        ('  if (o.now !== undefined) parts.push(nowLine(o.now));\n  return parts.join', '  if (o.now !== undefined) parts.splice(3, 0, nowLine(o.now));\n  return parts.join'),
+    ], ['session-cost.test.ts']),
+    ('a chime-in carries the big constitution', 'src/brain/constitution.ts', [
+        ('if (!(o.mini ? MINI.includes(s.key) : loads(SECTION_MAP[s.key], o.specialty)) || !s.body) continue;', 'if (!loads(SECTION_MAP[s.key], o.specialty) || !s.body) continue;'),
+    ], ['session-cost.test.ts']),
+    ("a stream error's code read only at its top (10-06)", 'src/agent/responses.ts', [
+        ('errorOf({ code: e.code ?? e.error?.code, type: e.error?.type, message: e.message ?? e.error?.message })', 'errorOf({ code: e.code, message: e.message })'),
+    ], ['chatgpt.test.ts']),
+    ("one model's usage limit pauses the whole plan", 'src/chatgpt/chatgpt.ts', [
+        ('      if (this.#model(false) || this.#model(true)) return; // another model of the plan still answers\n', ''),
+    ], ['chatgpt.test.ts']),
+    ('the first-listed flagship is the default', 'src/chatgpt/chatgpt.ts', [
+        ('this.#reg.model = defaultMain(models);', 'this.#reg.model = models[0]?.slug ?? null;'),
+    ], ['chatgpt.test.ts']),
+    ('helpers run on the main model', 'src/home.ts', [
+        ('if (!cur || !o?.light) return cur?.ep ?? null;', 'return cur?.ep ?? null;'),
+    ], ['chatgpt.test.ts']),
+    ('a chime-in thinks and talks at length', 'src/agent/responses.ts', [
+        ('const asked = body.brief ? Object.keys(BRIEF_FIELDS).filter((k) => !refused.has(k)) : [];', 'const asked: string[] = [];'),
+    ], ['chatgpt.test.ts']),
+    ('a field the plan refuses fails the turn', 'src/agent/responses.ts', [
+        ('  if (field && asked.includes(field)) {', '  if (false) {'),
+    ], ['chatgpt.test.ts']),
+    ("an asked orb reads the whole session (Ash: a subagent sees only its brief)", "src/agent/conversation.ts", [
+        ("    if (o.brief && o.me) {", "    if (false) {"),
+    ], ["session-cost.test.ts"]),
+    ("any number of orbs work on asks at once", "src/team.ts", [
+        ("    if (busy.size >= MAX_ASKED) throw", "    if (false) throw"),
+    ], ["session-cost.test.ts"]),
+    ("Gemini's thought signatures are dropped (10-06)", 'src/agent/stream.ts', [
+        ('tool_calls: m.tool_calls.map(({ sig, ...c }) => (gemini ? { ...c, extra_content: { google: { thought_signature: sig ?? FOREIGN_SIGNATURE } } } : c)),', 'tool_calls: m.tool_calls.map(({ sig: _sig, ...c }) => c),'),
+    ], ['brains.test.ts']),
+    ("Gemini's own signature is never kept", 'src/agent/stream.ts', [
+        ('          if (typeof sig === "string" && sig) c.sig = sig;\n', ''),
+    ], ['brains.test.ts']),
+    ('a light turn on Gemini stays on the flash', 'src/brain/brains.ts', [
+        ('return ep.chain === "gemini" && lite ? { ...ep, model: lite } : ep;', 'return ep;'),
+    ], ['brains.test.ts']),
 ]
 
 # the app (PLAN 2.x): paths are inside packages/app
@@ -1583,7 +1656,7 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ("export function preview(id: string, speed = 1): void {\n  playing?.pause();", "export function preview(id: string, speed = 1): void {"),
     ], ["voice-preview.test.ts"]),
     ("the samples are looked for in the wrong place", "src/orb/preview.ts", [
-        ("export const sampleOf = (id: string): string => `voices/${id}.mp3`;", "export const sampleOf = (id: string): string => `voice/${id}.mp3`;"),
+        ("  return `voices/${list[take % list.length] ?? `${id}.mp3`}`;", "  return `voice/${list[take % list.length] ?? `${id}.mp3`}`;"),
     ], ["voice-preview.test.ts"]),
     ("the build writes no manifest", "vite.config.ts", [
         ('      this.emitFile({ type: "asset", fileName: "manifest.webmanifest", source: `${JSON.stringify(manifest, null, 1)}\\n` });', "      void manifest;"),
@@ -2044,6 +2117,32 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ('Pass does nothing', 'src/rooms/Recruiter.tsx', [
         ('const pass = (id: number): void => void home.passApplicant(id).catch((e: Error) => setSaid(e.message));', 'const pass = (_id: number): void => undefined;'),
     ], ['recruiter-view.test.ts']),
+    # phones first (PLAN 2.17), and a meeting kept in place on coming back (5.9)
+    ("a finger's targets are small again", 'src/orbs.tsx', [
+        ('select, textarea, input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]) { min-height: 44px !important; }', 'select, textarea, input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]) { min-height: 0; }'),
+    ], ['phones.test.ts']),
+    ('an iPhone zooms into a text field', 'src/orbs.tsx', [
+        ('  input, select, textarea { font-size: max(16px, 1em) !important; }\n', ''),
+    ], ['phones.test.ts']),
+    ("the floor's tags lose their finger's room", 'src/orbs.tsx', [
+        ('  .orbs-tag::after { content: ""; position: absolute; inset: -13px; }\n', ''),
+    ], ['phones.test.ts']),
+    ("a month's days must each be 44 wide", 'src/orbs.tsx', [
+        ('  .orbs-calday { min-width: 24px !important; }\n', ''),
+        ('button:not(.orbs-tag):not(.orbs-calday):not(.orbs-narrow), [role="button"]:not(.orbs-tag) { min-width: 44px !important; }', 'button:not(.orbs-tag):not(.orbs-narrow), [role="button"]:not(.orbs-tag) { min-width: 44px !important; }'),
+    ], ['phones.test.ts']),
+    ('a small phone keeps its margins', 'src/orbs.tsx', [
+        ('  main.orbs-main { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }\n', ''),
+    ], ['phones.test.ts']),
+    ("a chat's header never wraps", 'src/rooms/Chat.tsx', [
+        ('<header style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px 12px",', '<header style={{ display: "flex", alignItems: "center", gap: "8px 12px",'),
+    ], ['phones.test.ts']),
+    ('a meeting is walked to again on coming back', 'src/floor/Floor.tsx', [
+        ('instant || homeNow - meet.at > MEET_WALK_MS);', 'instant);'),
+    ], ['social-view.test.ts']),
+    ("a device's own clock times the meetings", 'src/floor/Floor.tsx', [
+        ('(x) => (skew.current = x.now - Date.now(), setMeets(', '(x) => (skew.current = 0, setMeets('),
+    ], ['social-view.test.ts']),
     # office life in the app (PLAN 5.9)
     ("a meeting by a wall stands off the floor", 'src/floor/plan.ts', [
         ('  const inside = (x: number): number => Math.min(W - 48, Math.max(48, x));\n  const toward = spot.at.x > W - 90 ? -1 : spot.at.x < 90 ? 1 : 0;', '  const inside = (x: number): number => x;\n  const toward = 0;'),
@@ -2126,10 +2225,10 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ], ['voice-preview.test.ts']),
     # the phone and the press (10-03): an iPhone's icon, the title bar's, Copy link, a move's light
     ('an iPhone is shown the rounded icon, whose clear corners it paints black', 'vite.config.ts', [
-        ('<link rel="apple-touch-icon" sizes="180x180" href="icons/orbs-apple-180.png" />', '<link rel="apple-touch-icon" href="icons/orbs-192.png" />'),
+        ('<link rel="apple-touch-icon" sizes="180x180" href="${icon("orbs-apple-180.png")}" />', '<link rel="apple-touch-icon" href="${icon("orbs-192.png")}" />'),
     ], ['install.test.ts']),
     ("the window's title bar has no icon of ours", 'vite.config.ts', [
-        ('<link rel="icon" type="image/png" sizes="32x32" href="icons/orbs-32.png" />\\n    <link rel="icon" type="image/png" sizes="16x16" href="icons/orbs-16.png" />\\n    ', ''),
+        ('<link rel="icon" type="image/png" sizes="32x32" href="${icon("orbs-32.png")}" />\\n    <link rel="icon" type="image/png" sizes="16x16" href="${icon("orbs-16.png")}" />\\n    ', ''),
     ], ['install.test.ts']),
     ('Copy link copies nothing', 'src/rooms/Devices.tsx', [
         ('onClick={() => void navigator.clipboard.writeText(link).then(', 'onClick={() => void Promise.resolve().then('),
@@ -2165,9 +2264,13 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("the white swatch does nothing", "src/orbs.tsx", [
         ("title={cap(m)} onClick={() => onPick(m)} data-material={m}", "title={cap(m)} onClick={() => undefined} data-material={m}"),
     ], ["creator.test.ts"]),
+    # the row as it stood before 10-07 (a phone's 44-wide buttons, no wrap): with the page numbers 32 wide
+    # (`orbs-narrow`), five pages fit a phone unwrapped, so the wrap is kept for the roster's growth
     ("the page numbers spill past a phone's width", "src/ui/Paged.tsx", [
         ('style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", alignItems: "center", gap: 5, rowGap: 6 }}', 'style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 6 }}'),
-        ('minWidth: 32, minHeight: 34, padding: "0 8px",', 'minWidth: 36, minHeight: 34, padding: "0 10px",'),
+        ('<button className="orbs-narrow" aria-label="Previous page"', '<button aria-label="Previous page"'),
+        ('              className="orbs-narrow"\n              data-sound="pick"', '              data-sound="pick"'),
+        ('<button className="orbs-narrow" aria-label="Next page"', '<button aria-label="Next page"'),
     ], ["office.test.ts", "creator.test.ts"]),
     # the New orb seat and the menu's New orb, inviting (owner, 10-03)
     ("the New orb seat is an empty outline again", "src/orbs.tsx", [
@@ -2220,6 +2323,38 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ('the recruiter hides diplomas', 'src/rooms/Recruiter.tsx', [
         (', ...r.diplomas.map((d) => `🎓 ${d}`)]', ']'),
     ], ['school-view.test.ts']),
+    # sessions that cost little and say little (PLAN 5.10), and Midnight the default (owner 10-06)
+    ('a long message never scrolls', 'src/rooms/Talk.tsx', [
+        ('maxHeight: LONG, overflowY: "auto", overscrollBehavior: "contain", ', ''),
+    ], ['sessions.test.ts']),
+    ('Delete it deletes nothing', 'src/rooms/Sessions.tsx', [
+        ('o.home.deleteSession(id).then(', 'Promise.resolve().then('),
+    ], ['sessions.test.ts']),
+    ("the system's theme until you choose", 'src/ui/theme.ts', [
+        ('return v !== null && v in THEMES ? (v as ThemeId) : DEFAULT_THEME;', 'return v !== null && v in THEMES ? (v as ThemeId) : null;'),
+    ], ['render.test.ts']),
+    ("the phone's menu squeezes its lines (10-06: CEO Rob cut at the bottom)", 'src/orbs.tsx', [
+        ('  .orbs-side > :not(:last-child) { flex-shrink: 0; } /* the office\'s list, last, is the part that gives way and scrolls */\n', ''),
+    ], ['phones.test.ts']),
+    ('letting an orb go never offers school', 'src/orbs.tsx', [
+        ('onClick={() => onDelete(handTo || undefined, true)}', 'onClick={() => onDelete(handTo || undefined)}'),
+    ], ['org-view.test.ts']),
+    ('light is paper white again', 'src/design/tokens.ts', [
+        ('    card: parseHex("#E6E9EE"),', '    card: parseHex("#FFFFFF"),'),
+        ('    ground: parseHex("#CDD1D9"),', '    ground: parseHex("#E9E9EE"),'),
+    ], ['design.test.ts']),
+    ('rose is pale again', 'src/design/tokens.ts', [
+        ('ground: parseHex("#EAC2D0"), card: parseHex("#F7DCE5"), side: parseHex("#EEC8D5")', 'ground: parseHex("#EFE1E6"), card: parseHex("#FFF8FA"), side: parseHex("#F8ECF0")'),
+    ], ['design.test.ts']),
+    ('sand is paper again', 'src/design/tokens.ts', [
+        ('ground: parseHex("#E0CDA8"), card: parseHex("#F0E3C8"), side: parseHex("#E6D3AE")', 'ground: parseHex("#EEE8DC"), card: parseHex("#FCF9F3"), side: parseHex("#F4EEE3")'),
+    ], ['design.test.ts']),
+    ("light's walls are its card", 'src/design/tokens.ts', [
+        ('wall: parseHex("#A9B3C4")', 'wall: parseHex("#E6E9EE")'),
+    ], ['design.test.ts']),
+    ('System is forgotten, and Midnight comes back', 'src/ui/theme.ts', [
+        ('globalThis.localStorage?.setItem(KEY, t ?? SYSTEM);', 'if (t) globalThis.localStorage?.setItem(KEY, t); else globalThis.localStorage?.removeItem(KEY);'),
+    ], ['render.test.ts']),
 ]
 
 # the `orbs` terminal (PLAN 1.9): paths are inside packages/terminal
@@ -2375,24 +2510,40 @@ def run_kit_suites(root: Path, suites: list[str]) -> subprocess.CompletedProcess
     return subprocess.CompletedProcess([str(py), *suites], code, "\n".join(out), "")
 
 
+SUITE_CAP_S = 1800
+
+
 def run_suites(work: Path, suites: list[str]) -> subprocess.CompletedProcess[str]:
-    """The suites (paths inside `work`, the copied packages/), each test given a minute. A run that
-    still hangs past ten is red too: a defect that makes a test hang has been caught as surely as
-    one that makes it fail."""
-    # as the gate runs them (tools/run-ts-tests.mjs): half the cores at once, two minutes a test;
-    # every core at once starved the picture suites past their limit (10-02)
-    at = max(2, (os.cpu_count() or 4) // 2)
-    cmd = ["node", "--test", "--test-timeout=120000", f"--test-concurrency={at}", *[str(work / s) for s in suites]]
-    # its own process group, so a hung run is ended with everything it started (a planted defect
-    # that spawns two kits leaves one nobody will stop)
-    p = subprocess.Popen(cmd, cwd=work, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, start_new_session=True)
-    try:
-        out, _ = p.communicate(timeout=600)
-        return subprocess.CompletedProcess(cmd, p.returncode, out, "")
-    except subprocess.TimeoutExpired:
-        os.killpg(p.pid, signal.SIGKILL)
-        out, _ = p.communicate()
-        return subprocess.CompletedProcess(cmd, 124, (out or "") + "\n[hung past 600 s]", "")
+    """The suites (paths inside `work`, the copied packages/), each test given two minutes. A run that
+    still hangs past SUITE_CAP_S is red too: a defect that makes a test hang has been caught as surely as
+    one that makes it fail. The voice suites go after the rest, one at a time, as the gate runs them."""
+    # as the gate runs them (tools/run-ts-tests.mjs): a third of the cores at once, two minutes a test;
+    # every core at once starved the picture suites past their limit (10-02), and half did too (the gate
+    # went to a third on 10-04; this followed on 10-07, when the creator's hat colours, 21 s alone, ran past two minutes)
+    at = max(2, (os.cpu_count() or 4) // 3)
+    # the voice suites (Chromium's microphone, the kit's Kokoro and Whisper, all on the CPU) alone and last, as in
+    # the gate (10-03); beside the others "a real conversation" heard two turns of three (10-07)
+    alone = [s for s in suites if s.endswith("/voice.test.ts")]
+    groups = [(g, n) for g, n in (([s for s in suites if s not in alone], at), (alone, 1)) if g]
+    outs: list[str] = []
+    code = 0
+    for group, n in groups:
+        cmd = ["node", "--test", "--test-timeout=120000", f"--test-concurrency={n}", *[str(work / s) for s in group]]
+        # its own process group, so a hung run is ended with everything it started (a planted defect
+        # that spawns two kits leaves one nobody will stop)
+        p = subprocess.Popen(cmd, cwd=work, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, start_new_session=True)
+        # thirty minutes, not ten (10-07): characters.test alone draws every hat on every shape, 33 of them,
+        # and takes twelve minutes or more; ten cut a green baseline short and called it hung
+        try:
+            out, _ = p.communicate(timeout=SUITE_CAP_S)
+            outs.append(out)
+            code = code or p.returncode
+        except subprocess.TimeoutExpired:
+            os.killpg(p.pid, signal.SIGKILL)
+            out, _ = p.communicate()
+            outs.append((out or "") + f"\n[hung past {SUITE_CAP_S} s]")
+            code = 124
+    return subprocess.CompletedProcess(["node", "--test", *suites], code, "\n".join(outs), "")
 
 
 def main() -> int:

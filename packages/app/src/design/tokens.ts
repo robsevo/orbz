@@ -31,6 +31,8 @@ export const THEMES = {
   contrast: { label: "High contrast", base: "dark" },
 } as const satisfies Record<string, { label: string; base: Theme }>;
 export type ThemeId = keyof typeof THEMES;
+/** What the app wears until you choose (owner, 10-06: "make midnight the app default also color"). */
+export const DEFAULT_THEME: ThemeId = "midnight";
 export const baseOf = (t: ThemeId): Theme => THEMES[t].base;
 
 type Surfaces = {
@@ -52,6 +54,11 @@ type Surfaces = {
   ok: RGB; // awake (Ash's status dot)
   busy: RGB; // thinking
   off: RGB; // asleep
+  // the office floor's own (owner, 10-06: "make the furniture and walls their own color"): never text
+  wall: RGB; // the back wall and the rooms' walls
+  trim: RGB; // a wall's top and skirting, a door's frame
+  floor: RGB; // the tiles between the rooms
+  wood: RGB; // desks, shelves, cupboards, the counter
 };
 
 export const SURFACES: Record<ThemeId, Surfaces> = {
@@ -74,26 +81,29 @@ export const SURFACES: Record<ThemeId, Surfaces> = {
     ok: parseHex("#34C759"),
     busy: parseHex("#FFD60A"),
     off: parseHex("#FF453A"),
+    wall: parseHex("#363B47"), trim: parseHex("#4A505E"), floor: parseHex("#17181C"), wood: parseHex("#5C4634"),
   },
+  // a soft grey day, not paper white (owner, 10-06: "light mode, wayy too light")
   light: {
-    ground: parseHex("#E9E9EE"),
-    card: parseHex("#FFFFFF"),
-    side: parseHex("#F2F2F7"),
-    raised: parseHex("#EFEFF3"),
-    fill: [0, 0, 0, 0.05],
-    fill2: [0, 0, 0, 0.09],
-    hairline: [0, 0, 0, 0.15],
-    sep: [0, 0, 0, 0.06],
-    shadow: [0, 0, 0, 0.1],
-    scrim: [0, 0, 0, 0.3],
-    text1: parseHex("#1D1D1F"),
-    text2: parseHex("#3A3A3C"),
-    text3: parseHex("#636369"),
-    quiet: parseHex("#AEAEB2"),
-    alert: parseHex("#865920"),
-    ok: parseHex("#1F7A35"),
-    busy: parseHex("#8A5A00"),
-    off: parseHex("#C4182B"),
+    ground: parseHex("#CDD1D9"),
+    card: parseHex("#E6E9EE"),
+    side: parseHex("#D9DDE4"),
+    raised: parseHex("#DDE1E8"),
+    fill: [0, 0, 0, 0.06],
+    fill2: [0, 0, 0, 0.1],
+    hairline: [0, 0, 0, 0.17],
+    sep: [0, 0, 0, 0.08],
+    shadow: [0, 0, 0, 0.14],
+    scrim: [0, 0, 0, 0.35],
+    text1: parseHex("#16171A"),
+    text2: parseHex("#2C2E33"),
+    text3: parseHex("#4B4E56"),
+    quiet: parseHex("#8E929B"),
+    alert: parseHex("#6E4615"),
+    ok: parseHex("#1A6A2E"),
+    busy: parseHex("#7A4F00"),
+    off: parseHex("#B0142A"),
+    wall: parseHex("#A9B3C4"), trim: parseHex("#8E99AC"), floor: parseHex("#D3D7DE"), wood: parseHex("#B08158"),
   },
   // deep navy, the night sky over the office
   midnight: {
@@ -102,6 +112,7 @@ export const SURFACES: Record<ThemeId, Surfaces> = {
     shadow: [0, 0, 8, 0.45], scrim: [0, 0, 8, 0.6],
     text1: parseHex("#F1F5FF"), text2: parseHex("#DCE3F5"), text3: parseHex("#9DABC9"), quiet: parseHex("#55617F"),
     alert: parseHex("#D6A45E"), ok: parseHex("#3DDC84"), busy: parseHex("#FFD60A"), off: parseHex("#FF5A5F"),
+    wall: parseHex("#2A3A66"), trim: parseHex("#3A4C80"), floor: parseHex("#0C1224"), wood: parseHex("#4B3A2C"),
   },
   // deep green, a plant in the corner
   forest: {
@@ -110,22 +121,25 @@ export const SURFACES: Record<ThemeId, Surfaces> = {
     shadow: [0, 6, 2, 0.42], scrim: [0, 6, 2, 0.58],
     text1: parseHex("#F0F7F2"), text2: parseHex("#DCE8E0"), text3: parseHex("#99B0A2"), quiet: parseHex("#587063"),
     alert: parseHex("#D2A25A"), ok: parseHex("#4ADE80"), busy: parseHex("#FACC15"), off: parseHex("#FF6B5E"),
+    wall: parseHex("#2D4A3A"), trim: parseHex("#3E604C"), floor: parseHex("#0F1913"), wood: parseHex("#5E4630"),
   },
-  // warm paper
+  // a beach at noon: warm sand, not paper (owner, 10-06: "neither is sand")
   sand: {
-    ground: parseHex("#EEE8DC"), card: parseHex("#FCF9F3"), side: parseHex("#F4EEE3"), raised: parseHex("#F1EADE"),
-    fill: [60, 40, 10, 0.06], fill2: [60, 40, 10, 0.1], hairline: [60, 40, 10, 0.17], sep: [60, 40, 10, 0.07],
-    shadow: [40, 25, 0, 0.12], scrim: [30, 20, 0, 0.32],
-    text1: parseHex("#2A2117"), text2: parseHex("#40352A"), text3: parseHex("#685A49"), quiet: parseHex("#B7A992"),
-    alert: parseHex("#87561A"), ok: parseHex("#2D7A32"), busy: parseHex("#865A00"), off: parseHex("#B3261E"),
+    ground: parseHex("#E0CDA8"), card: parseHex("#F0E3C8"), side: parseHex("#E6D3AE"), raised: parseHex("#EBDBBA"),
+    fill: [70, 45, 10, 0.08], fill2: [70, 45, 10, 0.13], hairline: [70, 45, 10, 0.2], sep: [70, 45, 10, 0.09],
+    shadow: [40, 25, 0, 0.16], scrim: [30, 20, 0, 0.36],
+    text1: parseHex("#23190D"), text2: parseHex("#3A2D1D"), text3: parseHex("#5A4834"), quiet: parseHex("#A68F68"),
+    alert: parseHex("#7A4710"), ok: parseHex("#22662A"), busy: parseHex("#734A00"), off: parseHex("#A3201A"),
+    wall: parseHex("#C9A774"), trim: parseHex("#B08C58"), floor: parseHex("#E2CFA6"), wood: parseHex("#9A6B3E"),
   },
-  // soft pink
+  // rose, the flower: pink you can see (owner, 10-06: "rose is not rose enough")
   rose: {
-    ground: parseHex("#EFE1E6"), card: parseHex("#FFF8FA"), side: parseHex("#F8ECF0"), raised: parseHex("#F5E6EB"),
-    fill: [90, 20, 45, 0.05], fill2: [90, 20, 45, 0.09], hairline: [90, 20, 45, 0.16], sep: [90, 20, 45, 0.06],
-    shadow: [60, 0, 20, 0.1], scrim: [50, 0, 20, 0.3],
-    text1: parseHex("#2B1820"), text2: parseHex("#452E38"), text3: parseHex("#6E5260"), quiet: parseHex("#C1A6B1"),
-    alert: parseHex("#8A4E1E"), ok: parseHex("#22783A"), busy: parseHex("#835700"), off: parseHex("#B4233C"),
+    ground: parseHex("#EAC2D0"), card: parseHex("#F7DCE5"), side: parseHex("#EEC8D5"), raised: parseHex("#F2D0DB"),
+    fill: [110, 20, 55, 0.07], fill2: [110, 20, 55, 0.12], hairline: [110, 20, 55, 0.2], sep: [110, 20, 55, 0.08],
+    shadow: [70, 0, 25, 0.14], scrim: [60, 0, 25, 0.34],
+    text1: parseHex("#2A1019"), text2: parseHex("#42202E"), text3: parseHex("#63394A"), quiet: parseHex("#B98A9C"),
+    alert: parseHex("#7C3F12"), ok: parseHex("#1E6631"), busy: parseHex("#744B00"), off: parseHex("#A3172F"),
+    wall: parseHex("#D98EA8"), trim: parseHex("#C27390"), floor: parseHex("#EBC3D1"), wood: parseHex("#A86B5C"),
   },
   // black and white, for reading most easily
   contrast: {
@@ -134,6 +148,7 @@ export const SURFACES: Record<ThemeId, Surfaces> = {
     shadow: [0, 0, 0, 0.6], scrim: [0, 0, 0, 0.75],
     text1: parseHex("#FFFFFF"), text2: parseHex("#FFFFFF"), text3: parseHex("#D0D0D6"), quiet: parseHex("#6E6E76"),
     alert: parseHex("#FFC266"), ok: parseHex("#4CFF7A"), busy: parseHex("#FFE14D"), off: parseHex("#FF6B6B"),
+    wall: parseHex("#3D3D3D"), trim: parseHex("#5C5C5C"), floor: parseHex("#050505"), wood: parseHex("#6B4826"),
   },
 };
 
@@ -159,8 +174,9 @@ export type Hue = { name: HueName; angle: number; dark: RGB; light: RGB };
 const LIGHT_TARGET = 4.8;
 
 function lightFor(angle: number, chroma: number): RGB {
-  const bg = backgrounds("light");
-  const worst = (c: RGB): number => Math.min(contrast(c, bg.ground), contrast(c, bg.card), contrast(c, bg.raised));
+  // every light theme wears these, so each must read on all of their surfaces (10-06: Rose and Sand grew deeper)
+  const bgs = (Object.keys(SURFACES) as ThemeId[]).filter((t) => baseOf(t) === "light").flatMap((t) => Object.values(backgrounds(t)));
+  const worst = (c: RGB): number => Math.min(...bgs.map((bg) => contrast(c, bg)));
   let lo = 0.25;
   let hi = 0.75;
   for (let i = 0; i < 30; i++) {

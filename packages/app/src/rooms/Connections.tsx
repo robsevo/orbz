@@ -10,7 +10,7 @@ import { useEffect, useState, type CSSProperties } from "react";
 import { idOf, type Accounts, type CalendarFeed, type Connector, type ConnectorSpec, type MailAccount, type Office } from "../home/link.ts";
 import { CATALOG } from "../home/catalog.ts";
 
-const panel: CSSProperties = { display: "grid", gap: "var(--s3)", padding: "var(--s4)", borderRadius: 18, background: "var(--fill)", boxShadow: "inset 0 0 0 1px var(--hairline)", minWidth: 0 };
+const panel: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "var(--s3)", padding: "var(--s4)", borderRadius: 18, background: "var(--fill)", boxShadow: "inset 0 0 0 1px var(--hairline)", minWidth: 0 };
 const head: CSSProperties = { font: "700 11px/16px var(--font)", letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)", margin: 0 };
 const button: CSSProperties = { font: "600 14px/20px var(--font)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 10, padding: "8px 14px", cursor: "pointer", boxShadow: "inset 0 0 0 .5px var(--hairline)", minHeight: 36, flex: "0 0 auto" };
 const field: CSSProperties = { flex: "1 1 160px", minWidth: 0, font: "600 15px/21px var(--font)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 10, padding: "8px 12px", outline: 0, boxShadow: "inset 0 0 0 1px var(--hairline)" };
@@ -18,7 +18,7 @@ const small: CSSProperties = { font: "400 12px/17px var(--font)", color: "var(--
 const name: CSSProperties = { font: "700 14px/19px var(--font)", color: "var(--text-1)", overflowWrap: "anywhere" };
 const pair: CSSProperties = { display: "flex", gap: 8, flexWrap: "wrap" };
 const row: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: 10, alignItems: "center" };
-const list: CSSProperties = { display: "grid", gap: 8, margin: 0, padding: 0, listStyle: "none" };
+const list: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 8, margin: 0, padding: 0, listStyle: "none" };
 
 /** A name the home can keep (lowercase letters, digits, - and _, up to 32), not one already taken. */
 export function nameFor(words: string, taken: string[]): string {
@@ -86,13 +86,13 @@ export function Connections({ home }: { home: Office }) {
       <h3 style={head}>Connections</h3>
       <span style={small}>Your own calendar, mail and tools, straight from your home to them: nobody in between. Passwords and keys stay in your home's keychain.</span>
 
-      <div style={{ display: "grid", gap: 8 }} data-connections="accounts">
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 8 }} data-connections="accounts">
         <span style={name}>Your accounts</span>
         {linked && Object.keys(linked.accounts).length > 0 && (
           <ul style={list}>
             {Object.entries(linked.accounts).map(([n, a]) => (
               <li key={n} data-account={n} style={row}>
-                <span style={{ display: "grid", minWidth: 0 }}>
+                <span style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", minWidth: 0 }}>
                   <span style={name}>{a.email}</span>
                   <span style={small}>{a.provider === "google" ? "Google: Gmail and Google Calendar" : "Microsoft: Outlook mail, the Outlook and Teams calendar"}</span>
                 </span>
@@ -126,13 +126,13 @@ export function Connections({ home }: { home: Office }) {
                   throw e;
                 }));
               }}
-              style={{ ...button, display: "grid", textAlign: "left", flex: "1 1 200px", gap: 2 }}
+              style={{ ...button, display: "grid", gridTemplateColumns: "minmax(0, 1fr)", textAlign: "left", flex: "1 1 200px", gap: 2 }}
             >
               <span>{p.id === "google" ? "Connect Google" : "Connect Microsoft"}</span>
               <span style={{ ...small, fontWeight: 400 }}>{p.id === "google" ? "Gmail and Google Calendar" : "Outlook mail, and your Outlook and Teams calendar"}</span>
             </button>
           ))}
-          <button onClick={() => setSlack((v) => !v)} aria-expanded={slack} style={{ ...button, display: "grid", textAlign: "left", flex: "1 1 200px", gap: 2 }}>
+          <button onClick={() => setSlack((v) => !v)} aria-expanded={slack} style={{ ...button, display: "grid", gridTemplateColumns: "minmax(0, 1fr)", textAlign: "left", flex: "1 1 200px", gap: 2 }}>
             <span>Slack</span>
             <span style={{ ...small, fontWeight: 400 }}>Its calendar is your Google or Outlook one</span>
           </button>
@@ -141,13 +141,13 @@ export function Connections({ home }: { home: Office }) {
         <span style={small}>The sign-in opens in this browser and comes back to the computer your home runs on. Your orbs read your mail and keep replies in Drafts; they never send, and never change your calendar.</span>
       </div>
 
-      <div style={{ display: "grid", gap: 8 }} data-connections="calendars">
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 8 }} data-connections="calendars">
         <span style={name}>Calendars</span>
         {feeds.length > 0 && (
           <ul style={list}>
             {feeds.map((f) => (
               <li key={f.name} data-calendar={f.name} style={row}>
-                <span style={{ display: "grid", minWidth: 0 }}>
+                <span style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", minWidth: 0 }}>
                   <span style={name}>{f.label}</span>
                   <span style={{ ...small, color: f.why ? "var(--alert)" : "var(--text-3)" }}>{f.why ? `Can't be read: ${f.why}` : f.read ? `Read at ${at(f.read)}` : "Not read yet"}</span>
                 </span>
@@ -168,7 +168,7 @@ export function Connections({ home }: { home: Office }) {
             const label = cal.label.trim() || "My calendar";
             act(() => home.addCalendar(nameFor(label, feeds.map((f) => f.name)), label, cal.address.trim()), () => setCal({ label: "", address: "" }));
           }}
-          style={{ display: "grid", gap: 8 }}
+          style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 8 }}
         >
           <div style={pair}>
             <input value={cal.label} onChange={(e) => setCal((c) => ({ ...c, label: e.target.value }))} aria-label="What to call the calendar" placeholder="Work" size={1} maxLength={60} style={{ ...field, flex: "1 1 120px" }} />
@@ -181,13 +181,13 @@ export function Connections({ home }: { home: Office }) {
         </form>
       </div>
 
-      <div style={{ display: "grid", gap: 8 }} data-connections="mail">
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 8 }} data-connections="mail">
         <span style={name}>Mail</span>
         {Object.keys(accounts).length > 0 && (
           <ul style={list}>
             {Object.entries(accounts).map(([n, a]) => (
               <li key={n} data-mail={n} style={row}>
-                <span style={{ display: "grid", minWidth: 0 }}>
+                <span style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", minWidth: 0 }}>
                   <span style={name}>{a.address ?? a.user}</span>
                   <span style={small}>{a.host}</span>
                 </span>
@@ -212,7 +212,7 @@ export function Connections({ home }: { home: Office }) {
             const account: MailAccount = { host, user: email, address: email, ...(port !== 993 && { port }), ...(/^(127\.0\.0\.1|localhost|::1)$/.test(host) && { tls: false }) };
             act(() => home.addMail(nameFor(email.split("@")[0] ?? email, Object.keys(accounts)), account, mail.password), () => setMail({ email: "", host: "", password: "", port: "" }));
           }}
-          style={{ display: "grid", gap: 8 }}
+          style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 8 }}
         >
           <div style={pair}>
             <input type="email" autoComplete="off" value={mail.email} onChange={(e) => setMail((m) => ({ ...m, email: e.target.value }))} aria-label="Your email address" placeholder="you@example.com" size={1} required style={field} />
@@ -229,13 +229,13 @@ export function Connections({ home }: { home: Office }) {
         </form>
       </div>
 
-      <div style={{ display: "grid", gap: 8 }} data-connections="connectors">
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 8 }} data-connections="connectors">
         <span style={name}>Connectors</span>
         {servers.length > 0 && (
           <ul style={list}>
             {servers.map((c) => (
               <li key={c.name} data-connector={c.name} data-state={c.state} style={row}>
-                <span style={{ display: "grid", minWidth: 0 }}>
+                <span style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", minWidth: 0 }}>
                   <span style={name}>{c.name}</span>
                   <span style={{ ...small, color: c.state === "failed" ? "var(--alert)" : "var(--text-3)" }}>
                     {c.state === "ready" ? `Ready · ${c.tools.length} ${c.tools.length === 1 ? "tool" : "tools"}` : c.state === "starting" ? "Starting…" : `Didn't start: ${c.why ?? "no reason given"}`}
@@ -263,7 +263,7 @@ export function Connections({ home }: { home: Office }) {
               setPreset("");
             });
           }}
-          style={{ display: "grid", gap: 8 }}
+          style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 8 }}
         >
           <select
             value={preset}

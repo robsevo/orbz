@@ -10,10 +10,17 @@ import { ReportCard, SchoolSheet } from "./School.tsx";
 
 const small: CSSProperties = { font: "500 12px/16px var(--font)", color: "var(--text-3)", textWrap: "pretty" };
 
-export function OrgRoom({ home, office, open, rehired }: { home: Office | null; office: Character[]; open: (c: Character) => void; rehired: () => void }) {
+export function OrgRoom({ home, office, open, rehired, school = null }: { home: Office | null; office: Character[]; open: (c: Character) => void; rehired: () => void; school?: string | null }) {
   const [org, setOrg] = useState<OrgState | null>(null);
   const [said, setSaid] = useState<string | null>(null);
-  const [sending, setSending] = useState<string | null>(null); // whose school sheet is open (PLAN 5.7)
+  // whose school sheet is open (PLAN 5.7): the orb you let go to send to school, from its profile (owner, 10-06)
+  const [sending, setSending] = useState<string | null>(school);
+  useEffect(() => setSending(school), [school]);
+  // that orb's place on the chart, in view once it is there (it arrives a moment after it is let go)
+  const away = org?.away.some((o) => o.id === sending) ?? false;
+  useEffect(() => {
+    if (away && sending) document.querySelector(`[data-away="${CSS.escape(sending)}"]`)?.scrollIntoView({ block: "center" });
+  }, [away, sending]);
   useEffect(() => {
     if (!home) return;
     const load = (): void => void home.org().then(setOrg, (e: Error) => setSaid(e.message));
@@ -52,11 +59,12 @@ export function OrgRoom({ home, office, open, rehired }: { home: Office | null; 
           <span style={{ font: "700 11px/16px var(--font)", letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)" }}>Away</span>
           {org.away.map((o) => (
             <div key={o.id} data-away={o.id} style={{ display: "grid", gap: 8, padding: "8px 10px", borderRadius: 12, background: "var(--fill)", minWidth: 0 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", minWidth: 0 }}>
-                <span style={{ flex: "1 1 auto", minWidth: 0, display: "grid" }}>
-                  <span style={{ font: "600 13px/18px var(--font)", color: "var(--text-1)" }}>{`${o.name}, ${o.level}`}</span>
-                  {(o.atSchool || o.diplomas.length > 0) && <span style={small}>{[o.atSchool ? "At school" : null, ...o.diplomas.map((d) => `🎓 ${d}`)].filter(Boolean).join(" · ")}</span>}
-                </span>
+              {/* who, then what you can do: the two never wrap into one row with a button left alone under it */}
+              <span style={{ minWidth: 0, display: "grid" }}>
+                <span style={{ font: "600 13px/18px var(--font)", color: "var(--text-1)" }}>{`${o.name}, ${o.level}`}</span>
+                {(o.atSchool || o.diplomas.length > 0) && <span style={small}>{[o.atSchool ? "At school" : null, ...o.diplomas.map((d) => `🎓 ${d}`)].filter(Boolean).join(" · ")}</span>}
+              </span>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", minWidth: 0 }}>
                 {!o.atSchool && (
                   <button type="button" aria-expanded={sending === o.id} onClick={() => setSending(sending === o.id ? null : o.id)} style={{ font: "600 12px/16px var(--font)", border: 0, borderRadius: 8, padding: "5px 10px", background: "var(--raised)", color: "var(--text-1)", cursor: "pointer", flex: "0 0 auto" }}>
                     {`Send ${o.name} to school`}

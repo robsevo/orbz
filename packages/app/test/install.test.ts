@@ -15,7 +15,7 @@ import { findChrome } from "./harness.ts";
 import { Home } from "../../home/src/home.ts";
 import { serve } from "../../home/src/api.ts";
 import { MemoryStore } from "../../home/src/chatgpt/store.ts";
-import { SURFACES } from "../src/design/tokens.ts";
+import { DEFAULT_THEME, SURFACES } from "../src/design/tokens.ts";
 import { hex } from "../src/design/color.ts";
 
 const APP = fileURLToPath(new URL("..", import.meta.url));
@@ -64,7 +64,7 @@ test("the logo set: the mark, the icon and the mark in white as SVG, and the loc
 
 test("served by a home, the app installs: a manifest from the tokens, its icons, nothing Chromium objects to", { skip, timeout: 120_000 }, async (t) => {
   const manifest = JSON.parse(readFileSync(join(dist, "manifest.webmanifest"), "utf8")) as { theme_color: string; background_color: string; icons: { src: string; sizes: string; purpose: string }[]; display: string };
-  assert.deepEqual([manifest.theme_color, manifest.background_color, manifest.display], [hex(SURFACES.dark.ground), hex(SURFACES.dark.ground), "standalone"]);
+  assert.deepEqual([manifest.theme_color, manifest.background_color, manifest.display], [hex(SURFACES[DEFAULT_THEME].ground), hex(SURFACES[DEFAULT_THEME].ground), "standalone"]);
   for (const i of manifest.icons) {
     const [file, v] = i.src.split("?v=");
     assert.ok(readFileSync(join(dist, file!)).subarray(1, 4).toString() === "PNG", `${i.src} is a picture`);

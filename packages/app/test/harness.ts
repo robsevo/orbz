@@ -117,7 +117,10 @@ export async function measure(page: Page): Promise<Finding[]> {
       const cut = s.textOverflow === "ellipsis" || s.overflowX === "auto" || s.overflowX === "scroll";
       // an SVG element has no scroll box (its scrollWidth means nothing); the spill check above covers it
       const svg = el instanceof SVGElement;
-      if (!svg && !cut && el.scrollWidth > el.clientWidth + 1 && el.clientWidth > 0 && s.display !== "inline") {
+      // a floor tag's hit area (::after, 13 px round it: orbs.tsx, PLAN 2.17) is a finger's room, not content
+      // and one inside a box (the floor, an orb walking by its wall) may reach that 13 px past the box's edge
+      const slop = el.classList.contains("orbs-tag") ? 26 : el.querySelector(".orbs-tag") ? 13 : 0;
+      if (!svg && !cut && el.scrollWidth > el.clientWidth + 1 + slop && el.clientWidth > 0 && s.display !== "inline") {
         out.push({ kind: "overflow", what: `${name(el)}: ${el.scrollWidth}px of content in ${el.clientWidth}px` });
       }
     }

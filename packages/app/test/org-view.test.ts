@@ -34,7 +34,7 @@ after(async () => {
   if (dist) rmSync(dist, { recursive: true, force: true });
 });
 
-test("the org chart and a career page; let go with a hand-off, away, rehired; desk and phone", { skip, timeout: 150_000 }, async (t) => {
+test("the org chart and a career page; let go with a hand-off, away, rehired; let go and sent to school from a profile; desk and phone", { skip, timeout: 150_000 }, async (t) => {
   const data = mkdtempSync(join(tmpdir(), "orbs-org-home-"));
   t.after(() => rmSync(data, { recursive: true, force: true }));
   const h = Home.open({ dataDir: data, protect: [], spendCapUsd: null });
@@ -94,7 +94,7 @@ test("the org chart and a career page; let go with a hand-off, away, rehired; de
   await page.getByRole("button", { name: "Let Ada go…" }).click();
   const ask = page.getByRole("group", { name: "Let Ada go?" });
   await ask.getByRole("combobox").selectOption("bea");
-  await ask.getByRole("button", { name: "Let Ada go" }).click();
+  await ask.getByRole("button", { name: "Let Ada go", exact: true }).click();
   await page.waitForFunction(() => !document.body.innerText.includes("Let Ada go…"), undefined, { timeout: 20_000 });
   for (let i = 0; i < 50 && !h.inbox.orb("ada")!.letGoAt; i++) await page.waitForTimeout(100);
   assert.ok(h.inbox.orb("ada")!.letGoAt, "Ada was let go");
@@ -117,4 +117,16 @@ test("the org chart and a career page; let go with a hand-off, away, rehired; de
   await bea.waitFor({ timeout: 20_000 });
   assert.match(await bea.innerText(), /trigger:t1 \{subject\} \(v1\), from Ada/);
   assert.deepEqual(await measure(page), [], "a career page, at phone size");
+
+  // school from where you let an orb go (owner, 10-06: "we dont see the send to school option"):
+  // one press lets Cy go and opens the org chart on Cy's school sheet
+  await page.evaluate(() => (location.hash = "#/office/Cy"));
+  await page.getByRole("button", { name: "Let Cy go…" }).click();
+  await page.getByRole("group", { name: "Let Cy go?" }).getByRole("button", { name: "Let Cy go and send to school" }).click();
+  await page.waitForFunction(() => location.hash === "#/org/school/cy", undefined, { timeout: 20_000 });
+  const sheet = page.locator('[data-away="cy"] [data-school-sheet="cy"]');
+  await sheet.waitFor({ timeout: 20_000 });
+  assert.ok(h.inbox.orb("cy")!.letGoAt, "Cy was let go");
+  await sheet.getByRole("button", { name: "Send Cy to school" }).waitFor();
+  assert.deepEqual(await measure(page), [], "the school sheet, opened from a profile, at phone size");
 });

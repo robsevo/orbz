@@ -136,7 +136,7 @@ export function NoticesRoom(o: { home: Office | null; office: Character[]; notic
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
         <h2 style={{ margin: 0, font: "800 28px/34px var(--font)", color: "var(--text-1)" }}>Notifications</h2>
         {o.notices.length > 1 && (
-          <button onClick={() => away()} style={button}>
+          <button onClick={() => away()} style={{ ...button, whiteSpace: "nowrap", flexShrink: 0 }}>
             Put all away
           </button>
         )}

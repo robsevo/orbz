@@ -24,6 +24,31 @@ import { defaultStore, type SecretStore } from "./store.ts";
 
 export const MANAGE_USAGE = "https://chatgpt.com/settings/usage";
 
+// Which of the plan's models does what (PLAN 5.10; 10-06, after the flagship, first in the list and so
+// every orb's, used a plan's limit in a quarter of an hour). OpenAI weighs plan use by model: per
+// million input tokens GPT-6 Astra counts 250, GPT-5.6 Terra 50, GPT-5.6 Luna 5 (developers.openai.com
+// /codex/pricing, read 10-06), and lists no price with a model, so the names decide:
+//   main    what you chose; until you choose (or when your choice leaves the plan) a middle model
+//           (Terra), never the first-listed flagship
+//   light   the plan's lightest (a Luna, mini, nano or lite; the newest of them): chime-ins, an orb
+//           another asked, the rows dealt on the Floor, and summaries
+/** A middle model, the default main. */
+export const MIDDLE = /terra/i;
+/** A light model. */
+export const LIGHT = /luna|mini|nano|lite/i;
+const version = (slug: string): number => Number(/(\d+(?:\.\d+)?)/.exec(slug)?.[1] ?? 0);
+
+/** The plan's lightest model (the newest light one), or null when it lists none. */
+export function lightOf(models: PlanModel[]): string | null {
+  return [...models].filter((m) => LIGHT.test(m.slug)).sort((a, b) => version(b.slug) - version(a.slug))[0]?.slug ?? null;
+}
+
+/** The main model until you choose one: the newest middle model, else the first that is not light, else the first. */
+export function defaultMain(models: PlanModel[]): string | null {
+  const middle = [...models].filter((m) => MIDDLE.test(m.slug)).sort((a, b) => version(b.slug) - version(a.slug))[0];
+  return middle?.slug ?? models.find((m) => !LIGHT.test(m.slug))?.slug ?? models[0]?.slug ?? null;
+}
+
 export type ChatGPTOptions = {
   dataDir: string;
   events: EventLog;
@@ -73,6 +98,8 @@ export class ChatGPT {
   #reg: Registration;
   #connected = false;
   #paused: { until: number; why: Limited } | null = null;
+  /** The models that met their own usage limit, and until when they rest. */
+  readonly #resting = new Map<string, number>();
   #storeP: Promise<SecretStore> | null = null;
   #discovery: Promise<Discovery> | null = null;
   #keys: Keys | null = null;
@@ -268,7 +295,7 @@ export class ChatGPT {
         .map((m) => ({ slug: String(m.slug ?? m.id ?? ""), name: String(m.display_name ?? m.slug ?? m.id ?? "") }))
         .filter((m) => m.slug);
       this.#reg.models = models;
-      if (!this.#reg.model || !models.some((m) => m.slug === this.#reg.model)) this.#reg.model = models[0]?.slug ?? null;
+      if (!this.#reg.model || !models.some((m) => m.slug === this.#reg.model)) this.#reg.model = defaultMain(models);
     } catch {
       // the models stay as they were; the status shows none if there never were any
     }
@@ -306,8 +333,15 @@ export class ChatGPT {
     this.#o.events.append("chatgpt.signed_out", { why });
   }
 
-  /** The plan could not serve a request: pause it, turn it off, or forget the sign-in. */
-  async limited(why: Limited): Promise<void> {
+  /** The plan could not serve a request: pause it, turn it off, or forget the sign-in. At a usage
+   * limit met by one `model`, only that model rests while another of the plan can answer. */
+  async limited(why: Limited, model?: string): Promise<void> {
+    if (why === "usage-limit" && model) {
+      const until = this.#o.clock.now() + this.#o.pauseMs;
+      this.#resting.set(model, until);
+      this.#o.events.append("chatgpt.limited", { why, model, until });
+      if (this.#model(false) || this.#model(true)) return; // another model of the plan still answers
+    }
     if (why === "usage-limit") {
       this.#paused = { until: this.#o.clock.now() + this.#o.pauseMs, why };
       this.#o.events.append("chatgpt.limited", { why, until: this.#paused.until });
@@ -320,6 +354,7 @@ export class ChatGPT {
 
   resume(): void {
     this.#paused = null;
+    this.#resting.clear();
     this.#o.events.append("chatgpt.resumed", {});
   }
 
@@ -343,15 +378,28 @@ export class ChatGPT {
     this.#saveReg();
   }
 
-  /** The plan as a brain, when it can serve now: signed in, plan use granted, a model, not paused. */
-  endpoint(): Endpoint | null {
+  /** The model to use now: the main one (or, `light`, the lightest), else the other if that one
+   * rests at its limit; null when both rest. */
+  #model(light: boolean): string | null {
+    const now = this.#o.clock.now();
+    const main = this.#reg.model;
+    const lite = lightOf(this.#reg.models) ?? main;
+    for (const m of light ? [lite, main] : [main, lite]) if (m && !((this.#resting.get(m) ?? 0) > now)) return m;
+    return null;
+  }
+
+  /** The plan as a brain, when it can serve now: signed in, plan use granted, a model, not paused.
+   * `light`: on the plan's lightest model (PLAN 5.10). */
+  endpoint(o: { light?: boolean } = {}): Endpoint | null {
     if (!this.#connected || !this.#reg.sharing || !this.#reg.model) return null;
     if (this.#paused && this.#paused.until > this.#o.clock.now()) return null;
+    const model = this.#model(Boolean(o.light));
+    if (!model) return null;
     return {
       name: "chatgpt",
       api: "responses",
       baseUrl: this.#o.apiBase,
-      model: this.#reg.model,
+      model,
       plan: "chatgpt",
       price: { inputPerM: 0, outputPerM: 0 }, // the plan pays: nothing comes out of the spend cap
       retries: 0,

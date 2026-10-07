@@ -17,7 +17,8 @@ import { parseJson, tx } from "../db.ts";
 import type { EventLog } from "../events.ts";
 
 export type Role = "user" | "assistant" | "tool" | "notice" | "summary" | "clear";
-export type ToolCall = { id: string; name: string; arguments: string };
+/** `sig`: the thought signature Gemini sent with the call, which must go back with it (stream.ts). */
+export type ToolCall = { id: string; name: string; arguments: string; sig?: string };
 
 export type Message = {
   id: number;
@@ -57,7 +58,7 @@ export type Card = {
 /** The message shapes an OpenAI-compatible chat endpoint takes. */
 export type ModelMessage =
   | { role: "system" | "user"; content: string }
-  | { role: "assistant"; content: string; tool_calls?: { id: string; type: "function"; function: { name: string; arguments: string } }[] }
+  | { role: "assistant"; content: string; tool_calls?: { id: string; type: "function"; function: { name: string; arguments: string }; sig?: string }[] }
   | { role: "tool"; tool_call_id: string; content: string };
 
 type MessageRow = {
@@ -92,6 +93,17 @@ type CardRow = {
 };
 
 export const NOT_RUN = "(not run: the turn ended before this call was made)";
+
+/** How much of an earlier turn's tool result is kept for the model (characters). */
+export const OLD_RESULT = 600;
+/** How many of the latest lines a chime-in reads. */
+export const TALK_LINES = 8;
+
+/** An earlier turn's result, cut to its head, saying how much was left out and how to get it back. */
+export function trimOld(r: string): string {
+  if (r.length <= OLD_RESULT * 2) return r;
+  return `${r.slice(0, OLD_RESULT)}\n… (${(r.length - OLD_RESULT).toLocaleString("en")} more characters, from an earlier turn: run the tool again if you need them)`;
+}
 
 export class Conversations {
   readonly #db: DatabaseSync;
@@ -162,15 +174,34 @@ export class Conversations {
     return [summary, ...live.filter((m) => m.id > covers && m.role !== "summary")];
   }
 
-  /** The history in the model's shapes, every tool result straight after its call. */
   /** The history as the model reads it. In a session (several orbs in one conversation), what
    * another orb said reaches `me` as said by him, by name, and never as `me`'s own words; his
-   * calls and their results are his, and stay out. */
-  toModel(history: Message[], o: { me?: string; nameOf?: (orb: string) => string } = {}): ModelMessage[] {
+   * calls and their results are his, and stay out.
+   *
+   * What it costs (owner, 10-06: a five-orb session spent 1.54M tokens in half an hour): a tool's
+   * result from before the latest message to answer is kept only as its head (`OLD_RESULT`), since
+   * every later request would carry all of it again; and a chime-in (`talk`) reads only what was
+   * said, the latest `TALK_LINES` of it, with what was agreed: no calls, no results. */
+  toModel(history: Message[], o: { me?: string; nameOf?: (orb: string) => string; talk?: boolean; brief?: boolean } = {}): ModelMessage[] {
+    if (o.talk) return this.#talk(history, o);
+    if (o.brief && o.me) {
+      // an orb another asked (owner, 10-06: "can we learn off ash ... on token cutting"): like Ash's
+      // subagents, which see "no conversation ... only its brief", it reads the session as a chime-in
+      // does, then its request and its own work on it, whole
+      const at = history.findLastIndex((m) => m.role === "user" && m.meta.asked === o.me);
+      if (at > 0) return [...this.#talk(history.slice(0, at), o), ...this.toModel(history.slice(at), { me: o.me, nameOf: o.nameOf })];
+    }
     const results = new Map<string, Message>();
     for (const m of history) if (m.role === "tool" && m.toolCallId) results.set(m.toolCallId, m);
+    // where this turn began: the latest message put to `me` (the person's, or a request to me); a
+    // request to another orb, another orb's words or a card answered mid-turn begin nothing
+    const turnAt = history.findLastIndex((m) => m.role === "user" && (m.meta.asked === undefined || m.meta.asked === o.me));
+    const resultOf = (c: ToolCall, at: number): string => {
+      const r = results.get(c.id)?.content ?? NOT_RUN;
+      return at < turnAt ? trimOld(r) : r;
+    };
     const out: ModelMessage[] = [];
-    for (const m of history) {
+    for (const [at, m] of history.entries()) {
       if (o.me && m.orb !== o.me && (m.role === "assistant" || m.role === "tool")) {
         if (m.role === "assistant" && m.content.trim()) out.push({ role: "user", content: `[${o.nameOf?.(m.orb) ?? m.orb}]: ${m.content}` });
         continue;
@@ -190,11 +221,30 @@ export class Conversations {
         out.push({
           role: "assistant",
           content: m.content,
-          tool_calls: m.toolCalls.map((c) => ({ id: c.id, type: "function", function: { name: c.name, arguments: c.arguments } })),
+          tool_calls: m.toolCalls.map((c) => ({ id: c.id, type: "function", function: { name: c.name, arguments: c.arguments }, ...(c.sig && { sig: c.sig }) })),
         });
-        for (const c of m.toolCalls) out.push({ role: "tool", tool_call_id: c.id, content: results.get(c.id)?.content ?? NOT_RUN });
+        for (const c of m.toolCalls) out.push({ role: "tool", tool_call_id: c.id, content: resultOf(c, at) });
       }
       // tool messages were placed with their calls; other notices and clears are for the person
+    }
+    return out;
+  }
+
+  /** A chime-in's view (owner, 10-06: "keep answers short and cheap so everyone can chime in"): the
+   * summary if there is one, what was agreed, and the latest lines said (the person's, each orb's,
+   * its own), without a single call or result. */
+  #talk(history: Message[], o: { me?: string; nameOf?: (orb: string) => string }): ModelMessage[] {
+    const name = (orb: string): string => o.nameOf?.(orb) ?? orb;
+    const out: ModelMessage[] = [];
+    const summary = history.findLast((m) => m.role === "summary");
+    if (summary) out.push({ role: "system", content: `Summary of the earlier conversation:\n${summary.content}` });
+    const agreed = history.filter((m) => m.role === "notice" && typeof m.meta.agreed === "string").map((m) => String(m.meta.agreed));
+    if (agreed.length) out.push({ role: "user", content: `[Agreed so far]: ${agreed.slice(-6).join("; ")}` });
+    const said = history.filter((m) => (m.role === "user" || m.role === "assistant") && m.content.trim() && m.id !== summary?.id);
+    for (const m of said.slice(-TALK_LINES)) {
+      if (m.role === "user") out.push({ role: "user", content: m.content });
+      else if (m.orb === o.me) out.push({ role: "assistant", content: m.content });
+      else out.push({ role: "user", content: `[${name(m.orb)}]: ${m.content}` });
     }
     return out;
   }

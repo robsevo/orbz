@@ -16,6 +16,8 @@ import { idOf, type CalendarEntry, type Meeting, type Notice, type Office } from
 
 /** A meeting under way, by the orbs' names (the home's ids turned to names). */
 type Meet = Meeting;
+/** How long the walk to a meeting is shown: after that, the two are already there when the floor opens. */
+const MEET_WALK_MS = 12_000;
 import type { Route } from "../ui/nav.ts";
 import { DeskPiece, FLOOR_CSS, MeetingTable, PingPong, Room, SideTables, skyAt, type Screen } from "./art.tsx";
 import { DESKS, H, POIS, ROOMS, SEATS, W, WALL, ZONES, dice, dwell, isMeeting, meetPlan, meetSpot, next, route, seating, sentBy, speed, type Desk, type Plan, type PoiId, type Spot, type Traits } from "./plan.ts";
@@ -79,6 +81,7 @@ export function Floor({ home, office, moods, person, go }: { home: Office | null
   const [sessions, setSessions] = useState<Record<number, string>>({});
   // office life (PLAN 5.9): the meetings the home decided that are under way, by the orbs' names
   const [meets, setMeets] = useState<Meet[]>([]);
+  const skew = useRef(0); // the home's clock less this device's: a meeting is timed by the home's
   const nameOf = useMemo(() => new Map(office.map((c) => [idOf(c.name), c.name])), [office]);
   useEffect(() => {
     if (!home) return;
@@ -86,7 +89,7 @@ export function Floor({ home, office, moods, person, go }: { home: Office | null
     const loadHiring = (): void => void home.recruiting().then((r) => setHiring(r.positions), () => {});
     const loadSessions = (): void => void home.sessions().then((ss) => setSessions(Object.fromEntries(ss.map((x) => [x.id, x.title]))), () => {});
     const loadMeets = (): void => void home.socialOf().then(
-      (x) => setMeets(x.current.map((m) => ({ ...m, a: nameOf.get(m.a) ?? m.a, b: nameOf.get(m.b) ?? m.b, winner: m.winner ? (nameOf.get(m.winner) ?? m.winner) : null }))),
+      (x) => (skew.current = x.now - Date.now(), setMeets(x.current.map((m) => ({ ...m, a: nameOf.get(m.a) ?? m.a, b: nameOf.get(m.b) ?? m.b, winner: m.winner ? (nameOf.get(m.winner) ?? m.winner) : null })))),
       () => {},
     );
     loadDay();
@@ -195,7 +198,7 @@ export function Floor({ home, office, moods, person, go }: { home: Office | null
     const t = targetOf(s, plan);
     const free = sentBy(live.current.moods[s.id] ?? "idle", Boolean(live.current.meeting[s.id])) === null;
     // a meeting lasts as long as the home says; a break as long as the orb's Calm keeps it
-    s.until = plan.kind === "meet" ? performance.now() + Math.max(0, plan.until - Date.now()) : free ? performance.now() + dwell(s.traits, s.r) + (instant ? s.r() * 8000 : 0) : Infinity;
+    s.until = plan.kind === "meet" ? performance.now() + Math.max(0, plan.until - (Date.now() + skew.current)) : free ? performance.now() + dwell(s.traits, s.r) + (instant ? s.r() * 8000 : 0) : Infinity;
     if (instant || Math.hypot(s.x - t.at.x, s.y - t.at.y) < 1) {
       // already there (a desk's orb whose state changed): a new label, no walk
       s.x = t.at.x;
@@ -238,11 +241,15 @@ export function Floor({ home, office, moods, person, go }: { home: Office | null
     const inMeeting = Boolean(mt[s.id]);
     const sent = sentBy(mood, inMeeting);
     // a meeting the home decided, if this orb is free and in one that is under way (PLAN 5.9)
-    const meet = sent === null ? live.current.meets.find((x) => x.until > Date.now() && (x.a === s.c.name || x.b === s.c.name)) : undefined;
+    const homeNow = Date.now() + skew.current;
+    const meet = sent === null ? live.current.meets.find((x) => x.until > homeNow && (x.a === s.c.name || x.b === s.c.name)) : undefined;
     if (meet) {
       s.mood = mood;
       if (s.plan?.kind === "meet" && s.plan.until === meet.until && s.plan.with === (meet.a === s.c.name ? meet.b : meet.a)) return;
-      return assign(s, meetPlan(meet, s.c.name), instant);
+      // a meeting under way for a while is where they already are: coming back to the office (or opening it)
+      // shows them there, never walking to it again (owner, 10-06: "every time i go back and forth if two
+      // orbs are interacting or playing a game the animation restarts"); one that has just begun, they walk to
+      return assign(s, meetPlan(meet, s.c.name), instant || homeNow - meet.at > MEET_WALK_MS);
     }
     const cur = s.plan;
     const resting = cur?.kind === "poi" && POIS.find((p) => p.id === cur.poi)?.rest;
@@ -417,7 +424,7 @@ export function Floor({ home, office, moods, person, go }: { home: Office | null
               <span key={r.id} data-orb={r.hue} style={{ ...sign, left: px(r.door.x + r.door.w / 2), top: px(262), translate: "-50% 0" }}>{r.name}</span>
             ))}
             {/* the meeting room's screen: the Brainstorm going on, or free to book */}
-            <button type="button" data-meeting-screen onClick={() => go({ room: "sessions", id: null, tab: "brainstorm" })} data-orb="teal"
+            <button type="button" className="orbs-tag" data-meeting-screen onClick={() => go({ room: "sessions", id: null, tab: "brainstorm" })} data-orb="teal"
               style={{ position: "absolute", left: px(ROOMS[1]!.rect.x + 111), top: px(15), width: px(170), height: px(52), border: 0, borderRadius: 4, background: "transparent", cursor: "pointer", display: "grid", placeItems: "center", padding: "0 6px", zIndex: 1 }}>
               <span style={{ font: "700 11px/14px var(--font)", color: "var(--text-1)", textAlign: "center", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{meetingTitle ? `Now: ${meetingTitle}` : "Free · start a session"}</span>
             </button>
@@ -425,7 +432,7 @@ export function Floor({ home, office, moods, person, go }: { home: Office | null
             {(() => {
               const life = ZONES.find((z) => z.id === "life")!.rect;
               return (
-                <button type="button" onClick={() => go({ room: "calendar" })} aria-label={`Today: ${todayList.length} on the calendar`}
+                <button type="button" className="orbs-tag" onClick={() => go({ room: "calendar" })} aria-label={`Today: ${todayList.length} on the calendar`}
                   style={{ position: "absolute", left: px(life.x + life.w - 124), top: px(life.y - 50), width: px(96), height: px(42), border: 0, padding: 0, background: "transparent", cursor: "pointer", display: "grid", placeItems: "end center", zIndex: 1 }}>
                   <span style={{ font: "800 11px/14px var(--font)", color: "var(--ground)", padding: "0 6px", borderRadius: 6, background: "var(--text-2)" }}>{`${now.getDate()} · ${todayList.length} today`}</span>
                 </button>
@@ -435,7 +442,7 @@ export function Floor({ home, office, moods, person, go }: { home: Office | null
             {(Object.keys(FAMILIES) as Family[]).map((z) => {
               const d = emptyHiring(z);
               return d ? (
-                <button key={z} type="button" data-hiring={z} onClick={() => go({ room: "recruiter", family: z })} aria-label={`Hiring for ${FAMILIES[z]}: see who applied`} data-orb={ZONES.find((x) => x.id === z)!.hue}
+                <button key={z} type="button" className="orbs-tag" data-hiring={z} onClick={() => go({ room: "recruiter", family: z })} aria-label={`Hiring for ${FAMILIES[z]}: see who applied`} data-orb={ZONES.find((x) => x.id === z)!.hue}
                   style={{ position: "absolute", left: px(d.seat.x), top: px(d.rect.y - 40), translate: "-50% 0", zIndex: d.rect.y + d.rect.h + 1, ...tag, cursor: "pointer", border: 0, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1px var(--accent)", color: "var(--text-1)" }}>
                   + Hiring
                 </button>
@@ -455,7 +462,7 @@ export function Floor({ home, office, moods, person, go }: { home: Office | null
               return (
                 <div key={c.name} ref={(el) => void (el ? els.current.set(c.name, el) : els.current.delete(c.name))} style={{ position: "absolute", left: 0, top: 0, width: 0, height: 0, willChange: "transform" }}>
                   <div ref={(el) => void (el ? bobs.current.set(c.name, el) : bobs.current.delete(c.name))} style={{ position: "absolute", left: 0, top: 0 }}>
-                    <button
+                    <button className="orbs-tag"
                       type="button"
                       data-floor-orb={c.name}
                       data-doing={sh?.kind ?? "none"}
@@ -529,7 +536,7 @@ export function Floor({ home, office, moods, person, go }: { home: Office | null
           {lines.slice(0, 6).map((l, i) => (
             <div key={`${l.at}${i}`} style={{ display: "flex", gap: 10, alignItems: "baseline", minWidth: 0 }}>
               <span className="num" style={{ flex: "0 0 44px", font: "600 12px/17px var(--font)", color: "var(--text-3)" }}>{time(l.at)}</span>
-              <span style={{ font: "500 13px/18px var(--font)", color: "var(--text-2)", textWrap: "pretty", minWidth: 0 }}>{l.text}</span>
+              <span style={{ font: "500 13px/18px var(--font)", color: "var(--text-2)", textWrap: "balance", minWidth: 0 }}>{l.text}</span>
             </div>
           ))}
         </section>

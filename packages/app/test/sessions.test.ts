@@ -3,8 +3,11 @@
 // with a chat next to it ... same for the floor tab, and you choose which orbs to bring into each
 // session and each tab ... we want to see what theire doing").
 //   - The side menu's Sessions makes one: a title, and the orbs you choose.
-//   - On the Brainstorm, your words go in once and each orb answers in turn, by name, as he writes;
-//     a load that lands late takes nothing away from words still streaming.
+//   - On the Brainstorm, your words go in once; the lead answers, then each other orb adds a line
+//     (PLAN 5.10), by name, as it writes; a load that lands late takes nothing away from words
+//     still streaming.
+//   - A long message scrolls inside itself; a session is deleted from its card, after a second
+//     press (owner, 10-06).
 //   - A decision lands as ✓ Agreed, in the chat and on the stage.
 //   - On the Floor, whoever you bring in (or send out) is the home's; each one's computer is a
 //     press away and one is big (rooms/Computer.tsx): the command, that it waits for your OK, and
@@ -47,9 +50,10 @@ test("a session: the orbs you bring in, the Brainstorm's turns and what was agre
   let release!: () => void;
   const held = new Promise<void>((r) => (release = r));
   const model = await fakeModel(t, [
-    { chunks: ["Saturday works, ", "at the park."], hold: held }, // Hazel, on the Brainstorm: held open mid-reply
-    { calls: [{ name: "agree", args: { decision: "Saturday, at the park" } }] }, // Milo agrees
-    { chunks: ["Agreed: Saturday."] },
+    // Hazel leads the Brainstorm: held open mid-reply, then she records what was agreed
+    { chunks: ["Saturday works, ", "at the park."], hold: held, calls: [{ name: "agree", args: { decision: "Saturday, at the park" } }] },
+    { chunks: ["Saturday it is."] },
+    { chunks: ["Agreed: Saturday."] }, // Milo chimes in
     { calls: [{ name: "shell", args: { command: "echo invite-made" } }] }, // Hazel, on the Floor
     { chunks: ["The invite is made."] },
   ]);
@@ -166,4 +170,59 @@ test("a session: the orbs you bring in, the Brainstorm's turns and what was agre
   await page.getByRole("tab", { name: "Floor" }).click();
   await page.waitForFunction(() => location.hash === "#/session/1/floor");
   assert.deepEqual(await measure(page), [], "nor on the Floor");
+});
+
+test("a long message scrolls inside itself; a session is deleted from its card, after a second press", { skip, ...LONG }, async (t) => {
+  const long = Array.from({ length: 60 }, (_, i) => `Line ${i + 1} of a very long research note.`).join("\n");
+  const model = await fakeModel(t, [{ chunks: [long] }, { chunks: ["pass"] }]);
+  const data = mkdtempSync(join(tmpdir(), "orbs-sessions-home-"));
+  t.after(() => rmSync(data, { recursive: true, force: true }));
+  const h = Home.open({
+    dataDir: data, protect: [], spendCapUsd: null,
+    brain: { preset: { id: "t", title: "t", own: null, big: { name: "big", baseUrl: model.url, model: "m", retries: 0 }, teacher: null } },
+    agent: { decide: () => "allow", passWaitMs: 20 },
+  });
+  t.after(() => h.close());
+  h.start();
+  h.about.setName("Robin");
+  h.inbox.addOrb("hazel", "Hazel", "planning", { shape: "bean", eyes: "classic", hue: "amber" });
+  h.inbox.addOrb("milo", "Milo", "research", { shape: "bean", eyes: "classic", hue: "teal" });
+  const s = h.team.create("A long talk", { brainstorm: ["hazel", "milo"], floor: ["hazel"] });
+  const other = h.team.create("Keep this one", { brainstorm: ["hazel"] });
+  const d = await serve(h, { port: 0, appDir: dist });
+  t.after(() => d.close());
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: "dark", hasTouch: true });
+  t.after(() => ctx.close());
+  const page = await ctx.newPage();
+  await page.goto(d.pairLink());
+  await page.getByText("CEO Robin").first().waitFor({ state: "attached", timeout: 30_000 }); // paired (on a phone the menu holds it out of sight)
+  await page.evaluate((id) => (location.hash = `#/session/${id}/brainstorm`), s.id);
+  await page.locator('[data-stream="open"]').waitFor({ timeout: 30_000 });
+  const box = page.getByRole("textbox", { name: "Say something to the Brainstorm" });
+  await box.fill("Write it all down");
+  await box.press("Enter");
+  const bubble = page.locator('[data-role="assistant"][data-from="hazel"]');
+  await bubble.waitFor({ timeout: 20_000 });
+  await page.locator("[data-notice]", { hasText: "Milo passed." }).waitFor({ timeout: 20_000 });
+  const size = await bubble.evaluate((el) => ({ shown: el.clientHeight, all: el.scrollHeight, long: el.hasAttribute("data-long"), tab: el.tabIndex, overflow: getComputedStyle(el).overflowY }));
+  assert.ok(size.shown <= 360 && size.all > size.shown * 2, `the message scrolls inside itself (${JSON.stringify(size)})`);
+  assert.deepEqual([size.long, size.tab, size.overflow], [true, 0, "auto"], "marked long, reachable by the keyboard");
+  await bubble.evaluate((el) => el.scrollTo({ top: el.scrollHeight }));
+  await page.getByText("Line 60 of a very long research note.").waitFor();
+  assert.deepEqual(await measure(page), [], "nothing spills at phone size");
+
+  // deleting: a press asks, the second does it; Keep keeps it
+  await page.evaluate(() => (location.hash = "#/sessions"));
+  const card = page.locator(`[data-session-card="${s.id}"]`);
+  await card.waitFor({ timeout: 20_000 });
+  await card.getByRole("button", { name: "Delete A long talk" }).click();
+  await card.getByRole("button", { name: "Keep" }).click();
+  assert.equal(h.team.list().length, 2, "Keep keeps it");
+  await card.getByRole("button", { name: "Delete A long talk" }).click();
+  await card.getByText("Delete this session? Its chats go with it.").waitFor();
+  await card.getByRole("button", { name: "Delete it" }).click();
+  await card.waitFor({ state: "detached", timeout: 20_000 });
+  assert.deepEqual(h.team.list().map((x) => x.id), [other.id], "gone from the home");
+  assert.equal(h.conversations.list(`team:${s.id}:brainstorm`).length, 0, "with its chats");
+  await page.locator(`[data-session-card="${other.id}"]`).waitFor();
 });

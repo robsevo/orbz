@@ -417,9 +417,12 @@ function Sheet({ c, onRename, replies, standing, startsAs, career, applying, fri
               ? `Applying · would start as ${startsAs === "Senior" ? `the Senior, your first ${SPECIALTIES[c.specialty].title}` : "a Junior"}`
               : `${standing?.level ?? startsAs ?? "Junior"} · ${(standing?.xp ?? 0).toLocaleString("en-GB")} XP · ${standing?.next?.ready ? `ready for ${standing.next.to}` : "levels come from finished work you approve"}`}
         </span>
-        {/* the first of his kind in the office starts as the Senior (owner, 10-02), so the work has someone to lead it */}
+        {/* the first of his kind in the office starts as the Senior (owner, 10-02), so the work has someone to lead it;
+            "your first All-Rounder" kept together, so a one-word title never stands alone on a small phone's last line (10-07) */}
         {onRename && startsAs && (
-          <span style={{ font: "400 13px/18px var(--font)", color: "var(--text-3)" }}>{startsAs === "Senior" ? `Starts as the Senior: your first ${SPECIALTIES[c.specialty].title}` : "Starts as a Junior"}</span>
+          <span style={{ font: "400 13px/18px var(--font)", color: "var(--text-3)", textWrap: "pretty" }}>
+            {startsAs === "Senior" ? <>Starts as the Senior: <span style={{ whiteSpace: "nowrap" }}>your first {SPECIALTIES[c.specialty].title}</span></> : "Starts as a Junior"}
+          </span>
         )}
         {/* how long he has been about, and been with you (owner, 10-02): his age never restarts; his days in the company start again when he is rehired */}
         {!onRename && standing && (
@@ -540,12 +543,13 @@ function Cards<K extends string>({ value, entries, onPick }: { value: K; entries
 function Swatch({ hue, on, size, label, onPick }: { hue: HueName; on: boolean; size: number; label: string; onPick: () => void }) {
   return (
     <button
+      className="orbs-tag" // a colour is a dot; on a phone a finger's ring round it, not a bigger dot (PLAN 2.17)
       data-orb={hue}
       aria-label={label}
       aria-pressed={on}
       title={cap(hue)}
       onClick={onPick}
-      style={{ width: size, height: size, borderRadius: "50%", border: 0, cursor: "pointer", background: "var(--accent)", boxShadow: on ? "0 0 0 2px var(--card), 0 0 0 4px var(--text-1)" : "inset 0 0 0 1px var(--hairline)" }}
+      style={{ position: "relative", width: size, height: size, borderRadius: "50%", border: 0, cursor: "pointer", background: "var(--accent)", boxShadow: on ? "0 0 0 2px var(--card), 0 0 0 4px var(--text-1)" : "inset 0 0 0 1px var(--hairline)" }}
     />
   );
 }
@@ -735,7 +739,7 @@ function RepliesRow({ replies, setReplies }: { replies: Replies; setReplies: (r:
 }
 
 /** An orb in the office: what he is made of, fixed, and the one thing you can still do (let him go). */
-function Card({ c, replies, setReplies, onDelete, onChat, onCareer, others }: { c: Character; replies: Replies; setReplies: (r: Replies) => void; onDelete: (handTo?: string) => void; onChat: () => void; onCareer: () => void; others: Character[] }) {
+function Card({ c, replies, setReplies, onDelete, onChat, onCareer, others }: { c: Character; replies: Replies; setReplies: (r: Replies) => void; onDelete: (handTo?: string, school?: boolean) => void; onChat: () => void; onCareer: () => void; others: Character[] }) {
   const [asking, setAsking] = useState(false);
   const [handTo, setHandTo] = useState(""); // whose his habits become when he goes, if anyone's
   useEffect(() => {
@@ -776,7 +780,7 @@ function Card({ c, replies, setReplies, onDelete, onChat, onCareer, others }: { 
       </p>
       {asking ? (
         <div role="group" aria-label={`Let ${c.name} go?`} style={{ display: "grid", gap: 8, padding: "var(--s3)", borderRadius: 14, background: "var(--fill)", boxShadow: "inset 0 0 0 1px var(--off)" }}>
-          <span style={{ font: "600 14px/20px var(--font)", color: "var(--text-1)", textWrap: "pretty" }}>{c.name} leaves the office. All of {c.name}'s work is kept, the learning goes on, and a rehire is a press away on the org chart.</span>
+          <span style={{ font: "600 14px/20px var(--font)", color: "var(--text-1)", textWrap: "pretty" }}>{c.name} leaves the office. All of {c.name}'s work is kept, the learning goes on, and a rehire is a press away on the org chart. Or send {c.name} to school: the subjects you pick, an exam, and a diploma that counts when you rehire.</span>
           {others.length > 0 && (
             <label style={{ display: "flex", alignItems: "center", gap: 8, font: "500 13px/18px var(--font)", color: "var(--text-2)", minWidth: 0 }}>
               Hand {c.name}'s habits to
@@ -791,6 +795,9 @@ function Card({ c, replies, setReplies, onDelete, onChat, onCareer, others }: { 
           <OneLine style={{ justifyContent: "flex-start" }}>
             <button data-sound="delete" onClick={() => onDelete(handTo || undefined)} style={{ ...s.btn, color: "var(--off)", boxShadow: "inset 0 0 0 1px var(--off)" }}>
               Let {c.name} go
+            </button>
+            <button data-sound="delete" onClick={() => onDelete(handTo || undefined, true)} style={s.btn}>
+              Let {c.name} go and send to school
             </button>
             <button onClick={() => setAsking(false)} style={s.btn}>
               Keep {c.name}
@@ -907,6 +914,11 @@ function App() {
     return r === "settings" || r === "chat" || r === "sessions" || r === "notices" || r === "calendar" || r === "lab" || r === "org" || r === "career" || r === "recruiter" ? r : "office";
   });
   // which department's applicants the Recruiter shows (owner, 10-06: the floor's Hiring tags), or all
+  // whose school sheet the org chart opens with (#/org/school/<id>; owner, 10-06)
+  const [schoolFor, setSchoolFor] = useState<string | null>(() => {
+    const r = parseRoute(location.hash);
+    return r.room === "org" ? (r.school ?? null) : null;
+  });
   const [hiringFor, setHiringFor] = useState<string | null>(() => {
     const r = parseRoute(location.hash);
     return r.room === "recruiter" ? r.family ?? null : null;
@@ -1017,7 +1029,7 @@ function App() {
     history.replaceState(history.state, "", routeHash({ room: "office", orb: made.name }));
     window.setTimeout(() => play("hop"), 120);
   };
-  const remove = (who: string, handTo?: string): void => {
+  const remove = (who: string, handTo?: string, school = false): void => {
     const i = office.findIndex((c) => c.name === who);
     const rest = office.filter((c) => c.name !== who);
     const gone = office[i];
@@ -1026,6 +1038,8 @@ function App() {
     window.setTimeout(() => {
       setLeaving(null);
       setOffice(rest);
+      // let go to be sent to school (owner, 10-06): the org chart, its school sheet open
+      if (school) return go({ room: "org", school: idOf(who) });
       const next = rest[Math.max(0, i - 1)];
       setView(next ? { kind: "orb", name: next.name } : { kind: "new", draft: surprise(roll(), { specialty: "assistant" }) });
       history.replaceState(history.state, "", routeHash(next ? { room: "office", orb: next.name } : { room: "new" }));
@@ -1039,13 +1053,16 @@ function App() {
   // where you are is an address (ui/nav.ts): going somewhere adds it to the history, so the side
   // menu's Back and the browser's Back are the same Back
   const routeOf = (): Route =>
-    room === "settings" ? { room: "settings" } : room === "notices" ? { room: "notices" } : room === "calendar" ? { room: "calendar" } : room === "lab" ? { room: "lab" } : room === "org" ? { room: "org" } : room === "recruiter" ? { room: "recruiter", family: hiringFor } : room === "career" && careerOf ? { room: "career", orb: careerOf } : room === "sessions" ? { room: "sessions", ...inSession } : room === "chat" && talking ? { room: "chat", orb: talking } : view.kind === "new" ? { room: "new" } : { room: "office", orb: view.kind === "orb" ? view.name : null };
+    room === "settings" ? { room: "settings" } : room === "notices" ? { room: "notices" } : room === "calendar" ? { room: "calendar" } : room === "lab" ? { room: "lab" } : room === "org" ? { room: "org", school: schoolFor } : room === "recruiter" ? { room: "recruiter", family: hiringFor } : room === "career" && careerOf ? { room: "career", orb: careerOf } : room === "sessions" ? { room: "sessions", ...inSession } : room === "chat" && talking ? { room: "chat", orb: talking } : view.kind === "new" ? { room: "new" } : { room: "office", orb: view.kind === "orb" ? view.name : null };
   const show = (r: Route): void => {
     if (r.room === "settings") setRoom("settings");
     else if (r.room === "notices") setRoom("notices");
     else if (r.room === "calendar") setRoom("calendar");
     else if (r.room === "lab") setRoom("lab");
-    else if (r.room === "org") setRoom("org");
+    else if (r.room === "org") {
+      setRoom("org");
+      setSchoolFor(r.school ?? null);
+    }
     else if (r.room === "recruiter" && office.length) {
       setRoom("recruiter");
       setHiringFor(r.family ?? null);
@@ -1129,7 +1146,7 @@ function App() {
   );
 
   return (
-    <main style={{ padding: "var(--s5) var(--margin)" }}>
+    <main className="orbs-main">
       {opening && (
         <Splash
           office={office.length ? office : [NEWBORN]}
@@ -1221,7 +1238,7 @@ function App() {
         {room === "recruiter" && office.length ? (
           <RecruiterRoom home={home} office={office} family={hiringFor} pick={(family) => go({ room: "recruiter", family })} hired={() => void home?.orbs().then((o) => o && setOffice(o))} profile={(c, startsAs) => <Sheet c={c} replies={replies} startsAs={startsAs} applying />} />
         ) : room === "org" ? (
-          <OrgRoom home={home} office={office} open={(c) => go({ room: "career", orb: c.name })} rehired={() => void home?.orbs().then((o) => o && setOffice(o))} />
+          <OrgRoom home={home} office={office} school={schoolFor} open={(c) => go({ room: "career", orb: c.name })} rehired={() => void home?.orbs().then((o) => o && setOffice(o))} />
         ) : room === "career" ? (
           <CareerRoom home={home} orb={office.find((c) => c.name === careerOf) ?? office[0] ?? ASH} />
         ) : room === "lab" ? (
@@ -1345,7 +1362,7 @@ function App() {
 
           <div className="orbs-pair" style={{ display: "grid", gap: "var(--s4)", padding: "0 var(--s5)", gridTemplateColumns: "minmax(0, 1fr)", alignItems: "start" }}>
             <Sheet c={before ?? me} key={before ? "was" : "now"} onRename={making ? (n) => edit({ name: n }) : undefined} replies={replies} standing={making ? null : standing} startsAs={startsAs} career={making ? null : career} friends={making ? null : friends} />
-            {making ? <Creator me={me} edit={edit} replies={replies} setReplies={setReplies} first={!office.length} /> : <Card c={me} replies={replies} setReplies={setReplies} onDelete={(handTo) => remove(me.name, handTo)} onChat={() => go({ room: "chat", orb: me.name })} onCareer={() => go({ room: "career", orb: me.name })} others={office.filter((o) => o.name !== me.name)} />}
+            {making ? <Creator me={me} edit={edit} replies={replies} setReplies={setReplies} first={!office.length} /> : <Card c={me} replies={replies} setReplies={setReplies} onDelete={(handTo, school) => remove(me.name, handTo, school)} onChat={() => go({ room: "chat", orb: me.name })} onCareer={() => go({ room: "career", orb: me.name })} others={office.filter((o) => o.name !== me.name)} />}
           </div>
 
           <div style={{ padding: "0 var(--s5)" }}>
@@ -1410,6 +1427,30 @@ function App() {
 
 const style = document.createElement("style");
 style.textContent = `${stylesheet(`${import.meta.env.BASE_URL}fonts/Nunito.ttf`)}
+/* the page's margin round the app, kept clear of a phone's notch and home bar (the page asks to cover them:
+   viewport-fit=cover, for the home-screen app) */
+main.orbs-main { padding: max(var(--s5), env(safe-area-inset-top)) max(var(--margin), env(safe-area-inset-right)) max(var(--s5), env(safe-area-inset-bottom)) max(var(--margin), env(safe-area-inset-left)); }
+/* a small phone (owner, 10-06: "more responsive and mobile friendly app wide"): edge to edge, so its whole
+   width is the room's, the notch and the home bar still clear */
+@media (max-width: 480px) {
+  main.orbs-main { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+  /* the window fills the screen; its rows stay at the top (a short room leaves room below, never a stretched top bar) */
+  .orbs-window { border-radius: 0 !important; box-shadow: none !important; min-height: 100dvh; align-content: start; }
+}
+/* a finger's targets on a touch screen (WCAG 2.5.5, Apple's 44 pt): every control at least 44 by 44; the floor's
+   small tags keep their look, and a finger gets an area round them; a text field at 16 px or more, or an
+   iPhone zooms into it */
+@media (pointer: coarse), (max-width: 760px) {
+  button:not(.orbs-tag), [role="button"]:not(.orbs-tag), select, textarea, input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]) { min-height: 44px !important; }
+  button:not(.orbs-tag):not(.orbs-calday):not(.orbs-narrow), [role="button"]:not(.orbs-tag) { min-width: 44px !important; }
+  /* a row of page numbers keeps to one line on a small phone: 44 high, 32 wide (WCAG 2.5.8 asks 24) */
+  .orbs-narrow { min-width: 32px !important; }
+  /* a month's days, seven across, cannot each be 44 wide on a small phone: they keep 44 of height and at least
+     24 of width (WCAG 2.5.8) */
+  .orbs-calday { min-width: 24px !important; }
+  input, select, textarea { font-size: max(16px, 1em) !important; }
+  .orbs-tag::after { content: ""; position: absolute; inset: -13px; }
+}
 /* a phone: the side menu slides in from the left, over a scrim, and a top bar holds Back and the menu;
    wider, there is no scrim, not even for the frame before a widened window closes the menu */
 .orbs-scrim { display: none; }
@@ -1418,7 +1459,11 @@ style.textContent = `${stylesheet(`${import.meta.env.BASE_URL}fonts/Nunito.ttf`)
   .orbs-topbar { display: flex !important; }
   /* closed, it is hidden once it has slid away (out of Tab's reach and a screen reader's), and shown as it slides in */
   .orbs-side { position: fixed; inset: 0 auto 0 0; z-index: 30; width: min(300px, 86vw); overflow-y: auto; translate: -105% 0; visibility: hidden; transition: translate var(--m-slow) var(--m-spring), visibility 0s linear var(--m-slow); box-shadow: 4px 0 24px var(--shadow) !important; }
+  .orbs-side { padding-top: calc(var(--s4) + env(safe-area-inset-top)) !important; padding-bottom: calc(var(--s4) + env(safe-area-inset-bottom)) !important; padding-left: calc(var(--s3) + env(safe-area-inset-left)) !important; }
   .orbs-side[data-open="true"] { translate: 0 0; visibility: visible; transition: translate var(--m-slow) var(--m-spring), visibility 0s; }
+  /* the menu scrolls when it is taller than the phone; nothing in it is squeezed to fit instead (owner, 10-06:
+     "under orbz, it says CEO Rob but the bottom is cut off": a line that hides its overflow had shrunk below its height) */
+  .orbs-side > :not(:last-child) { flex-shrink: 0; } /* the office's list, last, is the part that gives way and scrolls */
   .orbs-scrim { display: block; position: fixed; inset: 0; z-index: 29; background: var(--ground); opacity: .72; }
 }
 @media (min-width: 1100px) { .orbs-pair { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) !important; } }

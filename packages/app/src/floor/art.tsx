@@ -19,7 +19,7 @@ function Window({ x, y, w, h, sky }: { x: number; y: number; w: number; h: numbe
   const hue: HueName = sky === "dusk" ? "apricot" : "cornflower";
   return (
     <g>
-      <rect x={x - 4} y={y - 4} width={w + 8} height={h + 8} rx={5} style={f("raised")} />
+      <rect x={x - 4} y={y - 4} width={w + 8} height={h + 8} rx={5} style={f("trim")} />
       <Hue hue={hue}>
         <rect x={x} y={y} width={w} height={h} rx={3} style={sky === "night" ? f("ground") : f("accent")} opacity={sky === "night" ? 1 : 0.62} />
         {sky !== "night" && <rect x={x} y={y + h * 0.55} width={w} height={h * 0.45} rx={3} style={f("text-1")} opacity={0.16} />}
@@ -36,8 +36,8 @@ function Window({ x, y, w, h, sky }: { x: number; y: number; w: number; h: numbe
         </g>
       )}
       {/* the frame's cross */}
-      <rect x={x + w / 2 - 1.5} y={y} width={3} height={h} style={f("raised")} />
-      <rect x={x} y={y + h / 2 - 1.5} width={w} height={3} style={f("raised")} />
+      <rect x={x + w / 2 - 1.5} y={y} width={3} height={h} style={f("trim")} />
+      <rect x={x} y={y + h / 2 - 1.5} width={w} height={3} style={f("trim")} />
     </g>
   );
 }
@@ -83,7 +83,7 @@ function Partition({ r, door, hue }: { r: Rect; door: { x: number; w: number }; 
     <Hue hue={hue}>
       {parts.map((p, i) => (
         <g key={i}>
-          <rect x={p.x} y={r.y - 8} width={p.w} height={20} rx={4} style={f("raised")} />
+          <rect x={p.x} y={r.y - 8} width={p.w} height={20} rx={4} style={f("wall")} />
           <rect x={p.x} y={r.y - 8} width={p.w} height={5} rx={2.5} style={f("accent")} />
           <rect x={p.x} y={r.y + 8} width={p.w} height={4} style={f("ground")} opacity={0.35} />
         </g>
@@ -189,11 +189,11 @@ export function Room({ now, sky }: { now: Date; sky: Sky }) {
     <svg viewBox={`0 0 ${W} ${H}`} width="100%" height="100%" aria-hidden style={{ position: "absolute", inset: 0, display: "block" }}>
       <defs>
         <pattern id="orbs-floor-tiles" width={40} height={40} patternUnits="userSpaceOnUse">
-          <rect width={40} height={40} style={f("side")} />
+          <rect width={40} height={40} style={f("floor")} />
           <path d="M40 0 H0 V40" style={st("sep", 1.2)} />
         </pattern>
         <pattern id="orbs-floor-checks" width={24} height={24} patternUnits="userSpaceOnUse">
-          <rect width={24} height={24} style={f("side")} />
+          <rect width={24} height={24} style={f("floor")} />
           <rect width={12} height={12} style={f("fill")} />
           <rect x={12} y={12} width={12} height={12} style={f("fill")} />
         </pattern>
@@ -225,14 +225,14 @@ export function Room({ now, sky }: { now: Date; sky: Sky }) {
       ))}
 
       {/* the back wall */}
-      <rect width={W} height={WALL} style={f("card")} />
-      <rect y={WALL - 6} width={W} height={10} style={f("raised")} />
+      <rect width={W} height={WALL} style={f("wall")} />
+      <rect y={WALL - 6} width={W} height={10} style={f("trim")} />
       <rect y={WALL + 4} width={W} height={18} fill="url(#orbs-floor-wallshade)" />
       <Window x={30} y={14} w={74} h={50} sky={sky} />
       <Window x={128} y={14} w={74} h={50} sky={sky} />
       <Clock x={234} y={40} now={now} />
       {/* the meeting room's screen: the floor writes what is on it */}
-      <rect x={meeting.x + 106} y={10} width={180} height={62} rx={6} style={f("raised")} />
+      <rect x={meeting.x + 106} y={10} width={180} height={62} rx={6} style={f("trim")} />
       <Hue hue="teal">
         <rect x={meeting.x + 111} y={15} width={170} height={52} rx={3} style={f("accent-wash")} />
       </Hue>
@@ -241,7 +241,7 @@ export function Room({ now, sky }: { now: Date; sky: Sky }) {
       {/* the kitchen's cupboards and its window */}
       {[0, 1, 2, 3].map((i) => (
         <g key={i}>
-          <rect x={counter.x + i * 59} y={12} width={55} height={40} rx={4} style={f("raised")} />
+          <rect x={counter.x + i * 59} y={12} width={55} height={40} rx={4} style={f("wood")} />
           <rect x={counter.x + i * 59 + 24} y={38} width={8} height={3} rx={1.5} style={f("fill-2")} />
         </g>
       ))}
@@ -263,7 +263,7 @@ export function Room({ now, sky }: { now: Date; sky: Sky }) {
           { x: r.door.x + r.door.w, w: r.rect.x + r.rect.w - r.door.x - r.door.w },
         ].map((p, i) => (
           <g key={`${r.id}${i}`}>
-            <rect x={p.x} y={288} width={p.w} height={14} rx={3} style={f("raised")} />
+            <rect x={p.x} y={288} width={p.w} height={14} rx={3} style={f("wall")} />
             <rect x={p.x} y={288} width={p.w} height={4} rx={2} style={f("fill-2")} />
           </g>
         )),
@@ -283,7 +283,7 @@ export function Room({ now, sky }: { now: Date; sky: Sky }) {
         <rect x={sofa.x + 22} y={sofa.y - 6} width={20} height={16} rx={5} style={f("accent")} transform={`rotate(-10 ${sofa.x + 32} ${sofa.y + 2})`} />
       </Hue>
       <g>
-        <rect x={shelf.x} y={WALL - 52} width={shelf.w} height={shelf.h + 52 + (shelf.y - WALL)} rx={4} style={f("raised")} />
+        <rect x={shelf.x} y={WALL - 52} width={shelf.w} height={shelf.h + 52 + (shelf.y - WALL)} rx={4} style={f("wood")} />
         {[0, 1, 2].map((row) => (
           <g key={row}>
             <rect x={shelf.x + 5} y={WALL - 46 + row * 32} width={shelf.w - 10} height={26} style={f("ground")} opacity={0.6} />
@@ -317,7 +317,7 @@ export function Room({ now, sky }: { now: Date; sky: Sky }) {
       </g>
 
       {/* the kitchen: the counter and what is on it, the fridge, the water cooler, the vending machine */}
-      <rect x={counter.x} y={counter.y - 10} width={counter.w} height={counter.h + 10} rx={4} style={f("raised")} />
+      <rect x={counter.x} y={counter.y - 10} width={counter.w} height={counter.h + 10} rx={4} style={f("wood")} />
       <rect x={counter.x} y={counter.y - 10} width={counter.w} height={8} rx={3} style={f("fill-2")} />
       <rect x={counter.x + 120} y={counter.y - 6} width={34} height={14} rx={3} style={f("ground")} opacity={0.6} />
       <g>
@@ -438,11 +438,11 @@ export function DeskPiece({ d, screen, hue }: { d: Desk; screen: Screen; hue: Hu
   return (
     <Piece r={r} up={34} z={r.y + r.h}>
       {/* the top and its front */}
-      <rect x={r.x} y={r.y} width={r.w} height={r.h - 10} rx={4} style={f("raised")} />
+      <rect x={r.x} y={r.y} width={r.w} height={r.h - 10} rx={4} style={f("wood")} />
       <rect x={r.x} y={r.y} width={r.w} height={3} rx={1.5} style={f("fill-2")} />
-      <rect x={r.x} y={r.y + r.h - 12} width={r.w} height={12} rx={3} style={f("card")} />
-      <rect x={r.x + 4} y={r.y + r.h} width={4} height={6} style={f("card")} />
-      <rect x={r.x + r.w - 8} y={r.y + r.h} width={4} height={6} style={f("card")} />
+      <rect x={r.x} y={r.y + r.h - 12} width={r.w} height={12} rx={3} style={f("wood")} opacity={0.82} />
+      <rect x={r.x + 4} y={r.y + r.h} width={4} height={6} style={f("wood")} />
+      <rect x={r.x + r.w - 8} y={r.y + r.h} width={4} height={6} style={f("wood")} />
       {/* the monitor */}
       <rect x={mx + 15} y={r.y + 2} width={4} height={8} style={f("ground")} />
       <rect x={mx + 9} y={r.y + 8} width={16} height={3} rx={1.5} style={f("ground")} />
@@ -491,9 +491,9 @@ export function MeetingTable() {
   const r = PIECES.meetingTable;
   return (
     <Piece r={r} up={4} z={r.y + r.h}>
-      <rect x={r.x} y={r.y} width={r.w} height={r.h - 12} rx={12} style={f("raised")} />
+      <rect x={r.x} y={r.y} width={r.w} height={r.h - 12} rx={12} style={f("wood")} />
       <rect x={r.x} y={r.y} width={r.w} height={3} rx={1.5} style={f("fill-2")} />
-      <rect x={r.x} y={r.y + r.h - 14} width={r.w} height={14} rx={6} style={f("card")} />
+      <rect x={r.x} y={r.y + r.h - 14} width={r.w} height={14} rx={6} style={f("wood")} opacity={0.82} />
       {[0, 1, 2, 3].map((i) => (
         <rect key={i} x={r.x + 30 + i * 62} y={r.y + 10} width={22} height={14} rx={2} style={f("text-2")} opacity={0.75} transform={`rotate(${(i % 2 ? 1 : -1) * 6} ${r.x + 41 + i * 62} ${r.y + 17})`} />
       ))}
@@ -508,8 +508,8 @@ export function PingPong({ rally }: { rally: boolean }) {
   const r = PIECES.pingpong;
   return (
     <Piece r={r} up={10} z={r.y + r.h}>
-      <rect x={r.x + 8} y={r.y + r.h - 10} width={5} height={14} style={f("card")} />
-      <rect x={r.x + r.w - 13} y={r.y + r.h - 10} width={5} height={14} style={f("card")} />
+      <rect x={r.x + 8} y={r.y + r.h - 10} width={5} height={14} style={f("wood")} />
+      <rect x={r.x + r.w - 13} y={r.y + r.h - 10} width={5} height={14} style={f("wood")} />
       <g data-orb="jade">
         <rect x={r.x} y={r.y} width={r.w} height={r.h - 12} rx={4} style={f("accent")} />
       </g>

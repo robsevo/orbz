@@ -8,10 +8,10 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
-import { SURFACES } from "./src/design/tokens.ts";
+import { DEFAULT_THEME, SURFACES } from "./src/design/tokens.ts";
 import { hex } from "./src/design/color.ts";
 
-const ground = hex(SURFACES.dark.ground);
+const ground = hex(SURFACES[DEFAULT_THEME].ground); // the splash a phone shows: the default theme's page
 
 function installable(): Plugin {
   // each icon's address carries a stamp of what is in it: a phone keeps the icon it once fetched for an

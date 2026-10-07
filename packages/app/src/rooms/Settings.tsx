@@ -15,7 +15,7 @@ import { Brains } from "./Brains.tsx";
 import { Connections } from "./Connections.tsx";
 import { Passwords } from "./Passwords.tsx";
 
-const panel: CSSProperties = { display: "grid", gap: "var(--s3)", padding: "var(--s4)", borderRadius: 18, background: "var(--fill)", boxShadow: "inset 0 0 0 1px var(--hairline)", minWidth: 0 };
+const panel: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "var(--s3)", padding: "var(--s4)", borderRadius: 18, background: "var(--fill)", boxShadow: "inset 0 0 0 1px var(--hairline)", minWidth: 0 };
 const head: CSSProperties = { font: "700 11px/16px var(--font)", letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)", margin: 0 };
 const chip = (on: boolean): CSSProperties => ({
   font: "600 13px/18px var(--font)", border: 0, borderRadius: 999, padding: "6px 12px", cursor: "pointer", minHeight: 32,
@@ -97,7 +97,7 @@ export function Settings(o: {
     setSaid({ ok: true, text: `The office calls you ${r.name} now.` });
   };
   return (
-    <div style={{ display: "grid", gap: "var(--s4)", padding: "var(--s5)", alignContent: "start", maxWidth: 720, width: "100%", justifySelf: "center" }}>
+    <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "var(--s4)", padding: "var(--s5)", alignContent: "start", maxWidth: 720, width: "100%", justifySelf: "center" }}>
       <h2 style={{ margin: 0, font: "800 28px/34px var(--font)", color: "var(--text-1)" }}>Settings</h2>
       <Panel title="You">
         <form

@@ -145,6 +145,13 @@ export function ownersAgent(text: string): string | null {
   return first ? (/^([\p{L}][\p{L}\d'-]*)/u.exec(first.title)?.[1] ?? null) : null;
 }
 
+/** The mini constitution (owner, 10-06: "1 big constitution and a mini constitution for the
+ * agents"): what an orb carries when it only chimes in, or does what another orb asked, in a
+ * session. Core sections only, the ones about how it talks and stays honest and safe; the rest of
+ * its cut (its specialty's sections, how it plans, persists, searches) is the big one, for the orb
+ * leading the turn or working alone with the person. A test holds it to the core and its size. */
+export const MINI: readonly string[] = ["communication", "tone_and_formatting", "accuracy", "claims", "self_check", "injection_defense", "untrusted_input", "secrets"];
+
 /** How a researcher works (PLAN 3.10), ported from Ash's researcher (brain/agents/researcher.md):
  * the orbs whose work is finding things out load it, whatever the owner's file holds. */
 export const RESEARCHERS: readonly Specialty[] = ["research", "factcheck", "analyst", "travel", "career", "marketing", "product"];
@@ -159,15 +166,15 @@ Your office keeps a reading library: sites it follows, read each night and kept 
 
 /** One orb's constitution: the core and his specialty's sections, in the file's order, in his name,
  * then what the person approved for him to remember. */
-export function composeConstitution(o: { owner: string; specialty: Specialty; orbName: string; learned?: string[] }): string {
+export function composeConstitution(o: { owner: string; specialty: Specialty; orbName: string; learned?: string[]; mini?: boolean }): string {
   const agent = ownersAgent(o.owner);
   const rename = (t: string): string => (agent ? t.replace(new RegExp(`\\b${agent}\\b`, "g"), o.orbName) : t);
   const parts: string[] = [];
   for (const s of parseSections(o.owner)) {
-    if (!loads(SECTION_MAP[s.key], o.specialty) || !s.body) continue;
+    if (!(o.mini ? MINI.includes(s.key) : loads(SECTION_MAP[s.key], o.specialty)) || !s.body) continue;
     parts.push(`${"#".repeat(Math.max(2, s.level))} ${s.title}\n${rename(s.body)}`);
   }
-  if (RESEARCHERS.includes(o.specialty)) parts.push(RESEARCH_METHOD);
+  if (!o.mini && RESEARCHERS.includes(o.specialty)) parts.push(RESEARCH_METHOD);
   if (o.learned?.length) parts.push(`## What ${o.orbName} has learned (each line approved by the person)\n${o.learned.map((l) => `- ${l}`).join("\n")}`);
   return parts.join("\n\n");
 }

@@ -85,6 +85,23 @@ test("office life: traits sent, a meeting played on the floor, colleagues on the
   }
   assert.deepEqual(await measure(page), [], "the floor, with a meeting on it");
 
+  // back and forth (owner, 10-06: "every time i go back and forth if two orbs are interacting or playing a game
+  // the animation restarts"): a meeting under way for a while is shown where it is, never walked to again
+  for (let i = 0; i < 200 && Date.now() - m.at <= 12_500; i++) await page.waitForTimeout(100);
+  await page.evaluate(() => (location.hash = "#/calendar"));
+  await page.waitForTimeout(800);
+  await page.evaluate(() => (location.hash = "#/office"));
+  const where = `meet:${m.place}:${m.b === "ada" ? "Ada" : "Bo"}`;
+  const first = await page.waitForFunction(
+    ({ name, where }) => {
+      const b = document.querySelector(`[data-floor-orb="${name}"]`);
+      return b?.getAttribute("data-at") === where ? b.getAttribute("data-arrived") : null; // the first moment it is the meeting's
+    },
+    { name: m.a === "ada" ? "Ada" : "Bo", where },
+    { timeout: 20_000, polling: "raf" },
+  );
+  assert.equal(await first.jsonValue(), "true", "back in the office: already at the meeting, not walking to it again");
+
   // the profile: how Ada gets on with Bo, and their last moment
   for (let i = 0; i < 40; i++) h.social.meet(); // a few more meetings: a friendship with a word
   await page.evaluate(() => (location.hash = "#/office/Ada"));

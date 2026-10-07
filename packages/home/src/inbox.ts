@@ -52,7 +52,7 @@ export interface Runner {
 }
 
 type Halt = "paused" | "stopped" | "shutdown";
-type Active = { run: number; abort: AbortController; done: Promise<void> };
+type Active = { run: number; conversation: string; abort: AbortController; done: Promise<void> };
 type ItemRow = {
   id: number;
   orb: string;
@@ -186,6 +186,11 @@ export class Inboxes {
     return r.n;
   }
 
+  /** What waits or runs in a conversation, oldest first. */
+  openIn(conversation: string): Item[] {
+    return (this.#db.prepare("SELECT * FROM inbox WHERE conversation = ? AND state IN ('queued', 'running') ORDER BY id").all(conversation) as ItemRow[]).map(toItem);
+  }
+
   queued(orb: string): Item[] {
     const rows = this.#db
       .prepare("SELECT * FROM inbox WHERE orb = ? AND state = 'queued' ORDER BY id")
@@ -223,6 +228,18 @@ export class Inboxes {
       this.#events.append("orb.stopped", { dropped: Number(r.changes) }, { orb });
     });
     this.#active.get(orb)?.abort.abort("stopped" satisfies Halt);
+  }
+
+  /** Drops what is waiting in a conversation and stops what runs in it (a session deleted);
+   * resolves once those runs have ended, so nothing they say lands after. */
+  async drop(conversation: string): Promise<void> {
+    tx(this.#db, () => {
+      const r = this.#db.prepare("UPDATE inbox SET state = 'dropped' WHERE conversation = ? AND state = 'queued'").run(conversation);
+      if (Number(r.changes)) this.#events.append("inbox.dropped", { dropped: Number(r.changes) }, { conversation });
+    });
+    const ending = [...this.#active.values()].filter((a) => a.conversation === conversation);
+    for (const a of ending) a.abort.abort("stopped" satisfies Halt);
+    await Promise.all(ending.map((a) => a.done.catch(() => {})));
   }
 
   /** At boot: runs a crash cut off go back to the head of their queue, marked interrupted. */
@@ -311,7 +328,7 @@ export class Inboxes {
     };
 
     // Active before the runner is called: a runner may report activity before its first await.
-    const active: Active = { run, abort, done: Promise.resolve() };
+    const active: Active = { run, conversation, abort, done: Promise.resolve() };
     this.#active.set(orb, active);
     active.done = (async () => {
       let result: Settled<RunResult | void>;

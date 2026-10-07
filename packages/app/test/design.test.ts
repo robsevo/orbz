@@ -107,3 +107,29 @@ test("the token lint finds no colour outside the tokens (and finds every planted
   const src = fileURLToPath(new URL("../src", import.meta.url));
   assert.deepEqual(lintTree(src), []);
 });
+
+test("Light is not paper, Rose is rose, Sand is sand; the floor's walls and furniture are their own colours (owner, 10-06)", () => {
+  const ok = (c: RGB) => rgbToOklch(c);
+  // "light mode, wayy too light": a soft grey day, its card under paper white
+  assert.ok(ok(SURFACES.light.card).L < 0.95 && ok(SURFACES.light.ground).L < 0.88, `light card L ${ok(SURFACES.light.card).L.toFixed(3)}`);
+  // "rose is not rose enough", "neither is sand": each wears its colour where you see it most, the card and the side
+  for (const [t, from, to] of [["rose", 330, 30], ["sand", 55, 95]] as const) {
+    for (const k of ["ground", "card", "side"] as const) {
+      const c = ok(SURFACES[t][k]);
+      const h = (c.h + 360) % 360;
+      const inArc = from < to ? h >= from && h <= to : h >= from || h <= to;
+      assert.ok(c.C >= (k === "card" ? 0.025 : 0.04) && inArc, `${t} ${k} ${hex(SURFACES[t][k])}: chroma ${c.C.toFixed(3)} at ${h.toFixed(0)}°`);
+    }
+  }
+  // "make the furniture and walls their own color": the wall and the wood stand apart from the app's surfaces and each other
+  const dE = (a: RGB, b: RGB): number => {
+    const x = ok(a), y = ok(b);
+    return Math.hypot(x.L - y.L, x.C * Math.cos((x.h * Math.PI) / 180) - y.C * Math.cos((y.h * Math.PI) / 180), x.C * Math.sin((x.h * Math.PI) / 180) - y.C * Math.sin((y.h * Math.PI) / 180));
+  };
+  for (const t of THEMES) {
+    const s = SURFACES[t];
+    for (const k of ["wall", "wood"] as const) for (const bg of ["card", "side", "raised"] as const) assert.ok(dE(s[k], s[bg]) > 0.05, `${t}: the ${k} is too like the ${bg}`);
+    assert.ok(dE(s.wall, s.wood) > 0.05, `${t}: wall and wood alike`);
+    assert.ok(ok(s.wood).C > 0.03, `${t}: the wood has no warmth`);
+  }
+});

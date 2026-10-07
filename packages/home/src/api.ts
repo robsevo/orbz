@@ -535,7 +535,8 @@ async function handle(
   // office life (PLAN 5.9): the friendships, the meetings (the floor plays the ones under way), the lessons
   // waiting for your yes; an orb's traits as the app's DNA has them; Keep or Not now for a lesson
   if (method === "GET" && url.pathname === "/social") {
-    return { friendships: home.social.friendships(), meetings: home.social.recent(20), current: home.social.current(), lessons: home.social.lessons("waiting") };
+    // `now` is the home's clock: a device times the meetings by it, whatever its own clock says
+    return { now: home.clock.now(), friendships: home.social.friendships(), meetings: home.social.recent(20), current: home.social.current(), lessons: home.social.lessons("waiting") };
   }
   if (method === "GET" && parts[0] === "orbs" && parts.length === 3 && parts[2] === "friends") {
     const id = decodeURIComponent(parts[1]!);
@@ -664,6 +665,12 @@ async function handle(
       const s = home.team.get(id);
       if (!s) throw new HttpError(404, `no session ${parts[1]}`);
       return { session: s };
+    }
+    // deleting a session (owner, 10-06: "give the user ability to delete sessions")
+    if (method === "DELETE" && parts.length === 2) {
+      if (!home.team.get(id)) throw new HttpError(404, `no session ${parts[1]}`);
+      await home.team.remove(id);
+      return { deleted: id };
     }
     // the team's board (PLAN 5.1, 5.2): its plans row by row, who holds what, the reviews waiting
     // and the changes proposed, and the chatter written from it all by code

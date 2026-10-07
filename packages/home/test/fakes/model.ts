@@ -7,7 +7,7 @@ import type { TestContext } from "node:test";
 export type Turn = {
   /** Streamed in these chunks (default: one chunk "ok"). */
   chunks?: string[];
-  calls?: { name: string; args: Record<string, unknown>; id?: string }[];
+  calls?: { name: string; args: Record<string, unknown>; id?: string; sig?: string }[];
   /** Wait this long between chunks. */
   gapMs?: number;
   /** After the chunks, keep the stream open until the client goes away. */
@@ -26,6 +26,8 @@ export type Turn = {
 export type FakeModel = {
   url: string;
   agent: Record<string, unknown>[][];
+  /** Each streamed request whole (its model, tools and every other field), beside `agent`. */
+  bodies: Record<string, unknown>[];
   summaries: number;
   script: Turn[];
   /** What GET /models lists (Gemini's OpenAI root lists "models/…" ids), and the keys it was asked with. */
@@ -43,7 +45,7 @@ export type FakeModel = {
 };
 
 export async function fakeModel(t: TestContext, script: Turn[] = []): Promise<FakeModel> {
-  const fm: FakeModel = { url: "", agent: [], summaries: 0, script, models: [], keys: [], said: [], replies: [] };
+  const fm: FakeModel = { url: "", agent: [], bodies: [], summaries: 0, script, models: [], keys: [], said: [], replies: [] };
   const sse = (o: unknown): string => `data: ${JSON.stringify(o)}\n\n`;
   let ids = 0;
   const server = createServer((req, res) => {
@@ -67,6 +69,7 @@ export async function fakeModel(t: TestContext, script: Turn[] = []): Promise<Fa
         return;
       }
       fm.agent.push(msgs as Record<string, unknown>[]);
+      fm.bodies.push(body as Record<string, unknown>);
       const turn = fm.script.shift() ?? {};
       if (turn.status && turn.status >= 400) {
         res.writeHead(turn.status, { "content-type": "application/json", ...(turn.retryAfter && { "retry-after": String(turn.retryAfter) }) });
@@ -89,7 +92,8 @@ export async function fakeModel(t: TestContext, script: Turn[] = []): Promise<Fa
         return;
       }
       (turn.calls ?? []).forEach((c, index) => {
-        res.write(sse({ choices: [{ delta: { tool_calls: [{ index, id: c.id ?? `call_${++ids}`, type: "function", function: { name: c.name, arguments: JSON.stringify(c.args) } }] } }] }));
+        // `sig`: Gemini's thought signature, as its OpenAI root sends it with a call
+        res.write(sse({ choices: [{ delta: { tool_calls: [{ index, id: c.id ?? `call_${++ids}`, type: "function", function: { name: c.name, arguments: JSON.stringify(c.args) }, ...(c.sig && { extra_content: { google: { thought_signature: c.sig } } }) }] } }] }));
       });
       res.write(sse({ choices: [{ delta: {}, finish_reason: turn.calls?.length ? "tool_calls" : "stop" }] }));
       res.write(sse({ choices: [], usage: { prompt_tokens: 100, completion_tokens: 10 } }));

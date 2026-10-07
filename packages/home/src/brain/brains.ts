@@ -21,6 +21,17 @@ const KEY = "orbs.gemini";
 const SEARCH_KEY = "orbs.tavily";
 export const TAVILY_BASE = "https://api.tavily.com";
 
+/** The newest flash-lite a key may use, or null: the light brain's turns on Gemini (PLAN 5.10). A
+ * free key gets far more requests a day on it than on the flash (about 500 to 20, reported 09-03). */
+export function pickGeminiLite(ids: string[]): string | null {
+  const lite = ids
+    .map((id) => id.replace(/^models\//, ""))
+    .map((id) => ({ id, v: /^gemini-(\d+(?:\.\d+)?)-flash-lite$/.exec(id)?.[1] }))
+    .filter((x): x is { id: string; v: string } => x.v !== undefined)
+    .sort((a, b) => Number(b.v) - Number(a.v));
+  return lite[0]?.id ?? null;
+}
+
 /** The newest plain flash a key may use ("gemini-3.8-flash" over "-lite" and "-preview"). */
 export function pickGeminiModel(ids: string[]): string {
   const flash = ids
@@ -39,7 +50,7 @@ export class KeyRefusedError extends Error {
 }
 
 export type LocalCoder = { baseUrl: string; model: string };
-type Saved = { gemini?: { model: string }; local?: LocalCoder; search?: true };
+type Saved = { gemini?: { model: string; lite?: string | null }; local?: LocalCoder; search?: true };
 
 export type BrainsOptions = {
   dataDir: string;
@@ -93,15 +104,34 @@ export class Brains {
     return this.#store;
   }
 
-  /** Reads the Gemini key from the keychain, once, when there is a saved Gemini to read it for. */
-  async load(): Promise<void> {
+  /** Reads the Gemini key from the keychain, once, when there is a saved Gemini to read it for; a
+   * key kept before the light brain (10-06) has its flash-lite looked up once. */
+  async load(fetcher: typeof fetch = fetch): Promise<void> {
     if (!this.#saved.gemini) return;
     this.#geminiKey = await (await this.#storeP()).get(KEY);
+    if (this.#geminiKey && this.#saved.gemini.lite === undefined) {
+      try {
+        const res = await fetcher(`${this.#o.geminiBase ?? GEMINI_BASE}/models`, { headers: { authorization: `Bearer ${this.#geminiKey}` }, signal: AbortSignal.timeout(15_000) });
+        if (res.ok) {
+          const j = (await res.json().catch(() => ({}))) as { data?: { id?: string }[] };
+          this.#saved = { ...this.#saved, gemini: { ...this.#saved.gemini, lite: pickGeminiLite((j.data ?? []).map((m) => String(m.id ?? ""))) } };
+          this.#write();
+        }
+      } catch {
+        // looked up again at the next start
+      }
+    }
   }
 
   #gemini(): Endpoint | null {
     if (!this.#geminiKey || !this.#saved.gemini) return null;
     return { name: "gemini", baseUrl: this.#o.geminiBase ?? GEMINI_BASE, apiKey: this.#geminiKey, model: this.#saved.gemini.model, retries: 0 };
+  }
+
+  /** A brain the chain gave, on its light model where it has one (PLAN 5.10): Gemini's flash-lite. */
+  light(ep: Endpoint): Endpoint {
+    const lite = this.#saved.gemini?.lite;
+    return ep.chain === "gemini" && lite ? { ...ep, model: lite } : ep;
   }
 
   #local(): Endpoint | null {
@@ -126,13 +156,16 @@ export class Brains {
     }
     if (res.status === 400 || res.status === 401 || res.status === 403) throw new KeyRefusedError("Gemini refused that key.");
     let model = GEMINI_FALLBACK_MODEL;
+    let lite: string | null = null;
     if (res.ok) {
       const j = (await res.json().catch(() => ({}))) as { data?: { id?: string }[] };
-      model = pickGeminiModel((j.data ?? []).map((m) => String(m.id ?? "")));
+      const ids = (j.data ?? []).map((m) => String(m.id ?? ""));
+      model = pickGeminiModel(ids);
+      lite = pickGeminiLite(ids);
     }
     await (await this.#storeP()).set(KEY, k);
     this.#geminiKey = k;
-    this.#saved = { ...this.#saved, gemini: { model } };
+    this.#saved = { ...this.#saved, gemini: { model, lite } };
     this.#write();
     return { model };
   }

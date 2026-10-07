@@ -30,9 +30,9 @@ const PLAN = [
 
 async function party(t: Parameters<typeof agentHome>[0], more: { chunks?: string[] }[] = []) {
   const h = await agentHome(t, [
+    { calls: [{ name: "agree", args: { decision: "Saturday, at the park" } }] }, // Hazel leads, and records it (PLAN 5.10)
     { chunks: ["Saturday works, at the park."] },
-    { calls: [{ name: "agree", args: { decision: "Saturday, at the park" } }] },
-    { chunks: ["Agreed: Saturday."] },
+    { chunks: ["Agreed: Saturday."] }, // Milo chimes in
     ...more,
   ]);
   h.home.inbox.addOrb("hazel", "Hazel", "planning");
@@ -78,28 +78,27 @@ test("what one orb agreed reaches the others; a brainstorm reopened is a session
   const hazel = text(h.model.agent[3]!);
   assert.match(hazel, /Summary of the earlier conversation:[\s\S]*"A birthday party", reopened[\s\S]*What was agreed then:\n- Saturday, at the park[\s\S]*Where it was left: Agreed: Saturday\./);
   assert.throws(() => reopen(h.home, 99), /no session 99/);
-  // in the first session, Milo agreed; Hazel heard it on her next turn, as agreed, by no one's mouth
+  // Milo, named, agreed; Hazel heard it on her next turn, as agreed, by no one's mouth
   const later = await agentHome(t, [
-    { chunks: ["Saturday works."] },
-    { calls: [{ name: "agree", args: { decision: "Saturday, at the park" } }] },
+    { calls: [{ name: "agree", args: { decision: "Saturday, at the park" } }] }, // @Milo: a whole turn, his tools with it
     { chunks: ["Agreed."] },
-    { chunks: ["Then I'll book the park."] },
-    { chunks: ["Good."] },
+    { chunks: ["Then I'll book the park."] }, // Hazel leads the next
+    { chunks: ["Good."] }, // Milo chimes in
   ]);
   later.home.inbox.addOrb("hazel", "Hazel", "planning");
   later.home.inbox.addOrb("milo", "Milo", "research");
   const s = later.home.team.create("Party", { brainstorm: ["hazel", "milo"] });
-  later.home.team.say(s.id, "brainstorm", "When?");
-  for (let i = 0; i < 30 && later.model.agent.length < 3; i++) {
+  later.home.team.say(s.id, "brainstorm", "@Milo when?");
+  for (let i = 0; i < 30 && later.model.agent.length < 2; i++) {
     await later.home.inbox.idle();
     await new Promise((r) => setTimeout(r, 30));
   }
   later.home.team.say(s.id, "brainstorm", "Who books it?");
-  for (let i = 0; i < 30 && later.model.agent.length < 4; i++) {
+  for (let i = 0; i < 30 && later.model.agent.length < 3; i++) {
     await later.home.inbox.idle();
     await new Promise((r) => setTimeout(r, 30));
   }
-  const heard = later.model.agent[3]!.filter((m) => m.role === "user").map((m) => String(m.content));
+  const heard = later.model.agent[2]!.filter((m) => m.role === "user").map((m) => String(m.content));
   assert.ok(heard.includes("[Agreed]: Saturday, at the park"), `Hazel hears what Milo agreed (${heard.join(" | ")})`);
 });
 

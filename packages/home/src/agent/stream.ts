@@ -16,6 +16,8 @@ export type Streamed = {
   finish: string | null;
   promptTokens: number;
   completionTokens: number;
+  /** Of the prompt, how much the provider read from its cache (0 when it does not say). */
+  cachedTokens: number;
   costUsd: number | null;
   costSource: CostSource;
   /** The person stopped it; `text` is what had arrived by then. */
@@ -33,18 +35,18 @@ export type Streamed = {
 };
 
 export const emptyStreamed = (): Streamed => ({
-  text: "", toolCalls: [], finish: null, promptTokens: 0, completionTokens: 0, costUsd: null, costSource: "unknown",
+  text: "", toolCalls: [], finish: null, promptTokens: 0, completionTokens: 0, cachedTokens: 0, costUsd: null, costSource: "unknown",
   stopped: false, error: null, errorCode: null, limited: null, status: null, retryAfterS: null,
 });
 
 export async function streamChat(
   ep: Endpoint,
-  body: { messages: ModelMessage[]; tools?: ToolSpec[]; maxTokens?: number },
+  body: { messages: ModelMessage[]; tools?: ToolSpec[]; maxTokens?: number; brief?: boolean },
   opts: { signal?: AbortSignal; onText?: (delta: string) => void } = {},
 ): Promise<Streamed> {
   if (ep.api === "responses") return streamResponses(ep, body, opts);
   const out = emptyStreamed();
-  const calls: { id: string; name: string; arguments: string }[] = [];
+  const calls: { id: string; name: string; arguments: string; sig?: string }[] = [];
   let reportedCost: number | null = null;
   const headers: Record<string, string> = { "content-type": "application/json" };
   if (ep.apiKey) headers.authorization = `Bearer ${ep.apiKey}`;
@@ -59,7 +61,7 @@ export async function streamChat(
       signal,
       body: JSON.stringify({
         model: ep.model,
-        messages: body.messages,
+        messages: wireMessages(body.messages, isGemini(ep)),
         ...(body.tools?.length && { tools: body.tools }),
         max_tokens: body.maxTokens ?? 8000,
         stream: true,
@@ -96,6 +98,7 @@ export async function streamChat(
         if (j.usage) {
           out.promptTokens = Number(j.usage.prompt_tokens ?? out.promptTokens);
           out.completionTokens = Number(j.usage.completion_tokens ?? out.completionTokens);
+          out.cachedTokens = Number(j.usage.prompt_tokens_details?.cached_tokens ?? out.cachedTokens);
           if (typeof j.usage.cost === "number") reportedCost = j.usage.cost;
         }
         const choice = j.choices?.[0];
@@ -111,6 +114,8 @@ export async function streamChat(
           if (tc.id) c.id = tc.id;
           if (tc.function?.name) c.name += tc.function.name;
           if (tc.function?.arguments) c.arguments += tc.function.arguments;
+          const sig = tc.extra_content?.google?.thought_signature;
+          if (typeof sig === "string" && sig) c.sig = sig;
         }
         if (choice.finish_reason) out.finish = choice.finish_reason;
       }
@@ -124,7 +129,7 @@ export async function streamChat(
   function finish(): Streamed {
     out.toolCalls = calls
       .filter((c) => c.name)
-      .map((c, i) => ({ id: c.id || `call_${i}`, name: c.name, arguments: c.arguments || "{}" }));
+      .map((c, i) => ({ id: c.id || `call_${i}`, name: c.name, arguments: c.arguments || "{}", ...(c.sig && { sig: c.sig }) }));
     if (reportedCost !== null) {
       out.costUsd = reportedCost;
       out.costSource = "reported";
@@ -138,11 +143,32 @@ export async function streamChat(
 
 type StreamChunk = {
   choices?: {
-    delta?: { content?: unknown; tool_calls?: { index?: number; id?: string; function?: { name?: string; arguments?: string } }[] };
+    delta?: { content?: unknown; tool_calls?: { index?: number; id?: string; function?: { name?: string; arguments?: string }; extra_content?: { google?: { thought_signature?: unknown } } }[] };
     finish_reason?: string | null;
   }[];
-  usage?: { prompt_tokens?: number; completion_tokens?: number; cost?: number };
+  usage?: { prompt_tokens?: number; completion_tokens?: number; cost?: number; prompt_tokens_details?: { cached_tokens?: number } };
 };
+
+/** Gemini's OpenAI-compatible root (PLAN 1.11). */
+export const isGemini = (ep: Endpoint): boolean => ep.name === "gemini" || ep.baseUrl.includes("generativelanguage.googleapis.com");
+
+/** Google's documented stand-in for a call Gemini did not make itself (one ChatGPT made before the
+ * turn passed over): it skips the check rather than failing the request. */
+export const FOREIGN_SIGNATURE = "skip_thought_signature_validator";
+
+/** The messages as they go on the wire. Gemini 3 refuses a tool call sent back without the thought
+ * signature it came with (10-06: "Function call is missing a thought_signature", so every turn of
+ * Gemini's with a tool failed on its second step): its own goes back as it came, any other call
+ * carries Google's stand-in. Every other brain gets the calls without it. */
+export function wireMessages(messages: ModelMessage[], gemini: boolean): unknown[] {
+  return messages.map((m) => {
+    if (m.role !== "assistant" || !m.tool_calls?.length) return m;
+    return {
+      ...m,
+      tool_calls: m.tool_calls.map(({ sig, ...c }) => (gemini ? { ...c, extra_content: { google: { thought_signature: sig ?? FOREIGN_SIGNATURE } } } : c)),
+    };
+  });
+}
 
 /** The transport's own words: an errno code when there is one, else the message. */
 export function transportCause(e: unknown): string {

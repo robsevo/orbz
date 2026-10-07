@@ -41,10 +41,22 @@ export function teamTools(o: { claims: Claims; amendments: Amendments; board: Bo
         const id = session(ctx);
         if (id === null) return notHere;
         try {
-          const rows = new Set(o.board.rows(Number(a.plan)).filter((r) => !r.test).map((r) => r.row));
+          const features = o.board.rows(Number(a.plan)).filter((r) => !r.test);
+          const rows = new Set(features.map((r) => r.row));
           const unknown = list(a.rows).filter((r) => !rows.has(r));
           if (!rows.size) return { content: `plan ${s(a.plan)} has no board: it is not approved yet`, isError: true };
           if (unknown.length) return { content: `plan ${s(a.plan)} has no row ${unknown.join(", ")}`, isError: true };
+          // an even share (PLAN 5.10; owner, 10-06: "lets give everyone equal work to do, it seemed like
+          // only ash was given work"): with others in the tab, no one holds more than the open rows over them
+          const at = parseTabConversation(ctx.conversation)!;
+          const members = o.team().get(id)?.[at.tab] ?? [];
+          const open = new Set(features.filter((r) => r.box !== "[x]").map((r) => r.row));
+          const held = o.claims.live(id).find((c) => c.orb === ctx.orb && c.plan === Number(a.plan))?.rows ?? [];
+          const share = Math.ceil(open.size / Math.max(1, members.length));
+          const would = new Set([...held, ...list(a.rows)].filter((r) => open.has(r)));
+          if (members.length > 1 && would.size > share) {
+            return { content: `That is more than your share: ${open.size} open rows and ${members.length} orbs here, so ${share} each, and this would make yours ${would.size}. Claim at most ${Math.max(0, share - held.filter((r) => open.has(r)).length)} more, and leave the rest to the others.`, isError: true };
+          }
           const c = o.claims.claim({ session: id, plan: Number(a.plan), orb: ctx.orb, rows: list(a.rows), paths: list(a.paths) });
           ctx.note?.(`${o.nameOf(ctx.orb)} took row${c.rows.length > 1 ? "s" : ""} ${c.rows.join(", ")}${c.paths.length ? ` (${c.paths.join(", ")})` : ""}.`, { board: true, claim: c.id });
           return { content: `Yours: rows ${c.rows.join(", ")}${c.paths.length ? `, and ${c.paths.join(", ")}` : ""}. Hand them off when done.` };
@@ -93,7 +105,11 @@ export function teamTools(o: { claims: Claims; amendments: Amendments; board: Bo
         if (to === ctx.orb) return { content: "That is you.", isError: true };
         const depth = (ctx.depth ?? 0) + 1;
         if (depth > DEPTH) return { content: `Not asked: a request may go ${DEPTH} hands deep, and this one would be ${depth}. Do it yourself, or tell the person.`, isError: true };
-        o.team().ask(id, at.tab, ctx.orb, to, s(a.request).slice(0, 4000), depth);
+        try {
+          o.team().ask(id, at.tab, ctx.orb, to, s(a.request).slice(0, 4000), depth);
+        } catch (e) {
+          return { content: e instanceof Error ? e.message : String(e), isError: true };
+        }
         return { content: `Asked ${o.nameOf(to)}.` };
       },
     },

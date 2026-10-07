@@ -11,7 +11,7 @@ import { after, before, test } from "node:test";
 import { build } from "vite";
 import type { Browser } from "playwright-core";
 import { findChrome, launch, measure, serveDir, SIZES } from "./harness.ts";
-import { baseOf, HUES, SURFACES, THEMES, type ThemeId } from "../src/design/tokens.ts";
+import { baseOf, DEFAULT_THEME, HUES, SURFACES, THEMES, type ThemeId } from "../src/design/tokens.ts";
 
 const groundOf = (t: "dark" | "light"): string => `rgb(${SURFACES[t].ground.join(", ")})`;
 
@@ -143,13 +143,19 @@ for (const t of (Object.keys(THEMES) as ThemeId[]).filter((x) => x !== "dark" &&
   });
 }
 
-test("Settings' theme: chosen, worn at once, kept on a reload; System gives it back to the device", { skip }, async () => {
+test("Settings' theme: Midnight until you choose; chosen, worn at once, kept on a reload; System gives it back to the device, and stays", { skip }, async () => {
   const page = await browser.newPage({ viewport: SIZES.phone, colorScheme: "dark" });
   try {
     await page.goto(`${site.url}/orbs.html?splash=0&intro=0#/settings`);
+    const ground = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+    // a device that never chose wears the app's default (owner, 10-06: "make midnight the app default")
+    await page.locator('button[data-theme-choice="midnight"][aria-pressed="true"]').waitFor();
+    assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), DEFAULT_THEME);
+    assert.equal(await ground(), `rgb(${SURFACES[DEFAULT_THEME].ground.join(", ")})`);
+    await page.locator('button[data-theme-choice="light"]').click();
+    assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), "light");
     const midnight = page.locator('button[data-theme-choice="midnight"]');
     await midnight.click();
-    const ground = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
     assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), "midnight");
     assert.equal(await ground(), `rgb(${SURFACES.midnight.ground.join(", ")})`);
     assert.equal(await midnight.getAttribute("aria-pressed"), "true");
@@ -160,6 +166,9 @@ test("Settings' theme: chosen, worn at once, kept on a reload; System gives it b
     await page.locator('button[data-theme-choice="system"]').click();
     assert.equal(await page.evaluate(() => document.documentElement.dataset.theme ?? null), null);
     assert.equal(await ground(), `rgb(${SURFACES.dark.ground.join(", ")})`, "the device's own again");
+    await page.reload();
+    await page.locator('button[data-theme-choice="system"][aria-pressed="true"]').waitFor();
+    assert.equal(await page.evaluate(() => document.documentElement.dataset.theme ?? null), null, "System is kept: not Midnight again after a reload");
   } finally {
     await page.close();
   }

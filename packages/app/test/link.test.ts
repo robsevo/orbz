@@ -98,7 +98,7 @@ test("a hire, and a let-go, are the home's: one let go is archived there, out of
   await new Promise((r) => setTimeout(r, 300));
   assert.deepEqual(home.inbox.orbs().map((o) => o.name), ["Pip", "Wren"]);
   await page.getByRole("button", { name: "Let Wren go…" }).click();
-  await page.getByRole("group", { name: "Let Wren go?" }).getByRole("button", { name: "Let Wren go" }).click();
+  await page.getByRole("group", { name: "Let Wren go?" }).getByRole("button", { name: "Let Wren go", exact: true }).click();
   // the page moves to Pip on its own timer: under the gate's load a fixed wait ended before it ran, and the
   // next step reloaded Wren's address (10-06, reproduced by reloading at once)
   await page.waitForFunction(() => location.hash === "#/office/Pip", undefined, { timeout: 30_000 });

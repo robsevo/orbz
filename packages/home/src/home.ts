@@ -35,7 +35,7 @@ import { Vault } from "./computer/vault.ts";
 import { defaultStore, type SecretStore } from "./chatgpt/store.ts";
 import type { Undo } from "./gym/card.ts";
 import { type Level, LEVELS, levelOf, nextFor, tenureOf } from "./gym/levels.ts";
-import { orgTools } from "./org.ts";
+import { orgTools, whoFits } from "./org.ts";
 import { interviewSystem, Recruiter, RecruiterError } from "./recruiter.ts";
 import { type Fetcher, Reading, type Sleep } from "./reading/reading.ts";
 import { readingTools, withReading } from "./reading/tools.ts";
@@ -418,9 +418,18 @@ export class Home {
           clock: this.clock,
           dataDir: this.dataDir,
           background: this.#background,
-          endpoint: () => this.brains.chain.current()?.ep ?? null,
+          // a helper's turn in a session (PLAN 5.10) on the brain's light model: the plan's Luna, Gemini's flash-lite
+          endpoint: (o) => {
+            const cur = this.brains.chain.current();
+            if (!cur || !o?.light) return cur?.ep ?? null;
+            if (cur.ep.plan === "chatgpt") {
+              const light = this.chatgpt.endpoint({ light: true });
+              return light ? { ...light, chain: cur.ep.chain } : cur.ep;
+            }
+            return this.brains.light(cur.ep);
+          },
           chain: this.brains.chain,
-          planLimited: (why) => this.chatgpt.limited(why),
+          planLimited: (why, model) => this.chatgpt.limited(why, model),
           ready: () => brainsReady,
           orbName: (orb) => this.inbox.orb(orb)?.name ?? orb,
           orbSpecialty: (orb) => this.inbox.orb(orb)?.specialty ?? "general",
@@ -627,10 +636,30 @@ export class Home {
     const plan = Number(card.meta.plan);
     if (Number.isInteger(plan) && plan > 0) {
       this.plans.mark(plan, status === "denied" ? "declined" : status);
-      if (status === "approved") this.board.open(plan, this.plans.get(plan)!.body); // the plan becomes the board
+      if (status === "approved") {
+        this.board.open(plan, this.plans.get(plan)!.body); // the plan becomes the board
+        this.#deal(card, plan);
+      }
     }
     this.inbox.enqueue(card.orb, card.conversation, "system", `(plan ${status})`, { data: { resume: card.id } });
     return done;
+  }
+
+  /** A plan approved in a session: its open rows dealt evenly across the team (PLAN 5.10), each to
+   * who fits it best among those under their share, and what the lead holds said on its card. */
+  #deal(card: Card, plan: number): void {
+    const at = parseTabConversation(card.conversation);
+    if (!at) return;
+    const body = this.plans.get(plan)!.body;
+    const texts = new Map(parsePlan(body).rows.filter((r) => !r.test).map((r) => [r.id, r.text]));
+    const rows = this.board.rows(plan).filter((r) => !r.test && r.box !== "[x]").map((r) => ({ row: r.row, text: texts.get(r.row) ?? r.row }));
+    const office = this.inbox.orbs().map((o) => ({ id: o.id, name: o.name, specialty: o.specialty, level: levelOf(this.events, o.id), createdAt: o.createdAt }));
+    const dealt = this.team.deal(at.id, {
+      tab: at.tab, plan, lead: card.orb, rows,
+      rank: (text, members) => whoFits(this.events, text, office.filter((m) => members.includes(m.id)), (o) => this.school.diplomas(o), (o, others) => this.social.affinity(o, others)).map((r) => r.orb),
+      claim: (orb, mine) => this.claims.claim({ session: at.id, plan, orb, rows: mine, paths: [] }),
+    });
+    if (Object.keys(dealt).length) this.conversations.annotateCard(card.id, { dealt });
   }
 
   /** One tap on the morning card (PLAN 3.5): a habit taken back (the version before it answers

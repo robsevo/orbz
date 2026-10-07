@@ -18,6 +18,13 @@ export type PlanTurn = {
   code?: string;
   /** A stream that ends in `response.failed` with this code. */
   failed?: string;
+  /** A stream that ends in an `error` event with this code inside its `error` (10-06: how a usage
+   * limit came, codeless at the event's top). */
+  error?: string;
+  /** With `status`: the field the refusal names (`error.param`). */
+  param?: string;
+  /** Of the prompt, how much came from the cache. */
+  cached?: number;
   /** A stream that ends without `response.completed`. */
   cut?: boolean;
 };
@@ -39,6 +46,8 @@ export type FakeChatGPT = {
   tokenError: string | null;
   refreshError: string | null;
   script: PlanTurn[];
+  /** What GET /v1/models lists (default: gpt-6, and one hidden). */
+  models: { slug: string; display_name: string; visibility: string }[] | null;
 };
 
 const b64 = (o: unknown): string => Buffer.from(JSON.stringify(o)).toString("base64url");
@@ -55,7 +64,7 @@ export async function fakeChatGPT(t: TestContext): Promise<FakeChatGPT> {
   const f: FakeChatGPT = {
     issuer: "", apiBase: "", authorize: [], token: [], responses: [], revoked: [], secrets: [],
     idToken: "none", callback: "good", scope: "openid profile email offline_access resource.invoke chatgpt.tokens.use.direct",
-    expiresIn: 3600, tokenError: null, refreshError: null, script: [],
+    expiresIn: 3600, tokenError: null, refreshError: null, script: [], models: null,
   };
   const jwt = (claims: Record<string, unknown>, k: KeyObject): string => {
     const head = b64({ alg: "RS256", kid: "k1", typ: "JWT" });
@@ -156,19 +165,23 @@ export async function fakeChatGPT(t: TestContext): Promise<FakeChatGPT> {
       const bearer = (req.headers.authorization ?? "").replace(/^Bearer /, "");
       if (path === "/v1/models") {
         if (!live.has(bearer)) return json(res, 401, { error: { code: "subscription_sharing_invalid_user" } });
-        return json(res, 200, { models: [{ slug: "gpt-6", display_name: "GPT-6", visibility: "list" }, { slug: "gpt-6-internal", display_name: "internal", visibility: "hide" }] });
+        return json(res, 200, { models: f.models ?? [{ slug: "gpt-6", display_name: "GPT-6", visibility: "list" }, { slug: "gpt-6-internal", display_name: "internal", visibility: "hide" }] });
       }
       if (path === "/v1/responses") {
         const body = JSON.parse(raw || "{}") as Record<string, unknown>;
         f.responses.push({ body, bearer });
         if (!live.has(bearer)) return json(res, 401, { error: { code: "subscription_sharing_invalid_user", message: "sign in again" } });
         const turn = f.script.shift() ?? {};
-        if (turn.status) return json(res, turn.status, { error: { code: turn.code ?? null, message: "scripted refusal" } });
+        if (turn.status) return json(res, turn.status, { error: { code: turn.code ?? null, message: "scripted refusal", ...(turn.param && { param: turn.param }) } });
         res.writeHead(200, { "content-type": "text/event-stream" });
         sse(res, { type: "response.created", response: { status: "in_progress" } });
-        for (const c of turn.chunks ?? (turn.calls || turn.failed ? [] : ["ok"])) sse(res, { type: "response.output_text.delta", delta: c });
+        for (const c of turn.chunks ?? (turn.calls || turn.failed || turn.error ? [] : ["ok"])) sse(res, { type: "response.output_text.delta", delta: c });
         if (turn.failed) {
           sse(res, { type: "response.failed", response: { status: "failed", error: { code: turn.failed, message: "scripted" } } });
+          return res.end();
+        }
+        if (turn.error) {
+          sse(res, { type: "error", error: { type: "usage_limit_reached", code: turn.error, message: "You've hit your usage limit." } });
           return res.end();
         }
         (turn.calls ?? []).forEach((c, i) => {
@@ -179,7 +192,7 @@ export async function fakeChatGPT(t: TestContext): Promise<FakeChatGPT> {
           sse(res, { type: "response.function_call_arguments.delta", item_id: item.id, delta: args.slice(5) });
           sse(res, { type: "response.output_item.done", item: { ...item, arguments: args } });
         });
-        if (!turn.cut) sse(res, { type: "response.completed", response: { status: "completed", usage: { input_tokens: 120, output_tokens: 12 } } });
+        if (!turn.cut) sse(res, { type: "response.completed", response: { status: "completed", usage: { input_tokens: 120, output_tokens: 12, ...(turn.cached && { input_tokens_details: { cached_tokens: turn.cached } }) } } });
         return res.end();
       }
       json(res, 404, { error: "no such path" });

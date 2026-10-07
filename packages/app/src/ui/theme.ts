@@ -1,15 +1,19 @@
 // The theme you chose (owner, 10-02: "different themes users can use besides light or dark"), kept
-// in this browser: a device's look is its own. None chosen follows the system's light or dark.
-import { THEMES, type ThemeId } from "../design/tokens.ts";
+// in this browser: a device's look is its own. Nothing chosen yet wears Midnight (owner, 10-06: "make
+// midnight the app default"); choosing System follows the device's light or dark, and is kept as such.
+import { DEFAULT_THEME, THEMES, type ThemeId } from "../design/tokens.ts";
 
 const KEY = "orbs.theme";
+const SYSTEM = "system";
 
+/** The theme to wear: the one chosen here, null for System, Midnight when none was ever chosen. */
 export function savedTheme(): ThemeId | null {
   try {
     const v = globalThis.localStorage?.getItem(KEY) ?? null;
-    return v !== null && v in THEMES ? (v as ThemeId) : null;
+    if (v === SYSTEM) return null;
+    return v !== null && v in THEMES ? (v as ThemeId) : DEFAULT_THEME;
   } catch {
-    return null; // a private window: the system's
+    return DEFAULT_THEME; // a private window: the app's own
   }
 }
 
@@ -22,8 +26,7 @@ export function applyTheme(t: ThemeId | null, keep = true): void {
   }
   if (!keep) return;
   try {
-    if (t) globalThis.localStorage?.setItem(KEY, t);
-    else globalThis.localStorage?.removeItem(KEY);
+    globalThis.localStorage?.setItem(KEY, t ?? SYSTEM); // System is a choice too, kept like the others
   } catch {
     // a private window: worn for as long as the page is open
   }
