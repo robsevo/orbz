@@ -3,11 +3,14 @@
 // in Chromium:
 //   - a button squishes the moment it goes down and springs back when let go;
 //   - it sounds on the way down, and the sound fits what was pressed;
-//   - quick presses climb, and no two are the same pitch;
+//   - few presses sound (owner, 10-07: "fkn limit them please"): a tab, a plain button and a choice
+//     already made are silent, by mouse or by key, and a double press is one click;
+//   - quick presses climb and fall back, walked on a clock of the test's own;
 //   - he reacts to what you choose for him;
 //   - the sound switch silences it all, and is remembered.
 // Every sound is rendered offline and measured: it is quiet, ramps in without a pop, and is over
-// quickly; the low clicks are round, not bright. A planted harsh click fails each of those.
+// quickly; the clicks are round, not bright, and deep (owner, 10-07: "a deep click. comforting"). A
+// planted harsh click fails each of those, and the old wooden "tok" is not deep.
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -69,7 +72,7 @@ const clear = (page: Page): Promise<void> => page.evaluate(() => void ((globalTh
 test("a press squishes the moment it goes down, sounds then, and springs back when let go", { skip }, async () => {
   const page = await open();
   try {
-    const chip = page.getByRole("button", { name: "Wiggle" });
+    const chip = page.getByRole("button", { name: "Listening" }); // a choice not yet made: one that sounds
     const scale = (): Promise<number> => chip.evaluate((el) => {
       const v = getComputedStyle(el).scale;
       return v === "none" ? 1 : Number.parseFloat(v);
@@ -93,7 +96,7 @@ test("a press squishes the moment it goes down, sounds then, and springs back wh
     await page.mouse.down();
     await settles((v) => v < 1);
     assert.ok((await scale()) <= 0.945, "down: squished");
-    assert.deepEqual((await played(page)).map((p) => p.sound), ["tap"], "and it sounded already, before the release");
+    assert.deepEqual((await played(page)).map((p) => p.sound), ["pick"], "and it sounded already, before the release");
     await page.mouse.up();
     await settles((v) => v >= 1);
     // it springs past its size and back (the spring's overshoot): wait for that to finish too
@@ -104,51 +107,73 @@ test("a press squishes the moment it goes down, sounds then, and springs back wh
   }
 });
 
-test("the sound fits the press: a tab ticks, a choice picks, dice roll, he bubbles, creating sings, deleting pops", { skip }, async () => {
+test("the sound fits the press: a choice clicks, dice roll, he bubbles, creating sings, deleting pops; a tab, a plain button and a choice made are silent", { skip }, async () => {
   const page = await open();
   try {
     // a plain new orb: his shape the bean, on the first page with eight others (from the dice, it
     // could be the one alone on the last page, with nothing else there to press)
     await plainNewOrb(page);
-    await page.getByRole("tab", { name: "Personality" }).click(); // off the Shape tab, so pressing it ticks
+    await page.getByRole("tab", { name: "Personality" }).click(); // off the Shape tab, so pressing it is a change
     await clear(page);
-    await page.getByRole("tab", { name: "Shape" }).click();
-    await page.locator('[data-page]:not([hidden]) button[data-pick][aria-pressed="false"]').first().click(); // one he is not already, on the page shown
-    await page.waitForTimeout(700); // past the combo
+    await page.getByRole("tab", { name: "Shape" }).click(); // silent
+    const choice = page.locator('[data-page]:not([hidden]) button[data-pick][aria-pressed="false"]').first(); // one he is not already, on the page shown
+    const shape = await choice.getAttribute("data-pick");
+    await choice.click();
+    await page.waitForTimeout(300); // past the quarter second, so what follows is silent for being chosen
+    await page.locator(`[data-page]:not([hidden]) button[data-pick="${shape}"]`).click(); // chosen now: silent
     await page.getByRole("button", { name: "Roll everything" }).click();
     await page.locator("[data-cradle] canvas").first().click(); // the new orb (for the moment of the change, who he was is drawn behind)
     await page.getByRole("textbox", { name: "Name" }).fill("Pip");
     await page.getByRole("button", { name: "Create Pip" }).click();
-    await page.getByRole("button", { name: "Let Pip go…" }).click();
+    await page.getByRole("button", { name: "Let Pip go…" }).click(); // a plain button: silent
     await page.getByRole("button", { name: "Let Pip go", exact: true }).click();
-    assert.deepEqual((await played(page)).map((p) => p.sound), ["tick", "pick", "roll", "poke", "create", "tap", "delete"]);
-    // and a key press sounds as a click does
-    await clear(page);
-    await page.getByRole("button", { name: "Nod" }).focus();
-    await page.keyboard.press("Enter");
-    assert.deepEqual((await played(page)).map((p) => p.sound), ["tap"], "Enter on a button");
+    assert.deepEqual((await played(page)).map((p) => p.sound), ["pick", "roll", "poke", "create", "delete"]);
   } finally {
     await page.close();
   }
 });
 
-test("quick presses climb, and fall back once you stop", { skip }, async () => {
+test("a double press is one click, and a key sounds as a press does: a plain button silent, a choice a click", { skip }, async () => {
   const page = await open();
   try {
     await clear(page);
-    // the four presses in one go, inside the page: Playwright's own clicks, one after another, can
-    // take longer than the combo's 650 ms when the gate has every core busy (a race, not a combo)
-    await page.evaluate((names) => {
-      for (const n of names) {
-        const b = [...document.querySelectorAll("button")].find((x) => x.getAttribute("aria-label") === n || x.textContent?.trim() === n)!;
-        b.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, pointerType: "mouse" }));
-        b.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, button: 0, pointerType: "mouse" }));
-      }
-    }, ["Hop", "Wiggle", "Squish", "Jelly"]);
-    await page.waitForTimeout(800); // a rest: under load it only grows, so the fall back still holds
-    await page.getByRole("button", { name: "Nod" }).click();
-    const lifts = (await played(page)).map((p) => p.lift);
-    assert.deepEqual(lifts.map((l) => Math.round(l * 10) / 10), [0, 0.7, 1.4, 2.1, 0], "a combo, then rest");
+    // two presses in one go, inside the page: well within the quarter second however busy the machine
+    const press = (name: string): Promise<void> => page.evaluate((n) => {
+      const b = [...document.querySelectorAll("button")].find((x) => x.textContent?.trim() === n)!;
+      for (let i = 0; i < 2; i++) b.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, pointerType: "mouse" }));
+    }, name);
+    await press("Listening");
+    assert.deepEqual((await played(page)).map((p) => p.sound), ["pick"], "pressed twice at once: one click");
+    await press("Hop");
+    assert.deepEqual((await played(page)).map((p) => p.sound), ["pick"], "a plain button (a move): silent");
+    await clear(page);
+    await page.getByRole("button", { name: "Nod" }).focus();
+    await page.keyboard.press("Enter");
+    assert.deepEqual(await played(page), [], "Enter on a plain button: silent");
+    await page.waitForTimeout(300); // past the quarter second since the double press
+    await page.getByRole("button", { name: "Thinking" }).focus();
+    await page.keyboard.press("Enter");
+    assert.deepEqual((await played(page)).map((p) => p.sound), ["pick"], "Enter on a choice: a click");
+  } finally {
+    await page.close();
+  }
+});
+
+test("the pace, on a clock of the test's own: quick presses climb and fall back; the same sound within a quarter second is one; another sound is its own", { skip }, async () => {
+  const page = await browser.newPage();
+  try {
+    await page.goto(`${lab.url}/index.html`);
+    await page.waitForFunction(() => (globalThis as { ready?: boolean }).ready === true);
+    const lifts = await page.evaluate(() => {
+      const S = (globalThis as unknown as { S: { pace(p: object, s: string, t: number, voice?: number): number | null } }).S;
+      const p = { last: {}, pressed: -1e9, streak: 0 };
+      const walk: [string, number][] = [["pick", 0], ["pick", 300], ["pick", 600], ["pick", 900], ["pick", 1700], ["pick", 1800], ["delete", 1810], ["pick", 1950], ["blip", 1960], ["blip", 1970]];
+      return walk.map(([s, t]) => {
+        const l = S.pace(p, s, t, 2);
+        return l === null ? null : Math.round(l * 10) / 10;
+      });
+    });
+    assert.deepEqual(lifts, [0, 0.7, 1.4, 2.1, 0, null, 0, 0.7, 2, 2], "a combo, a rest; a double press silent; delete its own; a letter at its own pace, in his voice");
   } finally {
     await page.close();
   }
@@ -178,18 +203,20 @@ test("he reacts to what you choose for him: a hat, a hop; glasses, a nod; a colo
 test("the sound switch silences every press, and the page remembers it", { skip }, async () => {
   const page = await open();
   try {
+    // each press a choice not yet made, the kind that sounds
     await page.getByRole("button", { name: "Sounds on" }).click();
     await clear(page);
-    await page.getByRole("button", { name: "Hop" }).click();
+    await page.getByRole("button", { name: "Listening" }).click();
     assert.deepEqual(await played(page), [], "off: silent");
     await page.reload();
     await page.waitForSelector("canvas", { state: "attached" });
     assert.equal(await page.getByRole("button", { name: "Sounds off" }).count(), 1, "still off after a reload");
-    await page.getByRole("button", { name: "Hop" }).click();
+    await page.getByRole("button", { name: "Thinking" }).click();
     assert.deepEqual(await played(page), [], "and still silent");
     await page.getByRole("button", { name: "Sounds off" }).click();
-    await page.getByRole("button", { name: "Hop" }).click();
-    assert.ok((await played(page)).length >= 1, "control: on again, it sounds");
+    await clear(page); // the switch's own two clicks
+    await page.getByRole("button", { name: "Speaking" }).click();
+    assert.deepEqual((await played(page)).map((p) => p.sound), ["pick"], "control: on again, it sounds");
   } finally {
     await page.close();
   }
@@ -265,8 +292,12 @@ test("every sound, rendered and measured: quiet, no pop at the start, over quick
       };
       const out: Measured[] = [];
       for (const s of ["tap", "tick", "pick", "roll", "create", "delete", "poke", "toggle", "blip"]) out.push(await measure(s, S.recipe(s)));
-      // the control: a planted harsh click, square and loud and sudden and long
+      // the controls: a planted harsh click, square and loud and sudden and long; and the old wooden tok
       out.push(await measure("harsh", [{ at: 0, wave: "square", f0: 3000, f1: 3000, dur: 0.3, gain: 0.9, attack: 0 }]));
+      out.push(await measure("tok", [
+        { at: 0, wave: "sine", f0: 540, f1: 335, dur: 0.065, gain: 0.22, attack: 0.0015 },
+        { at: 0, wave: "noise", f0: 3200, f1: 3200, dur: 0.01, gain: 0.048, attack: 0.001 },
+      ]));
       return out;
     });
     const soft = (m: Measured, longest: number): string[] =>
@@ -275,12 +306,16 @@ test("every sound, rendered and measured: quiet, no pop at the start, over quick
         m.onset > 0.3 ? `starts at ${(m.onset * 100).toFixed(0)}% of its peak in a quarter millisecond: it pops` : "",
         m.tail > longest ? `rings for ${m.tail.toFixed(3)} s, over ${longest}` : "",
       ].filter(Boolean);
-    const LONGEST: Record<string, number> = { tap: 0.09, tick: 0.05, pick: 0.15, roll: 0.4, create: 0.7, delete: 0.2, poke: 0.15, toggle: 0.12, blip: 0.05, harsh: 0.09 };
-    for (const m of rows.filter((r) => r.sound !== "harsh")) assert.deepEqual(soft(m, LONGEST[m.sound]!), [], m.sound);
+    const LONGEST: Record<string, number> = { tap: 0.04, tick: 0.04, pick: 0.04, roll: 0.4, create: 0.7, delete: 0.2, poke: 0.15, toggle: 0.12, blip: 0.05, harsh: 0.09, tok: 0.09 };
+    for (const m of rows.filter((r) => r.sound !== "harsh" && r.sound !== "tok")) assert.deepEqual(soft(m, LONGEST[m.sound]!), [], m.sound);
     for (const s of ["tap", "pick", "poke", "delete"]) {
       const m = rows.find((r) => r.sound === s)!;
       assert.ok(m.centroid < 1500, `${s}: bright, not round (centroid ${m.centroid.toFixed(0)} Hz)`);
     }
+    // deep: the clicks' weight under 400 Hz (the tok sat at about 500)
+    const deep = (s: string): boolean => rows.find((r) => r.sound === s)!.centroid < 400;
+    for (const s of ["tap", "pick", "tick"]) assert.ok(deep(s), `${s}: not deep (centroid ${rows.find((r) => r.sound === s)!.centroid.toFixed(0)} Hz)`);
+    assert.ok(!deep("tok"), "control: the old tok is not deep");
     const bad = rows.find((r) => r.sound === "harsh")!;
     assert.equal(soft(bad, LONGEST.harsh!).length, 3, "control: the harsh click fails loud, pop and ring");
     assert.ok(bad.centroid > 1500, "and it is bright");

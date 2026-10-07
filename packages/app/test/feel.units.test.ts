@@ -54,7 +54,7 @@ function harsh(notes: Note[], longest: number): string[] {
   return out;
 }
 
-const LONGEST: Record<Sound, number> = { tap: 0.08, tick: 0.04, pick: 0.13, roll: 0.37, create: 0.66, delete: 0.18, poke: 0.13, toggle: 0.11, blip: 0.04 };
+const LONGEST: Record<Sound, number> = { tap: 0.05, tick: 0.05, pick: 0.05, roll: 0.37, create: 0.66, delete: 0.18, poke: 0.13, toggle: 0.12, blip: 0.04 };
 
 test("every sound is soft: it ramps in, it is quiet, it is round, and it is over quickly", () => {
   for (const s of Object.keys(LONGEST) as Sound[]) assert.deepEqual(harsh(recipe(s), LONGEST[s]), [], s);

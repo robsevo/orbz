@@ -61,7 +61,6 @@ export function Paged({ items, at, label }: { items: ReactNode[]; /** the chosen
             <button
               key={p}
               className="orbs-narrow"
-              data-sound="pick"
               aria-label={`Page ${p + 1}`}
               aria-current={p === page ? "page" : undefined}
               onClick={() => go(p)}

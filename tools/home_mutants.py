@@ -1803,14 +1803,26 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ('  doc.addEventListener("pointerdown", down, true);', '  doc.addEventListener("pointerup", down, true);'),
     ], ["feel.test.ts"]),
     ("quick presses do not climb", "src/ui/sound.ts", [
-        ("    streak = t - last < 650 ? Math.min(streak + 1, 6) : 0;", "    streak = 0;"),
+        ("  p.streak = t - p.pressed < COMBO_MS ? Math.min(p.streak + 1, 6) : 0;", "  p.streak = 0;"),
     ], ["feel.test.ts"]),
     ("the sound switch is ignored", "src/ui/sound.ts", [
-        ("  if (!on) return;\n  const t = performance.now();", "  const t = performance.now();"),
+        ("  if (!on) return;\n  const lift = pace(", "  const lift = pace("),
     ], ["feel.test.ts"]),
     ("a click that pops", "src/ui/sound.ts", [
-        ("dur: 0.065, gain, attack: 0.0015 }", "dur: 0.065, gain, attack: 0 }"),
+        ("dur: 0.045, gain, attack: 0.0015 }", "dur: 0.045, gain, attack: 0 }"),
     ], ["feel.units.test.ts", "feel.test.ts"]),
+    ("a double press clicks twice", "src/ui/sound.ts", [
+        ("  if (t - (p.last[sound] ?? -1e9) < QUIET_MS) return null;\n", ""),
+    ], ["feel.test.ts"]),
+    ("every button clicks again", "src/ui/feel.ts", [
+        ('  if (el.getAttribute("aria-pressed") === "false") return "pick";\n  return null;', '  if (el.getAttribute("aria-pressed") === "false") return "pick";\n  return "tap";'),
+    ], ["feel.test.ts"]),
+    ("a choice already made clicks again", "src/ui/feel.ts", [
+        ('  if (el.getAttribute("aria-pressed") === "false") return "pick";', '  if (el.hasAttribute("aria-pressed")) return "pick";'),
+    ], ["feel.test.ts"]),
+    ("the click is a high tok again", "src/ui/sound.ts", [
+        ("      return click(0, 170, 0.25);", "      return click(0, 540, 0.25);"),
+    ], ["feel.test.ts"]),
     ("he does not react to what you choose", "src/orbs.tsx", [
         ("    if (g && Object.keys(patch).length < 4", "    if (false && g && Object.keys(patch).length < 4"),
     ], ["feel.test.ts"]),

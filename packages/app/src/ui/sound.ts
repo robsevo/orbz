@@ -3,11 +3,14 @@
 // from a few oscillators and a breath of noise. There are no samples and nobody else's files.
 //
 // What makes a click soft and not tiring:
-//   - it is low and round: a short wooden "tock", not a bright beep;
+//   - it is a deep click (owner, 10-07: "more like a click and not a tok, a deep click. comforting"):
+//     a low thump, a short knock and a muffled tick, all over in a few hundredths of a second. The
+//     old one glided down for 65 ms, long enough to be heard as a note, the wooden "tok";
 //   - it ramps in over a millisecond or two, so it never pops;
-//   - it dies in well under a tenth of a second;
 //   - no two presses are quite the same pitch;
-//   - presses in quick succession climb a little, like a combo, and fall back once you stop.
+//   - presses in quick succession climb a little, like a combo, and fall back once you stop;
+//   - few things click at all (owner, 10-07: "limit them please"): what does is in feel.ts, and the
+//     same sound twice within a quarter second is one (`pace`).
 //
 // The recipes are plain data and a pure function, so a test can render them offline and measure
 // them (test/feel.test.ts).
@@ -20,17 +23,18 @@ export type Note = { at: number; wave: OscillatorType | "noise"; f0: number; f1:
 /** The notes of a sound. `lift` is in semitones (the combo); `vary` is from -1 to 1 (no two presses alike). */
 export function recipe(sound: Sound, lift = 0, vary = 0): Note[] {
   const k = 2 ** (lift / 12) * (1 + 0.03 * vary);
-  const tock = (at: number, f: number, gain: number): Note[] => [
-    { at, wave: "sine", f0: f * k, f1: f * 0.62 * k, dur: 0.065, gain, attack: 0.0015 }, // the body: a round wooden tock
-    { at, wave: "noise", f0: 3200 * k, f1: 3200 * k, dur: 0.01, gain: gain * 0.22, attack: 0.001 }, // its tip
+  const click = (at: number, f: number, gain: number): Note[] => [
+    { at, wave: "triangle", f0: f * k, f1: f * 0.7 * k, dur: 0.045, gain, attack: 0.0015 }, // the thump, felt more than heard
+    { at, wave: "sine", f0: f * 3.2 * k, f1: f * 2.6 * k, dur: 0.014, gain: gain * 0.3, attack: 0.001 }, // a knock, too short to be a note
+    { at, wave: "noise", f0: 1300 * k, f1: 1300 * k, dur: 0.005, gain: gain * 0.5, attack: 0.001 }, // the latch, muffled
   ];
   switch (sound) {
     case "tap":
-      return tock(0, 540, 0.22);
-    case "tick": // a tab, the goo slider's ratchet: lighter and higher
-      return [{ at: 0, wave: "sine", f0: 1250 * k, f1: 1050 * k, dur: 0.032, gain: 0.08, attack: 0.0012 }];
-    case "pick": // choosing something: the tock, and a little ding a fifth above
-      return [...tock(0, 540, 0.2), { at: 0.016, wave: "sine", f0: 810 * k * 1.5, f1: 810 * k * 1.5, dur: 0.11, gain: 0.07, attack: 0.003 }];
+      return click(0, 190, 0.24);
+    case "tick": // the goo slider's ratchet, a skip: lighter and a little higher
+      return click(0, 280, 0.12);
+    case "pick": // choosing something: the click, a little deeper and fuller
+      return click(0, 170, 0.25);
     case "roll": {
       // a die tumbling: five clacks, each its own pitch and further apart, then it lands
       const out: Note[] = [];
@@ -39,7 +43,7 @@ export function recipe(sound: Sound, lift = 0, vary = 0): Note[] {
         const wob = 1 + 0.08 * Math.sin(7.3 * (i + 1) + vary * 3);
         out.push({ at, wave: "sine", f0: 1500 * k * wob, f1: 1150 * k * wob, dur: 0.028, gain: 0.07 + 0.01 * i, attack: 0.001 });
       });
-      return [...out, ...tock(0.3, 470, 0.22)];
+      return [...out, ...click(0.3, 180, 0.22)];
     }
     case "create": // a new orb: four notes rising (C E G C), and a sparkle
       return [
@@ -55,11 +59,8 @@ export function recipe(sound: Sound, lift = 0, vary = 0): Note[] {
       ];
     case "blip": // a letter as an orb talks: tiny and soft, in his own pitch (the lift), never twice the same
       return [{ at: 0, wave: "sine", f0: 680 * k, f1: 600 * k, dur: 0.03, gain: 0.05, attack: 0.002 }];
-    case "toggle": // sounds on: two ticks rising
-      return [
-        { at: 0, wave: "sine", f0: 900, f1: 860, dur: 0.035, gain: 0.08, attack: 0.0012 },
-        { at: 0.055, wave: "sine", f0: 1350, f1: 1300, dur: 0.045, gain: 0.08, attack: 0.0012 },
-      ];
+    case "toggle": // sounds on: two clicks rising
+      return [...click(0, 200, 0.14), ...click(0.07, 280, 0.14)];
   }
 }
 
@@ -121,8 +122,7 @@ let on = ((): boolean => {
     return true;
   }
 })();
-let last = -1e9;
-let streak = 0;
+const paced: Pace = { last: {}, pressed: -1e9, streak: 0 };
 
 declare global {
   /** Set to an array by a test (or a curious person): each sound played is noted there. */
@@ -141,16 +141,29 @@ export function setSounds(next: boolean): void {
   if (next) play("toggle");
 }
 
-/** Plays a sound now, if sounds are on. Taps and picks in quick succession climb (the combo); a
- * blip is pitched by `voice` (semitones: each orb talks in his own register). */
+export const QUIET_MS = 250;
+export const COMBO_MS = 650;
+export type Pace = { last: Partial<Record<Sound, number>>; pressed: number; streak: number };
+
+/** How a sound at `t` (ms) is played after the ones before it, in `p`: null, not at all (the same
+ * sound within QUIET_MS: a double press is one click); else its lift in semitones. Taps and picks in
+ * quick succession climb (the combo); a blip, a letter as an orb talks, keeps its own pace and is
+ * pitched by `voice`. No clock or audio of its own, so a test walks it on a clock it chooses. */
+export function pace(p: Pace, sound: Sound, t: number, voice = 0): number | null {
+  if (sound === "blip") return voice;
+  if (t - (p.last[sound] ?? -1e9) < QUIET_MS) return null;
+  p.last[sound] = t;
+  if (sound !== "tap" && sound !== "pick") return 0;
+  p.streak = t - p.pressed < COMBO_MS ? Math.min(p.streak + 1, 6) : 0;
+  p.pressed = t;
+  return p.streak * 0.7;
+}
+
+/** Plays a sound now, if sounds are on and its pace allows. */
 export function play(sound: Sound, voice = 0): void {
   if (!on) return;
-  const t = performance.now();
-  if (sound === "tap" || sound === "pick") {
-    streak = t - last < 650 ? Math.min(streak + 1, 6) : 0;
-    last = t;
-  }
-  const lift = sound === "tap" || sound === "pick" ? streak * 0.7 : sound === "blip" ? voice : 0;
+  const lift = pace(paced, sound, performance.now(), voice);
+  if (lift === null) return;
   globalThis.__orbsSounds?.push({ sound, lift });
   try {
     ctx ??= new AudioContext({ latencyHint: "interactive" });
