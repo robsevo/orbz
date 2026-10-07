@@ -1827,9 +1827,9 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("approving a card in a conversation does nothing", "src/rooms/Talk.tsx", [
         ("    o.home.answer(card.id, choice).then(load, (e: Error) => setSaid(e.message));", "    void choice;"),
     ], ["link.test.ts", "sessions.test.ts"]),
-    ("an effect hands React scrollIntoView's Promise (as written first: the page tears down)", "src/rooms/Talk.tsx", [
-        ("  useEffect(() => {\n    end.current?.scrollIntoView({ block: \"end\" });\n  }, [messages.length, live, card?.id]);", "  useEffect(() => end.current?.scrollIntoView({ block: \"end\" }) as unknown as void, [messages.length, live, card?.id]);"),
-    ], ["link.test.ts", "sessions.test.ts"]),
+    ("an effect hands React scrollIntoView's Promise (as written first: the page tears down)", "src/rooms/Org.tsx", [
+        ("  useEffect(() => {\n    if (away && sending) document.querySelector(`[data-away=\"${CSS.escape(sending)}\"]`)?.scrollIntoView({ block: \"center\" });\n  }, [away, sending]);", "  useEffect(() => (away && sending ? document.querySelector(`[data-away=\"${CSS.escape(sending)}\"]`)?.scrollIntoView({ block: \"center\" }) : undefined) as unknown as void, [away, sending]);"),
+    ], ["org-view.test.ts"]),
     ("any new message wipes every orb's streamed words (as first written)", "src/rooms/Talk.tsx", [
         ("    setMessages(r.messages);\n    o.onMessages?.(r.messages);", "    if (r.messages.length !== messages.length) setLive({});\n    setMessages(r.messages);\n    o.onMessages?.(r.messages);"),
     ], ["sessions.test.ts"]),
@@ -2324,8 +2324,14 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         (', ...r.diplomas.map((d) => `🎓 ${d}`)]', ']'),
     ], ['school-view.test.ts']),
     # sessions that cost little and say little (PLAN 5.10), and Midnight the default (owner 10-06)
-    ('a long message never scrolls', 'src/rooms/Talk.tsx', [
-        ('maxHeight: LONG, overflowY: "auto", overscrollBehavior: "contain", ', ''),
+    ("the conversation grows the page again (10-07: ALL THE WAY DOWN ... AND ALL THE WAY UP)", 'src/rooms/Sessions.tsx', [
+        ('  useFillScreen(room); // the session is the screen', '  // useFillScreen(room); // the session is the screen'),
+    ], ['sessions.test.ts']),
+    ('new words pull you down while you read back', 'src/rooms/Talk.tsx', [
+        ('    if (atEnd.current) el.scrollTop = el.scrollHeight;\n    else setUnseen(true);', '    el.scrollTop = el.scrollHeight;'),
+    ], ['sessions.test.ts']),
+    ("a private chat grows the page", 'src/rooms/Chat.tsx', [
+        ('  useFillScreen(room); // the chat is the screen', '  // useFillScreen(room); // the chat is the screen'),
     ], ['sessions.test.ts']),
     ('Delete it deletes nothing', 'src/rooms/Sessions.tsx', [
         ('o.home.deleteSession(id).then(', 'Promise.resolve().then('),

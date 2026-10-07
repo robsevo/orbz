@@ -3,7 +3,7 @@
 // replies in his own voice at his personality's pace when your replies are "Speak & show", and you
 // by the microphone or hands-free. The conversation (Talk.tsx) is his and yours only: no other orb,
 // and no session, sees it.
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Orb } from "../orb/Orb.tsx";
 import { PERSONALITIES, type Replies, SPECIALTIES, speaks, type Character } from "../orb/spec.ts";
 import { chatOf, idOf, type Message, type Office } from "../home/link.ts";
@@ -11,9 +11,12 @@ import { Talk, type Busy } from "./Talk.tsx";
 import type { Ears } from "../orb/ears.ts";
 import type { Gesture } from "../orb/life.ts";
 import { Computer } from "./Computer.tsx";
+import { useFillScreen } from "../ui/fill.ts";
 
 export function Chat({ orb, home, person, replies = "speak" }: { orb: Character; home: Office | null; person: string | null; replies?: Replies }) {
   const [busy, setBusy] = useState<Busy>({});
+  const room = useRef<HTMLDivElement>(null);
+  useFillScreen(room); // the chat is the screen's height: the conversation scrolls, the page does not (owner, 10-07)
   const [messages, setMessages] = useState<Message[]>([]);
   const [computer, setComputer] = useState(true); // his computer beside the chat (PLAN 2.8), there unless you hide it
   // his listening cues (PLAN 4.7, after Griffin's): he listens while you talk, leans in when called,
@@ -35,7 +38,7 @@ export function Chat({ orb, home, person, replies = "speak" }: { orb: Character;
   const conv = chatOf(orb);
   const face = how ?? (ears === "hearing" ? "thinking" : ears === "called" || ears === "conversing" ? "listening" : "idle");
   return (
-    <div data-orb={orb.hue} data-chat={conv} style={{ display: "grid", gridTemplateRows: "auto 1fr", minHeight: "min(100%, calc(100dvh - 120px))", minWidth: 0 }}>
+    <div ref={room} data-orb={orb.hue} data-chat={conv} style={{ display: "grid", gridTemplateRows: "auto minmax(0, 1fr)", minHeight: 0, minWidth: 0 }}>
       <header style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px 12px", padding: "var(--s3) var(--s5)", boxShadow: "0 1px 0 var(--sep)", minWidth: 0 }}>
         <span data-ears-face={face} data-cues={cue?.n ?? 0} style={{ display: "contents" }}>
           <Orb character={orb} size={52} state={face} gesture={cue} poke={false} />
@@ -48,9 +51,9 @@ export function Chat({ orb, home, person, replies = "speak" }: { orb: Character;
           {orb.name}'s computer
         </button>
       </header>
-      <div className={computer ? "orbs-beside" : undefined} style={{ display: "grid", gap: "var(--s4)", minWidth: 0, paddingTop: computer ? "var(--s4)" : 0 }}>
+      <div className={computer ? "orbs-convo orbs-beside" : "orbs-convo"} style={{ gap: "var(--s4)", minWidth: 0, paddingTop: computer ? "var(--s4)" : 0 }}>
         {computer && (
-          <div style={{ padding: "0 var(--s5)", minWidth: 0 }}>
+          <div className="orbs-pane" style={{ padding: "0 var(--s5)", minWidth: 0 }}>
             <Computer home={home} orb={orb} messages={messages} busy={how} replies={replies} />
           </div>
         )}

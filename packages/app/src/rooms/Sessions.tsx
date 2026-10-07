@@ -9,7 +9,7 @@
 //   - the stage: on the Brainstorm, what has been agreed so far; on the Floor, each orb's
 //     computer showing what he did last;
 //   - the chat beside it, everyone in it.
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Orb } from "../orb/Orb.tsx";
 import type { Character } from "../orb/spec.ts";
 import { Balanced, OneLine } from "../ui/Balanced.tsx";
@@ -18,6 +18,7 @@ import { Talk, type Busy } from "./Talk.tsx";
 import { Computer } from "./Computer.tsx";
 import { TeamBoard } from "./Board.tsx";
 import { actsOf } from "./work.ts";
+import { useFillScreen } from "../ui/fill.ts";
 
 const button: CSSProperties = { font: "600 14px/20px var(--font)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 10, padding: "8px 14px", cursor: "pointer", boxShadow: "inset 0 0 0 .5px var(--hairline)", minHeight: 36 };
 const strong: CSSProperties = { ...button, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)", fontWeight: 800 };
@@ -142,6 +143,8 @@ function SessionView(o: { home: Office; office: Character[]; session: Session; t
   const [busy, setBusy] = useState<Busy>({});
   const [messages, setMessages] = useState<Message[]>([]);
   const [bringing, setBringing] = useState(false);
+  const room = useRef<HTMLDivElement>(null);
+  useFillScreen(room); // the session is the screen's height: its conversation scrolls, the page does not (owner, 10-07)
   const ids = o.session[o.tab];
   const crew = ids.map((id) => o.office.find((c) => idOf(c.name) === id)).filter((c): c is Character => Boolean(c));
   const agreed = messages.filter((m) => m.role === "notice" && typeof m.meta.agreed === "string");
@@ -162,7 +165,7 @@ function SessionView(o: { home: Office; office: Character[]; session: Session; t
     />
   );
   return (
-    <div data-session={o.session.id} data-tab={o.tab} style={{ display: "grid", gridTemplateRows: "auto 1fr", minHeight: "min(100%, calc(100dvh - 120px))", minWidth: 0 }}>
+    <div ref={room} data-session={o.session.id} data-tab={o.tab} style={{ display: "grid", gridTemplateRows: "auto minmax(0, 1fr)", minHeight: 0, minWidth: 0 }}>
       <header style={{ display: "grid", gap: "var(--s3)", padding: "var(--s4) var(--s5) var(--s3)", boxShadow: "0 1px 0 var(--sep)" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, minWidth: 0 }}>
           <h2 style={{ margin: 0, font: "800 22px/28px var(--font)", color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.session.title}</h2>
@@ -190,9 +193,10 @@ function SessionView(o: { home: Office; office: Character[]; session: Session; t
         {bringing && <Picker office={o.office} chosen={ids} set={(next) => o.home.bring(o.session.id, o.tab, next).then(o.changed, () => {})} />}
       </header>
       {o.tab === "brainstorm" ? (
-        <div style={{ display: "grid", gridTemplateRows: agreed.length ? "auto 1fr" : "1fr", minWidth: 0 }}>
+        <div style={{ display: "grid", gridTemplateRows: agreed.length ? "auto minmax(0, 1fr)" : "minmax(0, 1fr)", minHeight: 0, minWidth: 0 }}>
           {agreed.length > 0 && (
-            <section aria-label="Agreed so far" style={{ display: "grid", gap: 6, padding: "var(--s4) var(--s5) 0" }}>
+            // what was agreed keeps to a few lines of its own, scrolling, so the conversation keeps the screen
+            <section aria-label="Agreed so far" style={{ display: "grid", alignContent: "start", gap: 6, padding: "var(--s4) var(--s5) var(--s2)", maxHeight: "22dvh", overflowY: "auto", boxShadow: "0 1px 0 var(--sep)" }}>
               <span style={{ font: "700 11px/16px var(--font)", letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)" }}>Agreed so far</span>
               {agreed.map((m) => (
                 <span key={m.id} style={{ font: "600 14px/20px var(--font)", color: "var(--text-1)" }}>✓ {String(m.meta.agreed)}</span>
@@ -203,8 +207,8 @@ function SessionView(o: { home: Office; office: Character[]; session: Session; t
         </div>
       ) : (
         // the Floor (PLAN 2.9): the work shown big, each orb's computer a press away, the chat beside it
-        <div className="orbs-beside" style={{ display: "grid", gap: "var(--s4)", paddingTop: "var(--s4)", minWidth: 0 }}>
-          <div style={{ display: "grid", gap: 10, alignContent: "start", minWidth: 0, padding: "0 var(--s5)" }}>
+        <div className="orbs-convo orbs-beside" style={{ gap: "var(--s4)", paddingTop: "var(--s4)", minWidth: 0 }}>
+          <div className="orbs-pane" style={{ display: "grid", gap: 10, alignContent: "start", minWidth: 0, padding: "0 var(--s5)" }}>
             {crew.length > 1 && (
               <OneLine style={{ justifyContent: "flex-start" }} gap={8}>
                 {crew.map((c) => {

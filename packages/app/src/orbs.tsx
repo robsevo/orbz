@@ -1172,7 +1172,7 @@ function App() {
         />
       )}
       {drawn && !intro && (
-      <div className="orbs-window" style={s.window}>
+      <div className={/* a conversation fills the screen (owner, 10-07): the window keeps to it, its menu scrolling on its own */ room === "chat" || (room === "sessions" && inSession.id !== null) ? "orbs-window orbs-fit" : "orbs-window"} style={s.window}>
         {/* on a phone: Back, the name, and the menu, which slides in */}
         {/* a band of its own, clear of the hero (owner, 10-04: "the back button and menu buttons kind of bleed into the hero") */}
         <div className="orbs-topbar" style={{ display: "none", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "var(--s3) var(--s4)", marginBottom: "var(--s3)", boxShadow: "0 1px 0 var(--sep)" }}>
@@ -1482,7 +1482,17 @@ main.orbs-main { padding: max(var(--s5), env(safe-area-inset-top)) max(var(--mar
   .orbs-calnum { flex-basis: 100%; }
   .orbs-calword { display: none; }
 }
-@media (min-width: 1100px) { .orbs-beside { grid-template-columns: minmax(0, 6fr) minmax(320px, 5fr) !important; } }`;
+@media (min-width: 1100px) { .orbs-beside { grid-template-columns: minmax(0, 6fr) minmax(320px, 5fr) !important; } }
+/* a conversation fits the screen (owner, 10-07: "scrolling bar on the WHOLE CONVO that doesnt go past the screen"):
+   its room is the window's height (ui/fill.ts), the conversation one row of it that scrolls on its own; beside
+   it, his computer or the team's board scrolls on its own too; stacked on a narrower screen, the work above
+   gets two parts of five and the conversation three */
+.orbs-convo { display: grid; grid-template-rows: minmax(0, 1fr); min-height: 0; }
+.orbs-convo > * { min-height: 0; }
+.orbs-convo.orbs-beside { grid-template-rows: minmax(0, 2fr) minmax(0, 3fr); }
+.orbs-pane { overflow-y: auto; overscroll-behavior: contain; }
+@media (min-width: 761px) { .orbs-fit .orbs-side { max-height: calc(100dvh - 2 * var(--s5)); } }
+@media (min-width: 1100px) { .orbs-convo.orbs-beside { grid-template-rows: minmax(0, 1fr); } }`;
 document.head.append(style);
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

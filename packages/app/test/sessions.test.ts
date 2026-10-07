@@ -6,8 +6,8 @@
 //   - On the Brainstorm, your words go in once; the lead answers, then each other orb adds a line
 //     (PLAN 5.10), by name, as it writes; a load that lands late takes nothing away from words
 //     still streaming.
-//   - A long message scrolls inside itself; a session is deleted from its card, after a second
-//     press (owner, 10-06).
+//   - A conversation scrolls inside the screen, never the page (owner, 10-07); a session is deleted
+//     from its card, after a second press (owner, 10-06).
 //   - A decision lands as ✓ Agreed, in the chat and on the stage.
 //   - On the Floor, whoever you bring in (or send out) is the home's; each one's computer is a
 //     press away and one is big (rooms/Computer.tsx): the command, that it waits for your OK, and
@@ -172,9 +172,8 @@ test("a session: the orbs you bring in, the Brainstorm's turns and what was agre
   assert.deepEqual(await measure(page), [], "nor on the Floor");
 });
 
-test("a long message scrolls inside itself; a session is deleted from its card, after a second press", { skip, ...LONG }, async (t) => {
-  const long = Array.from({ length: 60 }, (_, i) => `Line ${i + 1} of a very long research note.`).join("\n");
-  const model = await fakeModel(t, [{ chunks: [long] }, { chunks: ["pass"] }]);
+test("a conversation scrolls inside the screen, never the page: what you type stays in view, reading back is left alone, Jump to latest; a session is deleted from its card, after a second press", { skip, ...LONG }, async (t) => {
+  const model = await fakeModel(t, []);
   const data = mkdtempSync(join(tmpdir(), "orbs-sessions-home-"));
   t.after(() => rmSync(data, { recursive: true, force: true }));
   const h = Home.open({
@@ -189,29 +188,66 @@ test("a long message scrolls inside itself; a session is deleted from its card, 
   h.inbox.addOrb("milo", "Milo", "research", { shape: "bean", eyes: "classic", hue: "teal" });
   const s = h.team.create("A long talk", { brainstorm: ["hazel", "milo"], floor: ["hazel"] });
   const other = h.team.create("Keep this one", { brainstorm: ["hazel"] });
+  const conv = `team:${s.id}:brainstorm`;
+  // a long conversation already there (owner, 10-07: "or else i have to scroll ALLL THE WAY DOWN ... AND ALL THE WAY UP AGAIN")
+  for (let i = 1; i <= 40; i++) h.conversations.add({ conversation: conv, orb: i % 2 ? "hazel" : "milo", role: "assistant", content: `Line ${i}: ${"a thought about the party, ".repeat(i % 5 + 1)}` });
   const d = await serve(h, { port: 0, appDir: dist });
   t.after(() => d.close());
+  for (const size of [{ width: 390, height: 844 }, { width: 1280, height: 800 }]) {
+    const ctx = await browser.newContext({ viewport: size, colorScheme: "dark", hasTouch: size.width < 1024 });
+    t.after(() => ctx.close());
+    const page = await ctx.newPage();
+    await page.goto(d.pairLink());
+    await page.getByText("CEO Robin").first().waitFor({ state: "attached", timeout: 30_000 });
+    await page.evaluate((id) => (location.hash = `#/session/${id}/brainstorm`), s.id);
+    await page.locator('[data-stream="open"]').waitFor({ timeout: 30_000 });
+    await page.getByText("Line 40:").waitFor({ timeout: 20_000 });
+    await page.waitForTimeout(400);
+    const log = page.getByRole("log", { name: "The conversation" });
+    const box = page.getByRole("textbox", { name: "Say something to the Brainstorm" });
+    const at = () => page.evaluate(() => {
+      const l = document.querySelector<HTMLElement>('[role="log"]')!;
+      return { page: document.scrollingElement!.scrollHeight - window.innerHeight, top: l.scrollTop, rest: l.scrollHeight - l.scrollTop - l.clientHeight, scrolls: l.scrollHeight > l.clientHeight + 1 };
+    });
+    let a = await at();
+    assert.ok(a.page <= 1, `${size.width}: the page does not scroll (${a.page} px past the screen)`);
+    assert.ok(a.scrolls, `${size.width}: the conversation scrolls on its own`);
+    assert.ok(a.rest <= 2, `${size.width}: it opens at its latest line`);
+    const b = await box.boundingBox();
+    assert.ok(b && b.y + b.height <= size.height, `${size.width}: what you type stays on the screen`);
+    // reading back: a new reply does not pull you down; Jump to latest says it is there
+    await log.evaluate((el) => (el.scrollTop = 0));
+    await page.waitForTimeout(200);
+    h.conversations.add({ conversation: conv, orb: "milo", role: "assistant", content: `And one more, at ${size.width}.` });
+    const jump = page.getByRole("button", { name: "↓ Jump to latest" });
+    await jump.waitFor({ timeout: 20_000 });
+    a = await at();
+    assert.ok(a.top < 50, `${size.width}: you stay where you were reading (${a.top})`);
+    await jump.click();
+    await page.waitForTimeout(200);
+    a = await at();
+    assert.ok(a.rest <= 2, `${size.width}: Jump to latest takes you to the end`);
+    await page.getByText(`And one more, at ${size.width}.`).waitFor();
+    assert.equal(await jump.count(), 0, "and goes once you are there");
+    assert.deepEqual(await measure(page), [], `${size.width}: nothing spills`);
+    // a private chat the same, his computer beside it scrolling on its own
+    for (let i = 1; i <= 40; i++) if (size.width === 390) h.conversations.add({ conversation: "chat:hazel", orb: "hazel", role: "assistant", content: `Chat line ${i}: ${"a plan for Saturday, ".repeat(i % 4 + 1)}` });
+    await page.evaluate(() => (location.hash = "#/chat/Hazel"));
+    await page.getByText("Chat line 40:").waitFor({ timeout: 20_000 });
+    await page.waitForTimeout(400);
+    a = await at();
+    assert.ok(a.page <= 1 && a.scrolls && a.rest <= 2, `${size.width}: a private chat scrolls inside the screen (${JSON.stringify(a)})`);
+    const typed = await page.getByRole("textbox", { name: "Message Hazel" }).boundingBox();
+    assert.ok(typed && typed.y + typed.height <= size.height, `${size.width}: what you type to Hazel stays on the screen`);
+    if (size.width === 1280) break;
+    await ctx.close();
+  }
+  // deleting: a press asks, the second does it; Keep keeps it
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: "dark", hasTouch: true });
   t.after(() => ctx.close());
   const page = await ctx.newPage();
   await page.goto(d.pairLink());
-  await page.getByText("CEO Robin").first().waitFor({ state: "attached", timeout: 30_000 }); // paired (on a phone the menu holds it out of sight)
-  await page.evaluate((id) => (location.hash = `#/session/${id}/brainstorm`), s.id);
-  await page.locator('[data-stream="open"]').waitFor({ timeout: 30_000 });
-  const box = page.getByRole("textbox", { name: "Say something to the Brainstorm" });
-  await box.fill("Write it all down");
-  await box.press("Enter");
-  const bubble = page.locator('[data-role="assistant"][data-from="hazel"]');
-  await bubble.waitFor({ timeout: 20_000 });
-  await page.locator("[data-notice]", { hasText: "Milo passed." }).waitFor({ timeout: 20_000 });
-  const size = await bubble.evaluate((el) => ({ shown: el.clientHeight, all: el.scrollHeight, long: el.hasAttribute("data-long"), tab: el.tabIndex, overflow: getComputedStyle(el).overflowY }));
-  assert.ok(size.shown <= 360 && size.all > size.shown * 2, `the message scrolls inside itself (${JSON.stringify(size)})`);
-  assert.deepEqual([size.long, size.tab, size.overflow], [true, 0, "auto"], "marked long, reachable by the keyboard");
-  await bubble.evaluate((el) => el.scrollTo({ top: el.scrollHeight }));
-  await page.getByText("Line 60 of a very long research note.").waitFor();
-  assert.deepEqual(await measure(page), [], "nothing spills at phone size");
-
-  // deleting: a press asks, the second does it; Keep keeps it
+  await page.getByText("CEO Robin").first().waitFor({ state: "attached", timeout: 30_000 });
   await page.evaluate(() => (location.hash = "#/sessions"));
   const card = page.locator(`[data-session-card="${s.id}"]`);
   await card.waitFor({ timeout: 20_000 });

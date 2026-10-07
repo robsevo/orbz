@@ -19,12 +19,8 @@ import { saying, speak, speaking, stopSpeaking } from "../orb/speech.ts";
 import { type Ears, listenFor, pressToTalk } from "../orb/ears.ts";
 import { Rich } from "../ui/Rich.tsx";
 
-/** How tall a message may be before it scrolls inside itself (owner, 10-06: "too long of messages
- * ... when it gets too long, make it scrollable"): the conversation stays readable at a glance. */
-export const LONG = "min(45dvh, 360px)";
-
 const bubble = (mine: boolean): CSSProperties => ({
-  justifySelf: mine ? "end" : "start", maxWidth: "min(80%, 620px)", maxHeight: LONG, overflowY: "auto", overscrollBehavior: "contain", padding: "10px 14px", borderRadius: 18,
+  justifySelf: mine ? "end" : "start", maxWidth: "min(80%, 620px)", padding: "10px 14px", borderRadius: 18,
   borderBottomRightRadius: mine ? 6 : 18, borderBottomLeftRadius: mine ? 18 : 6,
   background: mine ? "var(--accent-fill)" : "var(--raised)", boxShadow: mine ? "inset 0 0 0 1px var(--accent)" : "inset 0 0 0 .5px var(--hairline)",
   font: "400 15px/22px var(--font)", color: "var(--text-1)", whiteSpace: "pre-wrap", overflowWrap: "anywhere", minWidth: 0,
@@ -75,7 +71,9 @@ export function Talk(o: {
     o.onEars?.(e);
   };
   const spokenUpTo = useRef<number | null>(null); // the newest reply already spoken (or there before you came)
-  const end = useRef<HTMLDivElement>(null);
+  const log = useRef<HTMLDivElement>(null);
+  const atEnd = useRef(true);
+  const [unseen, setUnseen] = useState(false);
   const shownUpTo = useRef(0); // the newest message already shown
   const ended = useRef(new Set<string>()); // orbs whose run has finished: their streamed words go once its reply is in
   const byId = new Map(o.orbs.map((c) => [idOf(c.name), c]));
@@ -161,17 +159,28 @@ export function Talk(o: {
     });
   }, [o.conversation]);
   // a committed reply takes the place of the words that streamed in
-  // a block, not an arrow's value: Chromium's scrollIntoView returns a Promise now, and an effect
-  // that returns one takes it for its clean-up and throws when it is torn down
+  // the conversation scrolls inside the screen (owner, 10-07: "scrolling bar on the WHOLE CONVO that doesnt
+  // go past the screen"): it follows what arrives only while you are at its end; scrolled up to read, you
+  // stay where you are, and "Jump to latest" says there is more below
   useEffect(() => {
-    end.current?.scrollIntoView({ block: "end" });
+    const el = log.current;
+    if (!el) return;
+    if (atEnd.current) el.scrollTop = el.scrollHeight;
+    else setUnseen(true);
   }, [messages.length, live, card?.id]);
+  const toEnd = (): void => {
+    const el = log.current;
+    if (el) el.scrollTop = el.scrollHeight;
+    atEnd.current = true;
+    setUnseen(false);
+  };
 
   const send = (): void => {
     const text = [draft.trim(), ...given.map((p) => `[Attached: ${p}]`)].filter(Boolean).join("\n");
     if (!text) return;
     setDraft("");
     setGiven([]);
+    toEnd(); // what you say, and what answers it, at the end where you can see them
     o.send(text).catch((e: Error) => setSaid(e.message));
   };
   const give = (files: FileList | null): void => {
@@ -239,8 +248,19 @@ export function Talk(o: {
   };
   const shown = messages.filter((m) => m.role === "user" || m.role === "assistant" || m.role === "notice");
   return (
-    <div data-stream={open ? "open" : "connecting"} style={{ display: "grid", gridTemplateRows: "1fr auto", minHeight: 0, minWidth: 0 }}>
-      <div role="log" aria-label="The conversation" aria-live="polite" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", alignContent: "start", gap: 8, padding: "var(--s4) var(--s5)", overflowY: "auto", minWidth: 0 }}>
+    <div data-stream={open ? "open" : "connecting"} style={{ display: "grid", gridTemplateRows: "minmax(0, 1fr) auto", height: "100%", minHeight: 0, minWidth: 0 }}>
+      <div
+        ref={log}
+        role="log"
+        aria-label="The conversation"
+        aria-live="polite"
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          atEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+          if (atEnd.current) setUnseen(false);
+        }}
+        style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", alignContent: "start", gap: 8, padding: "var(--s4) var(--s5)", overflowY: "auto", overscrollBehavior: "contain", minHeight: 0, minWidth: 0 }}
+      >
         {!shown.length && !Object.values(live).some(Boolean) && <span style={{ justifySelf: "center", font: "400 14px/20px var(--font)", color: "var(--text-3)", padding: "var(--s5) 0", textAlign: "center" }}>{o.empty}</span>}
         {shown.map((m) =>
           m.role === "notice" ? (
@@ -262,19 +282,19 @@ export function Talk(o: {
           ) : m.content.trim() ? (
             <div key={m.id} style={{ display: "grid", justifyItems: m.role === "user" ? "end" : "start", minWidth: 0 }} data-orb={byId.get(m.orb)?.hue}>
               {m.role === "assistant" && nameplate(m.orb)}
-              <Bubble data-role={m.role} data-from={m.role === "assistant" ? m.orb : "you"} style={bubble(m.role === "user")}>
+              <div data-role={m.role} data-from={m.role === "assistant" ? m.orb : "you"} style={bubble(m.role === "user")}>
                 {/* an orb's reply formatted as it wrote it (owner, 10-05: "**5 people**" showed its asterisks); yours as you typed it */}
                 {m.role === "assistant" ? <Rich text={m.content} /> : m.content}
-              </Bubble>
+              </div>
             </div>
           ) : null,
         )}
         {Object.entries(live).filter(([, t]) => t).map(([orb, t]) => (
           <div key={`live-${orb}`} style={{ display: "grid", justifyItems: "start", minWidth: 0 }} data-orb={byId.get(orb)?.hue}>
             {nameplate(orb)}
-            <Bubble data-role="live" data-from={orb} style={{ ...bubble(false), opacity: 0.92 }} follow>
+            <div data-role="live" data-from={orb} style={{ ...bubble(false), opacity: 0.92 }}>
               <Rich text={t} />
-            </Bubble>
+            </div>
           </div>
         ))}
         {card && (
@@ -292,7 +312,12 @@ export function Talk(o: {
           </div>
         )}
         {said && <span role="alert" style={{ justifySelf: "center", font: "500 13px/18px var(--font)", color: "var(--alert)" }}>{said}</span>}
-        <div ref={end} />
+        {/* held at the bottom of the conversation's own window, over what scrolls under it */}
+        {unseen && (
+          <button type="button" data-jump onClick={toEnd} style={{ ...button, position: "sticky", bottom: 4, justifySelf: "center", zIndex: 2, boxShadow: "0 4px 14px var(--shadow), inset 0 0 0 1px var(--hairline)", background: "var(--raised)" }}>
+            ↓ Jump to latest
+          </button>
+        )}
       </div>
       <form
         onSubmit={(e) => {
@@ -369,25 +394,6 @@ export function Talk(o: {
         )}
         </div>
       </form>
-    </div>
-  );
-}
-
-/** A message's bubble: past `LONG` it scrolls inside itself, marked so (`data-long`) and reachable by
- * the keyboard; `follow` (a reply still arriving) keeps its newest line in view unless you scrolled up. */
-function Bubble({ children, style, follow, ...rest }: { children: ReactNode; style: CSSProperties; follow?: boolean; "data-role": string; "data-from": string }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [long, setLong] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const over = el.scrollHeight > el.clientHeight + 1;
-    setLong(over);
-    if (follow && over && el.scrollHeight - el.scrollTop - el.clientHeight < 80) el.scrollTop = el.scrollHeight;
-  });
-  return (
-    <div ref={ref} {...rest} {...(long && { "data-long": true, tabIndex: 0, "aria-label": "A long message: scroll it" })} style={{ ...style, ...(long && { boxShadow: `${style.boxShadow ?? "none"}, inset 0 -14px 12px -12px var(--shadow)` }) }}>
-      {children}
     </div>
   );
 }

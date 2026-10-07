@@ -18,6 +18,8 @@ export function OrgRoom({ home, office, open, rehired, school = null }: { home: 
   useEffect(() => setSending(school), [school]);
   // that orb's place on the chart, in view once it is there (it arrives a moment after it is let go)
   const away = org?.away.some((o) => o.id === sending) ?? false;
+  // a block, not an arrow's value: Chromium's scrollIntoView returns a Promise, and an effect that returns
+  // one has React take it for its clean-up, which throws when the effect is torn down
   useEffect(() => {
     if (away && sending) document.querySelector(`[data-away="${CSS.escape(sending)}"]`)?.scrollIntoView({ block: "center" });
   }, [away, sending]);
