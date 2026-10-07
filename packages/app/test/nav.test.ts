@@ -55,8 +55,11 @@ test("every place is an address, and back again", () => {
   // the org chart with one orb's school sheet open (owner, 10-06: "we dont see the send to school option")
   for (const r of [{ room: "org" }, { room: "org", school: "zoë" }] as Route[]) assert.deepEqual(parseRoute(routeHash(r)), r);
   assert.equal(routeHash({ room: "org", school: "cy" }), "#/org/school/cy");
-  assert.deepEqual(parseRoute(""), { room: "office", orb: null }, "nothing: the office");
-  assert.deepEqual(parseRoute("#/nonsense"), { room: "office", orb: null }, "an address that is not a place: the office");
+  assert.deepEqual(parseRoute(""), { room: "home" }, "nothing: the home page (owner, 10-07: what the app opens on)");
+  assert.deepEqual(parseRoute("#/home"), { room: "home" });
+  assert.equal(routeHash({ room: "home" }), "#/home");
+  assert.deepEqual(parseRoute("#/office"), { room: "office", orb: null }, "the office floor, by its own address");
+  assert.deepEqual(parseRoute("#/nonsense"), { room: "home" }, "an address that is not a place: the home page");
 });
 
 test("the menu goes to each room, and its Back is the browser's Back", { skip }, async () => {
@@ -71,7 +74,7 @@ test("the menu goes to each room, and its Back is the browser's Back", { skip },
     await menu(page).getByRole("button", { name: "Back" }).click();
     assert.equal(await page.getByRole("heading", { name: "Settings" }).count(), 1, "Back: Settings again");
     await page.goBack();
-    assert.equal(await page.locator("[data-floor]").count(), 1, "the browser's Back: the office, its floor");
+    assert.equal(await page.locator("[data-home-page]").count(), 1, "the browser's Back: where it opened, the home page");
     await page.goForward();
     assert.equal(await page.getByRole("heading", { name: "Settings" }).count(), 1, "and Forward");
     await page.locator("aside").getByRole("button", { name: /Oscar/ }).click();
@@ -110,7 +113,7 @@ test("on a phone the menu slides in from the top bar, and closes once you have c
     await page.getByRole("heading", { name: "Settings" }).waitFor();
     await menu(page).waitFor({ state: "hidden" });
     await page.getByRole("button", { name: "Back" }).first().click();
-    assert.equal(await page.locator("[data-floor]").count(), 1, "the top bar's Back: the office floor");
+    assert.equal(await page.locator("[data-home-page]").count(), 1, "the top bar's Back: where it opened, the home page");
     await page.getByRole("button", { name: "Menu" }).click();
     await menu(page).waitFor();
     await page.keyboard.press("Escape");
@@ -125,8 +128,8 @@ test("the menu open on a phone, then the window made wide: the desk's own layout
     const r = document.querySelector(sel)!.getBoundingClientRect();
     return [sel, [r.x, r.y, r.width, r.height].map(Math.round)];
   })));
-  const desk = await open("", "desk");
-  const page = await open("", "phone");
+  const desk = await open("#/office", "desk");
+  const page = await open("#/office", "phone");
   try {
     await desk.locator("[data-floor]").waitFor();
     await desk.waitForTimeout(600);

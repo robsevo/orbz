@@ -43,7 +43,9 @@ async function open(size: keyof typeof SIZES = "desk", theme: "dark" | "light" =
   await page.goto(`${site.url}/orbs.html?splash=0&intro=0`);
   await page.waitForSelector("canvas", { state: "attached" });
   await page.evaluate(() => document.fonts.ready);
-  if (!o.floor) await profile(page, "Ash"); // the office opens on its floor; these are about an orb's profile
+  // the app opens on the home page (owner, 10-07): the floor and an orb's profile each by its address
+  if (o.floor) await page.evaluate(() => (location.hash = "#/office"));
+  else await profile(page, "Ash");
   return page;
 }
 

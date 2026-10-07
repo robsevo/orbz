@@ -1256,6 +1256,22 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ('good friends go unsaid', 'src/social/social.ts', [
         ('      if (before < 50 && after >= 50) this.#events.append("social.friends", { a: x, b: y, names: [nameOf(x), nameOf(y)] });\n', ''),
     ], ['social.test.ts']),
+    # the home page's look at the office (owner, 10-07)
+    ("a run never heard to finish counts as work for ever", "src/dashboard.ts", [
+        ("filter((r) => now - r.at < STALE_RUN_MS && ids.has(r.orb))", "filter((r) => ids.has(r.orb))"),
+    ], ["dashboard.test.ts"]),
+    ("an answered card still waits for you", "src/dashboard.ts", [
+        ('  for (const e of home.events.ofType("card.resolved")) cards.delete(Number(e.data.card));\n', ""),
+    ], ["dashboard.test.ts"]),
+    ("XP taken back is not taken off the week", "src/dashboard.ts", [
+        ('for (const e of [...home.events.ofType("xp.earned"), ...home.events.ofType("xp.lost")]) {', 'for (const e of home.events.ofType("xp.earned")) {'),
+    ], ["dashboard.test.ts"]),
+    ("next week comes up as if it were the next two days", "src/dashboard.ts", [
+        ("dayOf(today + 2 * DAY_MS))", "dayOf(today + 7 * DAY_MS))"),
+    ], ["dashboard.test.ts"]),
+    ("an orb let go's work is the office's latest", "src/dashboard.ts", [
+        ("recentWork(home.events, null, { limit: 6 }).filter((w) => ids.has(w.orb))", "recentWork(home.events, null, { limit: 6 })"),
+    ], ["dashboard.test.ts"]),
     # the lead let go (owner, 10-07): the next one up, the most experienced of a level
     ("the lead goes to who joined first, not the most experienced", "src/org.ts", [
         (" || (b.xp ?? 0) - (a.xp ?? 0) || a.createdAt - b.createdAt)", " || a.createdAt - b.createdAt)"),
@@ -1850,6 +1866,13 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("the click is a high tok again", "src/ui/sound.ts", [
         ("      return click(0, 170, 0.25);", "      return click(0, 540, 0.25);"),
     ], ["feel.test.ts"]),
+    # the home page, what the app opens on (owner, 10-07)
+    ("the app opens on the office again", "src/ui/nav.ts", [
+        ('  if (parts[0] === "office") return { room: "office", orb: parts[1] ?? null };\n  return { room: "home" };', '  if (parts[0] === "office") return { room: "office", orb: parts[1] ?? null };\n  return { room: "office", orb: null };'),
+    ], ["nav.test.ts", "home-view.test.ts"]),
+    ("a pairing link lands on the office", "src/home/link.ts", [
+        ('      if (location.hash.includes("pair=")) history.replaceState(null, "", "#/home");', '      if (location.hash.includes("pair=")) history.replaceState(null, "", "#/office");'),
+    ], ["home-view.test.ts"]),
     # every side scroll, in a track with arrows (owner, 10-07)
     ("a side scroll has no arrows", "src/ui/Balanced.tsx", [
         ("      {over && arrow(-1, left)}", "      {null}"),
@@ -1972,7 +1995,7 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ("  if (!res.ok || !(res.headers.get(\"content-type\") ?? \"\").includes(\"json\")) return null;\n  return { office: doorOffice(base) };", "  return null;"),
     ], ["link.test.ts"]),
     ("a spent pairing code stays on the address", "src/home/link.ts", [
-        ('      if (location.hash.includes("pair=")) history.replaceState(null, "", "#/office"); // the code is spent: off the address\n', ""),
+        ('      if (location.hash.includes("pair=")) history.replaceState(null, "", "#/home");\n', ""),
     ], ["link.test.ts"]),
     ("a reply never shows as it streams", "src/rooms/Talk.tsx", [
         ('        setLive((l) => ({ ...l, [d.orb]: (l[d.orb] ?? "") + d.delta }));', "        void d;"),

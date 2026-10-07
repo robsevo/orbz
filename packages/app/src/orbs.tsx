@@ -42,6 +42,7 @@ import { span } from "./orb/age.ts";
 import { Radar } from "./ui/Radar.tsx";
 import { OrgRoom } from "./rooms/Org.tsx";
 import { CareerRoom } from "./rooms/Career.tsx";
+import { HomeRoom } from "./rooms/Home.tsx";
 import { RecruiterRoom } from "./rooms/Recruiter.tsx";
 import { Floor } from "./floor/Floor.tsx";
 import { applyTheme, savedTheme } from "./ui/theme.ts";
@@ -919,9 +920,9 @@ function App() {
     if (home) home.setName(p).catch((e: Error) => setSaid(e.message));
     else savePerson(p);
   };
-  const [room, setRoom] = useState<"office" | "settings" | "chat" | "sessions" | "notices" | "calendar" | "lab" | "org" | "career" | "recruiter">(() => {
+  const [room, setRoom] = useState<"home" | "office" | "settings" | "chat" | "sessions" | "notices" | "calendar" | "lab" | "org" | "career" | "recruiter">(() => {
     const r = parseRoute(location.hash).room;
-    return r === "settings" || r === "chat" || r === "sessions" || r === "notices" || r === "calendar" || r === "lab" || r === "org" || r === "career" || r === "recruiter" ? r : "office";
+    return r === "home" || r === "settings" || r === "chat" || r === "sessions" || r === "notices" || r === "calendar" || r === "lab" || r === "org" || r === "career" || r === "recruiter" ? r : "office";
   });
   // which department's applicants the Recruiter shows (owner, 10-06: the floor's Hiring tags), or all
   // whose school sheet the org chart opens with (#/org/school/<id>; owner, 10-06)
@@ -1063,9 +1064,10 @@ function App() {
   // where you are is an address (ui/nav.ts): going somewhere adds it to the history, so the side
   // menu's Back and the browser's Back are the same Back
   const routeOf = (): Route =>
-    room === "settings" ? { room: "settings" } : room === "notices" ? { room: "notices" } : room === "calendar" ? { room: "calendar" } : room === "lab" ? { room: "lab" } : room === "org" ? { room: "org", school: schoolFor } : room === "recruiter" ? { room: "recruiter", family: hiringFor } : room === "career" && careerOf ? { room: "career", orb: careerOf } : room === "sessions" ? { room: "sessions", ...inSession } : room === "chat" && talking ? { room: "chat", orb: talking } : view.kind === "new" ? { room: "new" } : { room: "office", orb: view.kind === "orb" ? view.name : null };
+    room === "home" ? { room: "home" } : room === "settings" ? { room: "settings" } : room === "notices" ? { room: "notices" } : room === "calendar" ? { room: "calendar" } : room === "lab" ? { room: "lab" } : room === "org" ? { room: "org", school: schoolFor } : room === "recruiter" ? { room: "recruiter", family: hiringFor } : room === "career" && careerOf ? { room: "career", orb: careerOf } : room === "sessions" ? { room: "sessions", ...inSession } : room === "chat" && talking ? { room: "chat", orb: talking } : view.kind === "new" ? { room: "new" } : { room: "office", orb: view.kind === "orb" ? view.name : null };
   const show = (r: Route): void => {
-    if (r.room === "settings") setRoom("settings");
+    if (r.room === "home") setRoom("home"); // the home page (owner, 10-07): what the app opens on
+    else if (r.room === "settings") setRoom("settings");
     else if (r.room === "notices") setRoom("notices");
     else if (r.room === "calendar") setRoom("calendar");
     else if (r.room === "lab") setRoom("lab");
@@ -1205,6 +1207,7 @@ function App() {
           )}
           <nav aria-label="Rooms" style={{ display: "grid", gap: 4, marginTop: "var(--s2)" }}>
             {backButton({ justifySelf: "start", marginBottom: "var(--s1)" })}
+            {navItem("Home", room === "home", { room: "home" }, "⌂")}
             {navItem("The office", room === "office" && view.kind === "floor", { room: "office", orb: null }, "◉")}
             {navItem("New orb", room === "office" && making, { room: "new" }, "+", 0, true) /* asks to be pressed (owner, 10-03) */}
             {navItem("Sessions", room === "sessions", { room: "sessions", id: null, tab: "brainstorm" }, "▦")}
@@ -1245,7 +1248,10 @@ function App() {
           </div>
         </aside>
 
-        {room === "recruiter" && office.length ? (
+        {/* the home page, once there is an office; an empty one opens on making its first orb, as it always has */}
+        {room === "home" && office.length ? (
+          <HomeRoom home={home} office={office} person={person?.name ?? null} moods={moods} go={go} />
+        ) : room === "recruiter" && office.length ? (
           <RecruiterRoom home={home} office={office} family={hiringFor} pick={(family) => go({ room: "recruiter", family })} hired={() => void home?.orbs().then((o) => o && setOffice(o))} profile={(c, startsAs) => <Sheet c={c} replies={replies} startsAs={startsAs} applying />} />
         ) : room === "org" ? (
           <OrgRoom home={home} office={office} school={schoolFor} open={(c) => go({ room: "career", orb: c.name })} rehired={() => void home?.orbs().then((o) => o && setOffice(o))} />

@@ -117,16 +117,16 @@ test("a reload is still paired, does not play the story again, and keeps the off
   await page.getByRole("heading", { name: "Pip" }).waitFor({ timeout: 30_000 });
 });
 
-test("opened afresh with no address, as the desktop launcher opens it: the office, never New orb", { skip, ...LONG }, async () => {
+test("opened afresh with no address, as the desktop launcher opens it: the home page, never New orb", { skip, ...LONG }, async () => {
   assert.ok(visit, "after the first steps");
   const { page } = visit;
   await page.goto(`http://127.0.0.1:${door.port}/app/orbs.html`);
   await page.getByText("CEO Robin").waitFor({ timeout: 30_000 });
-  await page.locator("[data-floor]").waitFor({ timeout: 30_000 });
+  await page.locator("[data-home-page]").waitFor({ timeout: 30_000 });
   await page.waitForTimeout(500);
   assert.equal(await page.getByRole("button", { name: /^Create / }).count(), 0, "not the creator");
   assert.notEqual(await page.evaluate(() => location.hash), "#/new", "and the address never says New orb");
-  assert.equal(await page.locator("[data-floor]").count(), 1, "the office, with the day at a glance");
+  assert.equal(await page.locator("[data-home-page] [data-tile]").count(), 4, "the home page (owner, 10-07), the day at a glance");
 });
 
 test("a used link, or a browser never paired, is said plainly", { skip }, async () => {

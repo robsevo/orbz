@@ -4,7 +4,7 @@
 // that ended without doing anything (no brain answered, a pass, a loop stopped) is not work.
 import type { EventLog } from "./events.ts";
 
-export type Work = { at: number; summary: string; conversation: string | null };
+export type Work = { at: number; orb: string; summary: string; conversation: string | null };
 
 const NOT_WORK = /^(no brain|passed|looped|repeated|nothing to answer|step limit|plan (usage|not)|a card is still waiting|waiting for an answer|no brain answered)/i;
 
@@ -16,16 +16,16 @@ export function plain(text: string, max = 160): string {
   return first.length > max ? `${first.slice(0, max - 1).trimEnd()}…` : first;
 }
 
-/** Its latest finished work, newest first, `since` the given time. */
-export function recentWork(events: EventLog, orb: string, o: { since?: number; limit?: number } = {}): Work[] {
+/** Its latest finished work, newest first, `since` the given time; `orb` null: the whole office's. */
+export function recentWork(events: EventLog, orb: string | null, o: { since?: number; limit?: number } = {}): Work[] {
   const out: Work[] = [];
   const done = events.ofType("run.finished");
   for (let i = done.length - 1; i >= 0 && out.length < (o.limit ?? 6); i--) {
     const e = done[i]!;
-    if (e.orb !== orb || e.at < (o.since ?? 0) || e.data.outcome !== "ok") continue;
+    if ((orb !== null && e.orb !== orb) || !e.orb || e.at < (o.since ?? 0) || e.data.outcome !== "ok") continue;
     const s = typeof e.data.summary === "string" ? e.data.summary.trim() : "";
     if (!s || NOT_WORK.test(s)) continue;
-    out.push({ at: e.at, summary: plain(s), conversation: e.conversation ?? null });
+    out.push({ at: e.at, orb: e.orb, summary: plain(s), conversation: e.conversation ?? null });
   }
   return out;
 }

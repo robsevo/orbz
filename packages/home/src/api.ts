@@ -47,6 +47,7 @@ import { morningCard } from "./gym/card.ts";
 import { LEVELS, levelOf, nextFor, tenureOf } from "./gym/levels.ts";
 import type { Kind } from "./school/subjects.ts";
 import { leadsOf } from "./org.ts";
+import { dashboardOf } from "./dashboard.ts";
 import { habitsOf } from "./gym/share.ts";
 import { findHotPaths } from "./gym/finder.ts";
 import { nichesOf, radarOf } from "./gym/specialty.ts";
@@ -621,6 +622,9 @@ async function handle(
       throw new HttpError(409, e instanceof Error ? e.message : String(e));
     }
   }
+  // the home page's look at the office (owner, 10-07: "a nice home page the app can default to ... with a nice dashboard
+  // and stats"): by code, no brain asked
+  if (method === "GET" && url.pathname === "/dashboard") return dashboardOf(home);
   // the org chart (PLAN 5.6): who is in the office, at what level, how long, and who leads each kind of work
   if (method === "GET" && url.pathname === "/org") {
     const now = home.clock.now();

@@ -1,8 +1,10 @@
 // Where you are in the app, as an address (owner, 2026-10-01: "back button on the side menu,
 // that brings you to different tabs ... easily navigable"). Every place has a link of its own, so
 // the side menu's Back, the browser's Back and a link someone sends all work alike:
+//   #/home         the home page, what the app opens on (owner, 10-07: "a nice home page the app can default to")
+//   #/office       the office floor            (nothing)    the home page
 //   #/office/Ash   an orb in the office        #/new        a new orb, in the creator
-//   #/settings     Settings                    (nothing)    the office, its first orb
+//   #/settings     Settings
 //   #/chat/Ash     a private chat with an orb (PLAN 2.10)
 //   #/sessions     the sessions (PLAN 2.9)     #/session/3/floor   a session's tab
 //   #/notices      the notification centre (PLAN 2.11)   #/calendar   the calendar (PLAN 2.12)
@@ -14,6 +16,7 @@
 
 export type Room = "office" | "settings";
 export type Route =
+  | { room: "home" }
   | { room: "office"; orb: string | null }
   | { room: "new" }
   | { room: "settings" }
@@ -46,10 +49,11 @@ export function parseRoute(hash: string): Route {
   if (parts[0] === "sessions") return { room: "sessions", id: null, tab: "brainstorm" };
   if (parts[0] === "session" && /^\d+$/.test(parts[1] ?? "")) return { room: "sessions", id: Number(parts[1]), tab: parts[2] === "floor" ? "floor" : "brainstorm" };
   if (parts[0] === "office") return { room: "office", orb: parts[1] ?? null };
-  return { room: "office", orb: null };
+  return { room: "home" };
 }
 
 export function routeHash(r: Route): string {
+  if (r.room === "home") return "#/home";
   if (r.room === "new") return "#/new";
   if (r.room === "settings") return "#/settings";
   if (r.room === "notices") return "#/notices";

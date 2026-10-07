@@ -87,6 +87,24 @@ export type SchoolSubject = {
 };
 export type ReportCardState = { orb: string; atSchool: boolean; passMark: number | null; since: number | null; subjects: SchoolSubject[]; diplomas: { kind: string; name: string; at: number; score: number }[] };
 /** A career page (PLAN 5.6). */
+/** The home page's look at the office (owner, 10-07: "a nice home page the app can default to ... with a nice dashboard
+ * and stats"), read by the home's code (home/src/dashboard.ts). */
+export type DashboardState = {
+  now: number;
+  name: string | null;
+  orbs: number;
+  working: string[];
+  waiting: string[];
+  notices: number;
+  xp: { today: number; week: number; top: { orb: string; name: string; xp: number }[] };
+  brain: { today: { tokens: number; requests: number }; week: { tokens: number; requests: number } };
+  lately: { at: number; orb: string; name: string; summary: string; conversation: string | null }[];
+  sessions: { id: number; title: string; orbs: number; at: number }[];
+  meetings: { at: number; a: string; b: string; kind: string; place: string; idea: string | null }[];
+  coming: CalendarEntry[];
+  hiring: { positions: number; applicants: number };
+};
+
 export type CareerState = Standing & {
   radar: Record<string, { xp: number; passRate: number | null; runs: number }>;
   niches: { word: string; runs: number; ratio: number }[];
@@ -183,6 +201,7 @@ export interface Office {
   setSyllabus(subject: number, topics: string[]): Promise<void>;
   thumb(sitting: number, n: number, up: boolean): Promise<void>;
   career(c: Character): Promise<CareerState>;
+  dashboard(): Promise<DashboardState>;
   me(): Promise<Person | null>;
   setName(p: Person): Promise<void>;
   /** A conversation's messages since `since`, and the card waiting in it, if one is. */
@@ -473,6 +492,9 @@ export function doorOffice(base: Character): Office {
     },
     async career(c) {
       return call<CareerState>(`../orbs/${encodeURIComponent(idOf(c.name))}/career`);
+    },
+    async dashboard() {
+      return call<DashboardState>("../dashboard");
     },
     async me() {
       const { me } = await call<{ me: { name: string | null; since: number | null } }>("../me");
@@ -807,10 +829,11 @@ export async function connect(base: Character): Promise<Link | null> {
     try {
       await call("../session", { method: "POST", body: JSON.stringify({ code: pair }) });
     } catch (e) {
-      history.replaceState(null, "", "#/office");
+      history.replaceState(null, "", "#/home");
       return { trouble: (e as Error).message };
     } finally {
-      if (location.hash.includes("pair=")) history.replaceState(null, "", "#/office"); // the code is spent: off the address
+      // the code is spent: off the address, which is the home page's (what the app opens on, owner 10-07)
+      if (location.hash.includes("pair=")) history.replaceState(null, "", "#/home");
     }
   }
   let res: Response;

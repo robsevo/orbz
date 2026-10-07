@@ -158,6 +158,8 @@ test("on a phone the office goes room by room: it opens on the busiest departmen
   t.after(() => ctx.close());
   const page = await ctx.newPage();
   await page.goto(d.pairLink());
+  await page.locator(".orbs-window").waitFor({ timeout: 30_000 });
+  await page.evaluate(() => (location.hash = "#/office")); // the app opens on the home page (10-07)
   await page.locator("[data-floor-plan]").waitFor({ timeout: 30_000 });
   await page.waitForTimeout(800);
   const at = () => page.evaluate(() => {
@@ -196,6 +198,8 @@ test("on a phone the office goes room by room: it opens on the busiest departmen
   // a desk shows it whole: no chips
   const desk = await (await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: "dark" })).newPage();
   await desk.goto(d.pairLink());
+  await desk.locator(".orbs-window").waitFor({ timeout: 30_000 });
+  await desk.evaluate(() => (location.hash = "#/office"));
   await desk.locator("[data-floor-plan]").waitFor({ timeout: 30_000 });
   assert.equal(await desk.locator("[data-view-choice]").count(), 0);
   await desk.context().close();
