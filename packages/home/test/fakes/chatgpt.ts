@@ -23,8 +23,9 @@ export type PlanTurn = {
   error?: string;
   /** With `status`: the field the refusal names (`error.param`). */
   param?: string;
-  /** Of the prompt, how much came from the cache. */
+  /** Of the prompt, how much came from the cache, and how much it was (default 120). */
   cached?: number;
+  input?: number;
   /** A stream that ends without `response.completed`. */
   cut?: boolean;
 };
@@ -192,7 +193,7 @@ export async function fakeChatGPT(t: TestContext): Promise<FakeChatGPT> {
           sse(res, { type: "response.function_call_arguments.delta", item_id: item.id, delta: args.slice(5) });
           sse(res, { type: "response.output_item.done", item: { ...item, arguments: args } });
         });
-        if (!turn.cut) sse(res, { type: "response.completed", response: { status: "completed", usage: { input_tokens: 120, output_tokens: 12, ...(turn.cached && { input_tokens_details: { cached_tokens: turn.cached } }) } } });
+        if (!turn.cut) sse(res, { type: "response.completed", response: { status: "completed", usage: { input_tokens: turn.input ?? 120, output_tokens: 12, ...(turn.cached && { input_tokens_details: { cached_tokens: turn.cached } }) } } });
         return res.end();
       }
       json(res, 404, { error: "no such path" });

@@ -16,7 +16,7 @@
 // names the transport's cause (Ash's stop-turn lessons). Every step is a `trace.step` event,
 // complete enough to replay the run (trace.ts).
 import { workspaceOf } from "../workspace.ts";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type { Clock } from "../clock.ts";
@@ -34,7 +34,7 @@ import { parseTabConversation } from "../team.ts";
 import { MANAGE_USAGE } from "../chatgpt/chatgpt.ts";
 import type { Spend } from "../brain/spend.ts";
 import type { Card, Conversations, Message, ModelMessage, ToolCall } from "./conversation.ts";
-import { standingContext } from "./standing.ts";
+import { AMBITION, nowNote, standingContext } from "./standing.ts";
 import { streamChat } from "./stream.ts";
 import { type Background, runTool, type ToolContext, type ToolDef, type ToolResult, TOOLS, toolSpecs } from "./tools.ts";
 import type { CallSite, Guard } from "../rules/guard.ts";
@@ -72,7 +72,8 @@ export type AgentOptions = {
   notebook?: (orb: string) => { subject: string; text: string }[];
   /** How it gets on with the office (PLAN 5.9): its friends and frictions, in a few lines, or null. */
   colleagues?: (orb: string) => string | null;
-  /** What it wants most, and where it stands on the office's XP table (owner, 10-07), or null. */
+  /** Where it stands on the office's XP table (owner, 10-07: every orb wants to top it), or null when it is not on it.
+   * Given at all, the orb also wants it (standing.ts AMBITION); the place is in the note after the conversation. */
   ambition?: (orb: string) => string | null;
   /** The company and its part in it (PLAN 5.14), or null. */
   company?: (orb: string) => string | null;
@@ -341,7 +342,10 @@ export class AgentRunner implements Runner {
       if (g) loaded.add(g.id);
     }
     tctx.kinds = loaded;
-    const runNow = this.#o.clock.now(); // once a run: the standing context stays the same from step to step
+    const runNow = this.#o.clock.now(); // once a run: the note's clock stays the same from step to step
+    // one key for an orb's conversation (owner, 10-07): the plan's requests for it go to the cache that holds them; a hash,
+    // so no name leaves the home in it
+    const cacheKey = createHash("sha256").update(`${ctx.orb}\u0000${ctx.conversation}`).digest("hex").slice(0, 32);
     // a reply written only in the reasoning channel (Ash's salvage): one nudge, then its reasoning is shown, marked
     let nudge: string | null = null;
     let nudged = false;
@@ -369,16 +373,26 @@ export class AgentRunner implements Runner {
       }
       const standing = standingContext({
         orbName: this.#o.orbName(ctx.orb), brainDir: join(this.#o.dataDir, "brain"), workspace: tctx.workspace,
-        specialty: this.#o.orbSpecialty?.(ctx.orb), learned: this.#o.learned?.(ctx.orb), notebook: this.#o.notebook?.(ctx.orb), colleagues: this.#o.colleagues?.(ctx.orb) ?? null, ambition: this.#o.ambition?.(ctx.orb) ?? null, company: this.#o.company?.(ctx.orb) ?? null, ...(team && { team }),
-        aloud: ctx.items.some((i) => i.data.said === true), // you spoke (PLAN 4.7): his answer is heard, not read
-        now: runNow,
+        specialty: this.#o.orbSpecialty?.(ctx.orb), learned: this.#o.learned?.(ctx.orb), notebook: this.#o.notebook?.(ctx.orb), colleagues: this.#o.colleagues?.(ctx.orb) ?? null, ambition: this.#o.ambition ? AMBITION : null, company: this.#o.company?.(ctx.orb) ?? null, ...(team && { team }),
         // the craft its tools bring (brain/constitution.ts When): what it has to hand, and what it has used here
         kinds: loaded, used: usedBy(conv.history(ctx.conversation), ctx.orb),
       });
-      await this.#compact(ctx, ep, est(standing));
+      // what changes from run to run: the clock, its place on the XP table, whether you spoke
+      const note = nowNote({
+        now: runNow,
+        place: this.#o.ambition?.(ctx.orb) ?? null,
+        aloud: ctx.items.some((i) => i.data.said === true), // you spoke (PLAN 4.7): his answer is heard, not read
+      });
+      await this.#compact(ctx, ep, est(standing) + (note ? est(note) : 0));
       if (!own) ep = this.#o.endpoint({ light }) ?? ep; // compaction may have met the plan's limit and moved on
       this.#o.spend.check(); // SpendCapError: the inbox stops the run cleanly ("capped")
-      const messages: ModelMessage[] = [{ role: "system" as const, content: own ? `${standing}\n\n${own.system}` : standing }, ...conv.toModel(conv.history(ctx.conversation), { me: ctx.orb, nameOf: this.#o.orbName, talk: role === "chime", brief: role === "asked" })];
+      // on the ChatGPT plan the note goes after the conversation: the instructions, the tools and the conversation so far
+      // are then the same from run to run, a prefix the plan's cache serves at a tenth of the price; another brain reads
+      // it at the end of its instructions, as before
+      const after = ep.plan === "chatgpt" ? note : null;
+      const system = [standing, after ? null : note, own?.system ?? null].filter(Boolean).join("\n\n");
+      const messages: ModelMessage[] = [{ role: "system" as const, content: system }, ...conv.toModel(conv.history(ctx.conversation), { me: ctx.orb, nameOf: this.#o.orbName, talk: role === "chime", brief: role === "asked" })];
+      if (after) messages.push({ role: "system", content: after });
       // the open rows of its plan, last, where attention is highest (plans/recite.ts; a chime-in builds nothing)
       const recital = role === "chime" ? null : (this.#o.recite?.(ctx.orb, ctx.conversation) ?? null);
       if (recital) messages.push({ role: "system", content: recital });
@@ -390,7 +404,7 @@ export class AgentRunner implements Runner {
       const cut = new AbortController();
       const r = await streamChat(
         ep,
-        { messages, tools: toolSpecs(role === "chime" ? [] : this.#toolsFor(loaded)), brief: role === "chime" },
+        { messages, tools: toolSpecs(role === "chime" ? [] : this.#toolsFor(loaded)), brief: role === "chime", cacheKey },
         {
           signal: AbortSignal.any([ctx.signal, cut.signal]),
           onText: (delta) => {
@@ -854,7 +868,7 @@ export class AgentRunner implements Runner {
       ep = next;
       r = await chat(ep, ask, { maxTokens: 1500, signal: ctx.signal });
     }
-    this.#o.spend.record({ tier: "big", model: ep.model, costUsd: r.costUsd, costSource: r.costSource, promptTokens: r.promptTokens, completionTokens: r.completionTokens, orb: ctx.orb, conversation: ctx.conversation });
+    this.#o.spend.record({ tier: "big", model: ep.model, costUsd: r.costUsd, costSource: r.costSource, promptTokens: r.promptTokens, completionTokens: r.completionTokens, orb: ctx.orb, conversation: ctx.conversation, turn: "summary" });
     const last = covered.filter((m) => m.role !== "summary").at(-1)!;
     conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "summary", run: ctx.run, content: r.text, meta: { covers_to: last.id, ...(section && { section: true }) } });
     this.#o.events.append("conversation.compacted", { run: ctx.run, covered: covered.length, kept: hist.length - k, ...(section && { section: parts + 1 }) }, { orb: ctx.orb, conversation: ctx.conversation });

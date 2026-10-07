@@ -44,7 +44,7 @@ export const emptyStreamed = (): Streamed => ({
 
 export async function streamChat(
   ep: Endpoint,
-  body: { messages: ModelMessage[]; tools?: ToolSpec[]; maxTokens?: number; brief?: boolean },
+  body: { messages: ModelMessage[]; tools?: ToolSpec[]; maxTokens?: number; brief?: boolean; cacheKey?: string },
   opts: { signal?: AbortSignal; onText?: (delta: string) => void } = {},
 ): Promise<Streamed> {
   if (ep.api === "responses") return streamResponses(ep, body, opts);

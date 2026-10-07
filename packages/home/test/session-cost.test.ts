@@ -7,15 +7,15 @@
 //     request to another orb, or another orb's words, begin nothing; within a turn, a long result from before
 //     its latest two steps its head too (10-07);
 //   - a session can be deleted: what waits is dropped, its cards put away, its chats gone;
-//   - the clock is the standing context's last line; a chime-in carries the mini constitution, an
-//     asked researcher its method.
+//   - nothing that moves from run to run is in the standing context (the clock is the note's, nowNote); a
+//     chime-in carries the mini constitution, an asked researcher its method.
 import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { Background, type ToolContext, type ToolDef } from "../src/agent/tools.ts";
 import { OLD_RESULT, STALE_KEEP, STALE_MAX, trimOld, trimStale } from "../src/agent/conversation.ts";
-import { standingContext } from "../src/agent/standing.ts";
+import { nowNote, standingContext } from "../src/agent/standing.ts";
 import { MINI, SECTION_MAP } from "../src/brain/constitution.ts";
 import { dealRows } from "../src/team.ts";
 import type { Home } from "../src/home.ts";
@@ -181,7 +181,7 @@ test("deleting a session stops its work, puts its cards away and removes its cha
   assert.equal((await del(keep.id)).status, 404);
 });
 
-test("the clock is the standing context's last line; a chime-in carries the mini constitution, an asked researcher its method", (t) => {
+test("nothing that moves from run to run is in the standing context, the clock is the note's; a chime-in carries the mini constitution, an asked researcher its method", (t) => {
   const dir = tempDir(t);
   const brain = join(dir, "brain");
   mkdirSync(brain, { recursive: true });
@@ -190,10 +190,12 @@ test("the clock is the standing context's last line; a chime-in carries the mini
   writeFileSync(join(brain, "CONSTITUTION.md"), keys.map((k, i) => `${i === 0 ? "#" : "##"} ${k === "title" ? "Serge — System Prompt" : k.replace(/_/g, " ")}\nSECTION-${k}\n`).join("\n"));
   const team = { session: 1, title: "x", tab: "brainstorm" as const, with: ["Milo", "Pip"] };
   const now = new Date(2026, 9, 6, 17, 4).getTime();
-  const lead = standingContext({ orbName: "Milo", brainDir: brain, workspace: "/w", specialty: "research", team: { ...team, role: "lead" }, now });
-  const chime = standingContext({ orbName: "Milo", brainDir: brain, workspace: "/w", specialty: "research", team: { ...team, role: "chime" }, now });
-  const asked = standingContext({ orbName: "Milo", brainDir: brain, workspace: "/w", specialty: "research", team: { ...team, role: "asked" }, now });
-  for (const s of [lead, chime, asked]) assert.match(s.split("\n\n").at(-1)!, /^It is Tuesday, 6 October 2026 at 17:04/, "the clock last: what comes before it is the same from step to step");
+  const lead = standingContext({ orbName: "Milo", brainDir: brain, workspace: "/w", specialty: "research", team: { ...team, role: "lead" } });
+  const chime = standingContext({ orbName: "Milo", brainDir: brain, workspace: "/w", specialty: "research", team: { ...team, role: "chime" } });
+  const asked = standingContext({ orbName: "Milo", brainDir: brain, workspace: "/w", specialty: "research", team: { ...team, role: "asked" } });
+  for (const s of [lead, chime, asked]) assert.doesNotMatch(s, /today is/, "no clock in it: it is the same from run to run");
+  assert.match(nowNote({ now })!, /^It is Tuesday,? 6 October 2026[ ,at]+17:04/, "the clock is the note's");
+  assert.equal(nowNote({}), null, "a note with nothing in it is none");
   const loaded = (s: string): string[] => keys.filter((k) => s.includes(`SECTION-${k}\n`) || s.endsWith(`SECTION-${k}`) || s.includes(`SECTION-${k}`));
   assert.deepEqual(loaded(chime).sort(), [...MINI].sort(), "a chime-in: the mini constitution, and nothing more");
   for (const k of MINI) assert.equal(SECTION_MAP[k]?.to, "core", `${k} is a core section`);

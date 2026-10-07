@@ -547,7 +547,7 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ("      if (r.error && own && !r.text && !r.toolCalls.length) {", "      if (r.error && own && !r.text && !r.toolCalls.length && false) {"),
     ], ["playbook.test.ts"]),
     ("his own brain answers without its playbook", "src/agent/loop.ts", [
-        ("content: own ? `${standing}\\n\\n${own.system}` : standing }", "content: standing }"),
+        ("own?.system ?? null].filter(Boolean)", "null].filter(Boolean)"),
     ], ["playbook.test.ts"]),
     ("his own brain's cost is billed as the big brain's", "src/agent/loop.ts", [
         ('          tier: own ? "own" : "big", model: ep.model,', '          tier: "big", model: ep.model,'),
@@ -1388,7 +1388,7 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ("xp: xp[o.id] ?? 0 })).sort((a, b) => b.xp - a.xp);", "xp: xp[o.id] ?? 0 })).sort((a, b) => a.xp - b.xp);"),
     ], ["org.test.ts"]),
     ("an orb is told it leads when it does not", "src/agent/standing.ts", [
-        ("  if (at === 0) return `${want} You lead", "  if (at >= 0) return `${want} You lead"),
+        ("  if (at === 0) return `You lead", "  if (at >= 0) return `You lead"),
     ], ["org.test.ts"]),
     ('an orb does not know its friends', 'src/agent/standing.ts', [
         ('  if (o.colleagues) parts.push(o.colleagues); // its friends and frictions in the office (PLAN 5.9)\n', ''),
@@ -1641,9 +1641,45 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("a deleted session's last run writes after it is gone", 'src/team.ts', [
         ('await Promise.all(TABS.map((tab) => this.#inbox.drop(tabConversation(id, tab))));', 'void Promise.all(TABS.map((tab) => this.#inbox.drop(tabConversation(id, tab))));'),
     ], ['session-cost.test.ts']),
-    ('the clock in the middle of the standing context', 'src/agent/standing.ts', [
-        ('  if (o.now !== undefined) parts.push(nowLine(o.now));\n  return parts.join', '  if (o.now !== undefined) parts.splice(3, 0, nowLine(o.now));\n  return parts.join'),
-    ], ['session-cost.test.ts']),
+    # what changes from run to run, after the conversation on the plan (owner, 10-07: "cut token costs ... while still
+    # keeping the current flow and logic")
+    ('the note before the conversation, on the plan', 'src/agent/loop.ts', [
+        ('      if (after) messages.push({ role: "system", content: after });', '      if (after) messages.splice(1, 0, { role: "system", content: after });'),
+    ], ['chatgpt.test.ts']),
+    ('the note in the instructions on the plan too', 'src/agent/loop.ts', [
+        ('const after = ep.plan === "chatgpt" ? note : null;', 'const after = null as string | null;'),
+    ], ['chatgpt.test.ts']),
+    ('another brain reads the note before its instructions', 'src/agent/loop.ts', [
+        ('const system = [standing, after ? null : note, own?.system ?? null]', 'const system = [after ? null : note, standing, own?.system ?? null]'),
+    ], ['chatgpt.test.ts']),
+    ('the place on the XP table in the instructions, the wish gone', 'src/agent/loop.ts', [
+        ('ambition: this.#o.ambition ? AMBITION : null,', 'ambition: this.#o.ambition?.(ctx.orb) ?? null,'),
+    ], ['chatgpt.test.ts']),
+    ('the plan is sent no cache key', 'src/agent/loop.ts', [
+        ('brief: role === "chime", cacheKey },', 'brief: role === "chime" },'),
+    ], ['chatgpt.test.ts']),
+    ("every conversation of an orb shares one cache key", 'src/agent/loop.ts', [
+        ('.update(`${ctx.orb}\\u0000${ctx.conversation}`)', '.update(ctx.orb)'),
+    ], ['chatgpt.test.ts']),
+    ("the cache key carries the orb's and the conversation's names", 'src/agent/loop.ts', [
+        ('const cacheKey = createHash("sha256").update(`${ctx.orb}\\u0000${ctx.conversation}`).digest("hex").slice(0, 32);', 'const cacheKey = `${ctx.orb}:${ctx.conversation}`;'),
+    ], ['chatgpt.test.ts']),
+    ('a refused cache key fails the turn', 'src/agent/responses.ts', [
+        ('  if (field && field in asked) {', '  if (field && field in BRIEF_FIELDS) {'),
+    ], ['chatgpt.test.ts']),
+    # what the brains cost, read back (PLAN 1.16)
+    ('the cache is said to serve all that was read', 'src/brain/cost.ts', [
+        ('      l.cached += count(r.data.cached_tokens);', '      l.cached += count(r.data.prompt_tokens);'),
+    ], ['cost.test.ts']),
+    ('every call is counted as a chat', 'src/brain/cost.ts', [
+        ('const kind = typeof r.data.turn === "string" ? r.data.turn : r.conversation ? "chat" : "other";', 'const kind = "chat";'),
+    ], ['cost.test.ts']),
+    ("the probe says served without its control", 'src/brain/cost.ts', [
+        ('const served = !failed && again.cached > control.cached && again.cached > first.cached;', 'const served = !failed && again.cached > first.cached;'),
+    ], ['cost.test.ts']),
+    ("the probe's control asks what the repeat asked", 'src/brain/cost.ts', [
+        ('const control = await ask(text(tag()));', 'const control = await ask(same);'),
+    ], ['cost.test.ts']),
     ('a chime-in carries the big constitution', 'src/brain/constitution.ts', [
         ('if (!(o.mini ? MINI.includes(s.key) : loads(SECTION_MAP[s.key], o.specialty, o)) || !s.body) continue;', 'if (!loads(SECTION_MAP[s.key], o.specialty, o) || !s.body) continue;'),
     ], ['session-cost.test.ts']),
@@ -1660,10 +1696,10 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ('endpoint: (o) => (o?.light ? this.lightBrain() : ', 'endpoint: (o) => (false ? this.lightBrain() : '),
     ], ['chatgpt.test.ts']),
     ('a chime-in thinks and talks at length', 'src/agent/responses.ts', [
-        ('const asked = body.brief ? Object.keys(BRIEF_FIELDS).filter((k) => !refused.has(k)) : [];', 'const asked: string[] = [];'),
+        ('{ ...(body.brief && BRIEF_FIELDS), ...(body.cacheKey', '{ ...(body.cacheKey'),
     ], ['chatgpt.test.ts']),
     ('a field the plan refuses fails the turn', 'src/agent/responses.ts', [
-        ('  if (field && asked.includes(field)) {', '  if (false) {'),
+        ('  if (field && field in asked) {', '  if (false) {'),
     ], ['chatgpt.test.ts']),
     # Ash's guards and recitation (owner, 10-07)
     ("a reply may repeat one sentence forever", "src/agent/loopguard.ts", [
@@ -2830,7 +2866,7 @@ def copy_home(tmp: Path) -> Path:
         work = pkgs / src.name
         shutil.copytree(src, work, symlinks=True, ignore=shutil.ignore_patterns("node_modules", "dist", "renders"))
         (work / "node_modules").symlink_to(src / "node_modules", target_is_directory=True)
-    for shared in ("kit", "docs"):  # read-only inputs the home's tests use (the kit, the bake-off defaults)
+    for shared in ("kit", "docs", "tools"):  # read-only inputs the home's tests use (the kit, the bake-off defaults, `pnpm cost`)
         if not (tmp / shared).exists():
             (tmp / shared).symlink_to(REPO / shared, target_is_directory=True)
     if not (tmp / "tsconfig.base.json").exists():  # the app's build reads it (Vite follows tsconfig's extends)

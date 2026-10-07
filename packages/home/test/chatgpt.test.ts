@@ -12,6 +12,8 @@ import { join } from "node:path";
 import { test, type TestContext } from "node:test";
 import { serve } from "../src/api.ts";
 import { MANAGE_USAGE } from "../src/chatgpt/chatgpt.ts";
+import { ALOUD } from "../src/agent/standing.ts";
+import { FakeClock } from "../src/clock.ts";
 import { KeychainStore, MemoryStore } from "../src/chatgpt/store.ts";
 import type { Turn } from "./fakes/model.ts";
 import { browse, fakeChatGPT, type FakeChatGPT } from "./fakes/chatgpt.ts";
@@ -367,4 +369,60 @@ test("a chime-in on the plan goes to the light model, thinking little and saying
   assert.deepEqual(said, ["Saturday.", "Book a shelter.", "Pip passed."]);
   const spend = h.home.events.ofType("brain.spend").map((e) => [e.data.model, e.data.turn, e.data.cached_tokens ?? 0]);
   assert.deepEqual(spend, [["gpt-5.6-terra", "lead", 100], ["gpt-5.6-luna", "chime", 0], ["gpt-5.6-luna", "chime", 0]], "each call's model, kind and cache, measured");
+});
+
+test("on the plan, what changes from run to run comes after the conversation: an hour on, said aloud, the XP table moved, the same instructions and the first request the start of the second; a cache key a conversation, dropped for good when refused", async (t) => {
+  const clock = new FakeClock(new Date("2026-10-05T14:07").getTime());
+  const h = await home(t, [], { clock });
+  await signIn(h);
+  const { forgetRefused } = await import("../src/agent/responses.ts");
+  forgetRefused();
+  t.after(forgetRefused);
+  h.openai.script = [
+    { chunks: ["Morning."] },
+    { chunks: ["Sure."] },
+    { status: 400, code: "subscription_sharing_unsupported_capability", param: "prompt_cache_key" },
+    { chunks: ["Done."] },
+    { chunks: ["Again."] },
+  ];
+  h.home.inbox.send("juniper", "chat:1", "hello");
+  await h.home.inbox.idle();
+  await clock.advance(60 * 60_000);
+  h.home.events.append("xp.earned", { amount: 10, reason: "a run you approved", source: 1, at: clock.now() }, { orb: "juniper" });
+  h.home.inbox.send("juniper", "chat:1", "and later?", { said: true });
+  await h.home.inbox.idle();
+  const [first, second] = h.openai.responses.map((r) => r.body as { instructions: string; input: { type: string; role?: string; content?: string }[]; prompt_cache_key?: string });
+  assert.equal(second!.instructions, first!.instructions, "the same instructions an hour on, said aloud, the table moved");
+  assert.doesNotMatch(first!.instructions, /today is|XP;|with \d+ XP|will hear your answer/, "nothing in them that moves from run to run");
+  assert.match(first!.instructions, /What you want most: to be the best orb/, "the wish stays in them");
+  assert.deepEqual(second!.input.slice(0, first!.input.length - 1), first!.input.slice(0, -1), "the first request, but for its note, is the start of the second");
+  const note = (b: typeof first) => b!.input.at(-1)!;
+  assert.equal(note(first).role, "developer", "the note: last, the developer's");
+  assert.match(note(first).content!, /^It is .*14:07 where the person is[\s\S]*today is 2026-10-05[\s\S]*You are the only orb in the office so far, with 0 XP\.$/);
+  assert.match(note(second).content!, /^It is .*15:07 where the person is[\s\S]*with 10 XP\.[\s\S]*will hear your answer read aloud/, "an hour on, its place moved, said aloud");
+  assert.match(first!.prompt_cache_key ?? "", /^[0-9a-f]{32}$/, "a cache key, a hash: no name in it");
+  assert.equal(second!.prompt_cache_key, first!.prompt_cache_key, "one key for the conversation");
+  // another conversation, another key; the plan refuses it: sent again without, and never asked for again
+  h.home.inbox.send("juniper", "chat:2", "a new chat");
+  await h.home.inbox.idle();
+  const [, , refused, resent] = h.openai.responses.map((r) => r.body);
+  assert.ok(refused!.prompt_cache_key && refused!.prompt_cache_key !== first!.prompt_cache_key, "another conversation, another key");
+  assert.equal(resent!.prompt_cache_key, undefined, "refused: sent again without it");
+  assert.equal(h.home.conversations.list("chat:2").find((m) => m.role === "assistant")?.content, "Done.", "the turn is answered all the same");
+  h.home.inbox.send("juniper", "chat:1", "once more");
+  await h.home.inbox.idle();
+  assert.equal(h.openai.responses.at(-1)!.body.prompt_cache_key, undefined, "and never asked for again");
+});
+
+test("CONTROL: another brain still reads the note at the end of its instructions, nothing after the conversation", async (t) => {
+  const clock = new FakeClock(new Date("2026-10-05T14:07").getTime());
+  const h = await home(t, [{ chunks: ["Morning."] }], { clock });
+  h.home.inbox.send("juniper", "chat:1", "hello", { said: true });
+  await h.home.inbox.idle();
+  const msgs = h.model.agent[0]! as { role: string; content?: string }[];
+  assert.deepEqual(msgs.map((m) => m.role), ["system", "user"], "the router: the instructions, then the conversation");
+  const system = String(msgs[0]!.content);
+  assert.match(system, /What you want most[\s\S]*It is .*14:07 where the person is[\s\S]*with 0 XP\./);
+  assert.ok(system.endsWith(ALOUD), "the note at the end of its instructions, as before");
+  assert.equal(h.model.bodies[0]!.prompt_cache_key, undefined, "no cache key off the plan");
 });

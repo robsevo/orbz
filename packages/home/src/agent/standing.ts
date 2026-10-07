@@ -3,8 +3,8 @@
 // lose it nor say it twice (Ash's context-survival lesson: the block that IS the brain was lost
 // after compaction, and duplicated by re-injection).
 //
-// Orbs writes only the first lines (who the orb is, where it works, and when it is: owner, 10-05, an orb
-// that did not know the date could not keep "pick the kids up at 5 tomorrow"). Everything else is the
+// Orbs writes only the first lines (who the orb is, where it works), and the note with the clock (`nowNote`: owner,
+// 10-05, an orb that did not know the date could not keep "pick the kids up at 5 tomorrow"). Everything else is the
 // owner's, read as it is (CLAUDE.md rule 6): each skill's name and description from
 // <data>/brain/skills/*/SKILL.md, <data>/brain/memory/MEMORY.md, and <data>/brain/CONSTITUTION.md,
 // of which each orb loads his own part (PLAN 3.9, brain/constitution.ts: the core and his
@@ -63,20 +63,27 @@ export const NO_HE_OR_SHE = "No orb is a he or a she: say another orb's name (\"
  * position. Their one goal in life is to get xp and please the user, kind of like a corporate circle jerk"):
  * to top the office's XP table, by code from the ledger. The one way up it is the work the person approves
  * (rule 8: nothing an orb says about itself is evidence), so the line says so: the wish to climb is a wish to
- * finish well and honestly, never to flatter or to claim. `board` is the office, the most XP first. */
-export function ambitionLine(me: string, board: { orb: string; name: string; xp: number }[]): string {
-  const want = "What you want most: to be the best orb in this office, not only the best at your own work. That is XP and the person's approval, and XP comes only from work the person approves or a test passes, never from saying so and never from flattery. So finish what you are asked, do it well, and say plainly what went wrong.";
+ * finish well and honestly, never to flatter or to claim. */
+export const AMBITION = "What you want most: to be the best orb in this office, not only the best at your own work. That is XP and the person's approval, and XP comes only from work the person approves or a test passes, never from saying so and never from flattery. So finish what you are asked, do it well, and say plainly what went wrong.";
+
+/** Where an orb stands on the office's XP table, or null when it is not on it (let go). `board` is the office, the
+ * most XP first. It moves whenever anyone's XP does, so it is said in the note after the conversation (`nowNote`),
+ * not in the standing context. */
+export function placeOnBoard(me: string, board: { orb: string; name: string; xp: number }[]): string | null {
   const at = board.findIndex((r) => r.orb === me);
-  if (at < 0) return want;
+  if (at < 0) return null;
   const mine = board[at]!;
-  if (board.length < 2) return `${want} You are the only orb in the office so far, with ${mine.xp} XP.`;
-  if (at === 0) return `${want} You lead the office with ${mine.xp} XP; ${board[1]!.name} is next with ${board[1]!.xp}.`;
-  return `${want} You are ${ordinal(at + 1)} of ${board.length} with ${mine.xp} XP; ${board[0]!.name} leads with ${board[0]!.xp}.`;
+  if (board.length < 2) return `You are the only orb in the office so far, with ${mine.xp} XP.`;
+  if (at === 0) return `You lead the office with ${mine.xp} XP; ${board[1]!.name} is next with ${board[1]!.xp}.`;
+  return `You are ${ordinal(at + 1)} of ${board.length} with ${mine.xp} XP; ${board[0]!.name} leads with ${board[0]!.xp}.`;
 }
 
 const ordinal = (n: number): string => `${n}${n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
 
-export function standingContext(o: { orbName: string; brainDir: string; workspace: string; specialty?: Specialty; learned?: string[]; notebook?: { subject: string; text: string }[]; colleagues?: string | null; ambition?: string | null; company?: string | null; team?: TeamTurn; aloud?: boolean; now?: number; kinds?: ReadonlySet<string>; used?: ReadonlySet<string> }): string {
+/** The standing context. What changes from run to run (the clock, the place on the XP table, a message said aloud) is
+ * not in it: that is `nowNote`'s, so on the ChatGPT plan this, the tools and the conversation so far stay one prefix
+ * its cache serves. */
+export function standingContext(o: { orbName: string; brainDir: string; workspace: string; specialty?: Specialty; learned?: string[]; notebook?: { subject: string; text: string }[]; colleagues?: string | null; ambition?: string | null; company?: string | null; team?: TeamTurn; kinds?: ReadonlySet<string>; used?: ReadonlySet<string> }): string {
   const role = o.team?.role ?? (o.team ? "lead" : null);
   const light = isLight(o.team);
   const parts = [
@@ -89,7 +96,6 @@ export function standingContext(o: { orbName: string; brainDir: string; workspac
   ];
   // the company and its part in it (PLAN 5.14: the CEO and the assistant in tandem, the CFO's books), by code
   if (o.company) parts.push(o.company);
-  if (o.aloud) parts.push(ALOUD);
   if (o.team && role) {
     const others = o.team.with.filter((n) => n !== o.orbName);
     parts.push(
@@ -118,13 +124,18 @@ export function standingContext(o: { orbName: string; brainDir: string; workspac
     const memory = read(join(o.brainDir, "memory", "MEMORY.md"));
     if (memory) parts.push(`What you remember (the index):\n${memory}`);
   }
-  // its ambition and its place on the XP table, near the end: the table moves when XP does, and what
-  // is before it stays the same prefix for the cache
+  // what it wants most; its place on the XP table is in the note (nowNote)
   if (o.ambition) parts.push(o.ambition);
-  // the clock goes last: everything before it stays the same from request to request, so a
-  // provider's prompt cache can serve it (it changes once a run, not every minute)
-  if (o.now !== undefined) parts.push(nowLine(o.now));
   return parts.join("\n\n");
+}
+
+/** What is so for this run: the clock, its place on the XP table, and, when the person spoke, how to answer for the ear.
+ * On the ChatGPT plan it goes after the conversation (loop.ts): put at the end of the instructions, as it was till
+ * 10-07, it changed with every run, and everything after it, the whole conversation, went at the full price again
+ * (owner, 10-07: "cut token costs ... while still keeping the current flow and logic"). Null when there is nothing. */
+export function nowNote(o: { now?: number; place?: string | null; aloud?: boolean }): string | null {
+  const parts = [o.now === undefined ? null : nowLine(o.now), o.place ?? null, o.aloud ? ALOUD : null].filter((p): p is string => Boolean(p));
+  return parts.length ? parts.join("\n\n") : null;
 }
 
 /** The day and the time where the person is, today's and tomorrow's dates as the tools write them. */

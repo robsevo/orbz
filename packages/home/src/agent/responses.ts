@@ -23,11 +23,15 @@ const LIMITS: Record<string, Limited> = {
 /** What a brief reply asks of the model (PLAN 5.10): a chime-in thinks a little and says little.
  * OpenAI bills reasoning as output; the plan's preview turns some fields down with
  * `subscription_sharing_unsupported_capability` (naming the field), so one it refuses is dropped and
- * the request sent again, and never asked for again while the home runs. */
+ * the request sent again, and never asked for again while the home runs. `prompt_cache_key` (owner, 10-07) is
+ * asked for the same way: one key per orb's conversation, as Codex sends its conversation's, so the plan's
+ * requests for it reach the cache that holds them. */
 export const BRIEF_FIELDS: Record<string, unknown> = { reasoning: { effort: "low" }, text: { verbosity: "low" } };
 const refused = new Set<string>();
 /** Forgets what the plan refused (a test's fresh start). */
 export const forgetRefused = (): void => refused.clear();
+/** What the plan has refused since the home started (`pnpm cost --probe` says so). */
+export const refusedFields = (): string[] => [...refused];
 
 /** The chat-shaped history as Responses input: the leading system text becomes the instructions, a tool
  * call and its result become a function_call and its function_call_output, and system text after the
@@ -49,13 +53,14 @@ export function toResponsesInput(messages: ModelMessage[]): { instructions: stri
 
 export async function streamResponses(
   ep: Endpoint,
-  body: { messages: ModelMessage[]; tools?: ToolSpec[]; brief?: boolean },
+  body: { messages: ModelMessage[]; tools?: ToolSpec[]; brief?: boolean; cacheKey?: string },
   opts: { signal?: AbortSignal; onText?: (delta: string) => void } = {},
 ): Promise<Streamed> {
-  const asked = body.brief ? Object.keys(BRIEF_FIELDS).filter((k) => !refused.has(k)) : [];
+  const wanted: Record<string, unknown> = { ...(body.brief && BRIEF_FIELDS), ...(body.cacheKey && { prompt_cache_key: body.cacheKey }) };
+  const asked = Object.fromEntries(Object.entries(wanted).filter(([k]) => !refused.has(k)));
   const first = await streamOnce(ep, body, asked, opts);
   const field = first.refusedField;
-  if (field && asked.includes(field)) {
+  if (field && field in asked) {
     refused.add(field);
     return streamResponses(ep, body, opts);
   }
@@ -65,7 +70,7 @@ export async function streamResponses(
 async function streamOnce(
   ep: Endpoint,
   body: { messages: ModelMessage[]; tools?: ToolSpec[] },
-  brief: string[],
+  asked: Record<string, unknown>,
   opts: { signal?: AbortSignal; onText?: (delta: string) => void },
 ): Promise<Streamed & { refusedField?: string }> {
   const out = emptyStreamed();
@@ -100,7 +105,7 @@ async function streamOnce(
         ...(body.tools?.length && { tools: body.tools.map((t) => ({ type: "function", name: t.function.name, description: t.function.description, parameters: t.function.parameters })) }),
         store: false,
         stream: true,
-        ...Object.fromEntries(brief.map((k) => [k, BRIEF_FIELDS[k]])),
+        ...asked,
         ...ep.extra,
       }),
     });
@@ -108,7 +113,7 @@ async function streamOnce(
       const j = (await res.json().catch(() => ({}))) as { error?: { code?: unknown; message?: unknown; param?: unknown } };
       const code = typeof j.error?.code === "string" ? j.error.code : null;
       const param = typeof j.error?.param === "string" ? j.error.param.split(".")[0]! : null;
-      if (res.status === 400 && param && brief.includes(param)) return { ...fail(`HTTP 400 ${code ?? ""}: ${param} refused`, code), refusedField: param };
+      if (res.status === 400 && param && param in asked) return { ...fail(`HTTP 400 ${code ?? ""}: ${param} refused`, code), refusedField: param };
       const said = typeof j.error?.message === "string" ? `: ${j.error.message.slice(0, 200)}` : "";
       return fail(`HTTP ${res.status}${code ? ` ${code}` : ""}${said}`, code, code ? (LIMITS[code] ?? null) : res.status === 401 ? "signed-out" : null);
     }

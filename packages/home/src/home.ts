@@ -38,7 +38,7 @@ import { type Level, LEVELS, levelOf, nextFor, tenureOf } from "./gym/levels.ts"
 import { orgTools, whoFits } from "./org.ts";
 import { recital } from "./plans/recite.ts";
 import { recentWork } from "./worklog.ts";
-import { ambitionLine } from "./agent/standing.ts";
+import { placeOnBoard } from "./agent/standing.ts";
 import { companyLine, whyNot } from "./company.ts";
 import { Boardroom, FORTNIGHT_MS } from "./boardroom.ts";
 import { BoardReports } from "./report.ts";
@@ -447,7 +447,7 @@ export class Home {
           learned: (orb) => this.learned.list(orb),
           notebook: (orb) => this.school.notebook(orb), // what it kept at school (PLAN 5.7) goes to work with it
           colleagues: (orb) => this.social.colleaguesLine(orb), // its friends and frictions (PLAN 5.9)
-          ambition: (orb) => ambitionLine(orb, this.ranking()), // to top the office (owner, 10-07)
+          ambition: (orb) => placeOnBoard(orb, this.ranking()), // to top the office (owner, 10-07)
           company: (orb) => {
             const me = this.inbox.orb(orb);
             const you = this.about.get();

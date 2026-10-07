@@ -26,7 +26,7 @@ import { habitsOf, shareHabit } from "../src/gym/share.ts";
 import { promotedFor } from "../src/gym/steps.ts";
 import { headsOf, leadsOf, whoFits, type Member } from "../src/org.ts";
 import { serve } from "../src/api.ts";
-import { ambitionLine } from "../src/agent/standing.ts";
+import { placeOnBoard } from "../src/agent/standing.ts";
 import type { Home } from "../src/home.ts";
 import { agentHome } from "./helpers.ts";
 import { fakeBrain } from "./fakes/openai.ts";
@@ -216,14 +216,14 @@ test("every orb wants to top the office: its place on the XP table in every requ
   assert.deepEqual(career.ranking.slice(0, 2), [{ orb: "bea", name: "Bea", xp: 40 }, { orb: "ada", name: "Ada", xp: 15 }]);
 });
 
-test("the ambition, by code: the leader, the rest, an office of one, and an orb not on the table", () => {
+test("the place on the table, by code: the leader, the rest, an office of one, and an orb not on the table", () => {
   const board = [{ orb: "b", name: "Bea", xp: 40 }, { orb: "a", name: "Ada", xp: 15 }, { orb: "j", name: "Jo", xp: 0 }];
-  assert.match(ambitionLine("b", board), /You lead the office with 40 XP; Ada is next with 15\.$/);
-  assert.match(ambitionLine("j", board), /You are 3rd of 3 with 0 XP; Bea leads with 40\.$/);
-  assert.match(ambitionLine("a", [board[1]!]), /You are the only orb in the office so far, with 15 XP\.$/);
-  assert.match(ambitionLine("x", board), /say plainly what went wrong\.$/, "not on the table (let go): the wish, and no place");
+  assert.equal(placeOnBoard("b", board), "You lead the office with 40 XP; Ada is next with 15.");
+  assert.equal(placeOnBoard("j", board), "You are 3rd of 3 with 0 XP; Bea leads with 40.");
+  assert.equal(placeOnBoard("a", [board[1]!]), "You are the only orb in the office so far, with 15 XP.");
+  assert.equal(placeOnBoard("x", board), null, "not on the table (let go): no place");
   const many = Array.from({ length: 13 }, (_, i) => ({ orb: `o${i}`, name: `O${i}`, xp: 100 - i }));
-  assert.deepEqual(["o0", "o1", "o2", "o10", "o11", "o12"].map((o) => /You (lead|are (\d+\w\w))/.exec(ambitionLine(o, many))![2] ?? "lead"), ["lead", "2nd", "3rd", "11th", "12th", "13th"]);
+  assert.deepEqual(["o0", "o1", "o2", "o10", "o11", "o12"].map((o) => /You (lead|are (\d+\w\w))/.exec(placeOnBoard(o, many)!)![2] ?? "lead"), ["lead", "2nd", "3rd", "11th", "12th", "13th"]);
 });
 
 test("let go the lead, and the next one up leads: the most experienced in the position, through the door", async (t) => {
