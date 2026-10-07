@@ -1485,12 +1485,22 @@ main.orbs-main { padding: max(var(--s5), env(safe-area-inset-top)) max(var(--mar
 @media (min-width: 1100px) { .orbs-beside { grid-template-columns: minmax(0, 6fr) minmax(320px, 5fr) !important; } }
 /* a conversation fits the screen (owner, 10-07: "scrolling bar on the WHOLE CONVO that doesnt go past the screen"):
    its room is the window's height (ui/fill.ts), the conversation one row of it that scrolls on its own; beside
-   it, his computer or the team's board scrolls on its own too; stacked on a narrower screen, the work above
-   gets two parts of five and the conversation three */
+   it, his computer or the team's board scrolls on its own too */
 .orbs-convo { display: grid; grid-template-rows: minmax(0, 1fr); min-height: 0; }
 .orbs-convo > * { min-height: 0; }
-.orbs-convo.orbs-beside { grid-template-rows: minmax(0, 2fr) minmax(0, 3fr); }
-.orbs-pane { overflow-y: auto; overscroll-behavior: contain; }
+.orbs-talk { display: grid; min-height: 0; }
+.orbs-switch { display: none; }
+/* narrower than side by side: one at a time, each the whole height, a switch between them (10-07) */
+@media (max-width: 1099px) {
+  .orbs-convo.orbs-beside[data-view="work"] > .orbs-talk, .orbs-convo.orbs-beside[data-view="talk"] > .orbs-pane { display: none; }
+  .orbs-switch { display: flex; }
+}
+/* a pane scrolls; what is in it keeps its own height (10-07: under a fixed height its rows shrank, the
+   computers' row to a sliver and the board cut short, "we cant see this section anymore") */
+.orbs-pane { overflow-y: auto; overscroll-behavior: contain; grid-auto-rows: max-content; }
+/* every scroll bar in the app's own: thin, the quiet grey on nothing (owner, 10-07: "make the scrolling
+   containers take the style of the app") */
+* { scrollbar-width: thin; scrollbar-color: var(--quiet) transparent; }
 @media (min-width: 761px) { .orbs-fit .orbs-side { max-height: calc(100dvh - 2 * var(--s5)); } }
 @media (min-width: 1100px) { .orbs-convo.orbs-beside { grid-template-rows: minmax(0, 1fr); } }`;
 document.head.append(style);

@@ -56,9 +56,11 @@ test("at phone size: watch him live, take over, press his screen, type on his pa
   await page.locator(".orbs-window").waitFor({ timeout: 30_000 }); // the app is up (at phone size the side menu, with the CEO badge, is folded away)
   await h.computers.open("hazel", site.url("shop.test", "/big-link"));
   await page.evaluate(() => (location.hash = "#/chat/hazel"));
+  // a phone's chat opens on the conversation; his computer is a press away (10-07)
+  await page.getByRole("button", { name: "Hazel's computer" }).click();
   const computer = page.locator('[data-computer="hazel"]');
   await computer.getByRole("tab", { name: "Browser" }).click();
-  await page.locator('[data-stream="open"]').waitFor({ timeout: 20_000 });
+  await page.locator('[data-stream="open"]').waitFor({ state: "attached", timeout: 20_000 }); // the chat, behind his computer on a phone
 
   await computer.getByRole("button", { name: "Watch live" }).click();
   const live = computer.locator("img[data-live]");

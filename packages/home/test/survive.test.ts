@@ -55,13 +55,13 @@ test("it survives compaction: the summary stands in for the old turns, the stand
   assert.equal(after[0]!.role, "system");
 });
 
-test("many compactions never pile up: one summary, the standing context once, after all of it", async (t) => {
+test("many compactions never pile up: at most one whole summary and the parts since, the standing context once, after all of it", async (t) => {
+  const { MAX_PARTS } = await import("../src/agent/loop.ts");
   const { home, model } = await survivor(t);
   await talk(home, 14);
   assert.ok(model.summaries >= 3, `three compactions happened (${model.summaries})`);
-  const last = model.agent.at(-1)!;
-  assert.equal(count(last, "SUMMARY-OF-MIDDLE"), 1, "only the latest summary is sent");
-  assert.ok(once(last));
+  for (const req of model.agent) assert.ok(count(req, "SUMMARY-OF-MIDDLE") <= 1 + MAX_PARTS, "never more than one whole and its parts");
+  assert.ok(once(model.agent.at(-1)!));
 });
 
 test("/clear starts fresh: the history is gone, the standing context is back", async (t) => {
@@ -90,4 +90,24 @@ test("after a restart the conversation resumes with the standing context BEFORE 
   assert.ok(doctrine >= 0 && doctrine < firstUser, "the constitution sits before the replayed conversation");
   assert.ok(text(req).includes("turn 0:"), "the conversation from before the restart is there");
   assert.ok(once(req));
+});
+
+test("condensing goes a part at a time: three parts, each its summariser reading only that part, then one whole summary folds them; never more than four sent", async (t) => {
+  const { MAX_PARTS } = await import("../src/agent/loop.ts");
+  const { home, model } = await survivor(t);
+  const compacted = () => home.events.ofType("conversation.compacted").map((e) => (e.data.section ? `part ${e.data.section}` : "whole"));
+  let i = 0;
+  while (compacted().length < MAX_PARTS + 1 && i < 40) await talk(home, 1, i++);
+  assert.deepEqual(compacted().slice(0, MAX_PARTS + 1), ["part 1", "part 2", "part 3", "whole"], "the parts first, then one whole summary");
+  const first = String(model.said[0]![0]!.content);
+  assert.match(first, /^Summarise this part of an earlier conversation/);
+  assert.ok(first.includes("turn 0:"), "the first part is the oldest");
+  assert.ok(!first.includes(`turn ${i - 2}:`), "and not the newest: the summariser reads a part, not everything");
+  const fold = String(model.said[MAX_PARTS]![0]!.content);
+  assert.match(fold, /^Summarise this conversation so far/);
+  assert.equal(fold.split("SUMMARY-OF-MIDDLE").length - 1, MAX_PARTS, "the whole summary folds the parts' summaries in");
+  await talk(home, 1, i++);
+  const last = model.agent.at(-1)!;
+  assert.ok(count(last, "SUMMARY-OF-MIDDLE") <= 1 + MAX_PARTS, "never more than one whole and the parts since");
+  assert.ok(once(last), "the standing context once, after all of it");
 });

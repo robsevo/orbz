@@ -163,15 +163,18 @@ export class Conversations {
     return this.list(conversation).some((m) => m.meta.item === item);
   }
 
-  /** What the model may see: after the last clear, from the latest summary on. */
+  /** What the model may see: after the last clear, from the latest whole summary on, then each part
+   * summarised since (oldest first, `meta.section`, loop.ts: condensed a part at a time), then what no
+   * summary covers. */
   history(conversation: string): Message[] {
     const all = this.list(conversation);
     const lastClear = all.findLastIndex((m) => m.role === "clear");
     const live = all.slice(lastClear + 1);
-    const summary = live.findLast((m) => m.role === "summary");
-    if (!summary) return live.filter((m) => m.role !== "summary");
-    const covers = Number(summary.meta.covers_to ?? 0);
-    return [summary, ...live.filter((m) => m.id > covers && m.role !== "summary")];
+    const whole = live.findLast((m) => m.role === "summary" && m.meta.section !== true);
+    const parts = live.filter((m) => m.role === "summary" && m.meta.section === true && m.id > (whole?.id ?? 0));
+    if (!whole && !parts.length) return live.filter((m) => m.role !== "summary");
+    const covers = Math.max(Number(whole?.meta.covers_to ?? 0), ...parts.map((m) => Number(m.meta.covers_to ?? 0)));
+    return [...(whole ? [whole] : []), ...parts, ...live.filter((m) => m.id > covers && m.role !== "summary")];
   }
 
   /** The history as the model reads it. In a session (several orbs in one conversation), what
@@ -212,7 +215,7 @@ export class Conversations {
       // what another orb did on the plan's board (took rows, handed off, proposed a change, asked for
       // a review) reaches everyone in the session, so no one works blind to it (PLAN 5.1)
       else if (m.role === "notice" && o.me && m.orb !== o.me && m.meta.board === true) out.push({ role: "user", content: `[Board]: ${m.content}` });
-      else if (m.role === "summary") out.push({ role: "system", content: `Summary of the earlier conversation:\n${m.content}` });
+      else if (m.role === "summary") out.push({ role: "system", content: `${m.meta.section === true ? "A part of the earlier conversation, summarised" : "Summary of the earlier conversation"}:\n${m.content}` });
       else if (m.role === "assistant") {
         if (!m.toolCalls?.length) {
           if (m.content) out.push({ role: "assistant", content: m.content });
@@ -236,11 +239,10 @@ export class Conversations {
   #talk(history: Message[], o: { me?: string; nameOf?: (orb: string) => string }): ModelMessage[] {
     const name = (orb: string): string => o.nameOf?.(orb) ?? orb;
     const out: ModelMessage[] = [];
-    const summary = history.findLast((m) => m.role === "summary");
-    if (summary) out.push({ role: "system", content: `Summary of the earlier conversation:\n${summary.content}` });
+    for (const m of history) if (m.role === "summary") out.push({ role: "system", content: `${m.meta.section === true ? "A part of the earlier conversation, summarised" : "Summary of the earlier conversation"}:\n${m.content}` });
     const agreed = history.filter((m) => m.role === "notice" && typeof m.meta.agreed === "string").map((m) => String(m.meta.agreed));
     if (agreed.length) out.push({ role: "user", content: `[Agreed so far]: ${agreed.slice(-6).join("; ")}` });
-    const said = history.filter((m) => (m.role === "user" || m.role === "assistant") && m.content.trim() && m.id !== summary?.id);
+    const said = history.filter((m) => (m.role === "user" || m.role === "assistant") && m.content.trim());
     for (const m of said.slice(-TALK_LINES)) {
       if (m.role === "user") out.push({ role: "user", content: m.content });
       else if (m.orb === o.me) out.push({ role: "assistant", content: m.content });

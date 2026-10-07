@@ -18,7 +18,7 @@ import { Talk, type Busy } from "./Talk.tsx";
 import { Computer } from "./Computer.tsx";
 import { TeamBoard } from "./Board.tsx";
 import { actsOf } from "./work.ts";
-import { useFillScreen } from "../ui/fill.ts";
+import { useCramped, useFillScreen } from "../ui/fill.ts";
 
 const button: CSSProperties = { font: "600 14px/20px var(--font)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 10, padding: "8px 14px", cursor: "pointer", boxShadow: "inset 0 0 0 .5px var(--hairline)", minHeight: 36 };
 const strong: CSSProperties = { ...button, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)", fontWeight: 800 };
@@ -144,6 +144,9 @@ function SessionView(o: { home: Office; office: Character[]; session: Session; t
   const [messages, setMessages] = useState<Message[]>([]);
   const [bringing, setBringing] = useState(false);
   const room = useRef<HTMLDivElement>(null);
+  // on a narrow screen the Floor shows its work or its chat, each the whole height (10-07: split, both were slivers)
+  const [show, setShow] = useState<"work" | "talk">("work");
+  const cramped = useCramped(); // a small screen: the orbs along the top drawn smaller, so the work keeps the room
   useFillScreen(room); // the session is the screen's height: its conversation scrolls, the page does not (owner, 10-07)
   const ids = o.session[o.tab];
   const crew = ids.map((id) => o.office.find((c) => idOf(c.name) === id)).filter((c): c is Character => Boolean(c));
@@ -178,10 +181,19 @@ function SessionView(o: { home: Office; office: Character[]; session: Session; t
           </div>
         </div>
         <span style={{ font: "400 13px/18px var(--font)", color: "var(--text-3)" }}>{TAB_WORDS[o.tab].about}</span>
+        {o.tab === "floor" && (
+          <div role="group" aria-label="Show on the Floor" className="orbs-switch" style={{ gap: 3, padding: 3, borderRadius: 12, background: "var(--fill)", justifySelf: "start" }}>
+            {(["work", "talk"] as const).map((v) => (
+              <button key={v} data-show-choice={v} aria-pressed={show === v} onClick={() => setShow(v)} style={{ ...button, padding: "6px 14px", borderRadius: 9, boxShadow: show === v ? "0 1px 3px var(--shadow)" : "none", background: show === v ? "var(--fill-2)" : "transparent", color: show === v ? "var(--text-1)" : "var(--text-3)" }}>
+                {v === "work" ? "The work" : "The chat"}
+              </button>
+            ))}
+          </div>
+        )}
         <OneLine style={{ justifyContent: "flex-start" }} gap={10}>
           {crew.map((c) => (
             <div key={c.name} data-orb={c.hue} data-member={idOf(c.name)} style={{ display: "grid", justifyItems: "center", gap: 0 }}>
-              <Orb character={c} size={64} state={busy[idOf(c.name)] ?? "idle"} poke={false} />
+              <Orb character={c} size={cramped ? 40 : 64} state={busy[idOf(c.name)] ?? "idle"} poke={false} />
               <span style={{ font: "700 12px/16px var(--font)", color: "var(--accent)" }}>{c.name}</span>
               <span style={{ font: "400 11px/14px var(--font)", color: "var(--text-3)" }}>{busy[idOf(c.name)] === "speaking" ? "writing" : busy[idOf(c.name)] ? "working" : "ready"}</span>
             </div>
@@ -207,7 +219,7 @@ function SessionView(o: { home: Office; office: Character[]; session: Session; t
         </div>
       ) : (
         // the Floor (PLAN 2.9): the work shown big, each orb's computer a press away, the chat beside it
-        <div className="orbs-convo orbs-beside" style={{ gap: "var(--s4)", paddingTop: "var(--s4)", minWidth: 0 }}>
+        <div className="orbs-convo orbs-beside" data-view={show} style={{ gap: "var(--s4)", paddingTop: "var(--s4)", minWidth: 0 }}>
           <div className="orbs-pane" style={{ display: "grid", gap: 10, alignContent: "start", minWidth: 0, padding: "0 var(--s5)" }}>
             {crew.length > 1 && (
               <OneLine style={{ justifyContent: "flex-start" }} gap={8}>
@@ -231,7 +243,7 @@ function SessionView(o: { home: Office; office: Character[]; session: Session; t
             {/* the shared computer: the session's own workspace, each orb's face on what he last touched */}
             {shown && <Computer key={idOf(shown.name)} home={o.home} orb={shown} messages={messages} busy={busy[idOf(shown.name)]} big session={o.session.id} />}
           </div>
-          {talk}
+          <div className="orbs-talk">{talk}</div>
         </div>
       )}
     </div>

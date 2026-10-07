@@ -3,7 +3,7 @@
 // replies in his own voice at his personality's pace when your replies are "Speak & show", and you
 // by the microphone or hands-free. The conversation (Talk.tsx) is his and yours only: no other orb,
 // and no session, sees it.
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Orb } from "../orb/Orb.tsx";
 import { PERSONALITIES, type Replies, SPECIALTIES, speaks, type Character } from "../orb/spec.ts";
 import { chatOf, idOf, type Message, type Office } from "../home/link.ts";
@@ -16,9 +16,16 @@ import { useFillScreen } from "../ui/fill.ts";
 export function Chat({ orb, home, person, replies = "speak" }: { orb: Character; home: Office | null; person: string | null; replies?: Replies }) {
   const [busy, setBusy] = useState<Busy>({});
   const room = useRef<HTMLDivElement>(null);
+  // a lesson begun (PLAN 4.4) brings his computer up, on its tab, even where the chat had the screen
+  const [lessonOn, setLessonOn] = useState(false);
+  useEffect(() => {
+    if (!home) return;
+    return home.watch({ event: (e) => void (e.orb === idOf(orb.name) && e.type === "lesson.started" && (setComputer(true), setLessonOn(true))) });
+  }, [home, orb.name]);
   useFillScreen(room); // the chat is the screen's height: the conversation scrolls, the page does not (owner, 10-07)
   const [messages, setMessages] = useState<Message[]>([]);
-  const [computer, setComputer] = useState(true); // his computer beside the chat (PLAN 2.8), there unless you hide it
+  // his computer beside the chat (PLAN 2.8), there unless you hide it; on a narrow screen one at a time, the chat first (10-07)
+  const [computer, setComputer] = useState(() => globalThis.matchMedia?.("(min-width: 1100px)").matches ?? true);
   // his listening cues (PLAN 4.7, after Griffin's): he listens while you talk, leans in when called,
   // nods at your pauses, thinks while he hears you
   const [ears, setEars] = useState<Ears | null>(null);
@@ -51,26 +58,28 @@ export function Chat({ orb, home, person, replies = "speak" }: { orb: Character;
           {orb.name}'s computer
         </button>
       </header>
-      <div className={computer ? "orbs-convo orbs-beside" : "orbs-convo"} style={{ gap: "var(--s4)", minWidth: 0, paddingTop: computer ? "var(--s4)" : 0 }}>
+      <div className={computer ? "orbs-convo orbs-beside" : "orbs-convo"} data-view={computer ? "work" : "talk"} style={{ gap: "var(--s4)", minWidth: 0, paddingTop: computer ? "var(--s4)" : 0 }}>
         {computer && (
           <div className="orbs-pane" style={{ padding: "0 var(--s5)", minWidth: 0 }}>
-            <Computer home={home} orb={orb} messages={messages} busy={how} replies={replies} />
+            <Computer home={home} orb={orb} messages={messages} busy={how} replies={replies} {...(lessonOn && { open: "Lesson" as const })} />
           </div>
         )}
-        <Talk
-          home={home}
-          conversation={conv}
-          orbs={[orb]}
-          send={(text, x) => home.say(orb, text, x)}
-          attach={(file) => home.give(orb, file)}
-          placeholder={`Message ${orb.name}`}
-          empty={`Say hello to ${orb.name}${person ? `, ${person}` : ""}. Just you two: no one else sees this.`}
-          onBusy={setBusy}
-          onMessages={setMessages}
-          onEars={setEars}
-          onCue={(c) => setCue((g) => ({ name: c, n: (g?.n ?? 0) + 1 }))}
-          voice={{ orb, speed: PERSONALITIES[orb.personality].speed, speaks: speaks(orb, replies) }}
-        />
+        <div className="orbs-talk">
+          <Talk
+            home={home}
+            conversation={conv}
+            orbs={[orb]}
+            send={(text, x) => home.say(orb, text, x)}
+            attach={(file) => home.give(orb, file)}
+            placeholder={`Message ${orb.name}`}
+            empty={`Say hello to ${orb.name}${person ? `, ${person}` : ""}. Just you two: no one else sees this.`}
+            onBusy={setBusy}
+            onMessages={setMessages}
+            onEars={setEars}
+            onCue={(c) => setCue((g) => ({ name: c, n: (g?.n ?? 0) + 1 }))}
+            voice={{ orb, speed: PERSONALITIES[orb.personality].speed, speaks: speaks(orb, replies) }}
+          />
+        </div>
       </div>
     </div>
   );

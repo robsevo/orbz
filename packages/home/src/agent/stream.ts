@@ -18,6 +18,9 @@ export type Streamed = {
   completionTokens: number;
   /** Of the prompt, how much the provider read from its cache (0 when it does not say). */
   cachedTokens: number;
+  /** What a reasoning model thought, apart from its reply (`reasoning_content` or `reasoning`): kept
+   * for the one case it matters, a reply written there and nowhere else (loop.ts). */
+  reasoning: string;
   costUsd: number | null;
   costSource: CostSource;
   /** The person stopped it; `text` is what had arrived by then. */
@@ -35,7 +38,7 @@ export type Streamed = {
 };
 
 export const emptyStreamed = (): Streamed => ({
-  text: "", toolCalls: [], finish: null, promptTokens: 0, completionTokens: 0, cachedTokens: 0, costUsd: null, costSource: "unknown",
+  text: "", toolCalls: [], finish: null, promptTokens: 0, completionTokens: 0, cachedTokens: 0, reasoning: "", costUsd: null, costSource: "unknown",
   stopped: false, error: null, errorCode: null, limited: null, status: null, retryAfterS: null,
 });
 
@@ -108,6 +111,8 @@ export async function streamChat(
           out.text += d.content;
           opts.onText?.(d.content);
         }
+        const thought = d.reasoning_content ?? d.reasoning;
+        if (typeof thought === "string") out.reasoning += thought;
         for (const tc of d.tool_calls ?? []) {
           const i = tc.index ?? 0;
           const c = (calls[i] ??= { id: "", name: "", arguments: "" });
@@ -143,7 +148,7 @@ export async function streamChat(
 
 type StreamChunk = {
   choices?: {
-    delta?: { content?: unknown; tool_calls?: { index?: number; id?: string; function?: { name?: string; arguments?: string }; extra_content?: { google?: { thought_signature?: unknown } } }[] };
+    delta?: { content?: unknown; reasoning_content?: unknown; reasoning?: unknown; tool_calls?: { index?: number; id?: string; function?: { name?: string; arguments?: string }; extra_content?: { google?: { thought_signature?: unknown } } }[] };
     finish_reason?: string | null;
   }[];
   usage?: { prompt_tokens?: number; completion_tokens?: number; cost?: number; prompt_tokens_details?: { cached_tokens?: number } };

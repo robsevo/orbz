@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { LoopGuard } from "../src/agent/loopguard.ts";
 import { toResponsesInput } from "../src/agent/responses.ts";
-import { REPEAT_LIMIT } from "../src/agent/loop.ts";
+import { REASONING_NUDGE, REASONING_SALVAGE_MARK, REPEAT_LIMIT } from "../src/agent/loop.ts";
 import { text } from "./fakes/model.ts";
 import { agentHome } from "./helpers.ts";
 
@@ -134,4 +134,26 @@ test("on the ChatGPT plan the restatement stays last, as the developer's, never 
   ]);
   assert.equal(instructions, "WHO YOU ARE");
   assert.deepEqual(input.at(-1), { type: "message", role: "developer", content: "Your plan, restated" });
+});
+
+test("a reply written only in its reasoning: asked once to write it; twice, its reasoning is shown, marked, not nothing", async (t) => {
+  // twice: the reasoning, marked
+  const h = await agentHome(t, [{ reasoning: ["The total is 42 because ", "6 times 7 is 42."] }, { reasoning: ["Still: 6 times 7 is 42."] }]);
+  h.home.inbox.send("juniper", "chat:1", "what is 6 times 7?");
+  await h.home.inbox.idle();
+  assert.equal(h.model.agent.length, 2);
+  assert.deepEqual(h.model.agent[1]!.at(-1), { role: "system", content: REASONING_NUDGE }, "asked, once, last");
+  const said = h.home.conversations.list("chat:1").filter((m) => m.role === "assistant");
+  assert.deepEqual(said.map((m) => m.content), [`${REASONING_SALVAGE_MARK}\n\nStill: 6 times 7 is 42.`], "its own words, marked as what it thought");
+  // once, then a reply: only the reply
+  const k = await agentHome(t, [{ reasoning: ["thinking it over"] }, { chunks: ["It is 42."] }]);
+  k.home.inbox.send("juniper", "chat:1", "what is 6 times 7?");
+  await k.home.inbox.idle();
+  assert.deepEqual(k.home.conversations.list("chat:1").filter((m) => m.role === "assistant").map((m) => m.content), ["It is 42."]);
+  // control: reasoning beside a reply is nobody's business
+  const c = await agentHome(t, [{ reasoning: ["thinking"], chunks: ["Here it is."] }]);
+  c.home.inbox.send("juniper", "chat:1", "go");
+  await c.home.inbox.idle();
+  assert.equal(c.model.agent.length, 1, "no nudge");
+  assert.ok(!text(c.model.agent[0]!).includes(REASONING_NUDGE));
 });

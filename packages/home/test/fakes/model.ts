@@ -7,6 +7,8 @@ import type { TestContext } from "node:test";
 export type Turn = {
   /** Streamed in these chunks (default: one chunk "ok"). */
   chunks?: string[];
+  /** Streamed first, in the reasoning channel (`reasoning_content`), apart from the reply. */
+  reasoning?: string[];
   calls?: { name: string; args: Record<string, unknown>; id?: string; sig?: string }[];
   /** Wait this long between chunks. */
   gapMs?: number;
@@ -77,7 +79,8 @@ export async function fakeModel(t: TestContext, script: Turn[] = []): Promise<Fa
         return;
       }
       res.writeHead(200, { "content-type": "text/event-stream" });
-      for (const c of turn.chunks ?? (turn.calls ? [] : ["ok"])) {
+      for (const c of turn.reasoning ?? []) res.write(sse({ choices: [{ delta: { reasoning_content: c } }] }));
+      for (const c of turn.chunks ?? (turn.calls || turn.reasoning ? [] : ["ok"])) {
         res.write(sse({ choices: [{ delta: { content: c } }] }));
         if (turn.gapMs) await new Promise((r) => setTimeout(r, turn.gapMs));
       }

@@ -110,7 +110,7 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ('    else if (card.status === "denied") result = { content: DENIED };\n', ""),
     ], ["agent.test.ts"]),
     ("compaction summaries are ignored", "src/agent/conversation.ts", [
-        ('    if (!summary) return live.filter((m) => m.role !== "summary");', '    if (summary || !summary) return live.filter((m) => m.role !== "summary");'),
+        ('    if (!whole && !parts.length) return live.filter((m) => m.role !== "summary");', '    if (true) return live.filter((m) => m.role !== "summary");'),
     ], ["survive.test.ts"]),
     ("listeners hear an event before it is committed", "src/events.ts", [
         ("    afterCommit(this.#db, () => {", "    ((fn: () => void) => fn())(() => {"),
@@ -1549,6 +1549,21 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("the restatement goes in the instructions, first", "src/agent/responses.ts", [
         ("    if (m.role === \"system\" && input.length) input.push", "    if (false) input.push"),
     ], ["guards.test.ts"]),
+    ("a reply written only in reasoning is shown as nothing", "src/agent/loop.ts", [
+        ("        r.text = `${REASONING_SALVAGE_MARK}\\n\\n${r.reasoning.trim()}`;\n", ""),
+    ], ["guards.test.ts"]),
+    ("the model is never asked to write its reply", "src/agent/loop.ts", [
+        ("          nudge = REASONING_NUDGE;", "          nudge = null;"),
+    ], ["guards.test.ts"]),
+    ("condensing swallows everything at once", "src/agent/loop.ts", [
+        ("    const section = parts < MAX_PARTS;", "    const section = false;"),
+    ], ["survive.test.ts"]),
+    ("the parts pile up and are never folded", "src/agent/loop.ts", [
+        ("    const section = parts < MAX_PARTS;", "    const section = true;"),
+    ], ["survive.test.ts"]),
+    ("a part's summary goes missing from what the model reads", "src/agent/conversation.ts", [
+        ("    return [...(whole ? [whole] : []), ...parts, ...live.filter", "    return [...(whole ? [whole] : []), ...live.filter"),
+    ], ["survive.test.ts"]),
     ("an asked orb reads the whole session (Ash: a subagent sees only its brief)", "src/agent/conversation.ts", [
         ("    if (o.brief && o.me) {", "    if (false) {"),
     ], ["session-cost.test.ts"]),
@@ -2389,6 +2404,15 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("light's walls are its card", 'src/design/tokens.ts', [
         ('wall: parseHex("#A9B3C4")', 'wall: parseHex("#E6E9EE")'),
     ], ['design.test.ts']),
+    ("a narrow Floor squeezes the work and the chat into slivers again", 'src/orbs.tsx', [
+        ('  .orbs-convo.orbs-beside[data-view="work"] > .orbs-talk, .orbs-convo.orbs-beside[data-view="talk"] > .orbs-pane { display: none; }\n', ''),
+    ], ['sessions.test.ts']),
+    ("a pane's rows shrink to fit, cutting what is in them", 'src/orbs.tsx', [
+        ('.orbs-pane { overflow-y: auto; overscroll-behavior: contain; grid-auto-rows: max-content; }', '.orbs-pane { overflow-y: auto; overscroll-behavior: contain; }'),
+    ], ['sessions.test.ts']),
+    ("the browser's own scroll bars", 'src/orbs.tsx', [
+        ('* { scrollbar-width: thin; scrollbar-color: var(--quiet) transparent; }', ''),
+    ], ['sessions.test.ts']),
     ('System is forgotten, and Midnight comes back', 'src/ui/theme.ts', [
         ('globalThis.localStorage?.setItem(KEY, t ?? SYSTEM);', 'if (t) globalThis.localStorage?.setItem(KEY, t); else globalThis.localStorage?.removeItem(KEY);'),
     ], ['render.test.ts']),

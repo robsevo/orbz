@@ -29,7 +29,7 @@ const KIND_WORDS: Record<Kind, string> = { dataset: "Dataset", ui: "Page", dashb
 const mono: CSSProperties = { font: "500 12px/18px var(--mono)", color: "var(--text-2)", whiteSpace: "pre-wrap", overflowWrap: "anywhere", margin: 0 };
 const hhmm = (t: number): string => new Date(t).toTimeString().slice(0, 5);
 
-export function Computer(o: { home: Office; orb: Character; messages: Message[]; busy?: "thinking" | "speaking"; big?: boolean; replies?: Replies; session?: number }) {
+export function Computer(o: { home: Office; orb: Character; messages: Message[]; busy?: "thinking" | "speaking"; big?: boolean; replies?: Replies; session?: number; open?: "Lesson" }) {
   const id = idOf(o.orb.name);
   const acts = actsOf(o.messages, id);
   const latest = acts[acts.length - 1];
@@ -43,7 +43,7 @@ export function Computer(o: { home: Office; orb: Character; messages: Message[];
         setLesson(l);
         if (open && l) setTab("Lesson");
       }, () => setLesson(null));
-    load(false);
+    load(o.open === "Lesson"); // brought up for a lesson that has just begun (a narrow chat, Chat.tsx): on its tab
     return o.home.watch({ event: (e) => void (e.orb === id && e.type.startsWith("lesson.") && load(e.type === "lesson.started")) });
   }, [o.home, id]);
   const tabs: Tab[] = lesson ? [...TABS, "Lesson"] : TABS;

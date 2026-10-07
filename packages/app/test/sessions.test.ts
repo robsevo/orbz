@@ -189,6 +189,12 @@ test("a conversation scrolls inside the screen, never the page: what you type st
   const s = h.team.create("A long talk", { brainstorm: ["hazel", "milo"], floor: ["hazel"] });
   const other = h.team.create("Keep this one", { brainstorm: ["hazel"] });
   const conv = `team:${s.id}:brainstorm`;
+  // a long board on the Floor: taller than a phone's room for it
+  const BOARD = ["# The party", "", "Verified by the tests under each row.", "", "### PHASE 1 — the party", "", "| # | Feature | Description | Done |", "|---|---------|-------------|------|",
+    ...Array.from({ length: 12 }, (_, i) => [`| 1.${i + 1} | Part ${i + 1} | part ${i + 1} | [ ] |`, `| 1.${i + 1}_t | Tests: part ${i + 1} | it exists | [ ] |`]).flat()].join("\n");
+  const board = h.plans.archive({ orb: "hazel", conversation: `team:${s.id}:floor`, card: 0, body: BOARD, shown: BOARD, objections: [] });
+  h.plans.mark(board.id, "approved");
+  h.board.open(board.id, BOARD);
   // a long conversation already there (owner, 10-07: "or else i have to scroll ALLL THE WAY DOWN ... AND ALL THE WAY UP AGAIN")
   for (let i = 1; i <= 40; i++) h.conversations.add({ conversation: conv, orb: i % 2 ? "hazel" : "milo", role: "assistant", content: `Line ${i}: ${"a thought about the party, ".repeat(i % 5 + 1)}` });
   const d = await serve(h, { port: 0, appDir: dist });
@@ -212,6 +218,7 @@ test("a conversation scrolls inside the screen, never the page: what you type st
     let a = await at();
     assert.ok(a.page <= 1, `${size.width}: the page does not scroll (${a.page} px past the screen)`);
     assert.ok(a.scrolls, `${size.width}: the conversation scrolls on its own`);
+    assert.equal(await log.evaluate((el) => getComputedStyle(el).scrollbarWidth), "thin", "its scroll bar is the app's: thin, quiet (owner, 10-07)");
     assert.ok(a.rest <= 2, `${size.width}: it opens at its latest line`);
     const b = await box.boundingBox();
     assert.ok(b && b.y + b.height <= size.height, `${size.width}: what you type stays on the screen`);
@@ -239,7 +246,30 @@ test("a conversation scrolls inside the screen, never the page: what you type st
     assert.ok(a.page <= 1 && a.scrolls && a.rest <= 2, `${size.width}: a private chat scrolls inside the screen (${JSON.stringify(a)})`);
     const typed = await page.getByRole("textbox", { name: "Message Hazel" }).boundingBox();
     assert.ok(typed && typed.y + typed.height <= size.height, `${size.width}: what you type to Hazel stays on the screen`);
-    if (size.width === 1280) break;
+    if (size.width === 390) {
+      // a narrow Floor: the work or the chat, each the whole height, a switch between them (10-07)
+      await page.evaluate((id) => (location.hash = `#/session/${id}/floor`), s.id);
+      await page.locator('[data-show-choice="work"][aria-pressed="true"]').waitFor({ timeout: 20_000 });
+      assert.equal(await page.getByRole("log", { name: "The conversation" }).isVisible(), false, "the work first, the chat out of the way");
+      // the work scrolls as a whole: nothing in it squeezed to fit (10-07: the computers' row went to a sliver)
+      await page.getByText("1.12").first().waitFor({ state: "attached", timeout: 20_000 });
+      const pane = await page.evaluate(() => {
+        const p = document.querySelector<HTMLElement>(".orbs-pane")!;
+        return { scrolls: p.scrollHeight > p.clientHeight + 1, squeezed: [...p.children].filter((c) => (c as HTMLElement).scrollHeight > (c as HTMLElement).clientHeight + 1 && getComputedStyle(c).overflowY !== "visible").length };
+      });
+      assert.deepEqual(pane, { scrolls: true, squeezed: 0 }, "the work scrolls, and nothing in it is cut");
+      await page.locator('[data-show-choice="talk"]').click();
+      await page.getByRole("log", { name: "The conversation" }).waitFor({ state: "visible" });
+      await page.waitForTimeout(300);
+      a = await at();
+      assert.ok(a.page <= 1 && a.rest <= 2, `the Floor's chat, shown, at its latest line, the page still (${JSON.stringify(a)})`);
+    }
+    if (size.width === 1280) {
+      await page.evaluate((id) => (location.hash = `#/session/${id}/floor`), s.id);
+      await page.getByRole("log", { name: "The conversation" }).waitFor({ state: "visible", timeout: 20_000 });
+      assert.equal(await page.locator(".orbs-switch").isVisible(), false, "side by side on a desk: no switch");
+      break;
+    }
     await ctx.close();
   }
   // deleting: a press asks, the second does it; Keep keeps it

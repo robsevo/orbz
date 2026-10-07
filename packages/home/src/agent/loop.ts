@@ -138,6 +138,16 @@ const est = (text: string): number => Math.ceil(text.length / 4) + 4;
 /** How many steps an orb asked by another may take (PLAN 5.10): a report, not a project. */
 export const ASKED_STEPS = 15;
 
+/** Condensing (Ash's context collapse): a part is this share of what no summary covers yet, and this many
+ * parts are kept as written before one whole summary folds them. */
+export const PART_OF = 3;
+export const MAX_PARTS = 3;
+
+/** What a brain that wrote its whole reply in its reasoning channel is told, once (loop.ts). */
+export const REASONING_NUDGE = "Your last reply went entirely into your reasoning, so the person saw nothing. Write your answer now as the reply itself.";
+/** What marks a reply that is the brain's own reasoning, promoted because it wrote no reply twice. */
+export const REASONING_SALVAGE_MARK = "(No reply was written: below is what it thought, shown so the work is not lost.)";
+
 /** The same call, unchanged, this many times in one run ends it (Ash: three flags, the fourth stops). */
 export const REPEAT_LIMIT = 4;
 
@@ -257,6 +267,9 @@ export class AgentRunner implements Runner {
     const steps = role === "asked" ? Math.min(ASKED_STEPS, this.#o.maxSteps) : this.#o.maxSteps;
     const tools = role === "chime" ? [] : this.#all();
     const runNow = this.#o.clock.now(); // once a run: the standing context stays the same from step to step
+    // a reply written only in the reasoning channel (Ash's salvage): one nudge, then its reasoning is shown, marked
+    let nudge: string | null = null;
+    let nudged = false;
     for (let n = 0; n < steps; n++) {
       if (ctx.signal.aborted) return this.#ended("stopped", ctx);
       let ep = own?.ep ?? this.#o.endpoint({ light }); // every step: a plan at its limit since the last one has stepped aside
@@ -292,6 +305,8 @@ export class AgentRunner implements Runner {
       // the open rows of its plan, last, where attention is highest (plans/recite.ts; a chime-in builds nothing)
       const recital = role === "chime" ? null : (this.#o.recite?.(ctx.orb, ctx.conversation) ?? null);
       if (recital) messages.push({ role: "system", content: recital });
+      if (nudge) messages.push({ role: "system", content: nudge });
+      nudge = null;
       ctx.activity("Thinking");
       // a reply that falls into a loop is stopped where it began to repeat (loopguard.ts, Ash's of 09-12)
       const guard = new LoopGuard();
@@ -361,6 +376,18 @@ export class AgentRunner implements Runner {
         if (r.text) conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "assistant", run: ctx.run, content: r.text, meta: { error: r.error } });
         conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "notice", run: ctx.run, content: `I couldn't finish: ${r.error}`, meta: { error: true } });
         throw new Error(r.error);
+      }
+      if (role !== "chime" && !r.toolCalls.length && !r.text.trim() && r.reasoning.trim()) {
+        // it answered in its reasoning and wrote no reply: asked once to write it, then its reasoning is
+        // what the person sees, marked as such, rather than nothing (Ash, 09-09: an agent that did this
+        // handed back an empty report, which reads as "it found nothing")
+        step("reasoning-only", { chars: r.reasoning.length, nudged });
+        if (!nudged) {
+          nudged = true;
+          nudge = REASONING_NUDGE;
+          continue;
+        }
+        r.text = `${REASONING_SALVAGE_MARK}\n\n${r.reasoning.trim()}`;
       }
       // `plan` marks a reply the ChatGPT plan served to completion: the only replies that carry its badge
       const meta = { ...(ep.plan && { plan: ep.plan }), ...(own && { own: own.kind, ownTask: own.task }) };
@@ -716,14 +743,25 @@ export class AgentRunner implements Runner {
     while (k > 0 && keep + est(hist[k - 1]!.content) <= this.#o.keepRecentTokens) keep += est(hist[--k]!.content);
     while (k < hist.length && hist[k]!.role !== "user") k++; // start the kept part at a person's message
     if (k <= 1 || k >= hist.length) return;
-    const middle = hist.slice(0, k);
-    const text = middle
+    // a part at a time (Ash's context collapse): the oldest third of what no summary covers yet, ended where
+    // a new request begins so no exchange is cut; each part's summary stays as written, never summarised
+    // again, until MAX_PARTS of them, when one whole summary folds the lot. The summariser reads a third,
+    // not everything, and the conversation loses its detail a little at a time, not all at once.
+    const earlier = hist.slice(0, k);
+    const middle = earlier.filter((m) => m.role !== "summary");
+    if (!middle.length) return;
+    const parts = earlier.filter((m) => m.role === "summary" && m.meta.section === true).length;
+    const section = parts < MAX_PARTS;
+    let cut = Math.max(1, Math.ceil(middle.length / PART_OF));
+    while (cut < middle.length && middle[cut]!.role !== "user") cut++;
+    const covered = section ? middle.slice(0, cut) : earlier;
+    const text = covered
       .map((m) => `${m.role}: ${m.content}${m.toolCalls ? ` [called ${m.toolCalls.map((c) => c.name).join(", ")}]` : ""}`)
       .join("\n");
     this.#o.spend.check();
     ctx.activity("Tidying the conversation");
     if (ep.plan === "chatgpt") ep = this.#o.endpoint({ light: true }) ?? ep; // a summary is the plan's light model's work (PLAN 5.10)
-    const ask = [{ role: "user" as const, content: `Summarise this conversation so far, keeping every decision, fact, file and open task:\n\n${text}` }];
+    const ask = [{ role: "user" as const, content: `${section ? "Summarise this part of an earlier conversation" : "Summarise this conversation so far"}, keeping every decision, fact, file and open task:\n\n${text}` }];
     let r: Awaited<ReturnType<typeof chat>>;
     try {
       r = await chat(ep, ask, { maxTokens: 1500, signal: ctx.signal });
@@ -740,8 +778,9 @@ export class AgentRunner implements Runner {
       r = await chat(ep, ask, { maxTokens: 1500, signal: ctx.signal });
     }
     this.#o.spend.record({ tier: "big", model: ep.model, costUsd: r.costUsd, costSource: r.costSource, promptTokens: r.promptTokens, completionTokens: r.completionTokens, orb: ctx.orb, conversation: ctx.conversation });
-    conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "summary", run: ctx.run, content: r.text, meta: { covers_to: middle.at(-1)!.id } });
-    this.#o.events.append("conversation.compacted", { run: ctx.run, covered: middle.length, kept: hist.length - k }, { orb: ctx.orb, conversation: ctx.conversation });
+    const last = covered.filter((m) => m.role !== "summary").at(-1)!;
+    conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "summary", run: ctx.run, content: r.text, meta: { covers_to: last.id, ...(section && { section: true }) } });
+    this.#o.events.append("conversation.compacted", { run: ctx.run, covered: covered.length, kept: hist.length - k, ...(section && { section: parts + 1 }) }, { orb: ctx.orb, conversation: ctx.conversation });
   }
 
   #stepper(ctx: RunContext): Stepper {

@@ -168,6 +168,16 @@ export function Talk(o: {
     if (atEnd.current) el.scrollTop = el.scrollHeight;
     else setUnseen(true);
   }, [messages.length, live, card?.id]);
+  // shown again after being hidden (a narrow Floor's "The chat"), or resized: still at its latest line if it was there
+  useEffect(() => {
+    const el = log.current;
+    if (!el || typeof ResizeObserver !== "function") return;
+    const ro = new ResizeObserver(() => {
+      if (atEnd.current) el.scrollTop = el.scrollHeight;
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const toEnd = (): void => {
     const el = log.current;
     if (el) el.scrollTop = el.scrollHeight;
