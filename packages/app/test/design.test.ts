@@ -102,7 +102,7 @@ test("the token lint finds no colour outside the tokens (and finds every planted
   ];
   for (const p of planted) assert.equal(lintSource("planted.tsx", p).length, 1, `control: the lint missed ${p}`);
   assert.equal(lintSource("prose.tsx", "issue #123").length, 1, "control: three hex digits are a colour unless the line says otherwise");
-  const clean = [`.x { color: var(--text-2); background: var(--card); }`, `<a href="#top">top</a>`, `const id = "#root";`, `issue #123 {/* lint: not a colour */}`];
+  const clean = [`.x { color: var(--text-2); background: var(--card); }`, `<a href="#top">top</a>`, `const id = "#root";`, `issue #123 {/* lint: not a colour */}`, `* { scrollbar-color: var(--quiet) transparent; }`];
   for (const c of clean) assert.deepEqual(lintSource("clean.tsx", c), [], `a false finding in ${c}`);
   const src = fileURLToPath(new URL("../src", import.meta.url));
   assert.deepEqual(lintTree(src), []);

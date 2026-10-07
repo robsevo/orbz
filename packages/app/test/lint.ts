@@ -11,7 +11,8 @@ const HEX = /(?<![\w&])#(?:[0-9a-f]{8}|[0-9a-f]{6}|[0-9a-f]{3,4})(?![\w-])/gi;
 const FUNC = /\b(?:rgba?|hsla?|hwb|oklch|oklab|lab|lch|color)\(/gi;
 const NAMED =
   /\b(?:color|background(?:-color)?|fill|stroke|border(?:-[a-z]+)?|outline(?:-color)?|box-shadow|text-shadow|caret-color|accent-color|backgroundColor|borderColor|outlineColor)\s*[:=]\s*["'`]?[^;"'`\n]*?\b(white|black|red|green|blue|yellow|orange|purple|pink|gray|grey|silver|gold|navy|teal|aqua|cyan|magenta|lime|maroon|olive|brown|beige|ivory|coral|salmon|crimson|indigo|violet)\b/gi;
-const QUIET_TEXT = /\bcolor\s*:\s*["'`]?var\(--quiet\)/gi;
+// the `color` property itself: a scrollbar's thumb (`scrollbar-color`, 10-07) is not text
+const QUIET_TEXT = /(?<![\w-])color\s*:\s*["'`]?var\(--quiet\)/gi;
 
 export function lintSource(file: string, text: string): Finding[] {
   const out: Finding[] = [];

@@ -11,6 +11,7 @@ import { grownOf, TOTAL } from "../orb/dna.ts";
 import { idOf, type CareerState, type Office } from "../home/link.ts";
 import { span } from "../orb/age.ts";
 import { Radar } from "../ui/Radar.tsx";
+import { Balanced } from "../ui/Balanced.tsx";
 import { ReportCard } from "./School.tsx";
 
 const head: CSSProperties = { font: "700 11px/16px var(--font)", letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)" };
@@ -129,14 +130,15 @@ export function CareerRoom({ home, orb }: { home: Office | null; orb: Character 
       {/* its life with the others: who it gets on with, what they traded, what it learned from whom */}
       <Section title="With the others" label="With the others">
         {c.friends?.length ? (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          // a balanced grid: never one friend alone on a row (a wrapping row left one at 768 px, 10-07)
+          <Balanced min={170} gap={6}>
             {c.friends.map((f) => (
-              <span key={f.name} data-friend={f.name} style={{ display: "inline-flex", gap: 6, alignItems: "baseline", padding: "4px 10px", borderRadius: 999, background: "var(--fill-2)" }}>
-                <b style={{ font: "700 13px/18px var(--font)", color: "var(--text-1)" }}>{f.name}</b>
-                <span style={small}>{`${f.word.toLowerCase()} · ${f.meetings} met`}</span>
+              <span key={f.name} data-friend={f.name} style={{ display: "flex", gap: 6, alignItems: "baseline", minWidth: 0, padding: "4px 10px", borderRadius: 999, background: "var(--fill-2)" }}>
+                <b style={{ font: "700 13px/18px var(--font)", color: "var(--text-1)", flexShrink: 0 }}>{f.name}</b>
+                <span style={{ ...small, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{`${f.word.toLowerCase()} · ${f.meetings} met`}</span>
               </span>
             ))}
-          </div>
+          </Balanced>
         ) : <span style={small}>It has not met the others yet: free orbs meet through the office's day.</span>}
         {meetings.length > 0 && (
           <ul style={{ display: "grid", gap: 10, margin: 0, padding: 0, listStyle: "none" }}>
