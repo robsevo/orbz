@@ -51,6 +51,7 @@ before(async () => {
   home.start();
   home.about.setName("Robin");
   home.inbox.addOrb("ash", "Ash", "assistant", { shape: "bean", eyes: "classic", hue: "azure" });
+  home.inbox.addOrb("max", "Max", "ceo", { shape: "egg", eyes: "classic", hue: "honey", hat: "laurel" }); // your CEO (PLAN 5.13): Build stays shut without a CTO
   home.inbox.addOrb("ada", "Ada", "frontend", { shape: "egg", eyes: "classic", hue: "coral" });
   home.inbox.addOrb("milo", "Milo", "research", { shape: "pebble", eyes: "classic", hue: "teal" });
   home.inbox.addOrb("wren", "Wren", "writing", { shape: "drop", eyes: "classic", hue: "rose" });

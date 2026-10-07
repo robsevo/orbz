@@ -34,7 +34,8 @@ import { LabRoom } from "./rooms/Lab.tsx";
 import { Chat } from "./rooms/Chat.tsx";
 import { type CareerState, connect, type Friend, idOf, keepOffice, keptOffice, type Office, passkeysHere, signInWithPasskey, type Standing, type Tab as SessionTab } from "./home/link.ts";
 import { DEMO_CREW } from "./orb/demo.ts";
-import { NEWBORN } from "./onboarding/story.ts";
+import { NEWBORN, TOUR } from "./onboarding/story.ts";
+import { headOf, nextFounding, openDepartments, whyNot } from "./orb/company.ts";
 import type { Gesture, OrbState } from "./orb/life.ts";
 import { useMood, useMoods, WORN } from "./orb/useMood.ts";
 import { preview, stopPreview } from "./orb/preview.ts";
@@ -63,6 +64,23 @@ type Tab = (typeof TABS)[number];
 const cap = (s: string): string => s[0]!.toUpperCase() + s.slice(1);
 const roll = (): number => Math.floor(Math.random() * 1e6);
 const pick = <T,>(xs: readonly T[]): T => xs[Math.floor(Math.random() * xs.length)]!;
+
+// the tour your CEO gives once made (owner, 10-07), played once on this device
+const TOURED = "orbs.toured";
+const toured = (): boolean => {
+  try {
+    return globalThis.localStorage?.getItem(TOURED) === "1";
+  } catch {
+    return false;
+  }
+};
+const setToured = (): void => {
+  try {
+    globalThis.localStorage?.setItem(TOURED, "1");
+  } catch {
+    // a private window: it plays again next time
+  }
+};
 
 const s = {
   window: {
@@ -608,7 +626,10 @@ function Tabs({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
   );
 }
 
-function Creator({ me, edit, replies, setReplies, first = false }: { me: Character; edit: (p: Partial<Character>) => void; replies: Replies; setReplies: (r: Replies) => void; first?: boolean }) {
+function Creator({ me, edit, replies, setReplies, kinds = [] }: { me: Character; edit: (p: Partial<Character>) => void; replies: Replies; setReplies: (r: Replies) => void; /** the office's orbs' specialties: who may join next (orb/company.ts) */ kinds?: string[] }) {
+  // the CEO, then your assistant, before anyone; then each department with its head (owner, 10-07)
+  const founding = nextFounding(kinds);
+  const open = openDepartments(kinds);
   const [tab, setTab] = useState<Tab>("Personality");
   // a colour that goes with his (spec.ts SCHEMES): what the colour dice roll, like Roll everything's
   const partner = (): HueName => partnerOf(me.hue, pick(Object.keys(SCHEMES) as Scheme[]), Math.random());
@@ -616,7 +637,7 @@ function Creator({ me, edit, replies, setReplies, first = false }: { me: Charact
   const hues = HUES.map((h) => h.name);
   const dice: Record<Tab, () => void> = {
     Personality: () => edit(withPersonality(me, pick(Object.keys(PERSONALITIES) as PersonalityName[]))),
-    Specialty: () => edit({ specialty: first ? "assistant" : pick(Object.keys(SPECIALTIES) as SpecialtyName[]) }),
+    Specialty: () => edit({ specialty: founding ?? pick((Object.keys(SPECIALTIES) as SpecialtyName[]).filter((k) => !whyNot(k, kinds))) }),
     Shape: () => edit({ shape: pick(Object.keys(SHAPES) as ShapeName[]) }),
     Eyes: () => edit({ eyes: pick(Object.keys(EYES) as EyesName[]) }),
     Hat: () => edit({ hat: pick(Object.keys(HATS) as HatName[]), hatHue: Math.random() < 0.35 ? partner() : null }),
@@ -646,23 +667,31 @@ function Creator({ me, edit, replies, setReplies, first = false }: { me: Charact
       {tab === "Personality" && (
         <Cards value={me.personality} entries={(Object.keys(PERSONALITIES) as PersonalityName[]).map((k) => [k, PERSONALITIES[k].label, PERSONALITIES[k].blurb])} onPick={(p) => edit(withPersonality(me, p))} />
       )}
-      {tab === "Specialty" && first && (
-        // the first orb is your assistant (owner, 10-04): the rest you hire after
-        <div data-first-assistant style={{ display: "grid", gap: 8 }}>
-          <span style={{ font: "400 14px/20px var(--font)", color: "var(--text-2)" }}>Your first orb is your personal assistant: they plan everything, your days, your reminders and who does what. Hire the rest after.</span>
-          <Cards value={me.specialty} entries={[["assistant", SPECIALTIES.assistant.title, cap(SPECIALTIES.assistant.focus)]]} onPick={(specialty) => edit({ specialty })} />
+      {tab === "Specialty" && founding && (
+        // the CEO first, then your assistant (owner, 10-07: "Your first orb is the CEO, you must appoint one before
+        // apointing any orbs, and a personal assistant"): the rest you hire after
+        <div data-founding={founding} style={{ display: "grid", gap: 8 }}>
+          <span style={{ font: "400 14px/20px var(--font)", color: "var(--text-2)" }}>
+            {founding === "ceo" ? "Your first orb is your CEO: they run the company and chair the board. Your personal assistant comes next, then everyone else." : "Next, your personal assistant: they keep your day and bring the CEO what the company should do. Then you can hire everyone else."}
+          </span>
+          <Cards value={me.specialty} entries={[[founding, SPECIALTIES[founding].title, cap(SPECIALTIES[founding].focus)]]} onPick={(specialty) => edit({ specialty })} />
         </div>
       )}
-      {tab === "Specialty" && !first && (
+      {tab === "Specialty" && !founding && (
         <div style={{ display: "grid", gap: "var(--s4)" }}>
           {(Object.keys(FAMILIES) as Family[]).map((fam) => (
-            <div key={fam} style={{ display: "grid", gap: 8 }}>
+            <div key={fam} data-specialty-group={fam} style={{ display: "grid", gap: 8 }}>
               <Head>{FAMILIES[fam]}</Head>
-              <Cards
-                value={me.specialty}
-                entries={(Object.keys(SPECIALTIES) as SpecialtyName[]).filter((k) => SPECIALTIES[k].family === fam).map((k) => [k, SPECIALTIES[k].title, cap(SPECIALTIES[k].focus)])}
-                onPick={(specialty) => edit({ specialty })}
-              />
+              {open.includes(fam) ? (
+                <Cards
+                  value={me.specialty}
+                  entries={(Object.keys(SPECIALTIES) as SpecialtyName[]).filter((k) => SPECIALTIES[k].family === fam).map((k) => [k, SPECIALTIES[k].title, cap(SPECIALTIES[k].focus)])}
+                  onPick={(specialty) => edit({ specialty })}
+                />
+              ) : (
+                // a department opens with its head (owner, 10-07: "for every section in recruiter they need to unlock")
+                <span data-locked={fam} style={{ font: "500 14px/20px var(--font)", color: "var(--text-3)" }}>{`🔒 Hire a ${headOf(fam)} to open ${FAMILIES[fam]}: the ${headOf(fam)} is in the Executive above.`}</span>
+              )}
             </div>
           ))}
         </div>
@@ -888,6 +917,7 @@ function App() {
   const [person, setPerson] = useState<Person | null>(loadPerson);
   // the first open is a story (PLAN 2.5): until it is played, it is what the person sees
   const [intro, setIntro] = useState(() => !loadPerson() && introWanted());
+  const [touring, setTouring] = useState<Character | null>(null); // your CEO, showing you round (TOUR)
   // the home behind this page, when there is one (PLAN 2.4): its office, and what it calls you
   const [home, setHome] = useState<Office | null>(null);
   const [said, setSaid] = useState<string | null>(null); // what the home said when it refused something
@@ -957,6 +987,9 @@ function App() {
   }, [office, home]);
 
   const making = view.kind === "new";
+  // who may join next (orb/company.ts): the CEO, then your assistant, then each department with its head
+  const kinds = office.map((c) => c.specialty);
+  const founding = nextFounding(kinds);
   const before = making && evolve && evolve.n !== shown ? evolve.c : null;
   const at = view.kind === "orb" ? Math.max(0, office.findIndex((c) => c.name === view.name)) : -1;
   const me = view.kind === "new" ? view.draft : (view.kind === "floor" ? office[0] : office[at]) ?? NEWBORN;
@@ -1011,7 +1044,10 @@ function App() {
   const startsAs = (making ? !office.some((o) => o.specialty === me.specialty) : office.find((o) => o.specialty === me.specialty) === me) ? "Senior" : "Junior";
   /** A new orb by the dice, with a name nobody in the office has. */
   const fresh = (): Character => {
-    let c = surprise(roll(), office.length ? {} : { specialty: "assistant" }); // the first is always the assistant
+    // the dice keep to who may join: the CEO first, then your assistant, then an open department's (owner, 10-07)
+    const may = (Object.keys(SPECIALTIES) as SpecialtyName[]).filter((k) => !whyNot(k, kinds));
+    const seed = roll();
+    let c = surprise(seed, founding ? { specialty: founding } : { specialty: may[seed % may.length] ?? "general" });
     for (let i = 0; i < 40 && (taken(c.name) || recent.current.includes(c.name)); i++) c = { ...c, name: orbName(() => Math.random()) };
     recent.current = [c.name, ...recent.current].slice(0, 40);
     return c;
@@ -1028,13 +1064,16 @@ function App() {
     }
   };
   const name = me.name.trim();
-  const blocked = !making ? null : !name ? "Give your orb a name first" : taken(name) ? `Someone in the office is already called ${name}` : null;
+  const blocked = !making ? null : !name ? "Give your orb a name first" : taken(name) ? `Someone in the office is already called ${name}` : whyNot(me.specialty, kinds);
   const create = (): void => {
     if (view.kind !== "new" || blocked) return;
     const made = { ...view.draft, name };
     setOffice((o) => [...o, made]);
     home?.add(made).catch((e: Error) => setSaid(`${made.name} was not hired: ${e.message}`));
     setArrived(made.name);
+    // your CEO made: the tour it gives you, then your assistant (owner, 10-07: "hires the CEO and then through a little
+    // tour the user can skip if they want, they hire the personal assistant"), once, in a first open
+    if (made.specialty === "ceo" && nextFounding([...kinds, "ceo"]) === "assistant" && introWanted() && !toured()) setTouring(made);
     setRoom("office"); // its profile, whichever room it was made from (an empty office's home page opens the creator)
     setView({ kind: "orb", name: made.name });
     // the creator's address becomes his: a reload shows him, and Back does not reopen a creator for him
@@ -1076,7 +1115,7 @@ function App() {
       setRoom("org");
       setSchoolFor(r.school ?? null);
     }
-    else if (r.room === "recruiter" && office.length) {
+    else if (r.room === "recruiter" && !nextFounding(office.map((c) => c.specialty))) {
       setRoom("recruiter");
       setHiringFor(r.family ?? null);
     }
@@ -1184,7 +1223,24 @@ function App() {
           }}
         />
       )}
-      {drawn && !intro && (
+      {touring && (
+        <Onboarding
+          office={office}
+          person={person}
+          home={home}
+          story={TOUR}
+          narrator={touring}
+          onDone={(p, then) => {
+            setTouring(null);
+            setToured();
+            keep(p);
+            // your assistant next: "Make my assistant" a plain bean to dress, "Surprise me" the dice
+            setView({ kind: "new", draft: then === "surprise" ? fresh() : { ...NEWBORN, specialty: "assistant", seed: roll() } });
+            go({ room: "new" });
+          }}
+        />
+      )}
+      {drawn && !intro && !touring && (
       <div className={/* a conversation fills the screen (owner, 10-07): the window keeps to it, its menu scrolling on its own */ room === "chat" || (room === "sessions" && inSession.id !== null) ? "orbs-window orbs-fit" : "orbs-window"} style={s.window}>
         {/* on a phone: Back, the name, and the menu, which slides in */}
         {/* a band of its own, clear of the hero (owner, 10-04: "the back button and menu buttons kind of bleed into the hero") */}
@@ -1203,6 +1259,7 @@ function App() {
           </div>
           {person && (
             <div style={{ padding: "0 var(--s2)", font: "600 13px/18px var(--font)", color: "var(--text-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {person.company ? <span data-company style={{ display: "block", font: "800 14px/20px var(--font)", color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{person.company}</span> : null}
               Founder {person.name}
             </div>
           )}
@@ -1218,7 +1275,7 @@ function App() {
             {navItem("Org chart", room === "org", { room: "org" }, "◇")}
             {/* hiring comes after your assistant, the first orb (owner, 10-04: "if you have not created your assistant yet ... you
                 shouldnt be able to see the recruiter page yet, it should be greyed out and inaccesible") */}
-            {navItem("Recruiter", room === "recruiter" && office.length > 0, { room: "recruiter" }, "✚", 0, false, office.length ? "" : "Make your personal assistant first")}
+            {navItem("Recruiter", room === "recruiter" && !founding, { room: "recruiter" }, "✚", 0, false, founding ? (founding === "ceo" ? "Appoint your CEO first" : "Appoint your personal assistant first") : "")}
             {navItem("Settings", room === "settings", { room: "settings" }, "⚙")}
           </nav>
           <div style={{ ...s.head, margin: "var(--s3) var(--s2) var(--s1)" }}>The office</div>
@@ -1252,7 +1309,7 @@ function App() {
         {/* the home page, once there is an office; an empty one opens on making its first orb, as it always has */}
         {room === "home" && office.length ? (
           <HomeRoom home={home} office={office} person={person?.name ?? null} moods={moods} go={go} />
-        ) : room === "recruiter" && office.length ? (
+        ) : room === "recruiter" && !founding ? (
           <RecruiterRoom home={home} office={office} family={hiringFor} pick={(family) => go({ room: "recruiter", family })} hired={() => void home?.orbs().then((o) => o && setOffice(o))} profile={(c, startsAs) => <Sheet c={c} replies={replies} startsAs={startsAs} applying />} />
         ) : room === "org" ? (
           <OrgRoom home={home} office={office} school={schoolFor} open={(c) => go({ room: "career", orb: c.name })} rehired={() => void home?.orbs().then((o) => o && setOffice(o))} />
@@ -1385,7 +1442,7 @@ function App() {
               <Sheet c={before ?? me} key={before ? "was" : "now"} replies={replies} standing={standing} startsAs={startsAs} career={career} friends={friends}
                 onChat={() => go({ room: "chat", orb: me.name })} onCareer={() => go({ room: "career", orb: me.name })} />
             )}
-            {making ? <Creator me={me} edit={edit} replies={replies} setReplies={setReplies} first={!office.length} /> : <Card c={me} replies={replies} setReplies={setReplies} onDelete={(handTo, school) => remove(me.name, handTo, school)} others={office.filter((o) => o.name !== me.name)} />}
+            {making ? <Creator me={me} edit={edit} replies={replies} setReplies={setReplies} kinds={kinds} /> : <Card c={me} replies={replies} setReplies={setReplies} onDelete={(handTo, school) => remove(me.name, handTo, school)} others={office.filter((o) => o.name !== me.name)} />}
           </div>
 
           <div style={{ padding: "0 var(--s5)" }}>

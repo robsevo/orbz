@@ -15,7 +15,7 @@ import { serve } from "../src/api.ts";
 import { composeConstitution, coverage, parseSections, SECTION_MAP, SPECIALTY_FAMILIES } from "../src/brain/constitution.ts";
 import { standingContext } from "../src/agent/standing.ts";
 import { text } from "./fakes/model.ts";
-import { agentHome } from "./helpers.ts";
+import { agentHome, openCompany } from "./helpers.ts";
 
 /** A stand-in with every mapped heading, each section carrying a marker named for it. */
 function standIn(extra = ""): string {
@@ -90,6 +90,7 @@ test("only the person adds a line (the door), and taking it back removes it", as
   const { home, dataDir } = await agentHome(t, []);
   mkdirSync(join(dataDir, "brain"), { recursive: true });
   writeFileSync(join(dataDir, "brain", "CONSTITUTION.md"), standIn());
+  openCompany(home); // the company in place, so Build is open (PLAN 5.13)
   const door = await serve(home, { port: 0 });
   t.after(() => door.close());
   const call = async (method: string, path: string, body?: unknown) => {

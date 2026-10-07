@@ -17,7 +17,7 @@ import { PER_DAY, WAIT_DAYS } from "../src/recruiter.ts";
 import { levelOf } from "../src/gym/levels.ts";
 import { SPECIALTY_FAMILIES } from "../src/brain/constitution.ts";
 import { serve } from "../src/api.ts";
-import { agentHome } from "./helpers.ts";
+import { agentHome, openCompany } from "./helpers.ts";
 
 const DAY = 86_400_000;
 
@@ -80,6 +80,7 @@ test("the list turns over at midnight by the home's own tick, with no one lookin
 
 test("Pass sends an applicant on; an interview answers as the applicant, with no tools, and hired, it is the first chat", async (t) => {
   const { home, model } = await agentHome(t, []);
+  openCompany(home); // the company in place, so Make is open (PLAN 5.13)
   home.recruiter.setPosition("writing", true);
   const [a, b] = home.recruiting().applicants;
   home.recruiter.pass(a!.id);
@@ -112,6 +113,7 @@ test("Pass sends an applicant on; an interview answers as the applicant, with no
 
 test("the orbs you let go apply again for an open position, the most qualified first; the door", async (t) => {
   const { home, model } = await agentHome(t, []);
+  openCompany(home); // the company in place, so every department is open (PLAN 5.13)
   home.inbox.addOrb("ada", "Ada", "data");
   home.inbox.addOrb("bo", "Bo", "data");
   home.events.append("orb.promoted", { from: "Junior", to: "Mid" }, { orb: "bo" });
@@ -143,6 +145,7 @@ test("the orbs you let go apply again for an open position, the most qualified f
 
 test("several positions at once: every kind of work, or a department's, each opened once; a wrong name changes none; the door", async (t) => {
   const { home } = await agentHome(t, []);
+  openCompany(home); // the company in place, so every department is open (PLAN 5.13)
   const every = Object.keys(SPECIALTY_FAMILIES);
   home.recruiter.setPosition("design", true);
   assert.deepEqual(new Set(home.recruiter.setPositions(every, true)), new Set(every), "every kind of work, in one go");

@@ -1,15 +1,16 @@
 // The first open, played (PLAN 2.5; story.ts has every line). A game's opening: your first orb,
 // not yet made (a plain bean, no name), stands above a dialog box with his nameplate; his words
 // type out with a soft blip; a press (a click, Enter or Space) finishes the line or moves on. He
-// asks what to call you, you are made the office's CEO with a title card, and he asks you to make
-// him: "Make me" opens the creator on him, "Surprise me" rolls him. "Skip the story" goes
-// straight to what still needs you.
+// asks what to call you and what your company is called, you are made its Founder with a title card
+// (owner, 10-07), and he asks you to make him your CEO: "Make me" opens the creator on him, "Surprise me"
+// rolls him. "Skip the story" goes straight to what still needs you. The same player plays the TOUR your
+// CEO gives once made (its rooms, one card each; "Skip the tour"), which ends on your personal assistant.
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Orb } from "../orb/Orb.tsx";
 import type { Character, PersonalityName } from "../orb/spec.ts";
 import { play } from "../ui/sound.ts";
 import { startMusic, stopMusic } from "../ui/music.ts";
-import { checkName, line, NEWBORN, NEWBORN_PLATE, skipTo, storyFor, type Person } from "./story.ts";
+import { checkCompany, checkName, line, NEWBORN, NEWBORN_PLATE, skipTo, STORY, type Beat, type Person } from "./story.ts";
 import type { Brains as BrainsNow, ChatGPT, Office } from "../home/link.ts";
 
 const TYPE_MS = 26;
@@ -27,11 +28,21 @@ const button: CSSProperties = {
   boxShadow: "inset 0 0 0 .5px var(--hairline)", minHeight: 44,
 };
 
-export function Onboarding({ office, person, home, onDone }: { office: Character[]; person: Person | null; home: Office | null; onDone: (p: Person, then: "make" | "surprise") => void }) {
+/** A tour's rooms, as its cards show them. */
+const ROOM: Record<"home" | "office" | "sessions" | "recruiter" | "org", string> = { home: "⌂", office: "◉", sessions: "▦", recruiter: "✚", org: "◇" };
+
+export function Onboarding({ office, person, home, onDone, story: told = STORY, narrator }: {
+  office: Character[]; person: Person | null; home: Office | null; onDone: (p: Person, then: "make" | "surprise") => void;
+  /** what is played: the first open's story, or the tour your CEO gives once made */
+  story?: readonly Beat[];
+  /** who "ceo" is in it: the CEO you made */
+  narrator?: Character;
+}) {
   const [i, setI] = useState(0);
   const [typed, setTyped] = useState(0);
   const [named, setNamed] = useState<Person | null>(person);
   const [draft, setDraft] = useState("");
+  const [firm, setFirm] = useState(person?.company ?? "");
   const [why, setWhy] = useState("");
   const input = useRef<HTMLInputElement>(null);
   // the music (owner, 10-02): from your first press (a browser plays nothing before one), off with the sounds
@@ -42,11 +53,14 @@ export function Onboarding({ office, person, home, onDone }: { office: Character
   useEffect(() => () => stopMusic(), []); // the story over: it fades out
   const typer = useRef<ReturnType<typeof setInterval> | null>(null);
   const calm = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const story = storyFor(office.map((c) => c.name));
+  const names = office.map((c) => c.name);
+  const story = told.filter((b) => b.kind !== "say" || b.who === "new" || b.who === "ceo" || names.includes(b.who));
+  const tour = story.some((b) => b.kind === "tour");
   const beat = story[i]!;
-  const who = beat.kind === "say" && beat.who !== "new" ? office.find((c) => c.name === beat.who) ?? NEWBORN : NEWBORN;
+  // who speaks: the orb you are about to make (the story), your CEO (the tour), or another orb by name
+  const who = tour && narrator ? narrator : beat.kind === "say" && beat.who !== "new" && beat.who !== "ceo" ? office.find((c) => c.name === beat.who) ?? NEWBORN : NEWBORN;
   const plate = who === NEWBORN ? NEWBORN_PLATE : who.name;
-  const full = beat.kind === "say" ? line(beat.text, named) : beat.kind === "hire" ? line("Ready when you are, {name}.", named) : "";
+  const full = beat.kind === "say" || beat.kind === "tour" ? line(beat.text, named) : beat.kind === "hire" ? line(beat.role === "assistant" ? "Ready when you are." : "Ready when you are, {name}.", named) : "";
   const typing = typed < full.length;
 
   // the words type out, with a blip every other letter in the speaker's register
@@ -66,8 +80,8 @@ export function Onboarding({ office, person, home, onDone }: { office: Character
   }, [i, full]);
 
   useEffect(() => {
-    if (beat.kind === "ask-name") input.current?.focus();
-    if (beat.kind === "ceo") play("create");
+    if (beat.kind === "ask-name" || beat.kind === "ask-company") input.current?.focus();
+    if (beat.kind === "founder") play("create");
   }, [i]);
 
   const next = (): void => setI((n) => Math.min(n + 1, story.length - 1));
@@ -78,11 +92,21 @@ export function Onboarding({ office, person, home, onDone }: { office: Character
       return;
     }
     setWhy("");
-    setNamed({ name: r.name, since: Date.now() });
+    setNamed({ name: r.name, since: Date.now(), company: named?.company ?? null });
+    next();
+  };
+  const submitCompany = (): void => {
+    const r = checkCompany(firm);
+    if (!r.ok) {
+      setWhy(r.why);
+      return;
+    }
+    setWhy("");
+    setNamed((p) => ({ name: p?.name ?? "boss", since: p?.since ?? Date.now(), company: r.company }));
     next();
   };
   const advance = (): void => {
-    if (beat.kind === "ask-name" || beat.kind === "hire" || beat.kind === "brains") return; // these wait for their own answer
+    if (beat.kind === "ask-name" || beat.kind === "ask-company" || beat.kind === "hire" || beat.kind === "brains") return; // these wait for their own answer
     if (typing) {
       // the whole line at once: the typing stops, or it would carry on from where it was
       if (typer.current) clearInterval(typer.current);
@@ -107,12 +131,24 @@ export function Onboarding({ office, person, home, onDone }: { office: Character
     onDone(named ?? { name: "boss", since: Date.now() }, then);
   };
   const stage = (): ReactNode => {
-    if (beat.kind === "ceo") {
+    if (beat.kind === "tour") {
+      // a stop on the tour: the room's card, your CEO beside it
+      return (
+        <div data-tour={beat.room} style={{ display: "grid", justifyItems: "center", gap: "var(--s3)", animation: calm ? undefined : "orbs-stamp 520ms var(--m-spring) both" }}>
+          <Orb character={who} size={112} state={typing ? "speaking" : "idle"} gesture={{ name: "nod", n: i }} />
+          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 22px", borderRadius: 20, background: "linear-gradient(165deg, var(--raised), var(--card))", boxShadow: "0 0 0 2px var(--accent), 0 12px 32px var(--shadow)" }}>
+            <span aria-hidden style={{ font: "800 30px/1 var(--font)", color: "var(--accent)" }}>{ROOM[beat.room]}</span>
+            <span style={{ font: "800 22px/28px var(--font)", color: "var(--text-1)" }}>{beat.title}</span>
+          </div>
+        </div>
+      );
+    }
+    if (beat.kind === "founder") {
       return (
         // a badge on a lanyard (owner, 10-01: "make a nicer ceo badge"): it stamps in, then hangs and
         // sways; a glint crosses its gold now and then; a few twinkles around it
         // (room either side for the sway: at 2 degrees its foot swings about 12 px)
-        <div data-ceo data-orb="honey" style={{ position: "relative", display: "grid", justifyItems: "center", padding: "0 16px 12px", animation: calm ? undefined : "orbs-stamp 700ms var(--m-spring) both" }}>
+        <div data-founder data-orb="honey" style={{ position: "relative", display: "grid", justifyItems: "center", padding: "0 16px 12px", animation: calm ? undefined : "orbs-stamp 700ms var(--m-spring) both" }}>
           {!calm &&
             ([[-7, 34, 0], [93, 22, 0.5], [-5, 80, 1.1], [95, 72, 1.6]] as const).map(([x, y, d], k) => (
               <svg key={k} aria-hidden viewBox="0 0 10 10" width={k % 2 ? 14 : 18} height={k % 2 ? 14 : 18} style={{ position: "absolute", left: `${x}%`, top: `${y}%`, fill: "var(--accent)", animation: `orbs-twinkle 1.8s ease-in-out ${d}s infinite` }}>
@@ -125,9 +161,9 @@ export function Onboarding({ office, person, home, onDone }: { office: Character
               <i style={{ width: 22, background: "linear-gradient(transparent, var(--accent-fill) 35%, var(--accent))", transform: "skewX(12deg)", transformOrigin: "100% 100%" }} />
               <i style={{ width: 22, background: "linear-gradient(transparent, var(--accent-fill) 35%, var(--accent))", transform: "skewX(-12deg)", transformOrigin: "0 100%", filter: "brightness(.85)" }} />
             </div>
-            <div style={{ position: "relative", overflow: "hidden", display: "grid", justifyItems: "center", gap: 2, marginTop: -4, padding: "26px 40px 20px", borderRadius: 26, background: "linear-gradient(165deg, var(--raised), var(--card))", boxShadow: "0 0 0 3px var(--accent), 0 0 0 7px var(--accent-fill), 0 18px 48px var(--shadow), 0 0 70px var(--accent-glow)" }}>
+            <div style={{ position: "relative", overflow: "hidden", display: "grid", justifyItems: "center", gap: 2, marginTop: -4, padding: "26px clamp(16px, 5vw, 40px) 20px", maxWidth: "min(86vw, 520px)", borderRadius: 26, background: "linear-gradient(165deg, var(--raised), var(--card))", boxShadow: "0 0 0 3px var(--accent), 0 0 0 7px var(--accent-fill), 0 18px 48px var(--shadow), 0 0 70px var(--accent-glow)" }}>
               <i aria-hidden style={{ position: "absolute", top: 10, width: 46, height: 8, borderRadius: 4, background: "var(--ground)", boxShadow: "inset 0 1px 2px var(--shadow)" }} />
-              <span style={{ marginTop: 6, font: "700 11px/16px var(--font)", letterSpacing: ".24em", color: "var(--text-3)" }}>THE OFFICE</span>
+              <span style={{ marginTop: 6, font: "700 11px/16px var(--font)", letterSpacing: ".24em", color: "var(--text-3)", maxWidth: "70vw", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{(named?.company ?? "The startup").toUpperCase()}</span>
               <svg aria-hidden viewBox="0 0 48 34" width={46} height={33} style={{ fill: "var(--accent)", marginTop: 4, filter: "drop-shadow(0 2px 6px var(--accent-glow))" }}>
                 <path d="M5 27 L2 8 L14 17 L24 3 L34 17 L46 8 L43 27 Z" />
                 <rect x="5" y="28" width="38" height="5" rx="2" />
@@ -135,9 +171,9 @@ export function Onboarding({ office, person, home, onDone }: { office: Character
                 <circle cx="24" cy="3" r="3" />
                 <circle cx="45.5" cy="7" r="2.5" />
               </svg>
-              <span style={{ font: "900 58px/62px var(--font)", letterSpacing: ".08em", background: "linear-gradient(180deg, var(--text-1) 0%, var(--accent) 62%)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>CEO</span>
+              <span style={{ font: "900 clamp(34px, 10vw, 58px)/1.1 var(--font)", letterSpacing: ".06em", background: "linear-gradient(180deg, var(--text-1) 0%, var(--accent) 62%)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>FOUNDER</span>
               <span style={{ font: "800 26px/32px var(--font)", color: "var(--text-1)", maxWidth: "70vw", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{named?.name}</span>
-              <span style={{ font: "600 12px/16px var(--font)", letterSpacing: ".06em", color: "var(--text-2)", whiteSpace: "nowrap" }}>Chief Executive Officer</span>
+              <span style={{ font: "600 12px/16px var(--font)", letterSpacing: ".06em", color: "var(--text-2)", textAlign: "center", textWrap: "balance" }}>Founder of a brand new Orb startup</span>
               <span style={{ display: "flex", gap: 10, marginTop: 10, padding: "4px 12px", borderRadius: 999, background: "var(--fill)", font: "600 11px/16px var(--font)", color: "var(--text-3)" }}>
                 <span style={{ font: "700 11px/16px var(--mono)", letterSpacing: ".08em" }}>No. 0001</span>
                 <span>Since today</span>
@@ -165,7 +201,7 @@ export function Onboarding({ office, person, home, onDone }: { office: Character
       }}
       style={{
         position: "fixed", inset: 0, zIndex: 40, display: "grid", gridTemplateRows: "1fr auto", justifyItems: "center", gap: "var(--s4)",
-        padding: "var(--s6) var(--margin) var(--s6)", background: "radial-gradient(60% 50% at 50% 35%, var(--accent-wash), transparent 70%), var(--ground)", cursor: beat.kind === "say" || beat.kind === "ceo" ? "pointer" : "default",
+        padding: "var(--s6) var(--margin) var(--s6)", background: "radial-gradient(60% 50% at 50% 35%, var(--accent-wash), transparent 70%), var(--ground)", cursor: beat.kind === "say" || beat.kind === "founder" || beat.kind === "tour" ? "pointer" : "default",
       }}
     >
       <div style={{ position: "absolute", top: "var(--s4)", left: "var(--margin)", right: "var(--margin)", display: "flex", justifyContent: "space-between", gap: 8, pointerEvents: "none" }}>
@@ -183,12 +219,12 @@ export function Onboarding({ office, person, home, onDone }: { office: Character
         {music ? "♪ Music on" : "♪ Music off"}
       </button>
       <button onClick={() => setI(skipTo(named, story))} data-sound="tick" style={{ ...button, pointerEvents: "auto", font: "600 13px/18px var(--font)", padding: "6px 12px", minHeight: 32, color: "var(--text-3)" }}>
-        Skip the story
+        {tour ? "Skip the tour" : "Skip the story"}
       </button>
       </div>
       <div style={{ alignSelf: "center", display: "grid", justifyItems: "center", minWidth: 0, maxWidth: "100%" }}>{stage()}</div>
       <div style={box} data-orb={who.hue}>
-        {(beat.kind === "say" || beat.kind === "ask-name" || beat.kind === "hire" || beat.kind === "brains") && (
+        {(beat.kind === "say" || beat.kind === "ask-name" || beat.kind === "ask-company" || beat.kind === "hire" || beat.kind === "brains" || beat.kind === "tour") && (
           <span style={{ position: "absolute", top: -14, left: 18, font: "800 13px/18px var(--font)", letterSpacing: ".04em", color: "var(--text-1)", background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)", borderRadius: 999, padding: "4px 12px" }}>
             {plate}
           </span>
@@ -219,6 +255,33 @@ export function Onboarding({ office, person, home, onDone }: { office: Character
             </div>
             {why && <span style={{ font: "500 14px/20px var(--font)", color: "var(--alert)" }}>{why}</span>}
           </form>
+        ) : beat.kind === "ask-company" ? (
+          // your company's name (owner, 10-07: "the user first picks his own name, the company name")
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              submitCompany();
+            }}
+            style={{ display: "grid", gap: "var(--s3)" }}
+          >
+            <span>What's your company called?</span>
+            <div style={{ display: "flex", gap: 8, flexWrap: "nowrap" }}>
+              <input
+                ref={input}
+                value={firm}
+                onChange={(e) => setFirm(e.target.value)}
+                aria-label="Your company's name"
+                placeholder="Company name"
+                maxLength={60}
+                size={1}
+                style={{ flex: "1 1 160px", minWidth: 0, font: "700 20px/28px var(--font)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 12, padding: "8px 14px", outline: 0, boxShadow: "inset 0 0 0 1px var(--hairline)" }}
+              />
+              <button type="submit" data-sound="pick" style={{ ...button, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)" }}>
+                That's it
+              </button>
+            </div>
+            {why && <span style={{ font: "500 14px/20px var(--font)", color: "var(--alert)" }}>{why}</span>}
+          </form>
         ) : beat.kind === "brains" ? (
           <BrainsStep home={home} next={next} />
         ) : beat.kind === "hire" ? (
@@ -226,7 +289,7 @@ export function Onboarding({ office, person, home, onDone }: { office: Character
             <span aria-label={full}>{shownText}</span>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <button data-sound="create" onClick={() => finish("make")} style={{ ...button, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)" }}>
-                Make me
+                {beat.role === "assistant" ? "Make my assistant" : "Make me"}
               </button>
               <button data-sound="roll" onClick={() => finish("surprise")} style={button}>
                 Surprise me
@@ -235,7 +298,7 @@ export function Onboarding({ office, person, home, onDone }: { office: Character
           </div>
         ) : (
           <>
-            <span aria-label={full || "Press to continue"}>{beat.kind === "say" ? shownText : "You're hired."}</span>
+            <span aria-label={full || "Press to continue"}>{beat.kind === "say" || beat.kind === "tour" ? shownText : "It's yours."}</span>
             {!typing && <span aria-hidden style={{ position: "absolute", right: 20, bottom: 12, font: "800 14px/14px var(--font)", color: "var(--accent)", animation: calm ? undefined : "orbs-nudge 900ms ease-in-out infinite" }}>▼</span>}
           </>
         )}

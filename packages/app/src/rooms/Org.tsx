@@ -59,7 +59,7 @@ export function OrgRoom({ home, office, open, rehired, school = null }: { home: 
       {/* you, at its top (owner, 10-07: "You are the Founder of a brand new Orb startup") */}
       {org.founder && (
         <section aria-label="Founder" data-founder style={{ display: "grid", justifyItems: "center", gap: 2 }}>
-          <span style={head}>Founder</span>
+          <span style={head}>{org.company ? `Founder of ${org.company}` : "Founder"}</span>
           <span style={{ font: "800 18px/24px var(--font)", color: "var(--text-1)" }}>{org.founder}</span>
         </section>
       )}

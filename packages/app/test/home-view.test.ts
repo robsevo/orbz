@@ -48,6 +48,7 @@ async function homeOf(t: { after(fn: () => unknown): void }, stocked: boolean) {
   h.start();
   h.about.setName("Robin");
   if (stocked) {
+    h.inbox.addOrb("max", "Max", "ceo", { shape: "egg", eyes: "classic", hue: "honey", hat: "laurel" }); // your CEO, the middle of the row
     h.inbox.addOrb("pip", "Pip", "assistant", { shape: "egg", eyes: "classic", hue: "azure" });
     for (const [id, name, sp, hue] of [["beatrix", "Beatrix", "research", "rose"], ["darius", "Darius", "frontend", "teal"], ["ilaria", "Ilaria", "writing", "amber"], ["kenji", "Kenji", "backend", "violet"], ["tad", "Tad", "data", "mint"], ["horace", "Horace", "design", "coral"], ["wren", "Wren", "editing", "iris"]] as const) {
       h.inbox.addOrb(id, name, sp, { shape: "bean", eyes: "classic", hue });
@@ -86,11 +87,13 @@ test("the app opens on the home page: the splash awake, a greeting, the home's n
   assert.equal(await page.evaluate(() => location.hash), "#/home", "the pairing code spent: the home page's address");
   // the splash, awake
   const hero = home.locator("[data-home-hero]");
-  assert.equal(await hero.locator('button[aria-label$="\'s profile"]').count(), 7, "seven of the eight orbs across a desk");
+  assert.equal(await hero.locator('button[aria-label$="\'s profile"]').count(), 7, "seven of the nine orbs across a desk");
+  assert.equal(await hero.locator('button[aria-label$="\'s profile"]').nth(3).getAttribute("aria-label"), "Max's profile", "your CEO in the middle (owner, 10-07)");
+  assert.equal(await hero.locator('button[aria-label="Max\'s profile"] canvas').getAttribute("data-rank"), "ceo", "glowing");
   assert.equal(await hero.locator("img").count(), 1, "the Orbz mark");
   assert.match(await hero.innerText(), /ORBZ/);
   assert.match(await hero.locator("h1").innerText(), /^(Good (morning|afternoon|evening)|Working late), Robin$/);
-  assert.match(await hero.locator("[data-home-status]").innerText(), /^8 orbs · 0 working · nothing waiting for you$/);
+  assert.match(await hero.locator("[data-home-status]").innerText(), /^9 orbs · 0 working · nothing waiting for you$/);
   for (const b of ["Chat with Pip", "The office", "Start a session", "New orb"]) assert.equal(await hero.getByRole("button", { name: b, exact: true }).count(), 1, b);
   // the home's numbers
   assert.match(await home.locator('[data-tile="xp"]').innerText(), /\+245[\s\S]*\+245 today/);

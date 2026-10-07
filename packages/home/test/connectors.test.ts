@@ -38,6 +38,11 @@ test("the floor reads a connector's tool by its name: sending, paying, deleting,
   assert.deepEqual(shell("curl -X POST https://api.binance.com/api/v3/order -d side=SELL"), ["money"], "an order on an exchange");
   assert.deepEqual(shell(`cast send 0xabc --value 1ether # eth_sendRawTransaction`), ["money"], "a wallet sending");
   assert.deepEqual(shell("curl https://api.coingecko.com/api/v3/simple/price?ids=bitcoin"), [], "a price is only read");
+  // a bet (owner, 10-07: the sports analyst reads the odds): placing one always asks; the odds are only read
+  assert.deepEqual(cats("place_bet"), ["money"]);
+  assert.deepEqual(cats("get_odds"), [], "reading the odds changes nothing");
+  assert.deepEqual(shell("curl -X POST https://sportsbook.draftkings.com/api/bets -d wager=10"), ["money"], "a bet at a sportsbook");
+  assert.deepEqual(shell("curl https://api.the-odds-api.com/v4/sports/soccer_epl/odds"), [], "the odds, only read");
 });
 
 test("a connector's tools are an orb's: each asks first; sending always asks; what comes back runs", { timeout: 60_000 }, async (t) => {

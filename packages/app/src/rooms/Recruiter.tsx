@@ -22,6 +22,7 @@ import { idOf, type InterviewLine, type Office, type RecruiterState } from "../h
 import { span } from "../orb/age.ts";
 import { Balanced } from "../ui/Balanced.tsx";
 import { fitOf, ranked, type Fit } from "../orb/fit.ts";
+import { headOf, openDepartments, whyNot } from "../orb/company.ts";
 
 const head: CSSProperties = { font: "700 11px/16px var(--font)", letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)" };
 const small: CSSProperties = { font: "500 13px/18px var(--font)", color: "var(--text-3)", textWrap: "pretty", overflowWrap: "anywhere" };
@@ -64,7 +65,11 @@ export function RecruiterRoom({ home, office, family, pick, hired, profile }: { 
   const familyOf = (k: string): Family | undefined => SPECIALTIES[k as Kind]?.family;
   const inDept = (k: string): boolean => !dept || familyOf(k) === dept;
   const hiringIn = families.filter((f) => state.positions.some((k) => familyOf(k) === f)); // the departments you are hiring in
-  const shownKinds = (Object.keys(SPECIALTIES) as Kind[]).filter((k) => !group || SPECIALTIES[k].family === group);
+  // a department opens with its head (owner, 10-07: "for every section in recruiter they need to unlock, they need to
+  // hire the cfo for example first"): its positions shown, greyed, until then
+  const kinds = office.map((c) => c.specialty);
+  const opened = openDepartments(kinds);
+  const shownKinds = (Object.keys(SPECIALTIES) as Kind[]).filter((k) => (!group || SPECIALTIES[k].family === group) && !whyNot(k, kinds));
   const allShown = shownKinds.every((k) => state.positions.includes(k));
   const tickShown = (): void => void home.setPositions(shownKinds, !allShown).then((positions) => setState({ ...state, positions }), (e: Error) => setSaid(e.message));
   // everyone applying for a position you are hiring for (in the department shown), ranked by how well each would suit the office
@@ -94,20 +99,23 @@ export function RecruiterRoom({ home, office, family, pick, hired, profile }: { 
           {`${allShown ? "✓ " : ""}${group ? `All of ${FAMILIES[group]}` : "All positions"}`}
         </button>
         {(group ? [group] : families).map((f) => {
-          const kinds = shownKinds.filter((k) => SPECIALTIES[k].family === f);
-          const ticked = kinds.filter((k) => state.positions.includes(k)).length;
+          const all = (Object.keys(SPECIALTIES) as Kind[]).filter((k) => SPECIALTIES[k].family === f);
+          const kinds = opened.includes(f) ? all : [];
+          const ticked = all.filter((k) => state.positions.includes(k)).length;
           return (
             <div key={f} role="group" aria-label={FAMILIES[f]} data-position-group={f} style={{ display: "grid", gap: 6, minWidth: 0 }}>
               <span style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, minWidth: 0 }}>
                 <b style={{ font: "800 14px/20px var(--font)", color: "var(--text-1)" }}>{FAMILIES[f]}</b>
-                <span style={{ ...small, whiteSpace: "nowrap" }}>{`${ticked} of ${kinds.length}`}</span>
+                <span style={{ ...small, whiteSpace: "nowrap" }}>{opened.includes(f) ? `${ticked} of ${all.length}` : "🔒 Locked"}</span>
               </span>
+              {!opened.includes(f) && <span data-locked={f} style={small}>{`Hire a ${headOf(f)} to open ${FAMILIES[f]}: their position is in the Executive.`}</span>}
               {/* a balanced grid: never one position alone on a row */}
               <Balanced min={150} gap={6}>
-                {kinds.map((k) => {
+                {(kinds.length ? kinds : all).map((k) => {
                   const on = state.positions.includes(k);
+                  const shut = !kinds.length;
                   return (
-                    <button key={k} type="button" aria-pressed={on} data-position={k} onClick={() => tick(k)} style={{ ...(on ? strong : button), minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <button key={k} type="button" aria-pressed={on} data-position={k} disabled={shut} onClick={() => tick(k)} style={{ ...(on ? strong : button), minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", ...(shut && { opacity: 0.45, cursor: "not-allowed" }) }}>
                       {on ? "✓ " : ""}{SPECIALTIES[k].title}
                     </button>
                   );

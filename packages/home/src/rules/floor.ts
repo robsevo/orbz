@@ -41,6 +41,8 @@ const MONEY = [
   // a wallet signing or sending: always the person's yes, at every rank
   /\b(binance|kraken|robinhood|etoro|alpaca|bybit|okx|kucoin|bitstamp|bitfinex|uniswap)\b/i,
   /\b(sell|trade|swap|withdraw|stake|unstake)\b/i,
+  // a bet (owner, 10-07: the sports analyst reads the odds): placing one is money, always the person's
+  /\b(place[ds]? (a |the )?bets?|wager|sportsbook|parlay|bet365|draftkings|fanduel|betfair|betmgm)\b/i,
   /\b(eth_send(raw)?transaction|send(raw)?transaction|sign(and(send)?)?transaction|personal_sign)\b/i,
   /\/(charges|payments?|payouts|transfers|checkout|invoices\/[^/\s]+\/pay|orders)\b/i,
   /\b(purchase|buy|checkout|pay)\b/i,
@@ -78,7 +80,8 @@ export function shellFloor(command: string, protectedPaths: string[], home: stri
 // A connector's tool (PLAN 4.2) is someone else's code: what it does is read off its name, the
 // words in it (`send_email`, `createPayment`, `deleteEvent`), and what the floor covers asks.
 const TOOL_WORDS: [FloorCategory, RegExp][] = [
-  ["money", /^(pay|payment|payments|charge|refund|transfer|purchase|buy|checkout|invoice|payout|order|sell|trade|swap|withdraw|deposit|stake|unstake|bridge)$/],
+  // a bet is money too (owner, 10-07: the sports analyst reads the odds; placing one is yours)
+  ["money", /^(pay|payment|payments|charge|refund|transfer|purchase|buy|checkout|invoice|payout|order|sell|trade|swap|withdraw|deposit|stake|unstake|bridge|bet|bets|wager|wagers|parlay)$/],
   ["messaging", /^(send|reply|forward|post|message|email|mail|sms|tweet|dm|publish|invite|share)$/],
   ["deleting", /^(delete|remove|destroy|drop|purge|trash|erase|wipe|unsubscribe)$/],
   ["passwords", /^(password|passwords|secret|secrets|credential|credentials|token|tokens|key|keys)$/],

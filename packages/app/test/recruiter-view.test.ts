@@ -32,6 +32,12 @@ import { applicant, SPECIALTIES } from "../src/orb/spec.ts";
 import { toHome } from "../src/home/link.ts";
 
 const APP = fileURLToPath(new URL("..", import.meta.url));
+/** Your CEO and every department's head, so the Recruiter is open throughout (PLAN 5.13). */
+const heads = (h: Home): void => {
+  for (const [id, name, sp, hue] of [["max", "Max", "ceo", "honey"], ["ivo", "Ivo", "cto", "violet"], ["cos", "Cos", "chiefofstaff", "orchid"], ["cam", "Cam", "cmo", "coral"], ["fin", "Fin", "cfo", "jade"], ["oto", "Oto", "coo", "cornflower"]] as const) {
+    h.inbox.addOrb(id, name, sp, { shape: "bean", eyes: "classic", hue });
+  }
+};
 const skip = findChrome() ? false : "no Chromium on this machine";
 let browser: Browser;
 let dist: string;
@@ -60,6 +66,7 @@ test("tick a position, interview, hire, pass; an orb let go applies again; desk 
   h.about.setName("Robin");
   // the office has its personal assistant: the Recruiter opens only once there is one (owner, 10-04)
   h.inbox.addOrb("pa", "Pip", "assistant", { shape: "egg", eyes: "classic", hue: "azure" });
+  heads(h); // the company in place: your CEO and every department's head (PLAN 5.13)
   h.inbox.addOrb("cy", "Cy", "writing", { shape: "bean", eyes: "classic", hue: "rose" });
   h.inbox.letGo("cy");
   const d = await serve(h, { port: 0, appDir: dist });
@@ -162,6 +169,7 @@ test("the floor's Hiring tags open on who applied to their department; All and t
   h.start();
   h.about.setName("Robin");
   h.inbox.addOrb("pa", "Pip", "assistant", { shape: "egg", eyes: "classic", hue: "azure" });
+  heads(h); // the company in place: your CEO and every department's head (PLAN 5.13)
   // hiring in two departments, as the owner is: Build (Backend) and Think (Planning)
   h.recruiter.setPosition("backend", true);
   h.recruiter.setPosition("planning", true);
@@ -232,6 +240,7 @@ test("the positions in their departments, each named; one department's or All; e
   h.start();
   h.about.setName("Robin");
   h.inbox.addOrb("pa", "Pip", "assistant", { shape: "egg", eyes: "classic", hue: "azure" });
+  heads(h); // the company in place: your CEO and every department's head (PLAN 5.13)
   const d = await serve(h, { port: 0, appDir: dist });
   t.after(() => d.close());
   const open = async (size: { width: number; height: number }): Promise<Page> => {
@@ -282,4 +291,36 @@ test("the positions in their departments, each named; one department's or All; e
   await phone.locator('[data-position-filter="life"]').click();
   assert.deepEqual(await groups(phone), ["life"]);
   assert.deepEqual(await measure(phone), [], "at phone size");
+});
+
+test("with only your CEO and your assistant, a department is locked until its head: its positions shown, not pressable; the Executive open", { skip, timeout: 120_000 }, async (t) => {
+  const model = await fakeModel(t, []);
+  const data = mkdtempSync(join(tmpdir(), "orbs-recruiter-home-"));
+  t.after(() => rmSync(data, { recursive: true, force: true }));
+  const h = Home.open({
+    dataDir: data, protect: [], spendCapUsd: null,
+    brain: { preset: { id: "t", title: "t", own: null, big: { name: "big", baseUrl: model.url, model: "m", retries: 0 }, teacher: null } },
+  });
+  t.after(() => h.close());
+  h.start();
+  h.about.setName("Robin");
+  h.inbox.addOrb("max", "Max", "ceo", { shape: "egg", eyes: "classic", hue: "honey" });
+  h.inbox.addOrb("pa", "Pip", "assistant", { shape: "egg", eyes: "classic", hue: "azure" });
+  const d = await serve(h, { port: 0, appDir: dist });
+  t.after(() => d.close());
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: "dark" });
+  t.after(() => ctx.close());
+  const page = await ctx.newPage();
+  await page.goto(d.pairLink());
+  await page.locator(".orbs-window").waitFor({ timeout: 30_000 });
+  await page.evaluate(() => (location.hash = "#/recruiter"));
+  await page.locator("[data-recruiter]").waitFor({ timeout: 20_000 });
+  assert.match(await page.locator('[data-locked="build"]').innerText(), /^Hire a CTO to open Build/);
+  assert.equal(await page.locator('[data-position="frontend"]').isDisabled(), true, "Build's positions shown, not pressable");
+  assert.equal(await page.locator('[data-locked="exec"]').count(), 0, "the Executive is open");
+  assert.equal(await page.locator('[data-position="cto"]').isDisabled(), false);
+  await page.locator('[data-position="cto"]').click();
+  await page.waitForFunction(() => document.querySelector('[data-position="cto"]')?.getAttribute("aria-pressed") === "true", undefined, { timeout: 10_000 });
+  assert.deepEqual(h.recruiter.positions(), ["cto"], "hiring its head");
+  assert.deepEqual(await measure(page), [], "the locks, at desk size");
 });

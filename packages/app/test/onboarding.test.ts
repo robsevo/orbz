@@ -4,12 +4,15 @@
 //     no name yet.
 //   - His words type out (with soft blips, when sounds are on), and a press finishes or moves on.
 //   - He will not go on without a name; your name is used from then on.
-//   - The CEO card carries it. "Make me" opens the creator on him, "Surprise me" rolls him; the
-//     office then holds him and only him.
-//   - The sidebar calls you CEO; a reload does not play it again.
-//   - After the CEO badge, what he thinks with (owner, 10-02: ChatGPT, a Gemini key, a local coder
-//     if wanted), then you make him; skipping the story never skips that.
-//   - "Skip the story" still asks for your name. The layout rule holds on every beat.
+//   - Since 10-07 (owner: "you are not the CEO. Your first orb is the CEO"; "the user first picks his own name,
+//     the company name, hires the CEO and then through a little tour the user can skip if they want, they hire the
+//     personal assistant"): your name, then your company's, and the Founder card carries them; what he thinks with
+//     (owner, 10-02: ChatGPT, a Gemini key, a local coder if wanted); then "Make me" opens the creator on him, your
+//     CEO (only the CEO to choose), "Surprise me" rolls him. Made, your CEO shows you round (a skippable tour) and
+//     asks you to hire your personal assistant (only the assistant to choose); the office then holds the two.
+//   - The sidebar calls you the Founder, under your company's name; a reload does not play it again.
+//   - "Skip the story" still asks your name and your company's; skipping never skips the brains. "Skip the tour"
+//     goes to your assistant. The layout rule holds on every beat.
 //   - `?intro=0` skips it (the control the other render checks rely on).
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -20,7 +23,7 @@ import { after, before, test } from "node:test";
 import { build } from "vite";
 import type { Browser, Page } from "playwright-core";
 import { findChrome, launch, measure, serveDir, SIZES } from "./harness.ts";
-import { checkName, line, NEWBORN_PLATE, STORY } from "../src/onboarding/story.ts";
+import { checkCompany, checkName, line, NEWBORN_PLATE, STORY, TOUR } from "../src/onboarding/story.ts";
 
 const APP = fileURLToPath(new URL("..", import.meta.url));
 const skip = findChrome() ? false : "no Chromium on this machine";
@@ -66,14 +69,23 @@ test("the story's lines: a name is needed, and the person's name is in what is s
   const asked = STORY.findIndex((b) => b.kind === "ask-name");
   assert.ok(asked > 0 && STORY.slice(asked).some((b) => b.kind === "say" && b.text.includes("{name}")), "said with the name, after asking it");
   assert.ok(STORY.slice(0, asked).every((b) => b.kind !== "say" || !b.text.includes("{name}")), "never before it is known");
-  assert.ok(STORY.some((b) => b.kind === "say" && /CEO/.test(b.text)) && STORY.some((b) => b.kind === "ceo"), "you are made CEO");
+  assert.ok(STORY.some((b) => b.kind === "say" && /You're the Founder of \{company\}/.test(b.text)) && STORY.some((b) => b.kind === "founder"), "you are made its Founder");
+  assert.ok(!STORY.some((b) => b.kind === "say" && /You're the CEO/.test(b.text)), "never its CEO (owner, 10-07)");
   assert.ok(STORY.every((b) => b.kind !== "say" || b.who === "new"), "told by your first orb, and no one else (there is no one else yet)");
   const at = (k: string) => STORY.findIndex((b) => b.kind === k);
-  assert.ok(at("ceo") < at("brains") && at("brains") < at("hire"), "after the CEO badge, the brains; then you make him (owner, 10-02)");
+  assert.ok(at("ask-name") < at("ask-company") && at("ask-company") < at("founder") && at("founder") < at("brains") && at("brains") < at("hire"), "your name, your company's, the Founder card, the brains; then you make him");
+  assert.deepEqual(STORY.at(-1), { kind: "hire", role: "ceo" }, "and he is your CEO");
+  // the tour your CEO gives once made: its rooms, then your assistant
+  assert.ok(TOUR.every((b) => b.kind !== "say" || b.who === "ceo"), "told by your CEO");
+  assert.deepEqual(TOUR.filter((b) => b.kind === "tour").map((b) => b.kind === "tour" && b.room), ["home", "office", "sessions", "recruiter", "org"]);
+  assert.deepEqual(TOUR.at(-1), { kind: "hire", role: "assistant" });
   assert.equal(line("So, {name}, ...", { name: "Robin" }), "So, Robin, ...");
+  assert.equal(line("{name}, Founder of {company}", { name: "Robin", company: "Acme Orbs" }), "Robin, Founder of Acme Orbs");
+  assert.equal(checkCompany("  ").ok, false);
+  assert.deepEqual(checkCompany("  Acme   Orbs "), { ok: true, company: "Acme Orbs" });
 });
 
-test("a first open plays the story: your first orb asks your name, makes you CEO, and you make him", { skip }, async () => {
+test("a first open plays the story: your name, your company's, the Founder card; you make your CEO, who shows you round, then your assistant", { skip, timeout: 120_000 }, async () => {
   const page = await open();
   try {
     await page.locator("[data-onboarding]").waitFor();
@@ -91,8 +103,18 @@ test("a first open plays the story: your first orb asks your name, makes you CEO
     await page.keyboard.press("Enter"); // finish typing the next line
     await page.waitForTimeout(100);
     assert.match(await page.locator("[data-onboarding]").innerText(), /Robin\. Nice\./);
-    await until(page, "ceo");
-    assert.match(await page.locator("[data-ceo]").innerText(), /CEO[\s\S]*Robin/);
+    // your company's name: none, no going on
+    await until(page, "ask-company");
+    await page.getByRole("button", { name: "That's it" }).click();
+    assert.equal(await beat(page), "ask-company");
+    await page.getByRole("textbox", { name: "Your company's name" }).fill("Acme Orbs");
+    await page.getByRole("button", { name: "That's it" }).click();
+    await until(page, "founder");
+    assert.match(await page.locator("[data-founder]").innerText(), /ACME ORBS[\s\S]*FOUNDER[\s\S]*Robin/);
+    await page.keyboard.press("Enter");
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(100);
+    assert.match(await page.locator("[data-onboarding]").innerText(), /You're the Founder of Acme Orbs/);
     // then what he thinks with (owner, 10-02); with no home behind the page it says where to choose them
     await until(page, "brains");
     assert.match(await page.locator("[data-brains-step]").innerText(), /in Settings once this app is connected to your home/);
@@ -100,19 +122,34 @@ test("a first open plays the story: your first orb asks your name, makes you CEO
     await until(page, "hire");
     await page.getByRole("button", { name: "Make me" }).click();
     await page.locator("[data-onboarding]").waitFor({ state: "detached" });
-    // the creator, on him: no name yet, so not yet created
+    // the creator, on him, your CEO: no name yet, so not yet created; the CEO is all there is to choose
     assert.equal(await page.getByRole("tablist").count(), 1, "the creator");
+    await page.getByRole("tab", { name: "Specialty" }).click();
+    assert.equal(await page.locator('[data-founding="ceo"]').count(), 1, "only the CEO, first");
     assert.equal(await page.getByRole("textbox", { name: "Name" }).inputValue(), "", "he has no name until you give him one");
     assert.equal(await page.getByRole("button", { name: /^Create/ }).isDisabled(), true);
     await page.getByRole("textbox", { name: "Name" }).fill("Pip");
     await page.getByRole("button", { name: "Create Pip" }).click();
-    await page.getByRole("heading", { name: "Pip" }).waitFor();
-    assert.deepEqual(await page.locator("aside button[data-orb] span span:first-child").allTextContents(), ["Pip"], "the office: him, and only him");
+    // your CEO shows you round: its rooms, a card each, then your assistant
+    await page.locator("[data-onboarding]").waitFor({ timeout: 10_000 });
+    assert.match(await page.locator("[data-onboarding]").innerText(), /Pip/, "told by your CEO, by name");
+    await until(page, "tour");
+    assert.equal(await page.locator('[data-tour="home"]').count(), 1, "the first stop: your home page");
+    await until(page, "hire");
+    await page.getByRole("button", { name: "Make my assistant" }).click();
+    await page.locator("[data-onboarding]").waitFor({ state: "detached" });
+    await page.getByRole("tab", { name: "Specialty" }).click();
+    assert.equal(await page.locator('[data-founding="assistant"]').count(), 1, "only your assistant, next");
+    await page.getByRole("textbox", { name: "Name" }).fill("Bea");
+    await page.getByRole("button", { name: "Create Bea" }).click();
+    await page.getByRole("heading", { name: "Bea" }).waitFor();
+    assert.deepEqual(await page.locator("aside button[data-orb] span span:first-child").allTextContents(), ["Pip", "Bea"], "the office: your CEO and your assistant");
     assert.equal(await page.getByText("Founder Robin").count(), 1, "and the office knows its Founder (owner, 10-07)");
+    assert.equal(await page.locator("aside [data-company]").innerText(), "Acme Orbs", "under its company's name");
     await page.reload();
     await page.waitForSelector("canvas", { state: "attached" });
     assert.equal(await page.locator("[data-onboarding]").count(), 0, "a second open does not play it again");
-    assert.equal(await page.getByRole("heading", { name: "Pip" }).count(), 1, "and he is still there");
+    assert.equal(await page.getByRole("heading", { name: "Bea" }).count(), 1, "and she is still there");
   } finally {
     await page.context().close();
   }
@@ -123,6 +160,9 @@ test("'Surprise me' rolls him, ready to create", { skip }, async () => {
   try {
     await page.getByRole("button", { name: "Skip the story" }).click();
     await page.getByRole("textbox", { name: "Your name" }).fill("Sam");
+    await page.keyboard.press("Enter");
+    await page.getByRole("button", { name: "Skip the story" }).click();
+    await page.getByRole("textbox", { name: "Your company's name" }).fill("Sam & Co");
     await page.keyboard.press("Enter");
     await page.getByRole("button", { name: "Skip the story" }).click();
     await page.getByRole("button", { name: "Next" }).click(); // the brains: a skip never skips them
@@ -142,6 +182,10 @@ test("'Skip the story' still asks what to call you, then lets you in", { skip },
     await page.getByRole("button", { name: "Skip the story" }).click();
     assert.equal(await beat(page), "ask-name");
     await page.getByRole("textbox", { name: "Your name" }).fill("Sam");
+    await page.keyboard.press("Enter");
+    await page.getByRole("button", { name: "Skip the story" }).click();
+    assert.equal(await beat(page), "ask-company", "nor your company's name");
+    await page.getByRole("textbox", { name: "Your company's name" }).fill("Sam & Co");
     await page.keyboard.press("Enter");
     await page.getByRole("button", { name: "Skip the story" }).click();
     assert.equal(await beat(page), "brains", "skipping the story never skips choosing what he thinks with");
@@ -181,6 +225,9 @@ test("the music (owner, 10-02): from the first press, off with its own switch or
     // over with the story
     await page.getByRole("button", { name: "Skip the story" }).click();
     await page.getByRole("textbox", { name: "Your name" }).fill("Sam");
+    await page.keyboard.press("Enter");
+    await page.getByRole("button", { name: "Skip the story" }).click();
+    await page.getByRole("textbox", { name: "Your company's name" }).fill("Sam & Co");
     await page.keyboard.press("Enter");
     await page.getByRole("button", { name: "Skip the story" }).click();
     await page.getByRole("button", { name: "Next" }).click();
@@ -244,11 +291,14 @@ for (const size of ["phone", "desk"] as const) {
         if (b === "ask-name") {
           await page.getByRole("textbox", { name: "Your name" }).fill("Robin");
           await page.keyboard.press("Enter");
+        } else if (b === "ask-company") {
+          await page.getByRole("textbox", { name: "Your company's name" }).fill("Acme Orbs");
+          await page.keyboard.press("Enter");
         } else if (b === "brains") await page.getByRole("button", { name: "Next" }).click(); // it waits for its own answer
         else await page.keyboard.press("Enter");
         await page.waitForTimeout(40);
       }
-      assert.deepEqual([...seen].sort(), ["ask-name", "brains", "ceo", "hire", "say"]);
+      assert.deepEqual([...seen].sort(), ["ask-company", "ask-name", "brains", "founder", "hire", "say"]);
     } finally {
       await page.context().close();
     }
@@ -260,6 +310,31 @@ test("?intro=0 skips it", { skip }, async () => {
   try {
     await page.waitForSelector("canvas", { state: "attached" });
     assert.equal(await page.locator("[data-onboarding]").count(), 0);
+  } finally {
+    await page.context().close();
+  }
+});
+
+test("'Skip the tour' goes to your assistant", { skip, timeout: 90_000 }, async () => {
+  const page = await open();
+  try {
+    await page.getByRole("button", { name: "Skip the story" }).click();
+    await page.getByRole("textbox", { name: "Your name" }).fill("Sam");
+    await page.keyboard.press("Enter");
+    await page.getByRole("button", { name: "Skip the story" }).click();
+    await page.getByRole("textbox", { name: "Your company's name" }).fill("Sam & Co");
+    await page.keyboard.press("Enter");
+    await page.getByRole("button", { name: "Skip the story" }).click();
+    await page.getByRole("button", { name: "Next" }).click();
+    await until(page, "hire");
+    await page.getByRole("button", { name: "Make me" }).click();
+    await page.locator("[data-onboarding]").waitFor({ state: "detached" });
+    await page.getByRole("textbox", { name: "Name" }).fill("Pip");
+    await page.getByRole("button", { name: "Create Pip" }).click();
+    await page.locator("[data-onboarding]").waitFor({ timeout: 10_000 });
+    await page.getByRole("button", { name: "Skip the tour" }).click();
+    assert.equal(await beat(page), "hire", "straight to your assistant");
+    assert.equal(await page.getByRole("button", { name: "Make my assistant" }).count(), 1);
   } finally {
     await page.context().close();
   }

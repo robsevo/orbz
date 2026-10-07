@@ -19,4 +19,11 @@ export const DEMO_CREW: Character[] = [
   { name: "Ada", personality: "dapper", specialty: "accountant", seed: 22, hue: "jade", hue2: null, finish: "glass", shape: "egg", eyes: "beans", hat: "eyeshade", glasses: "half-rims", voice: "bf_emma", goo: 0.35 },
   { name: "Cal", personality: "brave", specialty: "trainer", seed: 23, hue: "apricot", hue2: null, finish: "neon", shape: "blob", eyes: "wide", hat: "sweatband", glasses: "sport", voice: "am_fenrir", goo: 0.7 },
   { name: "Gus", personality: "grumpy", specialty: "devops", seed: 21, hue: "mint", hue2: null, finish: "black", shape: "cub", eyes: "beans", hat: "hard hat", glasses: "shades", voice: "am_fenrir", goo: 0.4 },
+  // the company's heads (owner, 10-07): its CEO, and a head for every department, so a preview's company is open throughout
+  { name: "Max", personality: "brave", specialty: "ceo", seed: 24, hue: "honey", hue2: null, finish: "glass", shape: "egg", eyes: "classic", hat: "laurel", glasses: "none", voice: "bm_george", goo: 0.5 },
+  { name: "Penny", personality: "wise", specialty: "cfo", seed: 25, hue: "jade", hue2: null, finish: "pearl", shape: "bean", eyes: "ovals", hat: "quill", glasses: "half-rims", voice: "bf_emma", goo: 0.45 },
+  { name: "Otto", personality: "dapper", specialty: "coo", seed: 26, hue: "cornflower", hue2: null, finish: "glass", shape: "pebble", eyes: "close", hat: "bowler", glasses: "square", voice: "am_michael", goo: 0.5 },
+  { name: "Ivy", personality: "techy", specialty: "cto", seed: 27, hue: "violet", hue2: null, finish: "glass", shape: "drop", eyes: "dots", hat: "headphones", glasses: "rectangle", voice: "af_sky", goo: 0.55 },
+  { name: "Remy", personality: "cheerful", specialty: "cmo", seed: 28, hue: "coral", hue2: null, finish: "glass", shape: "cloud", eyes: "big", hat: "fedora", glasses: "shades", voice: "am_puck", goo: 0.6 },
+  { name: "Stella", personality: "curious", specialty: "chiefofstaff", seed: 29, hue: "orchid", hue2: null, finish: "pearl", shape: "moon", eyes: "classic", hat: "beret", glasses: "reading", voice: "af_heart", goo: 0.5 },
 ];

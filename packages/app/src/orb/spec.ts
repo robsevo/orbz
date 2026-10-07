@@ -571,6 +571,9 @@ export const SPECIALTIES = {
   cto: { family: "exec", label: "CTO", title: "Chief Technology Officer", focus: "the builders and the tech: what to build it with, how it fits together, and that it works", lean: [5, 5, 4, 2, 2, 3, 1, 1], hat: "headphones", glasses: "rectangle" },
   cmo: { family: "exec", label: "CMO", title: "Chief Marketing Officer", focus: "the brand and growth: the story, the campaigns, what people hear about the company", lean: [4, 1, 3, 4, 5, 3, 3, 3], hat: "fedora", glasses: "shades" },
   chiefofstaff: { family: "exec", label: "Chief of Staff", title: "Chief of Staff", focus: "the CEO's right hand: priorities, meetings and follow-ups, so nothing falls between two chairs", lean: [5, 1, 2, 2, 4, 3, 2, 4], hat: "beret", glasses: "reading" },
+  // owner, 10-07: "add a Sports stats and odds skill too". A reader of the numbers and of the odds, never a tipster: a
+  // bet is money, so it is always the person's (the floor, rule 9)
+  sports: { family: "think", label: "Sports stats & odds", title: "Sports Analyst", focus: "games, teams and players by the numbers: form, injuries, matchups, and the odds the bookmakers give, and where they look off", lean: [3, 1, 5, 1, 3, 5, 3, 1], hat: "cap", glasses: "sport", limits: "Not a tipster or a bookmaker: reads the numbers and the odds; every bet is yours to make, and only what you can afford to lose." },
 } satisfies Record<string, Specialty>;
 export type SpecialtyName = keyof typeof SPECIALTIES;
 

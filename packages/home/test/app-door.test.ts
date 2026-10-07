@@ -14,7 +14,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { serve } from "../src/api.ts";
 import { FakeClock } from "../src/clock.ts";
-import { agentHome, tempDir } from "./helpers.ts";
+import { agentHome, tempDir, openCompany } from "./helpers.ts";
 
 async function door(t: Parameters<typeof agentHome>[0], more: Parameters<typeof agentHome>[2] = {}) {
   const h = await agentHome(t, [{ chunks: ["hi"] }], more);
@@ -95,6 +95,7 @@ test("with a session the app reads, and a change needs its header too; the token
 
 test("about you is kept; an orb's look round-trips; letting him go archives him, and a rehire brings him back", async (t) => {
   const { call, home } = await door(t);
+  openCompany(home); // the company in place, so Build is open (PLAN 5.13)
   assert.equal(((await (await call("/me", { method: "PUT", body: { name: "  Robin  " }, token: true })).json()) as { me: { name: string } }).me.name, "Robin");
   assert.equal((await call("/me", { method: "PUT", body: { name: "   " }, token: true })).status, 400, "a name is something to call you");
   const look = { shape: "teddy", eyes: "big", hat: "beret", glasses: "round", hue: "rose" };

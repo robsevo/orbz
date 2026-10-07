@@ -10,6 +10,7 @@
 //              runs earned there (the radar), then by level, then who joined first; each with a line
 //              of why, so the lead hands it on with a reason
 import type { Family, Specialty } from "./brain/constitution.ts";
+import { HEAD_OF } from "./company.ts";
 import type { ToolDef } from "./agent/tools.ts";
 import type { EventLog } from "./events.ts";
 import { AREAS_OF, LEVELS, type Level } from "./gym/levels.ts";
@@ -58,11 +59,6 @@ export function leadsOf(team: Member[]): { chief: string | null; bySpecialty: Ma
   for (const m of [...team].sort((a, b) => rank(b) - rank(a) || (b.xp ?? 0) - (a.xp ?? 0) || a.createdAt - b.createdAt)) if (!by.has(m.specialty)) by.set(m.specialty, m.id);
   return { chief, bySpecialty: by };
 }
-
-/** Each department's head, by its post (owner, 10-07: "restructure it so it fits this makes things easier to see"): the
- * Executive the CEO, Build the CTO, Think the Chief of Staff, Make the CMO, Finance the CFO, Business the COO, Life your
- * personal assistant. */
-export const HEAD_OF: Record<Family, Specialty> = { exec: "ceo", build: "cto", think: "chiefofstaff", make: "cmo", finance: "cfo", business: "coo", life: "assistant" };
 
 /** Who heads each department: the top-ranked orb of its head's post (`leadsOf`), or no one yet. */
 export function headsOf(team: Member[]): Record<Family, string | null> {

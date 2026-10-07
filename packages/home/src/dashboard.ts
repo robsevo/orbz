@@ -16,6 +16,7 @@ const DAY_MS = 86_400_000;
 export type Dashboard = {
   now: number;
   name: string | null;
+  company: string | null;
   orbs: number;
   /** In the office: a run under way, and a card open for you. */
   working: string[];
@@ -99,6 +100,7 @@ export function dashboardOf(home: Home): Dashboard {
   return {
     now,
     name: home.about.get().name,
+    company: home.about.get().company,
     orbs: office.length,
     working: [...working],
     waiting: [...waiting],

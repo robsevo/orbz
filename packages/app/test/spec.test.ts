@@ -187,8 +187,11 @@ test("the roster: five families, wide enough to staff an office, the real-life r
   // owner, 10-07: Finance holds every money orb, and the Executive its six heads, last in the list (a strand keeps a
   // specialty by its place, so every addition goes at the end)
   for (const k of ["accountant", "money", "investor", "crypto", "fundamentals"] as SpecialtyName[]) assert.equal(SPECIALTIES[k].family, "finance", k);
-  assert.deepEqual(Object.keys(SPECIALTIES).slice(-6), ["ceo", "cfo", "coo", "cto", "cmo", "chiefofstaff"]);
-  assert.deepEqual((Object.keys(SPECIALTIES) as SpecialtyName[]).slice(-6).map((k) => [SPECIALTIES[k].family, SPECIALTIES[k].title]), [
+  assert.deepEqual(Object.keys(SPECIALTIES).slice(-7, -1), ["ceo", "cfo", "coo", "cto", "cmo", "chiefofstaff"]);
+  // owner, 10-07: "add a Sports stats and odds skill too": Think's, a reader of the odds who says every bet is yours
+  assert.deepEqual([Object.keys(SPECIALTIES).at(-1), SPECIALTIES.sports.family, SPECIALTIES.sports.title], ["sports", "think", "Sports Analyst"]);
+  assert.match(SPECIALTIES.sports.limits, /every bet is yours/);
+  assert.deepEqual((Object.keys(SPECIALTIES) as SpecialtyName[]).slice(-7, -1).map((k) => [SPECIALTIES[k].family, SPECIALTIES[k].title]), [
     ["exec", "Chief Executive Officer"], ["exec", "Chief Financial Officer"], ["exec", "Chief Operating Officer"], ["exec", "Chief Technology Officer"], ["exec", "Chief Marketing Officer"], ["exec", "Chief of Staff"],
   ]);
   for (const k of ["investor", "crypto", "fundamentals"] as SpecialtyName[]) assert.match((SPECIALTIES[k] as { limits?: string }).limits ?? "", /financial adviser[\s\S]*yours/, `${k}: not an adviser, and the trades are yours`);

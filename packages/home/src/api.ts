@@ -646,7 +646,7 @@ async function handle(
         xp: home.xp.of(o.id, now).total, diplomas: home.school.diplomas(o.id).map((d) => d.name), atSchool: home.school.term(o.id) !== null }))
       .sort((a, b) => LEVELS.indexOf(b.level) - LEVELS.indexOf(a.level) || b.diplomas.length - a.diplomas.length || b.xp - a.xp);
     // the departments' heads (owner, 10-07) and you, the Founder
-    return { chief, leads: Object.fromEntries(bySpecialty), heads: headsOf(team), founder: home.about.get().name, orbs: team.map((m) => ({ ...m, ...tenureOf(home.events, home.inbox.orb(m.id)!), now })), away };
+    return { chief, leads: Object.fromEntries(bySpecialty), heads: headsOf(team), founder: home.about.get().name, company: home.about.get().company, orbs: team.map((m) => ({ ...m, ...tenureOf(home.events, home.inbox.orb(m.id)!), now })), away };
   }
   // a career page (PLAN 5.6): read off the log by code
   if (method === "GET" && parts[0] === "orbs" && parts.length === 3 && parts[2] === "career") {
@@ -777,7 +777,10 @@ async function handle(
   if (method === "GET" && url.pathname === "/me") return { me: home.about.get() };
   if (method === "PUT" && url.pathname === "/me") {
     try {
-      return { me: home.about.setName(text(await body(req), "name")) };
+      // your name, your company's name (owner, 10-07), or both
+      const b = await body(req);
+      if (typeof b.company === "string") home.about.setCompany(b.company);
+      return { me: typeof b.name === "string" || b.company === undefined ? home.about.setName(text(b, "name")) : home.about.get() };
     } catch (e) {
       throw new HttpError(400, e instanceof Error ? e.message : String(e));
     }

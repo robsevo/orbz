@@ -106,3 +106,11 @@ export async function agentHome(t: TestContext, script: Turn[], more: Partial<Ho
   home.start();
   return { home, model, dataDir };
 }
+
+/** An office with its company in place (PLAN 5.13: the CEO and the personal assistant first, each department open with
+ * its head), for a test that hires through the door without being about who may join. */
+export function openCompany(home: { inbox: { addOrb(id: string, name: string, specialty: never): unknown } }): void {
+  for (const [id, name, specialty] of [["max", "Max", "ceo"], ["pia", "Pia", "assistant"], ["ivo", "Ivo", "cto"], ["cos", "Cos", "chiefofstaff"], ["cam", "Cam", "cmo"], ["fin", "Fin", "cfo"], ["oto", "Oto", "coo"]] as const) {
+    home.inbox.addOrb(id, name, specialty as never);
+  }
+}

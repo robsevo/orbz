@@ -446,7 +446,8 @@ export class Home {
           ambition: (orb) => ambitionLine(orb, this.ranking()), // to top the office (owner, 10-07)
           company: (orb) => {
             const me = this.inbox.orb(orb);
-            return me ? companyLine({ me, founder: this.about.get().name, office: this.inbox.orbs() }) : null;
+            const you = this.about.get();
+            return me ? companyLine({ me, founder: you.name, company: you.company, office: this.inbox.orbs() }) : null;
           },
           searchKey: () => this.brains.searchKey(),
           remind: (orb, conversation, r) => {

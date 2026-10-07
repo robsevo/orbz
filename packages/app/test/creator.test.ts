@@ -226,51 +226,71 @@ test("the first of his kind starts as the Senior, the next of that kind a Junior
   await page.close();
 });
 
-test("the first orb is the assistant: every roll is one, and it is the one offered; a later orb any (owner, 10-04)", { skip, timeout: 240_000 }, async () => {
+test("your first orb is your CEO, the next your assistant: every roll is that one, and only it is offered; then what is open (owner, 10-07)", { skip, timeout: 240_000 }, async () => {
   const page = await open("desk"); // nothing in the office yet: the creator is on the first orb
   try {
     const said = () => page.locator("[data-cradle] > p").innerText();
-    for (let i = 0; i < 6; i++) {
-      await page.getByRole("button", { name: /Roll everything/ }).click();
-      await page.waitForTimeout(120);
-      assert.match(await said(), /Personal Assistant\./, `roll ${i}: ${await said()}`);
-    }
+    const rolls = async (want: RegExp, what: string): Promise<void> => {
+      for (let i = 0; i < 5; i++) {
+        await page.getByRole("button", { name: /Roll everything/ }).click();
+        await page.waitForTimeout(120);
+        assert.match(await said(), want, `${what}, roll ${i}: ${await said()}`);
+      }
+    };
+    await rolls(/Chief Executive Officer\./, "your CEO first");
     await page.getByRole("tab", { name: "Specialty" }).click();
-    assert.equal(await page.locator("[data-first-assistant] button").count(), 1, "only the assistant is offered");
+    assert.equal(await page.locator('[data-founding="ceo"] button').count(), 1, "only the CEO is offered");
     await page.getByRole("button", { name: "Roll specialty" }).click();
-    assert.match(await said(), /Personal Assistant\./, "its own die too");
-    // hire it; the next orb may be anything
+    assert.match(await said(), /Chief Executive Officer\./, "its own die too");
     await page.getByRole("textbox", { name: "Name" }).fill("Maya");
     await page.getByRole("button", { name: "Create Maya" }).click();
+    await page.getByRole("heading", { name: "Maya" }).waitFor();
+    // then your personal assistant
+    await page.getByRole("button", { name: "New orb" }).first().click();
+    await rolls(/Personal Assistant\./, "then your assistant");
+    await page.getByRole("tab", { name: "Specialty" }).click();
+    assert.equal(await page.locator('[data-founding="assistant"] button').count(), 1, "only the assistant is offered");
+    await page.getByRole("textbox", { name: "Name" }).fill("Bea");
+    await page.getByRole("button", { name: "Create Bea" }).click();
+    await page.getByRole("heading", { name: "Bea" }).waitFor();
+    // then the Executive and every department with its head: Build is shut without a CTO, Life open with the assistant
     await page.getByRole("button", { name: "New orb" }).first().click();
     await page.getByRole("tab", { name: "Specialty" }).click();
-    assert.equal(await page.locator("[data-first-assistant]").count(), 0, "control: a later orb is offered everything");
+    assert.equal(await page.locator("[data-founding]").count(), 0, "control: no longer only one");
+    assert.match(await page.locator('[data-locked="build"]').innerText(), /Hire a CTO to open Build/);
+    assert.equal(await page.locator('[data-specialty-group="exec"] button').count(), 6, "the Executive, every head");
+    assert.ok(await page.locator('[data-specialty-group="life"] button').count() > 1, "and Life");
     const titles = new Set<string>();
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 8; i++) {
       await page.getByRole("button", { name: /Roll everything/ }).click();
       await page.waitForTimeout(120);
-      titles.add((await said()).replace(/^.*?, the \w+ /, "").split(".")[0]!);
+      titles.add(await said());
     }
-    assert.ok([...titles].some((t) => t !== "Assistant"), `control: later rolls are not all assistants (${[...titles].join(", ")})`);
+    for (const t of titles) assert.doesNotMatch(t, /Frontend Builder|Backend Engineer|Designer|Accountant|Sales Lead/, `the dice keep to what is open: ${t}`);
   } finally {
     await page.close();
   }
 });
 
-test("before your personal assistant, the Recruiter is greyed out and its address will not open it; after, it opens (owner, 10-04)", { skip, timeout: 240_000 }, async () => {
+test("before your CEO and your assistant, the Recruiter is greyed out and its address will not open it; after, it opens (owner, 10-07)", { skip, timeout: 240_000 }, async () => {
   const page = await open("desk"); // nothing in the office yet
   try {
     const rec = page.locator("aside").getByRole("button", { name: "Recruiter" });
     assert.equal(await rec.isDisabled(), true, "greyed out, not pressable");
-    assert.equal(await rec.getAttribute("title"), "Make your personal assistant first");
+    assert.equal(await rec.getAttribute("title"), "Appoint your CEO first");
     await page.evaluate(() => (location.hash = "#/recruiter"));
     await page.waitForTimeout(400);
     assert.equal(await page.locator("[data-recruiter]").count(), 0, "its address does not open it");
-    assert.ok(await page.getByRole("button", { name: /Roll everything/ }).isVisible(), "it opens the making of your first orb");
+    assert.ok(await page.getByRole("button", { name: /Roll everything/ }).isVisible(), "it opens the making of your CEO");
     await page.getByRole("textbox", { name: "Name" }).fill("Maya");
     await page.getByRole("button", { name: "Create Maya" }).click();
     await page.getByRole("heading", { name: "Maya" }).waitFor();
-    assert.equal(await rec.isDisabled(), false, "control: with an orb, it opens");
+    assert.equal(await rec.getAttribute("title"), "Appoint your personal assistant first", "still shut: the assistant next");
+    await page.getByRole("button", { name: "New orb" }).first().click();
+    await page.getByRole("textbox", { name: "Name" }).fill("Bea");
+    await page.getByRole("button", { name: "Create Bea" }).click();
+    await page.getByRole("heading", { name: "Bea" }).waitFor();
+    assert.equal(await rec.isDisabled(), false, "control: with the two, it opens");
     await rec.click();
     await page.getByText("The recruiter is the home's", { exact: false }).or(page.locator("[data-recruiter]")).first().waitFor({ timeout: 20_000 });
   } finally {

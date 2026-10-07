@@ -1175,7 +1175,7 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ('      if (!to || to.letGoAt !== null || handTo === orb) throw new Error(', '      if (!to) throw new Error('),
     ], ['org.test.ts']),
     ('the org chart names no lead', 'src/api.ts', [
-        ('    return { chief, leads: Object.fromEntries(bySpecialty), orbs: team.map(', '    return { chief, leads: {}, orbs: team.map('),
+        ('    return { chief, leads: Object.fromEntries(bySpecialty), heads:', '    return { chief, leads: {}, heads:'),
     ], ['org.test.ts']),
     ('a career page leaves his habits out', 'src/api.ts', [
         ('      habits: habitsOf(home.events, home.dataDir, orb).map((h) => {', '      habits: habitsOf(home.events, home.dataDir, "nobody").map((h) => {'),
@@ -1256,6 +1256,28 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ('good friends go unsaid', 'src/social/social.ts', [
         ('      if (before < 50 && after >= 50) this.#events.append("social.friends", { a: x, b: y, names: [nameOf(x), nameOf(y)] });\n', ''),
     ], ['social.test.ts']),
+    ("a bet goes without asking", "src/rules/floor.ts", [
+        ("|deposit|stake|unstake|bridge|bet|bets|wager|wagers|parlay)$/],", "|deposit|stake|unstake|bridge)$/],"),
+    ], ["connectors.test.ts"]),
+    # the company (owner, 10-07): the CEO and your assistant first; each department with its head; the tandem
+    ("anyone joins before your CEO", "src/company.ts", [
+        ("  if (next && specialty !== next) return `Appoint your ${POST[next]} first", "  if (false && next && specialty !== next) return `Appoint your ${POST[next]} first"),
+    ], ["company.test.ts"]),
+    ("a department opens without its head", "src/company.ts", [
+        ("  if (specialty !== head && !office.includes(head)) return `Hire a ${POST[head]} first", "  if (false) return `Hire a ${POST[head]} first"),
+    ], ["company.test.ts"]),
+    ("a bill is the assistant's though there is a CFO", "src/home.ts", [
+        ("    if (cfo && me) return { id: cfo.id, name: cfo.name };\n", ""),
+    ], ["company.test.ts"]),
+    ("the CEO is not told it works with your assistant", "src/company.ts", [
+        ("send ${F} the result through ${pa ? pa.name : \"the assistant\"} in a few lines", "report when it is done"),
+    ], ["company.test.ts"]),
+    ("your company's name is not kept", "src/api.ts", [
+        ('      if (typeof b.company === "string") home.about.setCompany(b.company);\n', ""),
+    ], ["app-door.test.ts", "company.test.ts", "onboarding.test.ts"]),
+    ("a department is headed by the wrong post", "src/org.ts", [
+        ("bySpecialty.get(HEAD_OF[f]) ?? null", "bySpecialty.get(HEAD_OF.exec) ?? null"),
+    ], ["org.test.ts"]),
     # the home page's look at the office (owner, 10-07)
     ("a run never heard to finish counts as work for ever", "src/dashboard.ts", [
         ("filter((r) => now - r.at < STALE_RUN_MS && ids.has(r.orb))", "filter((r) => ids.has(r.orb))"),
@@ -1866,6 +1888,26 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("the click is a high tok again", "src/ui/sound.ts", [
         ("      return click(0, 170, 0.25);", "      return click(0, 540, 0.25);"),
     ], ["feel.test.ts"]),
+    # the company in the app (owner, 10-07)
+    ("the creator offers everything before your CEO", "src/orbs.tsx", [
+        ('      {tab === "Specialty" && founding && (', '      {tab === "Specialty" && false && founding && ('),
+        ('      {tab === "Specialty" && !founding && (', '      {tab === "Specialty" && ('),
+    ], ["creator.test.ts"]),
+    ("your CEO never shows you round", "src/orbs.tsx", [
+        ('introWanted() && !toured()) setTouring(made);', 'introWanted() && !toured()) void made;'),
+    ], ["onboarding.test.ts"]),
+    ("the home page's middle is not your CEO", "src/rooms/Home.tsx", [
+        ("  const shown = ceo ? [...others.slice(0, half), ceo, ...others.slice(half)] : others;", "  const shown = ceo ? [ceo, ...others] : others;"),
+    ], ["home-view.test.ts"]),
+    ("the CEO does not glow", "src/orb/Orb.tsx", [
+        ('  const rank = character.specialty === "ceo" ? "ceo" : character.specialty === "cfo" ? "cfo" : null;', '  const rank = null as "ceo" | "cfo" | null;'),
+    ], ["home-view.test.ts"]),
+    ("a locked department's positions can be pressed", "src/rooms/Recruiter.tsx", [
+        ("data-position={k} disabled={shut}", "data-position={k} disabled={false}"),
+    ], ["recruiter-view.test.ts"]),
+    ("the app's rule drifts from the home's", "src/orb/company.ts", [
+        ('  if (!family || family === "exec") return null;', '  if (!family || family === "exec" || family === "finance") return null;'),
+    ], ["company.test.ts"]),
     # the home page, what the app opens on (owner, 10-07)
     ("the app opens on the office again", "src/ui/nav.ts", [
         ('  if (parts[0] === "office") return { room: "office", orb: parts[1] ?? null };\n  return { room: "home" };', '  if (parts[0] === "office") return { room: "office", orb: parts[1] ?? null };\n  return { room: "office", orb: null };'),
@@ -1959,16 +2001,16 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ('  if (!name) return { ok: false, why: "I need something to call you." };', "  if (false) return { ok: false, why: \"\" };"),
     ], ["onboarding.test.ts"]),
     ("the story forgets the name it was told", "src/onboarding/story.ts", [
-        ('export const line = (text: string, p: Pick<Person, "name"> | null): string => text.replaceAll("{name}", p?.name ?? "boss");', 'export const line = (text: string, p: Pick<Person, "name"> | null): string => text.replaceAll("{name}", "boss");'),
+        ('text.replaceAll("{name}", p?.name ?? "boss")', 'text.replaceAll("{name}", "boss")'),
     ], ["onboarding.test.ts"]),
     ("the story plays again at every open", "src/onboarding/story.ts", [
         ('    return v && typeof v.name === "string" && v.name ? v : null;', "    return v && false ? v : null;"),
     ], ["onboarding.test.ts", "nav.test.ts"]),
     ("skipping the story skips the name", "src/onboarding/story.ts", [
-        ('  if (!person) return story.findIndex((b) => b.kind === "ask-name");\n', ''),
+        ('  if (!person && at("ask-name") >= 0) return at("ask-name");\n', ''),
     ], ["onboarding.test.ts"]),
     ("skipping the story skips the brains", "src/onboarding/story.ts", [
-        ('  return brains >= 0 ? brains : story.findIndex((b) => b.kind === "hire");', '  return story.findIndex((b) => b.kind === "hire");'),
+        ('  return brains >= 0 ? brains : at("hire");', '  return at("hire");'),
     ], ["onboarding.test.ts"]),
     ("the first open never asks what he thinks with", "src/onboarding/story.ts", [
         ('  { kind: "brains" },\n', ''),

@@ -5,13 +5,19 @@
 // floor, still a plain glass bean with no name; he asks what to call you, makes you the office's
 // CEO, and asks you to make him: his name, his look, what he is good at. The story is data, here,
 // so a check can read every line; `Onboarding.tsx` plays it.
+//
+// Since 10-07 (owner: "We ask for the users name yes but you are not the CEO. Your first orb is the CEO"; "You are the
+// Founder of a brand new Orb startup"; "in the onboarding the user first picks his own name, the company name, hires the
+// CEO and then through a little tour the user can skip if they want, they hire the personal assistant"): you give your
+// name and your company's, you are its Founder, and the orb who woke up is the one you make your CEO. Once it is made,
+// your CEO shows you round (the TOUR, skippable) and asks you to hire your personal assistant.
 import type { Character } from "../orb/spec.ts";
 
-export type Person = { name: string; since: number };
+export type Person = { name: string; since: number; company?: string | null };
 
 /** Who tells it: your first orb, before you have made him (a plain bean, no name yet). */
 export const NEWBORN: Character = {
-  name: "", personality: "steady", specialty: "assistant", seed: 7, hue: "azure", hue2: null, finish: "glass",
+  name: "", personality: "steady", specialty: "ceo", seed: 7, hue: "azure", hue2: null, finish: "glass",
   shape: "bean", eyes: "classic", hat: "none", glasses: "none", voice: "am_michael", goo: 0.6,
 };
 /** What his nameplate says until he has a name. */
@@ -21,9 +27,13 @@ export const NEWBORN_PLATE = "Your first orb";
 export type Beat =
   | { kind: "say"; who: string; text: string }
   | { kind: "ask-name" }
-  | { kind: "ceo" }
+  | { kind: "ask-company" }
+  | { kind: "founder" }
   | { kind: "brains" }
-  | { kind: "hire" };
+  /** a stop on the tour: a room, what it is for */
+  | { kind: "tour"; room: "home" | "office" | "sessions" | "recruiter" | "org"; title: string; text: string }
+  /** the making of an orb: your CEO (the story's end), or your assistant (the tour's) */
+  | { kind: "hire"; role?: "ceo" | "assistant" };
 
 export const STORY: readonly Beat[] = [
   { kind: "say", who: "new", text: "Oh! Hello. I think I just woke up." },
@@ -31,20 +41,31 @@ export const STORY: readonly Beat[] = [
   { kind: "say", who: "new", text: "Before anything else, what should I call you?" },
   { kind: "ask-name" },
   { kind: "say", who: "new", text: "{name}. Nice. That has a ring to it." },
-  { kind: "say", who: "new", text: "So, here's the thing. This is an office. Right now it's an empty floor, a desk, and me." },
-  { kind: "say", who: "new", text: "Every office needs someone at the top. So, {name}, if you'll take the job..." },
-  { kind: "ceo" },
-  { kind: "say", who: "new", text: "Congratulations, boss. You're the CEO. And I'm your first hire." },
-  { kind: "say", who: "new", text: "Here's how it works. You hand me work, I do it, and anything that matters waits for your OK." },
-  { kind: "say", who: "new", text: "And every night I practise, so I get quicker at the things you ask for most. You can hire more of us whenever you like." },
-  // the brains (owner, 10-02: "after asking name and showing CEO badge, ask user to sign into chatgpt
-  // and input gemini api key and if they want to add a local coder, then go to create orb screen")
-  { kind: "say", who: "new", text: "First, though, I need a brain to think with. Give me one or two, and I'll use the first that can answer." },
+  { kind: "say", who: "new", text: "So, here's the thing. This is a brand new Orb startup, and it's yours. What's it called?" },
+  { kind: "ask-company" },
+  { kind: "founder" },
+  { kind: "say", who: "new", text: "Congratulations, {name}. You're the Founder of {company}." },
+  { kind: "say", who: "new", text: "Every startup starts with two: a CEO to run the company, and a personal assistant to keep your day. The rest you hire as you grow, each department with its head." },
+  // the brains (owner, 10-02: "after asking name and showing CEO badge, ask user to sign into chatgpt and input gemini
+  // api key and if they want to add a local coder, then go to create orb screen")
+  { kind: "say", who: "new", text: "First, though, we need a brain to think with. Give us one or two, and we'll use the first that can answer." },
   { kind: "brains" },
-  // the first orb is always the assistant (owner, 10-04: "that should be the first thing the user has to choose,
-  // an assistant orb. they plan everythhhhhhing")
-  { kind: "say", who: "new", text: "I'll be your assistant: I plan everything, your days, your reminders, and who does what. One problem: I don't have a name yet. Or a look. Will you make me?" },
-  { kind: "hire" },
+  // the first orb is the CEO (owner, 10-07: "Your first orb is the CEO, you must appoint one before apointing any orbs")
+  { kind: "say", who: "new", text: "Now, your CEO. That's me, if you'll have me: I'll run the company and chair the board. I don't have a name yet. Or a look. Will you make me?" },
+  { kind: "hire", role: "ceo" },
+];
+
+/** Once your CEO is made: a little tour of the company, which you can skip, and then your personal assistant. Said by
+ * your CEO ("ceo" is whoever you made it). */
+export const TOUR: readonly Beat[] = [
+  { kind: "say", who: "ceo", text: "Thank you, {name}. Before we hire your assistant, let me show you round {company}." },
+  { kind: "tour", room: "home", title: "Your home page", text: "This is where the app opens: how the company is today, what's coming up, and who's doing best." },
+  { kind: "tour", room: "office", title: "The office", text: "The office floor. You'll see us at our desks, in the Board room, and on our breaks." },
+  { kind: "tour", room: "sessions", title: "Sessions", text: "Sessions are where we work on something together: we plan it out loud, then build it." },
+  { kind: "tour", room: "recruiter", title: "The Recruiter", text: "Where you hire. Each department opens when you hire its head: a CTO opens Build, a CFO opens Finance." },
+  { kind: "tour", room: "org", title: "The org chart and the board", text: "Who heads what, and the board, where we vote on the big decisions." },
+  { kind: "say", who: "ceo", text: "That's the tour. Now, your personal assistant: they keep your day, and bring me what the company should do." },
+  { kind: "hire", role: "assistant" },
 ];
 
 /** The story for this office: a line is said only by one who is there (your first orb always is). */
@@ -52,15 +73,25 @@ export function storyFor(names: readonly string[]): Beat[] {
   return STORY.filter((b) => b.kind !== "say" || b.who === "new" || names.includes(b.who));
 }
 
-/** A line with the person in it. */
-export const line = (text: string, p: Pick<Person, "name"> | null): string => text.replaceAll("{name}", p?.name ?? "boss");
+/** A line with the person, and their company, in it. */
+export const line = (text: string, p: Pick<Person, "name" | "company"> | null): string => text.replaceAll("{name}", p?.name ?? "boss").replaceAll("{company}", p?.company ?? "your company");
 
-/** The first beat a skip lands on: the name, if we have none yet, else the brains (setting up, not
- * story: skipping the story never skips choosing what he thinks with), else the hire. */
-export function skipTo(person: Pick<Person, "name"> | null, story: readonly Beat[] = STORY): number {
-  if (!person) return story.findIndex((b) => b.kind === "ask-name");
-  const brains = story.findIndex((b) => b.kind === "brains");
-  return brains >= 0 ? brains : story.findIndex((b) => b.kind === "hire");
+/** The first beat a skip lands on: your name, then your company's, if we have them not yet, else the brains (setting
+ * up, not story: skipping the story never skips choosing what he thinks with), else the hire (the tour's skip). */
+export function skipTo(person: Pick<Person, "name" | "company"> | null, story: readonly Beat[] = STORY): number {
+  const at = (k: Beat["kind"]): number => story.findIndex((b) => b.kind === k);
+  if (!person && at("ask-name") >= 0) return at("ask-name");
+  if (!person?.company && at("ask-company") >= 0) return at("ask-company");
+  const brains = at("brains");
+  return brains >= 0 ? brains : at("hire");
+}
+
+/** What a company's name has to be: something, and short enough for the menu (40 letters at most). */
+export function checkCompany(raw: string): { ok: true; company: string } | { ok: false; why: string } {
+  const company = raw.replace(/\s+/g, " ").trim();
+  if (!company) return { ok: false, why: "It needs a name, even a working one." };
+  if (company.length > 40) return { ok: false, why: "A little shorter (40 letters at most)." };
+  return { ok: true, company };
 }
 
 /** What a name has to be: something to call you, short enough for a nameplate. */

@@ -117,10 +117,15 @@ export function HomeRoom({ home, office, person, moods, go }: { home: Office | n
   const assistant = office.find((c) => c.specialty === "assistant") ?? office[0] ?? null;
   const byId = new Map(office.map((c) => [idOf(c.name), c]));
   const byName = new Map(office.map((c) => [c.name, c]));
-  const shown = office.slice(0, tiny ? 3 : phone ? 5 : 7);
+  // the row, your CEO in its middle and the biggest (owner, 10-07: "on home page, middle orb should always be your CEO")
+  const across = tiny ? 3 : phone ? 5 : 7;
+  const ceo = office.find((c) => c.specialty === "ceo");
+  const others = office.filter((c) => c !== ceo).slice(0, ceo ? across - 1 : across);
+  const half = Math.floor(others.length / 2);
+  const shown = ceo ? [...others.slice(0, half), ceo, ...others.slice(half)] : others;
   const big = phone ? 84 : 140;
   const little = phone ? 56 : 92;
-  const mid = Math.floor(shown.length / 2);
+  const mid = ceo ? half : Math.floor(shown.length / 2);
   const date = new Date(now);
 
   // the sections under the numbers, once the home has answered: on a wide screen two columns, each stacking its own
@@ -240,7 +245,7 @@ export function HomeRoom({ home, office, person, moods, go }: { home: Office | n
           <>
             <div style={{ display: "grid", gap: 4, justifyItems: "center" }}>
               <h1 style={{ margin: 0, font: `800 ${phone ? 24 : 28}px/1.2 var(--font)`, color: "var(--text-1)" }}>{`${greeting(date.getHours())}${name ? `, ${name}` : ""}`}</h1>
-              <span style={{ ...small, color: "var(--text-2)" }}>{`${date.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })} · ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`}</span>
+              <span style={{ ...small, color: "var(--text-2)" }}>{`${d?.company ? `${d.company} · ` : ""}${date.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })} · ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`}</span>
               <span data-home-status style={{ ...body, color: "var(--text-2)" }}>
                 {[plural(office.length, "orb"), `${working} working`, waiting ? `${waiting} ${waiting === 1 ? "needs" : "need"} you` : "nothing waiting for you"].join(" · ")}
               </span>

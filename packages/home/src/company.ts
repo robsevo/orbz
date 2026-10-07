@@ -1,24 +1,31 @@
 // The company (PLAN 5.13, 5.14; owner, 10-07): "You are the Founder of a brand new Orb startup"; "Your first orb is
-// the CEO, you must appoint one before apointing any orbs, and a personal assistant ... they must have a CFO appointed
-// before touching any orbs that have to do with money, investing, and crypto so those 3 need to be appointed at the
-// beginning"; "these two work in tandem yo give you what you need ... find a strucure for those two to work in tandem";
-// "the role of the CFO is to keep all info there for you"; "and the orbs really do listen".
+// the CEO, you must appoint one before apointing any orbs, and a personal assistant"; "these two work in tandem yo give
+// you what you need ... find a strucure for those two to work in tandem"; "the role of the CFO is to keep all info there
+// for you"; "and the orbs really do listen"; then "for every section in recruiter they need to unlock, they need to hire
+// the cfo for example first, but ceo and personal assistant is mandatory".
 //
-// The founding three are appointed in order (the CEO, your personal assistant, the CFO), and nothing else joins
-// before they are all in; a money orb (Finance) never joins without a CFO. Pure, so the door, the recruiter and the
-// app's own check are the one rule (`whyNot`).
+// The CEO and your personal assistant are appointed first, in that order, and nothing else joins before both are in.
+// Then the Executive is open, and every other department opens with its head: Build with a CTO, Think with a Chief of
+// Staff, Make with a CMO, Finance with a CFO, Business with a COO (Life's head is your assistant, in from the start).
+// Pure, so the door, the recruiter and the app's own check are the one rule (`whyNot`).
 //
 // The tandem, said to each in its standing context (`companyLine`): the assistant keeps your day and is your way in;
 // what is company work it hands to the CEO, who decides who does it and leads it, and sends the result back to you
 // through the assistant. The CFO keeps every money record in one place (its books, and the bills: Home.plannerFor),
 // and every money orb reports to it. Everyone takes direction from the CEO and follows what the board decides.
-import { SPECIALTY_FAMILIES, type Specialty } from "./brain/constitution.ts";
+import { SPECIALTY_FAMILIES, type Family, type Specialty } from "./brain/constitution.ts";
 
-/** The founding three, in the order they are appointed. */
-export const FOUNDING: readonly Specialty[] = ["ceo", "assistant", "cfo"];
-const POST: Partial<Record<Specialty, string>> = { ceo: "CEO", assistant: "personal assistant", cfo: "CFO" };
+/** The two appointed first, in this order: nothing else joins before both are in. */
+export const FOUNDING: readonly Specialty[] = ["ceo", "assistant"];
 
-/** Who is to be appointed next, while the founding three are not all in. */
+/** Each department's head, by its post (owner, 10-07: "restructure it so it fits this makes things easier to see"):
+ * the Executive the CEO, Build the CTO, Think the Chief of Staff, Make the CMO, Finance the CFO, Business the COO, Life
+ * your personal assistant. A department opens for hiring with its head. */
+export const HEAD_OF: Record<Family, Specialty> = { exec: "ceo", build: "cto", think: "chiefofstaff", make: "cmo", finance: "cfo", business: "coo", life: "assistant" };
+const POST: Partial<Record<Specialty, string>> = { ceo: "CEO", assistant: "personal assistant", cfo: "CFO", cto: "CTO", chiefofstaff: "Chief of Staff", cmo: "CMO", coo: "COO" };
+const DEPARTMENT: Record<Family, string> = { exec: "the Executive", build: "Build", think: "Think", make: "Make", finance: "Finance", business: "Business", life: "Life" };
+
+/** Who is to be appointed next, while the CEO and your assistant are not both in. */
 export function nextFounding(office: readonly string[]): Specialty | null {
   return FOUNDING.find((r) => !office.includes(r)) ?? null;
 }
@@ -26,21 +33,30 @@ export function nextFounding(office: readonly string[]): Specialty | null {
 /** Why an orb of this kind cannot join the office as it is (its orbs' specialties), or null when it can. */
 export function whyNot(specialty: string, office: readonly string[]): string | null {
   const next = nextFounding(office);
-  if (next && specialty !== next) return `Appoint your ${POST[next]} first: the CEO, your personal assistant and the CFO come before anyone else.`;
-  if (SPECIALTY_FAMILIES[specialty as Specialty] === "finance" && !office.includes("cfo")) return "Appoint a CFO first: every money orb answers to one.";
+  if (next && specialty !== next) return `Appoint your ${POST[next]} first: your CEO and your personal assistant come before anyone else.`;
+  const family = SPECIALTY_FAMILIES[specialty as Specialty];
+  if (!family || family === "exec") return null; // the Executive is open once the two are in
+  const head = HEAD_OF[family];
+  if (specialty !== head && !office.includes(head)) return `Hire a ${POST[head]} first: they open ${DEPARTMENT[family]}.`;
   return null;
+}
+
+/** Which departments are open for hiring in an office as it is (its orbs' specialties). */
+export function openDepartments(office: readonly string[]): Family[] {
+  if (nextFounding(office)) return [];
+  return (Object.keys(HEAD_OF) as Family[]).filter((f) => f === "exec" || office.includes(HEAD_OF[f]));
 }
 
 type Who = { id: string; name: string; specialty: string };
 
 /** What an orb is told about the company and its part in it, by code; null when there is no company yet. */
-export function companyLine(o: { me: Who; founder: string | null; office: readonly Who[] }): string | null {
+export function companyLine(o: { me: Who; founder: string | null; company?: string | null; office: readonly Who[] }): string | null {
   const F = o.founder ?? "the Founder";
   const first = (s: string): Who | undefined => o.office.find((w) => w.specialty === s);
   const ceo = first("ceo"), pa = first("assistant"), cfo = first("cfo");
   if (!ceo && !pa && !cfo) return null;
   const who = [ceo && `${ceo.name} is the CEO and runs it`, pa && `${pa.name} is ${F}'s personal assistant`, cfo && `${cfo.name} is the CFO and keeps the books`].filter(Boolean).join("; ");
-  const lines = [`The company: ${F} is its Founder; ${who}. Take direction from the CEO and follow what the board decides.`];
+  const lines = [`The company${o.company ? `, ${o.company}` : ""}: ${F} is its Founder; ${who}. Take direction from the CEO and follow what the board decides.`];
   const money = o.office.filter((w) => SPECIALTY_FAMILIES[w.specialty as Specialty] === "finance").map((w) => w.name);
   if (o.me.specialty === "ceo") {
     lines.push(`You are the CEO. ${pa ? pa.name : "The personal assistant"} keeps ${F}'s day and brings you what the company should do: take it, decide who does it (ask_orb, or a session you lead), and send ${F} the result through ${pa ? pa.name : "the assistant"} in a few lines. You chair the board.`);

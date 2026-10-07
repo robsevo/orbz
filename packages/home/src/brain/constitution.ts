@@ -30,6 +30,7 @@ export const SPECIALTY_FAMILIES = {
   assistant: "life", tutor: "life", coach: "life", dietitian: "life", trainer: "life", health: "life", chef: "life", travel: "life",
   home: "life", events: "life", career: "life", language: "life",
   ceo: "exec", cfo: "exec", coo: "exec", cto: "exec", cmo: "exec", chiefofstaff: "exec",
+  sports: "think", // owner, 10-07: "add a Sports stats and odds skill too"
 } as const;
 export type Specialty = keyof typeof SPECIALTY_FAMILIES;
 export type Family = (typeof SPECIALTY_FAMILIES)[Specialty];
@@ -53,7 +54,7 @@ export const SECTION_MAP: Record<string, Placement> = {
   refusal_handling: morals("what to help with and what to refuse; Orbs' floor is code (rule 9)"),
   research_framing: morals("how to treat sensitive subjects"),
   communication: core,
-  financial_advice: work(["finance"], ["analyst", "operations", "cfo"]),
+  financial_advice: work(["finance"], ["analyst", "operations", "cfo", "sports"]), // odds are money too
   tone_and_formatting: core,
   user_wellbeing: work(["life"], ["support", "people", "money"]),
   evenhandedness: morals("contested political and moral questions"),
@@ -159,7 +160,7 @@ export const MINI: readonly string[] = ["communication", "tone_and_formatting", 
 
 /** How a researcher works (PLAN 3.10), ported from Ash's researcher (brain/agents/researcher.md):
  * the orbs whose work is finding things out load it, whatever the owner's file holds. */
-export const RESEARCHERS: readonly Specialty[] = ["research", "factcheck", "analyst", "travel", "career", "marketing", "product", "fundamentals"];
+export const RESEARCHERS: readonly Specialty[] = ["research", "factcheck", "analyst", "travel", "career", "marketing", "product", "fundamentals", "sports"];
 export const RESEARCH_METHOD = `## How you research
 You are called when the answer lives on the live web, not in what you already know. Search with method: start broad, then narrow. Pick query words from the answer's own vocabulary (the exact error text, the spec number, the product's real name), the most distinctive first, and add the year for anything that moves fast. If results come back weak, change the words instead of repeating the query. Work several angles when one will not cover it (official docs, release notes, issue trackers, people's reports), and read whole pages with web_fetch when snippets are not enough: a snippet is not a source.
 

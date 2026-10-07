@@ -20,7 +20,7 @@ type Meet = Meeting;
 const MEET_WALK_MS = 12_000;
 import type { Route } from "../ui/nav.ts";
 import { DeskPiece, FLOOR_CSS, MeetingTable, PingPong, Room, SideTables, skyAt, type Screen } from "./art.tsx";
-import { busiest, VIEWS, viewRect, type ViewId } from "./plan.ts";
+import { busiest, VIEWS, viewRect, zoneOf, type ViewId } from "./plan.ts";
 import { DESKS, H, POIS, ROOMS, SEATS, W, WALL, ZONES, dice, dwell, isMeeting, meetPlan, meetSpot, next, route, seating, sentBy, speed, type Desk, type Plan, type PoiId, type Spot, type Traits } from "./plan.ts";
 
 /** An orb's size on the plan (its window's width). */
@@ -402,7 +402,27 @@ export function Floor({ home, office, moods, person, go }: { home: Office | null
   const meetingTitle = inMeeting ? sessions[Number(/^team:(\d+)/.exec(inMeeting)?.[1])] ?? "A Brainstorm" : null;
   const sky = skyAt(now.getHours());
   const px = (v: number): number => v * scale;
-  const emptyHiring = (z: Family): Desk | null => (hiring.some((k) => SPECIALTIES[k as keyof typeof SPECIALTIES]?.family === z) ? DESKS.find((d) => d.zone === z && ![...desks.values()].includes(d)) ?? null : null);
+  // where a department's Hiring tag stands (owner, 10-06): a free desk in the zone it works in, else that zone's door;
+  // the Executive and Finance share Think's and Business's zones until they have their own (PLAN 5.17, zoneOf)
+  const hiringTags = (() => {
+    const out: { family: Family; zone: string; x: number; y: number; z: number; hue: string }[] = [];
+    const taken = new Set([...desks.values()]);
+    const used = new Set<Desk>();
+    for (const f of Object.keys(FAMILIES) as Family[]) {
+      if (!hiring.some((k) => SPECIALTIES[k as keyof typeof SPECIALTIES]?.family === f)) continue;
+      const zone = ZONES.find((x) => x.id === zoneOf(f));
+      if (!zone) continue;
+      const d = DESKS.find((x) => x.zone === zone.id && !taken.has(x) && !used.has(x));
+      if (d) {
+        used.add(d);
+        out.push({ family: f, zone: zone.id, x: d.seat.x, y: d.rect.y - 40, z: d.rect.y + d.rect.h + 1, hue: zone.hue });
+      } else {
+        const n = out.filter((t) => t.zone === zone.id).length;
+        out.push({ family: f, zone: zone.id, x: zone.door.x + zone.door.w / 2 + n * 74, y: zone.rect.y + 16, z: zone.rect.y + 20, hue: zone.hue });
+      }
+    }
+    return out;
+  })();
   const todayList = [...day].sort((a, b) => (a.time ?? "").localeCompare(b.time ?? ""));
 
   return (
@@ -482,14 +502,14 @@ export function Floor({ home, office, moods, person, go }: { home: Office | null
               );
             })()}
             {/* an empty desk where you are hiring: it opens on who applied to that department (owner, 10-06) */}
-            {(Object.keys(FAMILIES) as Family[]).map((z) => {
-              const d = emptyHiring(z);
-              return d ? (
-                <button key={z} type="button" className="orbs-tag" data-hiring={z} onClick={() => go({ room: "recruiter", family: z })} aria-label={`Hiring for ${FAMILIES[z]}: see who applied`} data-orb={ZONES.find((x) => x.id === z)!.hue}
-                  style={{ position: "absolute", left: px(d.seat.x), top: px(d.rect.y - 40), translate: "-50% 0", zIndex: d.rect.y + d.rect.h + 1, ...tag, cursor: "pointer", border: 0, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1px var(--accent)", color: "var(--text-1)" }}>
+            {hiringTags.map((h) => {
+              const z = h.family;
+              return (
+                <button key={z} type="button" className="orbs-tag" data-hiring={z} onClick={() => go({ room: "recruiter", family: z })} aria-label={`Hiring for ${FAMILIES[z]}: see who applied`} data-orb={h.hue}
+                  style={{ position: "absolute", left: px(h.x), top: px(h.y), translate: "-50% 0", zIndex: h.z, ...tag, cursor: "pointer", border: 0, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1px var(--accent)", color: "var(--text-1)" }}>
                   + Hiring
                 </button>
-              ) : null;
+              );
             })}
 
             {/* the orbs */}
