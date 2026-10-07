@@ -36,6 +36,7 @@ import { defaultStore, type SecretStore } from "./chatgpt/store.ts";
 import type { Undo } from "./gym/card.ts";
 import { type Level, LEVELS, levelOf, nextFor, tenureOf } from "./gym/levels.ts";
 import { orgTools, whoFits } from "./org.ts";
+import { recital } from "./plans/recite.ts";
 import { interviewSystem, Recruiter, RecruiterError } from "./recruiter.ts";
 import { type Fetcher, Reading, type Sleep } from "./reading/reading.ts";
 import { readingTools, withReading } from "./reading/tools.ts";
@@ -443,6 +444,8 @@ export class Home {
             return { id: kept.id, comesUpAt: comesUpAt(kept.due, kept.aheadDays), ...(keeper.id !== orb && { keeper: keeper.name }) };
           },
           reminders: () => this.notices.reminders(),
+          // its plan's open rows, restated last (plans/recite.ts; Ash's recitation)
+          recite: (orb, conversation) => recital({ orb, conversation, plans: this.plans, board: this.board, claims: this.claims }),
           moveReminder: (id, due) => this.notices.move(id, due),
           learn: (orb, line) => this.learned.add(orb, line),
           templates: (orb) => templatesFor(this.events, orb),

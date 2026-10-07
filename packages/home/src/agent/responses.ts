@@ -29,13 +29,15 @@ const refused = new Set<string>();
 /** Forgets what the plan refused (a test's fresh start). */
 export const forgetRefused = (): void => refused.clear();
 
-/** The chat-shaped history as Responses input: system text becomes the instructions, a tool call
- * and its result become a function_call and its function_call_output. */
+/** The chat-shaped history as Responses input: the leading system text becomes the instructions, a tool
+ * call and its result become a function_call and its function_call_output, and system text after the
+ * conversation began (the plan restated last, plans/recite.ts) stays where it is, as the developer's. */
 export function toResponsesInput(messages: ModelMessage[]): { instructions: string; input: Record<string, unknown>[] } {
   const instructions: string[] = [];
   const input: Record<string, unknown>[] = [];
   for (const m of messages) {
-    if (m.role === "system") instructions.push(m.content);
+    if (m.role === "system" && input.length) input.push({ type: "message", role: "developer", content: m.content });
+    else if (m.role === "system") instructions.push(m.content);
     else if (m.role === "user") input.push({ type: "message", role: "user", content: m.content });
     else if (m.role === "assistant") {
       if (m.content) input.push({ type: "message", role: "assistant", content: m.content });

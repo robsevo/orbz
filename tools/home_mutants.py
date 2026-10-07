@@ -439,7 +439,7 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ("      if (!ctx.fresh) return null; // only what a schedule or a trigger asked: a chat is the brain's\n", ""),
     ], ["habit-runs.test.ts"]),
     ("a habit's call skips the guard and the floor", "src/agent/loop.ts", [
-        ("      const r = await this.#calls(msg, 0, ctx, tctx, step, at);\n      if (r !== \"done\") return this.#ended(r, ctx);\n    }\n    return null;",
+        ("      const r = await this.#calls(msg, 0, ctx, tctx, step, at, false); // a habit is tested code: no repeat guard\n      if (r === \"repeated\") return { outcome: \"ok\", summary: \"repeated\" };\n      if (r !== \"done\") return this.#ended(r, ctx);\n    }\n    return null;",
          "      this.#result(msg, call, await runTool(this.#tools.get(call.name)!, next.call.args, tctx), ctx);\n      const r = \"done\" as \"done\" | \"waiting\" | \"stopped\";\n      if (r !== \"done\") return this.#ended(r, ctx);\n    }\n    return null;"),
     ], ["habit-runs.test.ts"]),
     ("a habit goes on past your no", "src/agent/loop.ts", [
@@ -1518,6 +1518,37 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ('a field the plan refuses fails the turn', 'src/agent/responses.ts', [
         ('  if (field && asked.includes(field)) {', '  if (false) {'),
     ], ['chatgpt.test.ts']),
+    # Ash's guards and recitation (owner, 10-07)
+    ("a reply may repeat one sentence forever", "src/agent/loopguard.ts", [
+        ("    if (this.#run.n >= RUN) return this.#trip(\"run\", sentence, this.#run.n, key);\n", ""),
+    ], ["guards.test.ts"]),
+    ("a cycle of two sentences goes on", "src/agent/loopguard.ts", [
+        ("    if (this.#history.length >= WINDOW_MIN && new Set(this.#history).size <= DISTINCT) {", "    if (false) {"),
+    ], ["guards.test.ts"]),
+    ("a code block can trip the guard", "src/agent/loopguard.ts", [
+        ("    if (was || this.#fence) return null;\n", ""),
+    ], ["guards.test.ts"]),
+    ("a looped reply is kept whole", "src/agent/loop.ts", [
+        ("        const kept = r.text.slice(0, t.cutAt).trim();", "        const kept = r.text.trim();"),
+    ], ["guards.test.ts"]),
+    ("a repeated call says nothing", "src/agent/loop.ts", [
+        ("      if (times > 1 && !result.isError) {", "      if (false) {"),
+    ], ["guards.test.ts"]),
+    ("a repeating turn never ends", "src/agent/loop.ts", [
+        ("      if (times >= REPEAT_LIMIT) {", "      if (false) {"),
+    ], ["guards.test.ts"]),
+    ("the plan is never restated", "src/agent/loop.ts", [
+        ("      if (recital) messages.push({ role: \"system\", content: recital });\n", ""),
+    ], ["guards.test.ts"]),
+    ("a finished plan is still restated", "src/plans/recite.ts", [
+        ("    if (!open.length) continue;\n", ""),
+    ], ["guards.test.ts"]),
+    ("another orb's rows are restated to it", "src/plans/recite.ts", [
+        ("if (c.orb === o.orb) mine.set", "if (c.plan) mine.set"),
+    ], ["guards.test.ts"]),
+    ("the restatement goes in the instructions, first", "src/agent/responses.ts", [
+        ("    if (m.role === \"system\" && input.length) input.push", "    if (false) input.push"),
+    ], ["guards.test.ts"]),
     ("an asked orb reads the whole session (Ash: a subagent sees only its brief)", "src/agent/conversation.ts", [
         ("    if (o.brief && o.me) {", "    if (false) {"),
     ], ["session-cost.test.ts"]),

@@ -27,9 +27,10 @@ import { type BrainChain, explain, type LinkId, restFor } from "../brain/chain.t
 import type { Specialty } from "../brain/constitution.ts";
 import type { SearchKey } from "./web.ts";
 import { isLight, isPass, type TeamTurn } from "./standing.ts";
+import { LoopGuard } from "./loopguard.ts";
 import { MANAGE_USAGE } from "../chatgpt/chatgpt.ts";
 import type { Spend } from "../brain/spend.ts";
-import type { Card, Conversations, Message, ToolCall } from "./conversation.ts";
+import type { Card, Conversations, Message, ModelMessage, ToolCall } from "./conversation.ts";
 import { standingContext } from "./standing.ts";
 import { streamChat } from "./stream.ts";
 import { type Background, runTool, type ToolContext, type ToolDef, type ToolResult, TOOLS, toolSpecs } from "./tools.ts";
@@ -112,6 +113,8 @@ export type AgentOptions = {
   compactAtTokens?: number;
   /** How much of the newest conversation compaction keeps as it is. */
   keepRecentTokens?: number;
+  /** The open rows of its plan, restated at the end of a working orb's request (plans/recite.ts), or null. */
+  recite?: (orb: string, conversation: string) => string | null;
   /** Streamed text, for whoever is watching (not stored until the reply is complete). */
   onText?: (e: { orb: string; conversation: string; run: number; delta: string }) => void;
 };
@@ -135,12 +138,17 @@ const est = (text: string): number => Math.ceil(text.length / 4) + 4;
 /** How many steps an orb asked by another may take (PLAN 5.10): a report, not a project. */
 export const ASKED_STEPS = 15;
 
+/** The same call, unchanged, this many times in one run ends it (Ash: three flags, the fourth stops). */
+export const REPEAT_LIMIT = 4;
+
 /** The session turn a run is for, if any (team.ts). */
 const teamOf = (ctx: RunContext): TeamTurn | undefined => ctx.items.map((i) => i.data.team as TeamTurn | undefined).find(Boolean);
 
 export class AgentRunner implements Runner {
-  readonly #o: Required<Omit<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned" | "notebook" | "colleagues" | "searchKey" | "remind" | "reminders" | "moveReminder" | "lessonGate" | "learn" | "habits" | "own" | "templates" | "schedule" | "extraTools" | "sandbox" | "onTerminal" | "workspaceFor" | "heldBy" | "pulse">> & Pick<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned" | "notebook" | "colleagues" | "searchKey" | "remind" | "reminders" | "moveReminder" | "lessonGate" | "learn" | "habits" | "own" | "templates" | "schedule" | "extraTools" | "sandbox" | "onTerminal" | "workspaceFor" | "heldBy" | "pulse">;
+  readonly #o: Required<Omit<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned" | "notebook" | "colleagues" | "searchKey" | "remind" | "reminders" | "moveReminder" | "lessonGate" | "learn" | "habits" | "own" | "templates" | "schedule" | "extraTools" | "sandbox" | "onTerminal" | "workspaceFor" | "heldBy" | "pulse" | "recite">> & Pick<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned" | "notebook" | "colleagues" | "searchKey" | "remind" | "reminders" | "moveReminder" | "lessonGate" | "learn" | "habits" | "own" | "templates" | "schedule" | "extraTools" | "sandbox" | "onTerminal" | "workspaceFor" | "heldBy" | "pulse" | "recite">;
   readonly #tools: Map<string, ToolDef>;
+  /** Each run's calls so far, by name and arguments (the repeat guard). */
+  readonly #repeats = new WeakMap<RunContext, Map<string, number>>();
 
   constructor(opts: AgentOptions) {
     this.#o = { tools: TOOLS, maxSteps: 50, compactAtTokens: 100_000, keepRecentTokens: 20_000, passWaitMs: 1000, ...opts };
@@ -198,6 +206,7 @@ export class AgentRunner implements Runner {
       const cardId = item.data.resume;
       if (typeof cardId === "number") {
         const r = await this.#resume(cardId, ctx, tctx, step);
+        if (r === "repeated") return { outcome: "ok", summary: "repeated" };
         if (r !== "done") return this.#ended(r, ctx);
         continue;
       }
@@ -279,12 +288,25 @@ export class AgentRunner implements Runner {
       await this.#compact(ctx, ep, est(standing));
       if (!own) ep = this.#o.endpoint({ light }) ?? ep; // compaction may have met the plan's limit and moved on
       this.#o.spend.check(); // SpendCapError: the inbox stops the run cleanly ("capped")
-      const messages = [{ role: "system" as const, content: own ? `${standing}\n\n${own.system}` : standing }, ...conv.toModel(conv.history(ctx.conversation), { me: ctx.orb, nameOf: this.#o.orbName, talk: role === "chime", brief: role === "asked" })];
+      const messages: ModelMessage[] = [{ role: "system" as const, content: own ? `${standing}\n\n${own.system}` : standing }, ...conv.toModel(conv.history(ctx.conversation), { me: ctx.orb, nameOf: this.#o.orbName, talk: role === "chime", brief: role === "asked" })];
+      // the open rows of its plan, last, where attention is highest (plans/recite.ts; a chime-in builds nothing)
+      const recital = role === "chime" ? null : (this.#o.recite?.(ctx.orb, ctx.conversation) ?? null);
+      if (recital) messages.push({ role: "system", content: recital });
       ctx.activity("Thinking");
+      // a reply that falls into a loop is stopped where it began to repeat (loopguard.ts, Ash's of 09-12)
+      const guard = new LoopGuard();
+      const cut = new AbortController();
       const r = await streamChat(
         ep,
         { messages, tools: toolSpecs(tools), brief: role === "chime" },
-        { signal: ctx.signal, onText: (delta) => this.#o.onText?.({ orb: ctx.orb, conversation: ctx.conversation, run: ctx.run, delta }) },
+        {
+          signal: AbortSignal.any([ctx.signal, cut.signal]),
+          onText: (delta) => {
+            if (guard.tripped) return;
+            if (guard.push(delta)) return void cut.abort("looped");
+            this.#o.onText?.({ orb: ctx.orb, conversation: ctx.conversation, run: ctx.run, delta });
+          },
+        },
       );
       if (r.promptTokens || r.completionTokens || r.costUsd) {
         this.#o.spend.record({
@@ -299,6 +321,15 @@ export class AgentRunner implements Runner {
         finish: r.finish, stopped: r.stopped, error: r.error, tokens: r.promptTokens + r.completionTokens, cost_usd: r.costUsd,
       });
 
+      if (guard.tripped && !ctx.signal.aborted) {
+        // kept up to the first time it said the sentence it went on repeating; the rest is the loop
+        const t = guard.tripped;
+        const kept = r.text.slice(0, t.cutAt).trim();
+        if (kept) conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "assistant", run: ctx.run, content: kept, meta: { looped: t.kind } });
+        conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "notice", run: ctx.run, content: `${this.#o.orbName(ctx.orb)} began saying the same thing over and over ("${t.sentence.slice(0, 90)}", ${t.count} times), so the reply was stopped there.`, meta: { looped: t.kind } });
+        step("looped", { loop: t.kind, sentence: t.sentence.slice(0, 200), count: t.count, kept: kept.length, cut: r.text.length - kept.length });
+        return { outcome: "ok", summary: "looped" };
+      }
       if (r.stopped) {
         if (r.text) conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "assistant", run: ctx.run, content: r.text, meta: { stopped: true } });
         return this.#ended("stopped", ctx);
@@ -347,6 +378,7 @@ export class AgentRunner implements Runner {
         return { outcome: "ok", summary: r.text.slice(0, 200) };
       }
       const calls = await this.#calls(msg, 0, ctx, tctx, step, at);
+      if (calls === "repeated") return { outcome: "ok", summary: "repeated" };
       if (calls !== "done") return this.#ended(calls, ctx);
     }
     conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "notice", run: ctx.run, content: `I stopped after ${steps} steps. Say "go on" and I'll continue.` });
@@ -381,7 +413,8 @@ export class AgentRunner implements Runner {
       const call: ToolCall = { id: `habit-${ctx.run}-${s.done.length}`, name: next.call.name, arguments: JSON.stringify(next.call.args) };
       step("model", { text: "", tool_calls: [{ ...call, arguments: await this.#safe(call.arguments) }], habit: s.h.key });
       const msg = conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "assistant", run: ctx.run, content: "", toolCalls: [call], meta });
-      const r = await this.#calls(msg, 0, ctx, tctx, step, at);
+      const r = await this.#calls(msg, 0, ctx, tctx, step, at, false); // a habit is tested code: no repeat guard
+      if (r === "repeated") return { outcome: "ok", summary: "repeated" };
       if (r !== "done") return this.#ended(r, ctx);
     }
     return null;
@@ -460,7 +493,7 @@ export class AgentRunner implements Runner {
   }
 
   /** Runs an assistant message's tool calls from `from` on. A call that needs the person opens a card. */
-  async #calls(msg: Message, from: number, ctx: RunContext, tctx: ToolContext, step: Stepper, at: CallSite): Promise<"done" | "waiting" | "stopped"> {
+  async #calls(msg: Message, from: number, ctx: RunContext, tctx: ToolContext, step: Stepper, at: CallSite, guarded = true): Promise<"done" | "waiting" | "stopped" | "repeated"> {
     const calls = msg.toolCalls ?? [];
     for (let i = from; i < calls.length; i++) {
       if (ctx.signal.aborted) return "stopped";
@@ -500,12 +533,35 @@ export class AgentRunner implements Runner {
           result = await this.#o.guard.result(def, args, at.turn, await runTool(def, args, this.#forCall(tctx, ctx, call.id)));
         }
       }
+      // the same call, unchanged, again (Ash's repeat guard): not refused, since a read after an edit is the
+      // same call and rightly says something new, but said to the model, and the fourth ends the turn
+      const times = guarded ? this.#repeat(ctx, call.name, args) : 1;
+      if (times > 1 && !result.isError) {
+        result = { ...result, content: `${result.content}\n\n--- REPEATED CALL (${times}x) ---\nThis exact call has now run ${times} times in this turn. Running it again cannot tell you anything new: use what you already have, change the call, or say plainly what you are missing and stop.` };
+      }
       this.#result(msg, call, result, ctx);
       this.#o.pulse?.(ctx.orb, ctx.conversation);
       step("tool", { call_id: call.id, name: call.name, args: await this.#safe(JSON.stringify(args)), result: await this.#safe(result.content), is_error: result.isError === true });
       if (result.stoppedByUser) return "stopped";
+      if (times >= REPEAT_LIMIT) {
+        // said as a finding about the step, not an apology (Ash, 09-11: "does not instill confidence")
+        const what = def?.describe?.(args ?? {}) ?? call.name;
+        this.#o.conversations.add({ conversation: ctx.conversation, orb: ctx.orb, role: "notice", run: ctx.run, content: `${this.#o.orbName(ctx.orb)} tried to ${what} ${times} times and got the same result each time, so there was nothing more to learn from it and the turn stopped there. Say what to try instead.`, meta: { repeated: call.name, times } });
+        step("repeated", { name: call.name, times });
+        return "repeated";
+      }
     }
     return "done";
+  }
+
+  /** How many times this run has now made this exact call (its name and its arguments, as parsed). */
+  #repeat(ctx: RunContext, name: string, args: Record<string, unknown> | null): number {
+    let seen = this.#repeats.get(ctx);
+    if (!seen) this.#repeats.set(ctx, (seen = new Map()));
+    const sig = `${name}\u0000${JSON.stringify(args ?? {})}`;
+    const times = (seen.get(sig) ?? 0) + 1;
+    seen.set(sig, times);
+    return times;
   }
 
   /** The tool context for one call: what it prints goes to his terminal on the person's screen. */
@@ -514,7 +570,7 @@ export class AgentRunner implements Runner {
     return on ? { ...tctx, onOutput: (chunk: string) => on({ orb: ctx.orb, conversation: ctx.conversation, run: ctx.run, call, chunk }) } : tctx;
   }
 
-  async #resume(cardId: number, ctx: RunContext, tctx: ToolContext, step: Stepper): Promise<"done" | "waiting" | "stopped"> {
+  async #resume(cardId: number, ctx: RunContext, tctx: ToolContext, step: Stepper): Promise<"done" | "waiting" | "stopped" | "repeated"> {
     const conv = this.#o.conversations;
     const card = conv.card(cardId);
     if (!card || card.status === "pending" || card.status === "expired") return "done";
