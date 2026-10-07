@@ -28,6 +28,8 @@ import type { Specialty } from "../brain/constitution.ts";
 import type { SearchKey } from "./web.ts";
 import { isLight, isPass, type TeamTurn } from "./standing.ts";
 import { LoopGuard } from "./loopguard.ts";
+import { TeamNotes } from "../notes.ts";
+import { parseTabConversation } from "../team.ts";
 import { MANAGE_USAGE } from "../chatgpt/chatgpt.ts";
 import type { Spend } from "../brain/spend.ts";
 import type { Card, Conversations, Message, ModelMessage, ToolCall } from "./conversation.ts";
@@ -201,6 +203,20 @@ export class AgentRunner implements Runner {
       ...(this.#o.templates && { templates: () => this.#o.templates!(ctx.orb) }),
       ...(this.#o.schedule && { schedule: (x) => this.#o.schedule!(ctx.orb, x) }),
       ...(this.#o.sandbox && { sandbox: this.#o.sandbox(ctx.orb, workspace) }),
+      // in a session, the team's notes on what it has read: a page a teammate read is its note, written once on
+      // the light brain the first time another needs it (notes.ts; owner, 10-07)
+      ...(parseTabConversation(ctx.conversation) && {
+        teamNotes: new TeamNotes(workspace, () => this.#o.clock.now()),
+        nameOf: this.#o.orbName,
+        summarize: async (ask: string) => {
+          const ep = this.#o.endpoint({ light: true });
+          if (!ep) return null;
+          this.#o.spend.check();
+          const r = await chat(ep, [{ role: "user", content: ask }], { maxTokens: 400, signal: ctx.signal });
+          this.#o.spend.record({ tier: "big", model: ep.model, costUsd: r.costUsd, costSource: r.costSource, promptTokens: r.promptTokens, completionTokens: r.completionTokens, orb: ctx.orb, conversation: ctx.conversation, turn: "note" });
+          return r.text.trim() || null;
+        },
+      }),
       ...(this.#o.heldBy && { heldBy: (p: string) => this.#o.heldBy!(ctx.orb, ctx.conversation, p) }),
       // an ask's turn says how many hands deep it is (PLAN 5.1); the run's items carry it
       depth: Math.max(0, ...ctx.items.map((i) => Number(i.data.depth) || 0)),

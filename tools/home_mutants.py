@@ -1564,6 +1564,25 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("a part's summary goes missing from what the model reads", "src/agent/conversation.ts", [
         ("    return [...(whole ? [whole] : []), ...parts, ...live.filter", "    return [...(whole ? [whole] : []), ...live.filter"),
     ], ["survive.test.ts"]),
+    # the team's notes on what it read (owner, 10-07)
+    ("a teammate reads the same page again", "src/agent/tools.ts", [
+        ("      if (notes && kept && kept.by !== ctx.orb) {", "      if (false) {"),
+    ], ["notes.test.ts"]),
+    ("a page read in a session is never kept for the team", "src/agent/tools.ts", [
+        ("      if (notes && !out.isError && !out.stoppedByUser) notes.keepPage(s(a.url), ctx.orb, out.content);\n", ""),
+    ], ["notes.test.ts"]),
+    ("a note is written again for every teammate", "src/agent/tools.ts", [
+        ("        const note = kept.note ?? (ctx.summarize", "        const note = (ctx.summarize"),
+    ], ["notes.test.ts"]),
+    ("an orb is handed a note on its own reading", "src/agent/tools.ts", [
+        ("      if (notes && kept && kept.by !== ctx.orb) {", "      if (notes && kept) {"),
+    ], ["notes.test.ts"]),
+    ("a page a day old is served from the notes", "src/notes.ts", [
+        ("    if (this.#now() - head.at > FRESH_MS) return null; // the home's clock, not the file's\n", ""),
+    ], ["notes.test.ts"]),
+    ("a chat with one orb keeps team notes", "src/agent/loop.ts", [
+        ("      ...(parseTabConversation(ctx.conversation) && {\n        teamNotes:", "      ...(true && {\n        teamNotes:"),
+    ], ["notes.test.ts"]),
     ("an asked orb reads the whole session (Ash: a subagent sees only its brief)", "src/agent/conversation.ts", [
         ("    if (o.brief && o.me) {", "    if (false) {"),
     ], ["session-cost.test.ts"]),

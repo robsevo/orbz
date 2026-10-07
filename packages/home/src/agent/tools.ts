@@ -22,6 +22,7 @@ import type { FloorHit } from "../rules/floor.ts";
 import { transportCause } from "./stream.ts";
 import { type SearchKey, webFetch, webSearch } from "./web.ts";
 import type { Wrap } from "../computer/sandbox.ts";
+import { noteAsk, type TeamNotes } from "../notes.ts";
 
 export type Decision = "allow" | "ask" | "never";
 export type ToolResult = { content: string; isError?: boolean; stoppedByUser?: boolean };
@@ -35,6 +36,11 @@ export type ToolContext = {
   depth?: number;
   /** In a session (PLAN 5.1): who else holds `path` in the team's claims, by name, or null. */
   heldBy?: (path: string) => string | null;
+  /** In a session (notes.ts): the team's notes on what it has read, and the light brain writing one, with
+   * whose name a note is under. */
+  teamNotes?: TeamNotes | null;
+  summarize?: (ask: string) => Promise<string | null>;
+  nameOf?: (orb: string) => string;
   /** The person's web-search key (Tavily), read from the keychain when a search needs it (PLAN 3.10). */
   searchKey?: () => Promise<SearchKey | null>;
   /** Puts a line in the conversation for everyone in it (a session's "✓ Agreed", PLAN 2.9). */
@@ -392,14 +398,25 @@ export const TOOLS: ToolDef[] = [
     label: "Reading the web",
     description:
       "Read a web page (or a PDF, or JSON) and get its text. This is how a source is actually read. `prompt` says what you are looking for: it picks which parts of a long page are kept. Only http and https; private and local addresses are refused.",
-    parameters: obj({ url: { type: "string" }, prompt: { type: "string", description: "What you want from the page." } }, ["url"]),
+    parameters: obj({ url: { type: "string" }, prompt: { type: "string", description: "What you want from the page." }, full: { type: "boolean", description: "In a session, when a teammate already read this page: the whole page, not the team's note on it." } }, ["url"]),
     describe: (a) => `read ${s(a.url)}`,
     decision: "allow",
     untrusted: "page",
     precheck: (a) => (/^https?:\/\//i.test(s(a.url)) ? null : "Only http and https addresses can be read."),
     async run(a, ctx) {
       if (ctx.signal?.aborted) return STOPPED;
-      return webFetch(a, ctx.signal);
+      // a page a teammate already read: its note, or the kept page if asked for whole (notes.ts)
+      const notes = ctx.teamNotes ?? null;
+      const kept = notes ? notes.find(s(a.url)) : null;
+      if (notes && kept && kept.by !== ctx.orb) {
+        const who = ctx.nameOf?.(kept.by) ?? kept.by;
+        if (a.full === true) return { content: `${kept.page}\n\n(The page as ${who} read it, kept in the team's notes.)` };
+        const note = kept.note ?? (ctx.summarize ? await ctx.summarize(noteAsk(kept.page)).then((n) => (n ? notes.keepNote(s(a.url), who, n) : null), () => null) : null);
+        if (note) return { content: `From the team's notes: ${who} read ${kept.url} and noted:\n\n${note}\n\n(This note stands in for the page. If you need more than it says, web_fetch the same address with full: true.)` };
+      }
+      const out = await webFetch(a, ctx.signal);
+      if (notes && !out.isError && !out.stoppedByUser) notes.keepPage(s(a.url), ctx.orb, out.content);
+      return out;
     },
   },
   {
