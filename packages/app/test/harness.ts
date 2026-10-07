@@ -94,11 +94,12 @@ export async function measure(page: Page): Promise<Finding[]> {
       return null;
     };
     // a row that scrolls sideways on purpose (ui/Balanced.tsx OneLine, the tab bar) holds what does
-    // not fit inside its own box: that is scrolled, not spilled; the scroller itself is still checked
+    // not fit inside its own box: that is scrolled, not spilled; the scroller itself is still checked.
+    // So does a window the app moves over something bigger (data-viewport: a phone's floor, by room)
     const scrolled = (el: Element): boolean => {
       for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
         const o = getComputedStyle(p).overflowX;
-        if (o === "auto" || o === "scroll") return true;
+        if (o === "auto" || o === "scroll" || p.hasAttribute("data-viewport")) return true;
       }
       return false;
     };
@@ -114,7 +115,8 @@ export async function measure(page: Page): Promise<Finding[]> {
         const c = clip.getBoundingClientRect();
         if (r.left < c.left - 1 || r.right > c.right + 1) out.push({ kind: "spill", what: `${name(el)} is cut by ${name(clip)}` });
       }
-      const cut = s.textOverflow === "ellipsis" || s.overflowX === "auto" || s.overflowX === "scroll";
+      // a window onto something bigger, moved by the app (a phone's floor, one room at a time: data-viewport) cuts on purpose
+      const cut = s.textOverflow === "ellipsis" || s.overflowX === "auto" || s.overflowX === "scroll" || el.hasAttribute("data-viewport");
       // an SVG element has no scroll box (its scrollWidth means nothing); the spill check above covers it
       const svg = el instanceof SVGElement;
       // a floor tag's hit area (::after, 13 px round it: orbs.tsx, PLAN 2.17) is a finger's room, not content

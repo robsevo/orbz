@@ -59,6 +59,30 @@ export const ROOMS: Room[] = [
 /** The corridor under the rooms. */
 export const CORRIDOR: Rect = { x: 0, y: 300, w: W, h: ROW_A - 300 };
 
+// ── a phone's views (owner, 10-07: "for mobile ... can we make it by room on mobile and the user can switch?") ──
+export type ViewId = "all" | Room["id"] | Zone["id"];
+/** What a phone shows, one at a time: the whole office, each room, each department, the games corner. */
+export const VIEWS: { id: ViewId; name: string; hue: HueName }[] = [
+  { id: "all", name: "Whole office", hue: "azure" },
+  ...ROOMS.map((r) => ({ id: r.id, name: r.name, hue: r.hue })),
+  ...ZONES.map((z) => ({ id: z.id, name: z.name, hue: z.hue })),
+];
+/** A view's part of the floor, with a little room round it so nothing at its edge is cut; the whole office has none. */
+export function viewRect(id: ViewId): Rect | null {
+  const r = ROOMS.find((x) => x.id === id)?.rect ?? ZONES.find((x) => x.id === id)?.rect;
+  if (!r) return null;
+  const pad = 10;
+  const x = Math.max(0, r.x - pad);
+  const y = Math.max(0, r.y - pad - 18); // room above for the names over the orbs at its top
+  return { x, y, w: Math.min(W, r.x + r.w + pad) - x, h: Math.min(H, r.y + r.h + pad) - y };
+}
+/** The department most of the office sits in (a phone opens on it); the whole office when no one does. */
+export function busiest(desks: Map<string, Desk>): ViewId {
+  const n = new Map<Family, number>();
+  for (const d of desks.values()) n.set(d.zone, (n.get(d.zone) ?? 0) + 1);
+  return [...n].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "all";
+}
+
 // ── desks ─────────────────────────────────────────────────────────────────────────────────────────
 export const DESK = { w: 96, h: 36 } as const;
 export type Desk = { zone: Family; n: number; rect: Rect; seat: Spot; approach: Spot; monitor: "left" | "right" };

@@ -139,3 +139,56 @@ test("the office is the floor: an orb at work at its desk, a Brainstorm at the m
   releaseGus();
   releaseAda();
 });
+
+test("on a phone the office goes room by room: it opens on the busiest department, a chip takes it to any room, the choice is kept; a desk shows it whole", { skip, timeout: 200_000 }, async (t) => {
+  const data = mkdtempSync(join(tmpdir(), "orbs-floor-rooms-"));
+  t.after(() => rmSync(data, { recursive: true, force: true }));
+  const h = Home.open({ dataDir: data, protect: [], spendCapUsd: null });
+  t.after(() => h.close());
+  h.start();
+  h.about.setName("Robin");
+  // two in Build, one in Life: Build is the busiest
+  h.inbox.addOrb("gus", "Gus", "devops", { shape: "bean", eyes: "classic", hue: "cornflower" });
+  h.inbox.addOrb("tad", "Tad", "frontend", { shape: "bean", eyes: "classic", hue: "violet" });
+  h.inbox.addOrb("pip", "Pip", "assistant", { shape: "egg", eyes: "classic", hue: "mint" });
+  const d = await serve(h, { port: 0, appDir: dist });
+  t.after(() => d.close());
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: "dark", hasTouch: true, isMobile: true });
+  t.after(() => ctx.close());
+  const page = await ctx.newPage();
+  await page.goto(d.pairLink());
+  await page.locator("[data-floor-plan]").waitFor({ timeout: 30_000 });
+  await page.waitForTimeout(800);
+  const at = () => page.evaluate(() => {
+    const v = document.querySelector<HTMLElement>("[data-floor-view]")!;
+    const plan = document.querySelector<HTMLElement>("[data-floor-plan]")!;
+    return { room: v.getAttribute("data-viewport"), left: v.scrollLeft, top: v.scrollTop, k: plan.clientWidth / 1200, w: v.clientWidth, h: v.clientHeight };
+  });
+  await page.locator('[data-view-choice="build"][aria-pressed="true"]').waitFor();
+  let a = await at();
+  // Build is { x: 12, y: 352, w: 360, h: 196 }, shown with 10 round it and 18 above for the names
+  assert.equal(a.room, "room");
+  assert.ok(Math.abs(a.left - 2 * a.k) <= 1 && Math.abs(a.top - 324 * a.k) <= 1, `the window on Build (${JSON.stringify(a)})`);
+  assert.ok(Math.abs(380 * a.k - a.w) <= 1, "Build the width of the screen");
+  assert.deepEqual(await measure(page), [], "nothing spills, a room at a time");
+  // the kitchen
+  await page.locator('[data-view-choice="kitchen"]').click();
+  await page.waitForTimeout(300);
+  a = await at();
+  assert.ok(Math.abs(a.left - 798 * a.k) <= 1 && Math.abs(a.top - 56 * a.k) <= 1, `the window on the kitchen (${JSON.stringify(a)})`);
+  // kept on this device
+  await page.reload();
+  await page.locator('[data-view-choice="kitchen"][aria-pressed="true"]').waitFor({ timeout: 30_000 });
+  // the whole office: the floor as before, wider than the screen and swiped
+  await page.locator('[data-view-choice="all"]').click();
+  await page.waitForTimeout(300);
+  a = await at();
+  assert.equal(a.room, null);
+  assert.equal(await page.locator("[data-floor-view]").evaluate((el) => getComputedStyle(el).overflowX), "auto", "swiped, as before");
+  // a desk shows it whole: no chips
+  const desk = await (await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: "dark" })).newPage();
+  await desk.goto(d.pairLink());
+  await desk.locator("[data-floor-plan]").waitFor({ timeout: 30_000 });
+  assert.equal(await desk.locator("[data-view-choice]").count(), 0);
+  await desk.context().close();
+});

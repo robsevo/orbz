@@ -11,7 +11,7 @@ import { FAMILIES, SPECIALTIES, sheetOf, type Character, type Family } from "../
 import type { Gesture } from "../orb/life.ts";
 import type { Mood } from "../orb/mood.ts";
 import { WORN } from "../orb/useMood.ts";
-import { Balanced } from "../ui/Balanced.tsx";
+import { Balanced, OneLine } from "../ui/Balanced.tsx";
 import { idOf, type CalendarEntry, type Meeting, type Notice, type Office } from "../home/link.ts";
 
 /** A meeting under way, by the orbs' names (the home's ids turned to names). */
@@ -20,6 +20,7 @@ type Meet = Meeting;
 const MEET_WALK_MS = 12_000;
 import type { Route } from "../ui/nav.ts";
 import { DeskPiece, FLOOR_CSS, MeetingTable, PingPong, Room, SideTables, skyAt, type Screen } from "./art.tsx";
+import { busiest, VIEWS, viewRect, type ViewId } from "./plan.ts";
 import { DESKS, H, POIS, ROOMS, SEATS, W, WALL, ZONES, dice, dwell, isMeeting, meetPlan, meetSpot, next, route, seating, sentBy, speed, type Desk, type Plan, type PoiId, type Spot, type Traits } from "./plan.ts";
 
 /** An orb's size on the plan (its window's width). */
@@ -40,6 +41,8 @@ type Line = { at: number; text: string; orb: string | null };
 const traitsOf = (c: Character): Traits => Object.fromEntries(sheetOf(c).traits.map((t) => [t.name, t.value])) as Traits;
 const time = (at: number): string => new Date(at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 const today = (now: Date): string => `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+/** Which room a phone's floor shows, kept on this device. */
+const VIEW_KEY = "orbs.floor.view";
 const greeting = (h: number): string => (h < 5 ? "Working late" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening");
 
 export function Floor({ home, office, moods, person, go }: { home: Office | null; office: Character[]; moods: Record<string, Mood>; person: string | null; go: (r: Route) => void }) {
@@ -55,13 +58,43 @@ export function Floor({ home, office, moods, person, go }: { home: Office | null
     return () => ro.disconnect();
   }, []);
   const phone = width > 0 && width < 640;
-  const scale = !width ? 0.75 : phone ? 0.62 : Math.min(1.05, width / W);
+  // on a phone, one room at a time, the width of the screen, and chips to go from one to another (owner, 10-07:
+  // "can we make it by room on mobile and the user can switch?"); the choice is this device's
+  const [picked, setPicked] = useState<ViewId | null>(() => {
+    try {
+      const v = globalThis.localStorage?.getItem(VIEW_KEY);
+      return VIEWS.some((x) => x.id === v) ? (v as ViewId) : null;
+    } catch {
+      return null;
+    }
+  });
+  const pick = (v: ViewId): void => {
+    setPicked(v);
+    try {
+      globalThis.localStorage?.setItem(VIEW_KEY, v);
+    } catch {
+      // a private window: for as long as the page is open
+    }
+  };
+  const desks = useMemo(() => seating(office.map((c) => ({ name: c.name, family: SPECIALTIES[c.specialty].family }))), [office]);
+  const view: ViewId = picked ?? busiest(desks); // until you choose, where most of the office sits
+  const shownRect = phone ? viewRect(view) : null;
+  const scale = !width ? 0.75 : shownRect ? width / shownRect.w : phone ? 0.62 : Math.min(1.05, width / W);
   const size = Math.round(ORB * scale);
   const pan = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    // on a phone the floor is wider than the screen: start at its middle
-    if (phone && pan.current) pan.current.scrollLeft = (pan.current.scrollWidth - pan.current.clientWidth) / 2;
-  }, [phone]);
+    const el = pan.current;
+    if (!phone || !el) return;
+    // a room: the floor moved under the window to it; the whole office: wider than the screen, from its middle
+    if (shownRect) {
+      el.scrollLeft = shownRect.x * scale;
+      el.scrollTop = shownRect.y * scale;
+    } else el.scrollLeft = (el.scrollWidth - el.clientWidth) / 2;
+  }, [phone, view, scale]);
+  // the room shown, its chip in sight (a block, not an arrow's value: scrollIntoView returns a Promise)
+  useEffect(() => {
+    if (phone) box.current?.querySelector(`[data-view-choice="${view}"]`)?.scrollIntoView({ block: "nearest", inline: "center" });
+  }, [phone, view]);
 
   // ── the clock: the windows' sky, the wall clock, the greeting ──
   const [now, setNow] = useState(() => new Date());
@@ -155,7 +188,6 @@ export function Floor({ home, office, moods, person, go }: { home: Office | null
   }, [home, nameOf]);
 
   // ── who sits where, and the walking ──
-  const desks = useMemo(() => seating(office.map((c) => ({ name: c.name, family: SPECIALTIES[c.specialty].family }))), [office]);
   const sims = useRef(new Map<string, Sim>());
   const els = useRef(new Map<string, HTMLElement>());
   const bobs = useRef(new Map<string, HTMLElement>());
@@ -403,7 +435,18 @@ export function Floor({ home, office, moods, person, go }: { home: Office | null
 
       {/* the floor */}
       <div ref={box} style={{ minWidth: 0 }}>
-        <div ref={pan} data-floor-view style={{ overflowX: phone ? "auto" : "visible", overflowY: "hidden", borderRadius: 20, boxShadow: "inset 0 0 0 1px var(--hairline)", overscrollBehaviorX: "contain", scrollbarWidth: "thin" }}>
+        {phone && (
+          // the rooms, a press each: the floor goes to the one you choose
+          <OneLine style={{ justifyContent: "flex-start", marginBottom: 8 }} gap={6}>
+            {VIEWS.map((v) => (
+              <button key={v.id} type="button" data-view-choice={v.id} data-orb={v.hue} aria-pressed={view === v.id} onClick={() => pick(v.id)}
+                style={{ flex: "0 0 auto", font: "600 13px/18px var(--font)", border: 0, borderRadius: 999, padding: "6px 12px", cursor: "pointer", color: view === v.id ? "var(--text-1)" : "var(--text-3)", background: view === v.id ? "var(--accent-fill)" : "var(--fill)", boxShadow: view === v.id ? "inset 0 0 0 1.5px var(--accent)" : "inset 0 0 0 .5px var(--hairline)" }}>
+                {v.name}
+              </button>
+            ))}
+          </OneLine>
+        )}
+        <div ref={pan} data-floor-view data-viewport={shownRect ? "room" : undefined} style={{ overflowX: shownRect ? "hidden" : phone ? "auto" : "visible", overflowY: "hidden", ...(shownRect && { height: px(shownRect.h) }), borderRadius: 20, boxShadow: "inset 0 0 0 1px var(--hairline)", overscrollBehaviorX: "contain", scrollbarWidth: "thin" }}>
           <div data-floor-plan style={{ position: "relative", width: px(W), height: px(H), borderRadius: 20, overflow: "hidden", isolation: "isolate" }}>
             <Room now={now} sky={sky} />
             {DESKS.map((d) => {
@@ -493,7 +536,7 @@ export function Floor({ home, office, moods, person, go }: { home: Office | null
             })}
           </div>
         </div>
-        {phone && <span style={{ ...small, display: "block", marginTop: 6, textAlign: "center" }}>Swipe to look around the office · press an orb for its profile</span>}
+        {phone && <span style={{ ...small, display: "block", marginTop: 6, textAlign: "center" }}>{shownRect ? "Press a room above to go there · press an orb for its profile" : "Swipe to look around the office · press an orb for its profile"}</span>}
       </div>
 
       {/* the dashboard: who is doing what, today, what just happened */}
