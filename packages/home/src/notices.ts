@@ -9,14 +9,15 @@
 //   - the reading library's night (PLAN 3.12): pages that changed on a followed site, or a site
 //     that has read nothing three times running, once a source a day;
 //   - office life (PLAN 5.9): two orbs who became good friends or fell out, and a lesson a friend
-//     offered, which waits for your Keep or Not now (an orb learning is the floor's, 1.6 and 3.5).
+//     offered, which waits for your Keep or Not now (an orb learning is the floor's, 1.6 and 3.5);
+//   - the board's daily report (PLAN 5.18), the day's newest only.
 // Quiet: a count on the side menu, never a sound. A phone hears only what you choose (with 2.7).
 import type { DatabaseSync } from "node:sqlite";
 import type { Clock } from "./clock.ts";
 import { tx } from "./db.ts";
 import type { EventLog, HomeEvent } from "./events.ts";
 
-export type NoticeKind = "bill" | "reminder" | "approval" | "done" | "promotion" | "performance" | "reading" | "friends" | "learning";
+export type NoticeKind = "bill" | "reminder" | "approval" | "done" | "promotion" | "performance" | "reading" | "friends" | "learning" | "report";
 export type Notice = {
   id: number; kind: NoticeKind; orb: string; conversation: string | null; card: number | null; reminder: number | null;
   title: string; detail: string; due: string | null; at: number;
@@ -224,6 +225,15 @@ export class Notices {
         title: fell ? `${x} and ${y} have fallen out` : `${x} and ${y} are good friends now`,
         detail: fell ? "They still work together; each knows to be kind and plain with the other" : "They work well together, and who fits a team's work weighs it",
       });
+    } else if (e.type === "report.made") {
+      // the board's report (PLAN 5.18): yesterday's is put away by today's
+      const ideas = (e.data.ideas as unknown[] | undefined)?.length ?? 0;
+      const office = (e.data.office as unknown[] | undefined)?.length ?? 0;
+      const world = (e.data.world as unknown[] | undefined)?.length ?? 0;
+      const day = new Date(e.at).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+      const parts = [ideas && `${ideas} ${ideas === 1 ? "idea" : "ideas"} to make money`, world && `${world} from the world`, office && `${office} from the office`].filter(Boolean);
+      this.#settle("kind = 'report'");
+      this.#add(`report:${e.seq}`, { kind: "report", orb: e.orb ?? "", conversation: null, title: `The board's report for ${day}`, detail: parts.length ? parts.join(" · ") : "A quiet day: nothing new", due: null });
     } else if (e.type === "social.lesson" && Array.isArray(e.data.names)) {
       // a lesson a friend offered: an orb learning is the floor's (1.6, 3.5), so it waits for your yes
       const [from, to] = e.data.names as string[];

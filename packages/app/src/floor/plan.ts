@@ -54,7 +54,9 @@ export type Room = { id: "lounge" | "meeting" | "kitchen"; name: string; hue: Hu
 const TOP_H = 300 - WALL;
 export const ROOMS: Room[] = [
   { id: "lounge", name: "Lounge", hue: "iris", rect: { x: 0, y: WALL, w: 392, h: TOP_H }, door: { x: 150, w: 90 } },
-  { id: "meeting", name: "Meeting room", hue: "teal", rect: { x: 404, y: WALL, w: 392, h: TOP_H }, door: { x: 555, w: 90 } },
+  // the Board room (owner, 10-07: "Add a Board room as well for those important meetings in the office, replace the meeting
+  // room because we already have sessions we can create in sessions"): its table is the board's, met when a proposal is voted
+  { id: "meeting", name: "Board room", hue: "honey", rect: { x: 404, y: WALL, w: 392, h: TOP_H }, door: { x: 555, w: 90 } },
   { id: "kitchen", name: "Kitchen", hue: "apricot", rect: { x: 808, y: WALL, w: 392, h: TOP_H }, door: { x: 955, w: 90 } },
 ];
 /** The corridor under the rooms. */

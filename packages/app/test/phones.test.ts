@@ -171,24 +171,26 @@ test("an iPhone never zooms into a text box: as an iPhone the page caps its scal
   assert.doesNotMatch(await viewport("Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36"), /maximum-scale/, "control: Android keeps pinch-to-zoom");
 });
 
-test("a row too wide for a phone sits in a track with an arrow at each end, dimmed where there is no more; a row that fits has none; Chat and Career beside the name; the career page centred, its long lists scrolling", { skip, timeout: 120_000 }, async () => {
+test("a row too wide for a phone sits in a track with an arrow at each end, dimmed where there is no more; a row that fits has none; an orb's moods squarer and its gestures small, quieter boxes under them, never a track; Chat and Career beside the name; the career page centred, its long lists scrolling", { skip, timeout: 120_000 }, async () => {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: "dark", hasTouch: true, isMobile: true });
   try {
     const page = await ctx.newPage();
     await page.goto(door.pairLink().replace("orbs.html", "orbs.html?splash=0"));
     await page.locator(".orbs-window").waitFor({ timeout: 30_000 });
-    await page.evaluate(() => (location.hash = "#/office/Ada"));
-    const moves = page.locator(".side-scroll", { has: page.getByRole("button", { name: "Wiggle", exact: true }) });
+    // the floor's rooms, a chip each (its gestures were the example till 10-07, when they left their track)
+    await page.evaluate(() => (location.hash = "#/office"));
+    const moves = page.locator(".side-scroll", { has: page.locator("[data-view-choice]") });
     await moves.waitFor({ timeout: 20_000 });
+    await moves.locator(".one-line").evaluate((el) => void (el.scrollLeft = 0));
     await page.waitForTimeout(500);
-    assert.equal(await moves.getAttribute("data-over"), "true", "the moves are wider than a phone: in a track");
+    assert.equal(await moves.getAttribute("data-over"), "true", "the rooms are wider than a phone: in a track");
     const left = moves.getByRole("button", { name: "Scroll left" });
     const right = moves.getByRole("button", { name: "Scroll right" });
     assert.deepEqual([await left.isDisabled(), await right.isDisabled()], [true, false], "at its start: more only to the right");
     const at = () => moves.locator(".one-line").evaluate((el) => el.scrollLeft);
     await right.click();
     await page.waitForFunction(() => {
-      const row = [...document.querySelectorAll(".side-scroll")].find((t) => t.textContent?.includes("Wiggle"))!.querySelector(".one-line")!;
+      const row = [...document.querySelectorAll(".side-scroll")].find((t) => t.querySelector("[data-view-choice]"))!.querySelector(".one-line")!;
       return row.scrollLeft > 40;
     }, undefined, { timeout: 5_000 });
     assert.equal(await left.isDisabled(), false, "moved on: more to the left now");
@@ -197,10 +199,31 @@ test("a row too wide for a phone sits in a track with an arrow at each end, dimm
       await page.waitForTimeout(500);
     }
     assert.equal(await right.isDisabled(), true, `at its end: no more to the right (at ${await at()})`);
-    // control: the moods fit a phone, so they are a plain row
+    // control: an orb's moods fit a phone, so they are a plain row
+    await page.evaluate(() => (location.hash = "#/office/Ada"));
     const moods = page.locator(".side-scroll", { has: page.getByRole("button", { name: "Listening" }) });
+    await moods.waitFor({ timeout: 20_000 });
+    await page.waitForTimeout(500);
     assert.equal(await moods.getAttribute("data-over"), null);
     assert.equal(await moods.locator(".side-arrow").count(), 0, "no arrows on a row that fits");
+    // its moods a little more square, its gestures small and quieter under them, two rows, no track (owner, 10-07: "make
+    // the awake listening etc a little more square ... take out the wheel under it, put those as smaller containers
+    // under awake lisening etc with a dimmer font color")
+    const look = (l: ReturnType<typeof page.locator>) => l.evaluate((el) => {
+      const cs = getComputedStyle(el), r = el.getBoundingClientRect();
+      return { radius: parseFloat(cs.borderTopLeftRadius), colour: cs.color, size: parseFloat(cs.fontSize), top: Math.round(r.top), bottom: r.bottom, h: r.height };
+    });
+    const mood = await look(page.locator("[data-mood-pick]").nth(1));
+    assert.ok(mood.radius <= 12, `the moods squarer (${mood.radius} px corners)`);
+    const gestures = page.locator("[data-gesture-pick]");
+    assert.equal(await gestures.count(), 9);
+    assert.equal(await page.locator(".side-scroll [data-gesture-pick]").count(), 0, "not in a track");
+    const g = await Promise.all([...Array(9).keys()].map((i) => look(gestures.nth(i))));
+    const quiet = await page.evaluate(() => { const p = document.createElement("span"); p.style.color = "var(--text-3)"; document.body.append(p); const c = getComputedStyle(p).color; p.remove(); return c; });
+    assert.ok(g.every((x) => x.h <= 32 && x.size < mood.size && x.radius <= 10), `smaller boxes (${JSON.stringify(g[0])})`);
+    assert.ok(g.every((x) => x.colour === quiet) && quiet !== mood.colour, "a dimmer word than the moods'");
+    assert.ok(g[0]!.top > mood.bottom - 1, "under the moods");
+    assert.deepEqual([new Set(g.slice(0, 5).map((x) => x.top)).size, new Set(g.slice(5).map((x) => x.top)).size, g[5]!.top > g[0]!.top], [1, 1, true], "two rows, five then four");
     // Chat and Career, small, on the name's line in its sheet
     const sheet = page.locator(".orbs-sheet");
     const name = (await sheet.locator("h2").boundingBox())!;

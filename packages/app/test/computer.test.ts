@@ -92,7 +92,7 @@ test("his computer: each kind of work as itself, its numbers the file's, him as 
   });
   const page = await ctx.newPage();
   await page.goto(d.pairLink());
-  await page.getByText("CEO Robin").waitFor({ timeout: 30_000 });
+  await page.getByText("Founder Robin").waitFor({ timeout: 30_000 });
   await profile(page, "Hazel"); // the office opens on its floor; the chat is on Hazel's profile
   await page.getByRole("button", { name: "Chat with Hazel" }).click();
   const computer = page.locator('[data-computer="hazel"]');

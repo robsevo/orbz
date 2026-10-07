@@ -29,6 +29,8 @@ export type Dashboard = {
   meetings: { at: number; a: string; b: string; kind: string; place: string; idea: string | null }[];
   coming: CalendarEntry[];
   hiring: { positions: number; applicants: number };
+  /** The board's latest report (PLAN 5.18): its day, its ideas, how many still wait for your verdict, the first. */
+  report: { at: number; ideas: number; open: number; first: { name: string; text: string } | null; chair: string | null } | null;
 };
 
 const dayOf = (t: number): string => {
@@ -112,5 +114,12 @@ export function dashboardOf(home: Home): Dashboard {
     meetings,
     coming,
     hiring: { positions: home.recruiter.positions().length, applicants: home.recruiter.applicants().length },
+    report: (() => {
+      const r = home.reports.latest();
+      if (!r) return null;
+      const open = r.ideas.filter((x) => x.verdict === null);
+      const first = open[0] ?? r.ideas[0] ?? null;
+      return { at: r.at, ideas: r.ideas.length, open: open.length, first: first && { name: first.name, text: first.text }, chair: r.chair?.name ?? null };
+    })(),
   };
 }

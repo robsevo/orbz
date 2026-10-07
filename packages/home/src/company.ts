@@ -50,13 +50,17 @@ export function openDepartments(office: readonly string[]): Family[] {
 type Who = { id: string; name: string; specialty: string };
 
 /** What an orb is told about the company and its part in it, by code; null when there is no company yet. */
-export function companyLine(o: { me: Who; founder: string | null; company?: string | null; office: readonly Who[] }): string | null {
+export function companyLine(o: { me: Who; founder: string | null; company?: string | null; office: readonly Who[]; decisions?: readonly string[]; ideas?: readonly { name: string; text: string }[] }): string | null {
   const F = o.founder ?? "the Founder";
   const first = (s: string): Who | undefined => o.office.find((w) => w.specialty === s);
   const ceo = first("ceo"), pa = first("assistant"), cfo = first("cfo");
   if (!ceo && !pa && !cfo) return null;
   const who = [ceo && `${ceo.name} is the CEO and runs it`, pa && `${pa.name} is ${F}'s personal assistant`, cfo && `${cfo.name} is the CFO and keeps the books`].filter(Boolean).join("; ");
   const lines = [`The company${o.company ? `, ${o.company}` : ""}: ${F} is its Founder; ${who}. Take direction from the CEO and follow what the board decides.`];
+  // what the board has carried, newest first: every orb follows it ("and the orbs really do listen")
+  if (o.decisions?.length) lines.push(`The board has decided: ${o.decisions.map((d) => `"${d}"`).join("; ")}.`);
+  // the ideas the Founder approved from the board's report (PLAN 5.18), newest first: the office works toward them
+  if (o.ideas?.length) lines.push(`${F} approved these ideas from the board's report: ${o.ideas.map((x) => `${x.name}'s "${x.text}"`).join("; ")}.`);
   const money = o.office.filter((w) => SPECIALTY_FAMILIES[w.specialty as Specialty] === "finance").map((w) => w.name);
   if (o.me.specialty === "ceo") {
     lines.push(`You are the CEO. ${pa ? pa.name : "The personal assistant"} keeps ${F}'s day and brings you what the company should do: take it, decide who does it (ask_orb, or a session you lead), and send ${F} the result through ${pa ? pa.name : "the assistant"} in a few lines. You chair the board.`);

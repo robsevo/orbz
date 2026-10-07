@@ -59,7 +59,7 @@ test("the calendar: a month of bills and schedules, a bill moved, a schedule's t
   t.after(() => ctx.close());
   const page = await ctx.newPage();
   await page.goto(d.pairLink());
-  await page.getByText("CEO Robin").waitFor({ timeout: 30_000 });
+  await page.getByText("Founder Robin").waitFor({ timeout: 30_000 });
   await page.getByRole("button", { name: "Calendar", exact: true }).click();
   assert.equal(await page.evaluate(() => location.hash), "#/calendar");
   await page.locator(`[data-month="${thisMonth(1).slice(0, 7)}"]`).waitFor();

@@ -19,9 +19,10 @@ type Meet = Meeting;
 /** How long the walk to a meeting is shown: after that, the two are already there when the floor opens. */
 const MEET_WALK_MS = 12_000;
 import type { Route } from "../ui/nav.ts";
+import { CameraFeed } from "./camera.tsx";
 import { DeskPiece, FLOOR_CSS, MeetingTable, PingPong, Room, SideTables, skyAt, type Screen } from "./art.tsx";
 import { busiest, VIEWS, viewRect, zoneOf, type ViewId } from "./plan.ts";
-import { DESKS, H, POIS, ROOMS, SEATS, W, WALL, ZONES, dice, dwell, isMeeting, meetPlan, meetSpot, next, route, seating, sentBy, speed, type Desk, type Plan, type PoiId, type Spot, type Traits } from "./plan.ts";
+import { DESKS, H, POIS, ROOMS, SEATS, W, WALL, ZONES, dice, dwell, meetPlan, meetSpot, next, route, seating, sentBy, speed, type Desk, type Plan, type PoiId, type Spot, type Traits } from "./plan.ts";
 
 /** An orb's size on the plan (its window's width). */
 const ORB = 84;
@@ -139,16 +140,13 @@ export function Floor({ home, office, moods, person, go }: { home: Office | null
       event: (e) => {
         const who = e.orb ? (nameOf.get(e.orb) ?? e.orb) : null;
         const d = e.data ?? {};
-        if (e.type === "run.started" && e.orb) {
-          said.current[e.orb] = "";
-          if (isMeeting(e.conversation)) setMeeting((m) => ({ ...m, [e.orb!]: e.conversation! }));
-        }
+        if (e.type === "run.started" && e.orb) said.current[e.orb] = "";
+        // a board vote (PLAN 5.17): its members go to the Board room's table, and back to their desks once it is decided;
+        // a session meets in Sessions, not on the floor (owner, 10-07)
+        if (e.type === "board.proposed" && Array.isArray(d.members)) setMeeting((m) => ({ ...m, ...Object.fromEntries((d.members as string[]).map((o) => [o, "board"])) }));
+        if (e.type === "board.decided") setMeeting((m) => Object.fromEntries(Object.entries(m).filter(([, v]) => v !== "board")));
         if ((e.type === "run.finished" || e.type === "run.interrupted") && e.orb) {
           const orb = e.orb;
-          setMeeting((m) => {
-            const { [orb]: _, ...rest } = m;
-            return rest;
-          });
           setDoing((m) => {
             const { [orb]: _, ...rest } = m;
             return rest;
@@ -399,7 +397,7 @@ export function Floor({ home, office, moods, person, go }: { home: Office | null
   }
   const rally = ["ping1", "ping2"].every((p) => office.some((c) => shown[c.name]?.poi === p && shown[c.name]?.arrived));
   const inMeeting = Object.values(meeting)[0];
-  const meetingTitle = inMeeting ? sessions[Number(/^team:(\d+)/.exec(inMeeting)?.[1])] ?? "A Brainstorm" : null;
+  const meetingTitle = inMeeting ? "A board vote" : null;
   const sky = skyAt(now.getHours());
   const px = (v: number): number => v * scale;
   // where a department's Hiring tag stands (owner, 10-06): a free desk in the zone it works in, else that zone's door;
@@ -466,6 +464,9 @@ export function Floor({ home, office, moods, person, go }: { home: Office | null
             ))}
           </OneLine>
         )}
+        {/* the floor through a camera (owner, 10-07: "vibe it like a camera room"): the camera over the view, so it
+            stays put while a phone pans; each room a phone goes to is a camera of its own */}
+        <CameraFeed n={shownRect ? VIEWS.findIndex((v) => v.id === view) + 1 : 1} room={shownRect ? VIEWS.find((v) => v.id === view)!.name : "Whole office"}>
         <div ref={pan} data-floor-view data-viewport={shownRect ? "room" : undefined} style={{ overflowX: shownRect ? "hidden" : phone ? "auto" : "visible", overflowY: "hidden", ...(shownRect && { height: px(shownRect.h) }), borderRadius: 20, boxShadow: "inset 0 0 0 1px var(--hairline)", overscrollBehaviorX: "contain", scrollbarWidth: "thin" }}>
           <div data-floor-plan style={{ position: "relative", width: px(W), height: px(H), borderRadius: 20, overflow: "hidden", isolation: "isolate" }}>
             <Room now={now} sky={sky} />
@@ -486,10 +487,10 @@ export function Floor({ home, office, moods, person, go }: { home: Office | null
             {ROOMS.map((r) => (
               <span key={r.id} data-orb={r.hue} style={{ ...sign, left: px(r.door.x + r.door.w / 2), top: px(262), translate: "-50% 0" }}>{r.name}</span>
             ))}
-            {/* the meeting room's screen: the Brainstorm going on, or free to book */}
-            <button type="button" className="orbs-tag" data-meeting-screen onClick={() => go({ room: "sessions", id: null, tab: "brainstorm" })} data-orb="teal"
+            {/* the Board room's screen: the vote going on, or where to put a proposal (the org chart's board) */}
+            <button type="button" className="orbs-tag" data-meeting-screen onClick={() => go({ room: "org" })} data-orb="honey"
               style={{ position: "absolute", left: px(ROOMS[1]!.rect.x + 111), top: px(15), width: px(170), height: px(52), border: 0, borderRadius: 4, background: "transparent", cursor: "pointer", display: "grid", placeItems: "center", padding: "0 6px", zIndex: 1 }}>
-              <span style={{ font: "700 11px/14px var(--font)", color: "var(--text-1)", textAlign: "center", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{meetingTitle ? `Now: ${meetingTitle}` : "Free · start a session"}</span>
+              <span style={{ font: "700 11px/14px var(--font)", color: "var(--text-1)", textAlign: "center", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{meetingTitle ? `Now: ${meetingTitle}` : "The board · put a proposal"}</span>
             </button>
             {/* the family calendar shows today */}
             {(() => {
@@ -556,6 +557,7 @@ export function Floor({ home, office, moods, person, go }: { home: Office | null
             })}
           </div>
         </div>
+        </CameraFeed>
         {phone && <span style={{ ...small, display: "block", marginTop: 6, textAlign: "center" }}>{shownRect ? "Press a room above to go there · press an orb for its profile" : "Swipe to look around the office · press an orb for its profile"}</span>}
       </div>
 

@@ -206,6 +206,17 @@ export function HomeRoom({ home, office, person, moods, go }: { home: Office | n
       ) : <span style={small}>No sessions yet: start one to put orbs to work on something together.</span>}
     </Section>
   );
+  // the board's report (PLAN 5.18): the morning's ideas wait here for your verdict
+  const board = d && (
+    <Section title="From the board" label="From the board" more={{ words: d.report ? "Read the report" : "The report", go: () => go({ room: "report" }) }}>
+      {d.report ? (
+        <div data-home-report style={{ display: "grid", gap: 6, minWidth: 0 }}>
+          <span style={body}>{`${new Date(d.report.at).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}${d.report.chair ? `, from ${d.report.chair}` : ""}: ${plural(d.report.ideas, "idea")} to make money${d.report.open ? `, ${d.report.open} waiting for your verdict` : ""}`}</span>
+          {d.report.first && <span style={{ ...small, color: "var(--text-2)", textWrap: "pretty" }}>{`${d.report.first.name}: “${d.report.first.text}”`}</span>}
+        </div>
+      ) : <span style={small}>The board sends its first report at 08:00: ideas to make money from your orbs, the office, the world, who to hire.</span>}
+    </Section>
+  );
   const life = d && (
     <Section title="Life in the office" label="Life in the office" more={d.hiring.positions ? { words: `Hiring: ${plural(d.hiring.applicants, "applicant")}`, go: () => go({ room: "recruiter" }) } : undefined}>
       {d.meetings.length ? (
@@ -285,11 +296,11 @@ export function HomeRoom({ home, office, person, moods, go }: { home: Office | n
             <>
               {wide ? (
                 <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: "var(--s4)", alignItems: "start", minWidth: 0 }}>
-                  <div style={column}>{coming}{sessions}{life}</div>
+                  <div style={column}>{board}{coming}{sessions}{life}</div>
                   <div style={column}>{top}{lately}</div>
                 </div>
               ) : (
-                <>{coming}{top}{lately}{sessions}{life}</>
+                <>{board}{coming}{top}{lately}{sessions}{life}</>
               )}
             </>
           )}

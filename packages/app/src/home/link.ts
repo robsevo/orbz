@@ -39,7 +39,7 @@ export type CalendarEntry =
   | { kind: "event"; id: string; calendar: string; title: string; day: string; time: string | null; until: string | null; location: string | null };
 /** The notification centre (PLAN 2.11): what needs you or happened, as the home keeps it. */
 export type Notice = {
-  id: number; kind: "bill" | "reminder" | "approval" | "done" | "promotion" | "performance" | "reading" | "friends" | "learning"; orb: string; conversation: string | null; card: number | null; reminder: number | null;
+  id: number; kind: "bill" | "reminder" | "approval" | "done" | "promotion" | "performance" | "reading" | "friends" | "learning" | "report"; orb: string; conversation: string | null; card: number | null; reminder: number | null;
   title: string; detail: string; due: string | null; at: number;
   /** A lesson a friend offered (PLAN 5.9), kept or not from its notice. */
   lesson?: number | null;
@@ -87,6 +87,26 @@ export type SchoolSubject = {
 };
 export type ReportCardState = { orb: string; atSchool: boolean; passMark: number | null; since: number | null; subjects: SchoolSubject[]; diplomas: { kind: string; name: string; at: number; score: number }[] };
 /** A career page (PLAN 5.6). */
+/** The company's board (PLAN 5.16): who sits by which post, its last election, its proposals and their votes. */
+export type BoardPost = "chair" | "vice" | "secretary" | "treasurer" | "director";
+/** The board's daily report (PLAN 5.18): each idea an orb's, the rest by code (the home's report.ts). */
+export type Report = {
+  id: number; at: number; day: string;
+  chair: { orb: string; name: string } | null;
+  ideas: { id: string; orb: string; name: string; text: string; verdict: "approved" | "passed" | null }[];
+  world: { title: string; url: string; host: string; orb: string; name: string }[];
+  office: { text: string; orb: string | null }[];
+  people: { well: { orb: string; name: string; why: string }[]; fit: { orb: string; name: string; why: string }[] };
+  hiring: { positions: string[]; applicants: number[]; returning: { id: string; name: string; specialty: string }[] };
+  money: { treasurer: string | null; yesterdayUsd: number; weekUsd: number; bills: { title: string; due: string; amount: string | null }[] };
+};
+export type BoardState = {
+  size: number;
+  seats: { orb: string; name: string; post: BoardPost }[];
+  election: { at: number; size: number; votes: { voter: string; for: string }[]; ranking: string[] } | null;
+  proposals: { id: number; at: number; text: string; by: string; carried: boolean | null; votes: { orb: string; name: string; post: BoardPost; vote: "yes" | "no" | "abstain"; why: string }[] }[];
+};
+
 /** The home page's look at the office (owner, 10-07: "a nice home page the app can default to ... with a nice dashboard
  * and stats"), read by the home's code (home/src/dashboard.ts). */
 export type DashboardState = {
@@ -104,6 +124,7 @@ export type DashboardState = {
   meetings: { at: number; a: string; b: string; kind: string; place: string; idea: string | null }[];
   coming: CalendarEntry[];
   hiring: { positions: number; applicants: number };
+  report: { at: number; ideas: number; open: number; first: { name: string; text: string } | null; chair: string | null } | null;
 };
 
 export type CareerState = Standing & {
@@ -203,6 +224,14 @@ export interface Office {
   thumb(sitting: number, n: number, up: boolean): Promise<void>;
   career(c: Character): Promise<CareerState>;
   dashboard(): Promise<DashboardState>;
+  /** The board (PLAN 5.16), a proposal put to it, an election now. */
+  board(): Promise<BoardState>;
+  /** The board's reports, newest first; one made now; your verdict on an idea (approved gives its orb XP). */
+  reports(): Promise<Report[]>;
+  makeReport(): Promise<void>;
+  judgeIdea(id: string, verdict: "approve" | "pass"): Promise<void>;
+  propose(text: string): Promise<void>;
+  elect(): Promise<void>;
   me(): Promise<Person | null>;
   setName(p: Person): Promise<void>;
   /** A conversation's messages since `since`, and the card waiting in it, if one is. */
@@ -496,6 +525,24 @@ export function doorOffice(base: Character): Office {
     },
     async dashboard() {
       return call<DashboardState>("../dashboard");
+    },
+    async board() {
+      return call<BoardState>("../board");
+    },
+    async reports() {
+      return (await call<{ reports: Report[] }>("../reports")).reports;
+    },
+    async makeReport() {
+      await call("../reports", { method: "POST" });
+    },
+    async judgeIdea(id, verdict) {
+      await call(`../reports/ideas/${encodeURIComponent(id)}/${verdict}`, { method: "POST" });
+    },
+    async propose(text) {
+      await call("../board/proposals", { method: "POST", body: JSON.stringify({ text }) });
+    },
+    async elect() {
+      await call("../board/election", { method: "POST" });
     },
     async me() {
       const { me } = await call<{ me: { name: string | null; since: number | null; company?: string | null } }>("../me");

@@ -25,6 +25,7 @@ export type Route =
   | { room: "notices" }
   | { room: "calendar" }
   | { room: "lab" }
+  | { room: "report" }
   | { room: "org"; school?: string | null }
   | { room: "recruiter"; family?: string | null }
   | { room: "career"; orb: string };
@@ -42,6 +43,7 @@ export function parseRoute(hash: string): Route {
   if (parts[0] === "notices") return { room: "notices" };
   if (parts[0] === "calendar") return { room: "calendar" };
   if (parts[0] === "lab") return { room: "lab" };
+  if (parts[0] === "report") return { room: "report" };
   if (parts[0] === "org") return parts[1] === "school" && parts[2] ? { room: "org", school: parts[2] } : { room: "org" };
   if (parts[0] === "recruiter") return { room: "recruiter", family: parts[1] ?? null };
   if (parts[0] === "career" && parts[1]) return { room: "career", orb: parts[1] };
@@ -59,6 +61,7 @@ export function routeHash(r: Route): string {
   if (r.room === "notices") return "#/notices";
   if (r.room === "calendar") return "#/calendar";
   if (r.room === "lab") return "#/lab";
+  if (r.room === "report") return "#/report";
   if (r.room === "org") return r.school ? `#/org/school/${encodeURIComponent(r.school)}` : "#/org";
   if (r.room === "recruiter") return r.family ? `#/recruiter/${encodeURIComponent(r.family)}` : "#/recruiter";
   if (r.room === "career") return `#/career/${encodeURIComponent(r.orb)}`;

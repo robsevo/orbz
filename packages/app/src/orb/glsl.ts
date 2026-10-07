@@ -429,7 +429,10 @@ vec2 accSDF(vec2 q){
   }
   // rank you can see (owner, 10-07: "when it comes to CEO orbs or CFO orbs, we need new Accessories")
   if (id == 41) {       // a laurel wreath, the CEO's: gold leaves round the top of his head, a gem at its front
-    float leaves = 1e5;
+    // the branch the leaves grow on, through each leaf and the gem, so the wreath is one piece (10-07: its leaves
+    // alone were three, characters.test.ts)
+    vec2 c = q - vec2(0.0, 0.52);
+    float leaves = max(abs(length(c) - 0.62) - 0.02, (abs(atan(c.x, -c.y)) - 1.16)*0.62);
     for (int i = 0; i < 5; i++) {
       for (int s = -1; s <= 1; s += 2) {
         float a = float(s)*(0.18 + 0.24*float(i));

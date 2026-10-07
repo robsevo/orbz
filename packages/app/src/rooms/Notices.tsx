@@ -8,8 +8,8 @@ import type { Character } from "../orb/spec.ts";
 import { idOf, type YourDay, type MorningCard, type Notice, type Office, type Undo } from "../home/link.ts";
 import type { Route } from "../ui/nav.ts";
 
-const MARK: Record<Notice["kind"], string> = { bill: "¤", reminder: "◷", approval: "!", done: "✓", promotion: "↑", performance: "◔", reading: "≡", friends: "♥", learning: "✎" };
-const KIND_WORDS: Record<Notice["kind"], string> = { bill: "Bill", reminder: "Reminder", approval: "Waiting for your OK", done: "Finished", promotion: "Ready for promotion", performance: "Weekly card", reading: "Reading", friends: "Office life", learning: "A lesson from a friend" };
+const MARK: Record<Notice["kind"], string> = { bill: "¤", reminder: "◷", approval: "!", done: "✓", promotion: "↑", performance: "◔", reading: "≡", friends: "♥", learning: "✎", report: "❖" };
+const KIND_WORDS: Record<Notice["kind"], string> = { bill: "Bill", reminder: "Reminder", approval: "Waiting for your OK", done: "Finished", promotion: "Ready for promotion", performance: "Weekly card", reading: "Reading", friends: "Office life", learning: "A lesson from a friend", report: "From the board" };
 const button: CSSProperties = { font: "600 13px/18px var(--font)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 10, padding: "6px 12px", cursor: "pointer", boxShadow: "inset 0 0 0 .5px var(--hairline)", minHeight: 32 };
 
 /** What is out, kept up to date as it comes and goes (on this device or another). */
@@ -175,7 +175,7 @@ export function NoticesRoom(o: { home: Office | null; office: Character[]; notic
                   <button onClick={() => away(n.id)} aria-label={`Put away: ${n.title}`} style={{ ...button, padding: "6px 10px" }}>
                     ✕
                   </button>
-                  {(n.kind === "promotion" || (n.kind === "performance" && c) || n.kind === "reading" || (n.kind === "learning" && n.lesson) || where) && (
+                  {(n.kind === "promotion" || (n.kind === "performance" && c) || n.kind === "reading" || n.kind === "report" || (n.kind === "learning" && n.lesson) || where) && (
                     <span style={{ gridColumn: "1 / -1", paddingLeft: 38, display: "flex", gap: 6, flexWrap: "wrap" }}>
                       {n.kind === "promotion" && (
                         <>
@@ -201,6 +201,12 @@ export function NoticesRoom(o: { home: Office | null; office: Character[]; notic
                       {n.kind === "reading" && (
                         <button onClick={() => o.go({ room: "lab" })} style={button}>
                           The reading library
+                        </button>
+                      )}
+                      {/* the board's daily report (PLAN 5.18): its own page */}
+                      {n.kind === "report" && (
+                        <button data-sound="pick" onClick={() => o.go({ room: "report" })} style={{ ...button, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)" }}>
+                          Read the report
                         </button>
                       )}
                       {/* his week (PLAN 5.5): the evidence is on his career page */}

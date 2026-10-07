@@ -41,6 +41,8 @@ import { useMood, useMoods, WORN } from "./orb/useMood.ts";
 import { preview, stopPreview } from "./orb/preview.ts";
 import { span } from "./orb/age.ts";
 import { Radar } from "./ui/Radar.tsx";
+import { ReportRoom } from "./rooms/Report.tsx";
+import { useCramped } from "./ui/fill.ts";
 import { OrgRoom } from "./rooms/Org.tsx";
 import { CareerRoom } from "./rooms/Career.tsx";
 import { HomeRoom } from "./rooms/Home.tsx";
@@ -854,6 +856,19 @@ function Card({ c, replies, setReplies, onDelete, others }: { c: Character; repl
 }
 
 /** A speaker, drawn: with its waves when sounds are on, crossed out when they are off. */
+/** The lab's mark (owner, 10-07: "change the lab icon in menu to a labratory flask"): a flask, a little of what is
+ * being tried in it, a bubble rising; drawn in the menu's colour. */
+function FlaskIcon() {
+  return (
+    <svg data-icon="flask" width="16" height="16" viewBox="0 0 16 16" aria-hidden style={{ display: "block", overflow: "visible" }}>
+      <path d="M5.6 9.6 L3.3 13.1 Q2.9 13.9 3.8 13.9 H12.2 Q13.1 13.9 12.7 13.1 L10.4 9.6 Z" fill="currentColor" opacity=".38" />
+      <path d="M6.3 1.6 H9.7 M6.9 1.6 V6.2 L3.1 12.4 Q2.2 14.2 4.2 14.2 H11.8 Q13.8 14.2 12.9 12.4 L9.1 6.2 V1.6" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="7.4" cy="11.6" r=".9" fill="currentColor" />
+      <circle cx="9.3" cy="10.3" r=".6" fill="currentColor" />
+    </svg>
+  );
+}
+
 function SoundIcon({ on }: { on: boolean }) {
   return (
     <svg aria-hidden width={16} height={16} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" style={{ display: "block" }}>
@@ -904,6 +919,7 @@ function App() {
   const [rolls, setRolls] = useState(0);
   const [evolve, setEvolve] = useState<{ c: Character; n: number } | null>(null); // Roll everything: who he was
   const phone = usePhone(); // the hero's orb smaller on a phone (owner, 10-04: "make hero a bit smaller")
+  const smallPhone = useCramped("(max-width: 360px)"); // its gestures three to a row, never one left alone
   // his card says who he is only once he has been shown whole (owner, 10-04: "only show the orbs info when the
   // orb has been shown completely"): until the change is over it still says who he was
   const [shown, setShown] = useState(0);
@@ -950,9 +966,9 @@ function App() {
     if (home) home.setName(p).catch((e: Error) => setSaid(e.message));
     else savePerson(p);
   };
-  const [room, setRoom] = useState<"home" | "office" | "settings" | "chat" | "sessions" | "notices" | "calendar" | "lab" | "org" | "career" | "recruiter">(() => {
+  const [room, setRoom] = useState<"home" | "office" | "settings" | "chat" | "sessions" | "notices" | "calendar" | "lab" | "org" | "career" | "recruiter" | "report">(() => {
     const r = parseRoute(location.hash).room;
-    return r === "home" || r === "settings" || r === "chat" || r === "sessions" || r === "notices" || r === "calendar" || r === "lab" || r === "org" || r === "career" || r === "recruiter" ? r : "office";
+    return r === "home" || r === "settings" || r === "chat" || r === "sessions" || r === "notices" || r === "calendar" || r === "lab" || r === "org" || r === "career" || r === "recruiter" || r === "report" ? r : "office";
   });
   // which department's applicants the Recruiter shows (owner, 10-06: the floor's Hiring tags), or all
   // whose school sheet the org chart opens with (#/org/school/<id>; owner, 10-06)
@@ -1104,13 +1120,14 @@ function App() {
   // where you are is an address (ui/nav.ts): going somewhere adds it to the history, so the side
   // menu's Back and the browser's Back are the same Back
   const routeOf = (): Route =>
-    room === "home" ? { room: "home" } : room === "settings" ? { room: "settings" } : room === "notices" ? { room: "notices" } : room === "calendar" ? { room: "calendar" } : room === "lab" ? { room: "lab" } : room === "org" ? { room: "org", school: schoolFor } : room === "recruiter" ? { room: "recruiter", family: hiringFor } : room === "career" && careerOf ? { room: "career", orb: careerOf } : room === "sessions" ? { room: "sessions", ...inSession } : room === "chat" && talking ? { room: "chat", orb: talking } : view.kind === "new" ? { room: "new" } : { room: "office", orb: view.kind === "orb" ? view.name : null };
+    room === "home" ? { room: "home" } : room === "settings" ? { room: "settings" } : room === "notices" ? { room: "notices" } : room === "calendar" ? { room: "calendar" } : room === "lab" ? { room: "lab" } : room === "report" ? { room: "report" } : room === "org" ? { room: "org", school: schoolFor } : room === "recruiter" ? { room: "recruiter", family: hiringFor } : room === "career" && careerOf ? { room: "career", orb: careerOf } : room === "sessions" ? { room: "sessions", ...inSession } : room === "chat" && talking ? { room: "chat", orb: talking } : view.kind === "new" ? { room: "new" } : { room: "office", orb: view.kind === "orb" ? view.name : null };
   const show = (r: Route): void => {
     if (r.room === "home") setRoom("home"); // the home page (owner, 10-07): what the app opens on
     else if (r.room === "settings") setRoom("settings");
     else if (r.room === "notices") setRoom("notices");
     else if (r.room === "calendar") setRoom("calendar");
     else if (r.room === "lab") setRoom("lab");
+    else if (r.room === "report") setRoom("report"); // the board's daily report (PLAN 5.18)
     else if (r.room === "org") {
       setRoom("org");
       setSchoolFor(r.school ?? null);
@@ -1271,7 +1288,7 @@ function App() {
             {navItem("Sessions", room === "sessions", { room: "sessions", id: null, tab: "brainstorm" }, "▦")}
             {navItem("Notifications", room === "notices", { room: "notices" }, "◔", notices.notices.length)}
             {navItem("Calendar", room === "calendar", { room: "calendar" }, "▤")}
-            {navItem("The lab", room === "lab", { room: "lab" }, "✦")}
+            {navItem("The lab", room === "lab", { room: "lab" }, <FlaskIcon />)}
             {navItem("Org chart", room === "org", { room: "org" }, "◇")}
             {/* hiring comes after your assistant, the first orb (owner, 10-04: "if you have not created your assistant yet ... you
                 shouldnt be able to see the recruiter page yet, it should be greyed out and inaccesible") */}
@@ -1317,6 +1334,8 @@ function App() {
           <CareerRoom home={home} orb={office.find((c) => c.name === careerOf) ?? office[0] ?? ASH} />
         ) : room === "lab" ? (
           <LabRoom home={home} office={office} go={go} />
+        ) : room === "report" ? (
+          <ReportRoom home={home} office={office} go={go} />
         ) : room === "calendar" ? (
           <CalendarRoom home={home} office={office} />
         ) : room === "notices" ? (
@@ -1370,22 +1389,29 @@ function App() {
                 {WORN[live.mood].words}
               </span>
             )}
+            {/* his moods a little more square, and his gestures as small, quieter boxes under them, not a row to scroll
+                (owner, 10-07: "make the awake listening etc a little more square ... take out the wheel under it, put
+                those as smaller containers under awake lisening etc with a dimmer font color") */}
             <OneLine>
               {MOODS.map(([m, label]) => (
-                <button key={m} onClick={() => (setState(m), setPicked(true))} aria-pressed={worn === m} style={{ ...s.chip, ...chosen(worn === m) }}>
+                <button key={m} data-mood-pick={m} onClick={() => (setState(m), setPicked(true))} aria-pressed={worn === m} style={{ ...s.chip, ...chosen(worn === m), borderRadius: 10 }}>
                   {label}
                 </button>
               ))}
             </OneLine>
-            <OneLine>
-              {GESTURES.map(([g, label]) => (
-                <button key={g} data-flash={flash?.g === g ? flash.n : undefined}
-                  style={{ ...s.chip, ...(flash?.g === g && { animation: `${flash.n % 2 ? "orbs-flash-a" : "orbs-flash-b"} 900ms ease-out` }) }}
-                  onClick={() => (play(g), setFlash((f) => ({ g, n: (f?.n ?? 0) + 1 })))}>
-                  {label}
-                </button>
+            <div role="group" aria-label={`What ${me.name || "your orb"} can do`} data-gestures style={{ display: "grid", gap: 8, justifyItems: "center", maxWidth: "100%" }}>
+              {(smallPhone ? [GESTURES.slice(0, 3), GESTURES.slice(3, 6), GESTURES.slice(6)] : [GESTURES.slice(0, 5), GESTURES.slice(5)]).map((row, r) => (
+                <div key={r} style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 6 }}>
+                  {row.map(([g, label]) => (
+                    <button key={g} className="orbs-small" data-gesture-pick={g} data-flash={flash?.g === g ? flash.n : undefined}
+                      style={{ font: "600 12px/16px var(--font)", color: "var(--text-3)", background: "var(--fill)", boxShadow: "inset 0 0 0 .5px var(--hairline)", border: 0, borderRadius: 8, padding: "6px 11px", minHeight: 30, cursor: "pointer", whiteSpace: "nowrap", ...(flash?.g === g && { animation: `${flash.n % 2 ? "orbs-flash-a" : "orbs-flash-b"} 900ms ease-out` }) }}
+                      onClick={() => (play(g), setFlash((f) => ({ g, n: (f?.n ?? 0) + 1 })))}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
               ))}
-            </OneLine>
+            </div>
             {making && (
               <OneLine gap={8} style={{ marginTop: "var(--s2)" }}>
                 <button
@@ -1521,7 +1547,7 @@ main.orbs-main { padding: max(var(--s5), env(safe-area-inset-top)) max(var(--mar
    small tags keep their look, and a finger gets an area round them; a text field at 16 px or more, or an
    iPhone zooms into it */
 @media (pointer: coarse), (max-width: 760px) {
-  button:not(.orbs-tag), [role="button"]:not(.orbs-tag), select, textarea, input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]) { min-height: 44px !important; }
+  button:not(.orbs-tag):not(.orbs-small), [role="button"]:not(.orbs-tag), select, textarea, input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]) { min-height: 44px !important; }
   button:not(.orbs-tag):not(.orbs-calday):not(.orbs-narrow), [role="button"]:not(.orbs-tag) { min-width: 44px !important; }
   /* a row of page numbers keeps to one line on a small phone: 44 high, 32 wide (WCAG 2.5.8 asks 24) */
   .orbs-narrow { min-width: 32px !important; }
@@ -1530,6 +1556,9 @@ main.orbs-main { padding: max(var(--s5), env(safe-area-inset-top)) max(var(--mar
   .orbs-calday { min-width: 24px !important; }
   input, select, textarea { font-size: max(16px, 1em) !important; }
   .orbs-tag::after { content: ""; position: absolute; inset: -13px; }
+  /* a small box (an orb's gestures, owner 10-07: "smaller containers"): 30 high as drawn, a finger's 44 round it */
+  .orbs-small { position: relative; }
+  .orbs-small::after { content: ""; position: absolute; inset: -7px 0; }
 }
 /* a phone: the side menu slides in from the left, over a scrim, and a top bar holds Back and the menu;
    wider, there is no scrim, not even for the frame before a widened window closes the menu */

@@ -75,7 +75,7 @@ test("a session: the orbs you bring in, the Brainstorm's turns and what was agre
   t.after(() => ctx.close());
   const page = await ctx.newPage();
   await page.goto(d.pairLink());
-  await page.getByText("CEO Robin").waitFor({ timeout: 30_000 });
+  await page.getByText("Founder Robin").waitFor({ timeout: 30_000 });
 
   // a new session, from the side menu
   await page.getByRole("button", { name: "Sessions", exact: true }).click();
@@ -204,7 +204,7 @@ test("a conversation scrolls inside the screen, never the page: what you type st
     t.after(() => ctx.close());
     const page = await ctx.newPage();
     await page.goto(d.pairLink());
-    await page.getByText("CEO Robin").first().waitFor({ state: "attached", timeout: 30_000 });
+    await page.getByText("Founder Robin").first().waitFor({ state: "attached", timeout: 30_000 });
     await page.evaluate((id) => (location.hash = `#/session/${id}/brainstorm`), s.id);
     await page.locator('[data-stream="open"]').waitFor({ timeout: 30_000 });
     await page.getByText("Line 40:").waitFor({ timeout: 20_000 });
@@ -277,7 +277,7 @@ test("a conversation scrolls inside the screen, never the page: what you type st
   t.after(() => ctx.close());
   const page = await ctx.newPage();
   await page.goto(d.pairLink());
-  await page.getByText("CEO Robin").first().waitFor({ state: "attached", timeout: 30_000 });
+  await page.getByText("Founder Robin").first().waitFor({ state: "attached", timeout: 30_000 });
   await page.evaluate(() => (location.hash = "#/sessions"));
   const card = page.locator(`[data-session-card="${s.id}"]`);
   await card.waitFor({ timeout: 20_000 });

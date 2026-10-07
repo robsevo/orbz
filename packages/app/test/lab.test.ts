@@ -70,7 +70,7 @@ test("the lab: brainstorms and plans kept, found by a word, a brainstorm reopene
   t.after(() => ctx.close());
   const page = await ctx.newPage();
   await page.goto(d.pairLink());
-  await page.getByText("CEO Robin").waitFor({ timeout: 30_000 });
+  await page.getByText("Founder Robin").waitFor({ timeout: 30_000 });
   await page.getByRole("button", { name: "The lab", exact: true }).click();
   assert.equal(await page.evaluate(() => location.hash), "#/lab");
   const brainstorm = page.locator(`[data-brainstorm="${s.id}"]`);

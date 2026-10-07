@@ -67,6 +67,10 @@ test("the pairing link opens the app on the home: your name and your first orb a
   await page.getByRole("textbox", { name: "Your name" }).fill("Robin");
   await page.keyboard.press("Enter");
   await page.getByRole("button", { name: "Skip the story" }).click();
+  // your company's name (owner, 10-07: "the user first picks his own name, the company name, hires the CEO")
+  await page.getByRole("textbox", { name: "Your company's name" }).fill("Acme Orbs");
+  await page.keyboard.press("Enter");
+  await page.getByRole("button", { name: "Skip the story" }).click();
   assert.deepEqual(home.inbox.orbs(), [], "a fresh home's office is empty: the first orb is the one you make");
   // the brains, on a real home: what he can think with, none of it required
   const step = page.locator("[data-brains-step]");
@@ -75,15 +79,17 @@ test("the pairing link opens the app on the home: your name and your first orb a
   await step.getByRole("button", { name: "Skip for now" }).click();
   for (let n = 0; n < 20 && !(await page.getByRole("button", { name: "Make me" }).isVisible()); n++) await page.keyboard.press("Enter");
   await page.getByRole("button", { name: "Make me" }).click();
-  await page.getByText("CEO Robin").waitFor();
+  await page.getByText("Founder Robin").waitFor();
   assert.equal(home.about.get().name, "Robin", "the home keeps what the office calls you");
 
-  // your first orb
+  // your first orb, your CEO (owner, 10-07), who then shows you round: skipped, it ends on making your assistant
   await page.getByRole("textbox", { name: "Name" }).fill("Pip");
   await page.getByRole("button", { name: "Create Pip" }).click();
-  await page.waitForFunction(() => document.querySelector("h2")?.textContent === "Pip");
-  await new Promise((r) => setTimeout(r, 300));
-  assert.deepEqual(home.inbox.orbs().map((o) => o.name), ["Pip"], "the home has him, and only him");
+  await page.getByRole("button", { name: "Skip the tour" }).click({ timeout: 20_000 });
+  await page.getByRole("button", { name: "Make my assistant" }).click();
+  await page.locator("[data-onboarding]").waitFor({ state: "detached" });
+  for (let i = 0; i < 50 && !home.inbox.orbs().length; i++) await new Promise((r) => setTimeout(r, 50));
+  assert.deepEqual(home.inbox.orbs().map((o) => [o.name, o.specialty]), [["Pip", "ceo"]], "the home has him, and only him: your CEO");
   assert.equal((home.inbox.orbs()[0]!.look as { shape?: string }).shape, "bean", "and his look, as the story showed him");
 
 });
@@ -111,7 +117,7 @@ test("a reload is still paired, does not play the story again, and keeps the off
   assert.ok(visit, "after the first steps");
   const { page } = visit;
   await page.reload();
-  await page.getByText("CEO Robin").waitFor({ timeout: 30_000 });
+  await page.getByText("Founder Robin").waitFor({ timeout: 30_000 });
   assert.equal(await page.locator("[data-onboarding]").count(), 0);
   // his page once the home has answered (your name shows first, from this browser: counting at once lost the race in the gate)
   await page.getByRole("heading", { name: "Pip" }).waitFor({ timeout: 30_000 });
@@ -121,7 +127,7 @@ test("opened afresh with no address, as the desktop launcher opens it: the home 
   assert.ok(visit, "after the first steps");
   const { page } = visit;
   await page.goto(`http://127.0.0.1:${door.port}/app/orbs.html`);
-  await page.getByText("CEO Robin").waitFor({ timeout: 30_000 });
+  await page.getByText("Founder Robin").waitFor({ timeout: 30_000 });
   await page.locator("[data-home-page]").waitFor({ timeout: 30_000 });
   await page.waitForTimeout(500);
   assert.equal(await page.getByRole("button", { name: /^Create / }).count(), 0, "not the creator");
@@ -175,7 +181,7 @@ test("a private chat with an orb: your words, his reply as it streams, a card th
   t.after(() => ctx.close());
   const page = await ctx.newPage();
   await page.goto(d.pairLink());
-  await page.getByText("CEO Robin").waitFor({ timeout: 30_000 });
+  await page.getByText("Founder Robin").waitFor({ timeout: 30_000 });
   await profile(page, "Ash"); // the office opens on its floor; the chat is on Ash's profile
   await page.getByRole("button", { name: "Chat with Ash" }).click();
   assert.equal(await page.evaluate(() => location.hash), "#/chat/Ash");

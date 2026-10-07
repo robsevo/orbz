@@ -18,7 +18,7 @@ import { findChrome, launch, measure } from "./harness.ts";
 import { Home } from "../../home/src/home.ts";
 import { serve } from "../../home/src/api.ts";
 import { fakeModel } from "../../home/test/fakes/model.ts";
-import { viewRect } from "../src/floor/plan.ts";
+import { VIEWS, viewRect } from "../src/floor/plan.ts";
 
 const APP = fileURLToPath(new URL("..", import.meta.url));
 const skip = findChrome() ? false : "no Chromium on this machine";
@@ -50,7 +50,7 @@ async function arrives(page: Page, name: string, at: RegExp): Promise<string> {
   return String(await handle.jsonValue());
 }
 
-test("the office is the floor: an orb at work at its desk, a Brainstorm at the meeting table, an orb pressed opens its profile", { skip, timeout: 240_000 }, async (t) => {
+test("the office is the floor: an orb at work at its desk, a board vote at the Board room's table (not a session), an orb pressed opens its profile", { skip, timeout: 240_000 }, async (t) => {
   let releaseGus!: () => void;
   let releaseAda!: () => void;
   const gusHeld = new Promise<void>((r) => (releaseGus = r));
@@ -101,14 +101,21 @@ test("the office is the floor: an orb at work at its desk, a Brainstorm at the m
   assert.match(await page.locator('[data-stat="Working"]').innerText(), /^1\s*Working/, "the dashboard counts him working");
   assert.match(await page.locator('[data-who="Gus"]').innerText(), /Gus\s+(Thinking|Working)/);
 
-  // a Brainstorm: Ada walks to the meeting table, and the screen says what it is
-  const s = h.team.create("Plan the launch", { brainstorm: ["ada"] });
-  h.team.say(s.id, "brainstorm", "ideas for the launch?");
+  // a board vote (owner, 10-07: "Add a Board room ... replace the meeting room"): its members walk to the Board room's
+  // table, and the screen says what it is
+  assert.match(await page.locator("[data-floor]").innerText(), /Board room/i); // its sign is set in capitals
+  assert.doesNotMatch(await page.locator("[data-floor]").innerText(), /Meeting room/);
+  h.events.append("board.proposed", { text: "Open Finance this month", by: "founder", members: ["ada", "pip"] });
   await arrives(page, "Ada", /^meeting:\d$/);
-  await page.locator("[data-meeting-screen]").filter({ hasText: "Now: Plan the launch" }).waitFor({ timeout: 20_000 });
-  assert.match(await page.locator('[data-stat="In a meeting"]').innerText(), /^1/);
+  await page.locator("[data-meeting-screen]").filter({ hasText: "Now: A board vote" }).waitFor({ timeout: 20_000 });
+  assert.match(await page.locator('[data-stat="In a meeting"]').innerText(), /^2/, "its two members");
   await page.waitForTimeout(400);
   assert.deepEqual(await measure(page), [], "the floor at work, at desk size");
+  // decided: back to work; and a session's Brainstorm meets in Sessions, not at the table (control)
+  h.events.append("board.decided", { proposal: 0, carried: true, yes: 2, no: 0, abstained: 0 });
+  const s = h.team.create("Plan the launch", { brainstorm: ["ada"] });
+  h.team.say(s.id, "brainstorm", "ideas for the launch?");
+  await arrives(page, "Ada", /^desk:/);
 
   // and on a phone: the same floor, nothing spilling
   const phone = await open({ width: 390, height: 844 });
@@ -178,6 +185,17 @@ test("on a phone the office goes room by room: it opens on the busiest departmen
   assert.ok(Math.abs(onBuild.w * a.k - a.w) <= 1, "the window the width of the screen");
   assert.ok(360 * a.k <= 0.8 * a.w, `Build at most four fifths of it, floor round it (${Math.round(360 * a.k)} of ${a.w})`);
   assert.deepEqual(await measure(page), [], "nothing spills, a room at a time");
+  // seen through a camera (owner, 10-07: "keep the style of the office the same but vibe it like a camera room"): each
+  // room a camera of its own, REC and the time to the second on a strip above the picture, never over it; the glass
+  // over the picture takes no presses (an orb pressed through it opens its profile: the test above)
+  const cam = (n: string, room: string): string => `CAM ${String(VIEWS.findIndex((v) => v.id === n) + 1).padStart(2, "0")} · ${room}`;
+  assert.equal(await page.locator("[data-camera]").getAttribute("data-camera"), cam("build", "BUILD"));
+  const stampAt = await page.locator("[data-camera-stamp]").innerText();
+  assert.match(stampAt, /^\d\d [A-Z]{3} \d{4} \d\d:\d\d:\d\d$/);
+  await page.waitForFunction((was) => document.querySelector("[data-camera-stamp]")?.textContent !== was, stampAt, { timeout: 3_000 });
+  const [strip, view] = [(await page.locator("[data-camera-rec]").boundingBox())!, (await page.locator("[data-floor-view]").boundingBox())!];
+  assert.ok(strip.y + strip.height <= view.y + 1, "REC above the picture, covering none of it");
+  assert.equal(await page.locator("[data-camera-glass]").evaluate((el) => getComputedStyle(el).pointerEvents), "none");
   // the kitchen
   await page.locator('[data-view-choice="kitchen"]').click();
   await page.waitForTimeout(300);
@@ -186,6 +204,7 @@ test("on a phone the office goes room by room: it opens on the busiest departmen
   const onKitchen = viewRect("kitchen")!;
   assert.deepEqual(onKitchen, { x: 708, y: 36, w: 492, h: 294 });
   assert.ok(Math.abs(a.left - onKitchen.x * a.k) <= 1 && Math.abs(a.top - onKitchen.y * a.k) <= 1, `the window on the kitchen (${JSON.stringify(a)})`);
+  assert.equal(await page.locator("[data-camera]").getAttribute("data-camera"), cam("kitchen", "KITCHEN"), "another room, another camera");
   // kept on this device
   await page.reload();
   await page.locator('[data-view-choice="kitchen"][aria-pressed="true"]').waitFor({ timeout: 30_000 });
@@ -202,5 +221,6 @@ test("on a phone the office goes room by room: it opens on the busiest departmen
   await desk.evaluate(() => (location.hash = "#/office"));
   await desk.locator("[data-floor-plan]").waitFor({ timeout: 30_000 });
   assert.equal(await desk.locator("[data-view-choice]").count(), 0);
+  assert.equal(await desk.locator("[data-camera]").getAttribute("data-camera"), "CAM 01 · WHOLE OFFICE", "a desk: the one camera on all of it");
   await desk.context().close();
 });

@@ -138,6 +138,10 @@ test("the first open asks what he thinks with: a Gemini key kept there, then you
   await page.getByRole("textbox", { name: "Your name" }).fill("Robin");
   await page.keyboard.press("Enter");
   await page.getByRole("button", { name: "Skip the story" }).click();
+  // your company's name (owner, 10-07: "the user first picks his own name, the company name, hires the CEO")
+  await page.getByRole("textbox", { name: "Your company's name" }).fill("Acme Orbs");
+  await page.keyboard.press("Enter");
+  await page.getByRole("button", { name: "Skip the story" }).click();
   const step = page.locator("[data-brains-step]");
   await step.getByLabel("Your Gemini key", { exact: true }).fill(KEY);
   await step.getByRole("button", { name: "Keep" }).first().click();

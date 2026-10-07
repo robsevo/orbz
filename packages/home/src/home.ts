@@ -40,6 +40,10 @@ import { recital } from "./plans/recite.ts";
 import { recentWork } from "./worklog.ts";
 import { ambitionLine } from "./agent/standing.ts";
 import { companyLine, whyNot } from "./company.ts";
+import { Boardroom, FORTNIGHT_MS } from "./boardroom.ts";
+import { BoardReports } from "./report.ts";
+import { weekOf } from "./gym/performance.ts";
+import { ledger as xpLedger } from "./gym/xp.ts";
 import { interviewSystem, Recruiter, RecruiterError } from "./recruiter.ts";
 import { type Fetcher, Reading, type Sleep } from "./reading/reading.ts";
 import { readingTools, withReading } from "./reading/tools.ts";
@@ -48,7 +52,7 @@ import { School, SchoolError, type ReportCard, type SchoolOptions } from "./scho
 import type { Kind } from "./school/subjects.ts";
 import { habitsOf, shareHabit } from "./gym/share.ts";
 import { parse as parsePlan } from "./plans/format.ts";
-import { SPECIALTY_FAMILIES } from "./brain/constitution.ts";
+import { SPECIALTY_FAMILIES, type Specialty } from "./brain/constitution.ts";
 import type { Case, CaseStep, StepFn } from "./gym/cases.ts";
 import { earnedFor, promotedFor, type Promoted } from "./gym/steps.ts";
 import { templatesFor } from "./gym/templates.ts";
@@ -101,6 +105,9 @@ export type HomeOptions = {
   /** Office life (PLAN 5.9): on for the real home (main.ts), off in a test home unless it says so (so
    * no other test's orbs wander off to meet); `dice` pinned by its own tests. */
   social?: { on?: boolean } & Pick<SocialOptions, "dice">;
+  /** The board's daily report (PLAN 5.18): sent by the tick for the real home (main.ts), never in a test home unless
+   * it says so (its ideas ask the brain, which would take the replies another test scripted); made on asking in both. */
+  reports?: { on?: boolean };
   /** How long a stopped run may take to wind down (default 5 s). */
   graceMs?: number;
   /** School (PLAN 5.7): tonight's share of the brain (tests set less). */
@@ -227,6 +234,11 @@ export class Home {
   readonly reading: Reading;
   /** Office life (PLAN 5.9): who meets, what they do, and the friendships it makes. */
   readonly social: Social;
+  /** The company's board (PLAN 5.16): its odd seats, its officers by their posts, everyone's election, proposals voted on. */
+  readonly boardroom: Boardroom;
+  /** The board's daily report (PLAN 5.18). */
+  readonly reports: BoardReports;
+  readonly #reportsOn: boolean;
   /** School (PLAN 5.7): an orb you let go, learning the subjects you picked, night by night. */
   readonly school: School;
   /** XP from graded evidence only (PLAN 3.6): the ledger, in the event log. */
@@ -426,15 +438,7 @@ export class Home {
           dataDir: this.dataDir,
           background: this.#background,
           // a helper's turn in a session (PLAN 5.10) on the brain's light model: the plan's Luna, Gemini's flash-lite
-          endpoint: (o) => {
-            const cur = this.brains.chain.current();
-            if (!cur || !o?.light) return cur?.ep ?? null;
-            if (cur.ep.plan === "chatgpt") {
-              const light = this.chatgpt.endpoint({ light: true });
-              return light ? { ...light, chain: cur.ep.chain } : cur.ep;
-            }
-            return this.brains.light(cur.ep);
-          },
+          endpoint: (o) => (o?.light ? this.lightBrain() : this.brains.chain.current()?.ep ?? null),
           chain: this.brains.chain,
           planLimited: (why, model) => this.chatgpt.limited(why, model),
           ready: () => brainsReady,
@@ -447,7 +451,7 @@ export class Home {
           company: (orb) => {
             const me = this.inbox.orb(orb);
             const you = this.about.get();
-            return me ? companyLine({ me, founder: you.name, company: you.company, office: this.inbox.orbs() }) : null;
+            return me ? companyLine({ me, founder: you.name, company: you.company, office: this.inbox.orbs(), decisions: this.boardroom.decisions(), ideas: this.reports.approved() }) : null;
           },
           searchKey: () => this.brains.searchKey(),
           remind: (orb, conversation, r) => {
@@ -539,6 +543,49 @@ export class Home {
     });
     this.team = new Team({ db, events: this.events, clock: this.clock, inbox: this.inbox, conversations: this.conversations, level: (orb) => levelOf(this.events, orb) });
     this.xp = new Xp(this.events, { planOrb: (plan) => this.plans.get(plan)?.orb ?? null });
+    this.boardroom = new Boardroom(this.events, this.clock, {
+      office: () => {
+        const now = this.clock.now();
+        return this.inbox.orbs().map((o) => ({ id: o.id, name: o.name, specialty: o.specialty, xp: this.xp.of(o.id, now).total, rank: LEVELS.indexOf(levelOf(this.events, o.id)), createdAt: o.createdAt }));
+      },
+      recent: (id) => {
+        const since = this.clock.now() - FORTNIGHT_MS;
+        return xpLedger(this.events).filter((e) => e.orb === id && e.at >= since).reduce((n, e) => n + e.amount, 0);
+      },
+      gets: (voter, other) => this.social.of(voter).find((c) => c.orb === other)?.score ?? 0,
+      // a vote on the cheapest brain (owner, 10-07: "Each thinks, cheap brain"), its cost recorded as the board's
+      ask: async (member, prompt) => {
+        const ep = this.lightBrain();
+        if (!ep) return null;
+        this.spend.check();
+        const r = await chat(ep, [{ role: "user", content: prompt }], { maxTokens: 120 });
+        this.spend.record({ tier: "big", model: ep.model, costUsd: r.costUsd, costSource: r.costSource, promptTokens: r.promptTokens, completionTokens: r.completionTokens, orb: member.orb, turn: "board" });
+        return r.text;
+      },
+      company: () => this.about.get().company,
+    });
+    this.#reportsOn = opts.reports?.on ?? false;
+    this.reports = new BoardReports(this.events, this.clock, {
+      office: () => this.inbox.orbs().map((o) => ({ id: o.id, name: o.name, specialty: o.specialty, createdAt: o.createdAt })),
+      board: () => this.boardroom.seats(),
+      company: () => this.about.get().company,
+      founder: () => this.about.get().name,
+      // an idea on the cheapest brain, as a vote is, its cost recorded as the report's
+      ask: async (orb, prompt) => {
+        const ep = this.lightBrain();
+        if (!ep) return null;
+        this.spend.check();
+        const r = await chat(ep, [{ role: "user", content: prompt }], { maxTokens: 160 });
+        this.spend.record({ tier: "big", model: ep.model, costUsd: r.costUsd, costSource: r.costSource, promptTokens: r.promptTokens, completionTokens: r.completionTokens, orb, turn: "report" });
+        return r.text;
+      },
+      news: (since) => this.events.ofType("reading.read").filter((e) => e.at > since && e.orb).reverse()
+        .flatMap((e) => ((e.data.changedPages as { title: string; url: string }[] | undefined) ?? []).map((p) => ({ title: p.title, url: p.url, host: String(e.data.host), orb: String(e.orb) }))),
+      week: (o) => weekOf(this.events, o.id, { specialty: o.specialty as Specialty, hired: o.createdAt, now: this.clock.now() }),
+      spent: (from, to) => this.events.ofType("brain.spend").filter((e) => e.at >= from && e.at < to).reduce((n, e) => n + (typeof e.data.cost_usd === "number" ? e.data.cost_usd : 0), 0),
+      bills: (until) => this.notices.reminders().filter((r) => r.kind === "bill" && r.doneAt === null && r.due.slice(0, 10) <= until).map((r) => ({ title: r.title, due: r.due, amount: r.amount })),
+      hiring: () => this.recruiting(),
+    });
     this.gym = new Gym({
       events: this.events, clock: this.clock, dataDir: this.dataDir, spend: this.spend, kit: kit && ((tool, args) => kit.call(tool, args)),
       teacher: () => opts.brain?.preset.teacher ?? this.brains.chain.current()?.ep ?? null, // the preset's teacher, else the big brain
@@ -760,6 +807,17 @@ export class Home {
     return { model: ep.model, text: res.text };
   }
 
+  /** The brain's light model (PLAN 5.10): the plan's Luna, Gemini's flash-lite; the brain itself where it has none. */
+  lightBrain(): ReturnType<Brains["light"]> | null {
+    const cur = this.brains.chain.current();
+    if (!cur) return null;
+    if (cur.ep.plan === "chatgpt") {
+      const light = this.chatgpt.endpoint({ light: true });
+      return light ? { ...light, chain: cur.ep.chain } : cur.ep;
+    }
+    return this.brains.light(cur.ep);
+  }
+
   /** The office by XP (owner, 10-07: every orb wants "to be the best orb ... get xp and please the user"):
    * each orb in it, the most XP first, a tie to whoever came first. */
   ranking(): { orb: string; name: string; xp: number }[] {
@@ -928,6 +986,8 @@ export class Home {
     this.recruiter.due(); // the Recruiter's list turns over at midnight (PLAN 5.8)
     void this.reading.due(); // the reading library's next read, one at a time (PLAN 3.12)
     this.social.due(); // two free orbs meet, in the office's day (PLAN 5.9)
+    this.boardroom.due(); // the board's election: when there is none, when its size changes, once a week (PLAN 5.16)
+    if (this.#reportsOn) void this.reports.due()?.catch(() => undefined); // the board's report, from 08:00 each day (PLAN 5.18)
     await this.triggers.poll({ all: woke });
   }
 
@@ -936,7 +996,7 @@ export class Home {
     this.#cancelTimer?.();
     const now = this.clock.now();
     let delay = this.#heartbeatMs;
-    for (const at of [this.schedules.nextDueAt(), this.notices.nextDueAt(), this.loops.nextDueAt(), this.triggers.nextPollAt(), this.gym.nextAt(), this.school.nextAt(), this.recruiter.nextAt(), this.reading.nextAt(), this.social.nextAt()]) {
+    for (const at of [this.schedules.nextDueAt(), this.notices.nextDueAt(), this.loops.nextDueAt(), this.triggers.nextPollAt(), this.gym.nextAt(), this.school.nextAt(), this.recruiter.nextAt(), this.reading.nextAt(), this.social.nextAt(), this.boardroom.nextAt(), this.#reportsOn ? this.reports.nextAt() : null]) {
       if (at !== null) delay = Math.min(delay, at - now);
     }
     this.#cancelTimer = this.clock.timer(Math.max(MIN_DELAY_MS, delay), () => void this.tick());

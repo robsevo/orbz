@@ -6,7 +6,7 @@
 //   - on a phone the menu slides in from a top bar and closes once you have chosen;
 //   - the menu open on a phone, then the window made wide: the desk's own layout, and closed when
 //     it is narrow again (owner, 10-06: "when we resize from mobile to desktop with menu open it glitches");
-//   - Settings renames the CEO, switches the sounds and plays the story again;
+//   - Settings renames the Founder (you, owner 10-07: "You are the Founder of a brand new Orb startup"), switches the sounds and plays the story again;
 //   - the layout rule holds in Settings and with the menu open.
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -66,6 +66,8 @@ test("the menu goes to each room, and its Back is the browser's Back", { skip },
   const page = await open();
   try {
     assert.equal(await menu(page).getByRole("button", { name: "Back" }).isDisabled(), true, "nowhere to go back to yet");
+    // the lab's mark is a flask (owner, 10-07: "change the lab icon in menu to a labratory flask")
+    assert.equal(await menu(page).getByRole("button", { name: "The lab" }).locator('svg[data-icon="flask"]').count(), 1);
     await menu(page).getByRole("button", { name: "Settings" }).click();
     assert.equal(await page.getByRole("heading", { name: "Settings" }).count(), 1);
     assert.equal(await where(page), "#/settings");
@@ -156,12 +158,12 @@ test("the menu open on a phone, then the window made wide: the desk's own layout
   }
 });
 
-test("Settings: the CEO's name, the sounds, and the story again", { skip }, async () => {
+test("Settings: the Founder's name, the sounds, and the story again", { skip }, async () => {
   const page = await open("#/settings");
   try {
     await page.getByRole("textbox", { name: "What the office calls you" }).fill("Sam");
     await page.getByRole("button", { name: "Save" }).click();
-    assert.equal(await page.getByText("CEO Sam").count(), 1, "the menu calls you that now");
+    assert.equal(await page.getByText("Founder Sam").count(), 1, "the menu calls you that now");
     await page.getByRole("region", { name: "Sounds" }).getByRole("button", { name: "Off" }).click();
     assert.equal(await page.evaluate(() => localStorage.getItem("orbs.sounds")), "off");
     await page.getByRole("button", { name: "Play the opening story again" }).click();

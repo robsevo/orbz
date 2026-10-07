@@ -60,7 +60,7 @@ test("one command starts a headless home; it answers only with its token, refuse
     "a rebound hostname is refused even with the token",
   );
 
-  const made = await fetch(`${base}/orbs`, { method: "POST", headers: auth, body: JSON.stringify({ id: "juniper", name: "Juniper" }) });
+  const made = await fetch(`${base}/orbs`, { method: "POST", headers: auth, body: JSON.stringify({ id: "juniper", name: "Juniper", specialty: "ceo" }) }); // the first orb is your CEO (owner, 10-07)
   assert.equal(made.status, 200);
   const sent = await fetch(`${base}/orbs/juniper/messages`, { method: "POST", headers: auth, body: JSON.stringify({ text: "hello" }) });
   assert.equal(sent.status, 200);

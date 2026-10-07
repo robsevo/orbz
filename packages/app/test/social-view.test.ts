@@ -108,7 +108,10 @@ test("office life: traits sent, a meeting played on the floor, colleagues on the
   const bo = page.locator('[data-colleagues] [data-friend="Bo"]');
   await bo.waitFor({ timeout: 20_000 });
   const word = h.social.of("ada")[0]!.word;
-  assert.match(await bo.innerText(), new RegExp(`Bo\\s+${word.charAt(0).toUpperCase() + word.slice(1)}[\\s\\S]*(coffee|ideas|ping-pong|arcade|lesson)[\\s\\S]*·`, "i"));
+  const says = new RegExp(`Bo\\s+${word.charAt(0).toUpperCase() + word.slice(1)}[\\s\\S]*(coffee|ideas|ping-pong|arcade|lesson)[\\s\\S]*·`, "i");
+  // the row is there before the forty meetings' word reaches it (a busy gate showed "Colleagues" a moment): wait for the word
+  await page.waitForFunction((src) => new RegExp(src, "i").test((document.querySelector('[data-colleagues] [data-friend="Bo"]') as HTMLElement | null)?.innerText ?? ""), says.source, { timeout: 20_000 }).catch(() => undefined);
+  assert.match(await bo.innerText(), says);
   await page.waitForTimeout(400);
   assert.deepEqual(await measure(page), [], "the profile with its colleagues, at desk size");
   const phone = await open({ width: 390, height: 844 }, "#/office/Ada");

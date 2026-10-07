@@ -17,6 +17,7 @@ import { findChrome, launch, measure } from "./harness.ts";
 import { Home } from "../../home/src/home.ts";
 import { serve } from "../../home/src/api.ts";
 import { habitDir } from "../../home/src/gym/compile.ts";
+import { fakeModel } from "../../home/test/fakes/model.ts";
 
 const APP = fileURLToPath(new URL("..", import.meta.url));
 const skip = findChrome() ? false : "no Chromium on this machine";
@@ -144,4 +145,50 @@ test("the org chart and a career page; let go with a hand-off, away, rehired; le
   assert.ok(h.inbox.orb("cy")!.letGoAt, "Cy was let go");
   await sheet.getByRole("button", { name: "Send Cy to school" }).waitFor();
   assert.deepEqual(await measure(page), [], "the school sheet, opened from a profile, at phone size");
+});
+
+test("the board on the org chart (owner, 10-07): its seats by their posts, an odd number; a proposal put from it is voted, each member's vote and why; desk and phone", { skip, timeout: 150_000 }, async (t) => {
+  const model = await fakeModel(t, []);
+  const data = mkdtempSync(join(tmpdir(), "orbs-org-board-"));
+  t.after(() => rmSync(data, { recursive: true, force: true }));
+  const h = Home.open({
+    dataDir: data, protect: [], spendCapUsd: null,
+    brain: { preset: { id: "t", title: "t", own: null, big: { name: "big", baseUrl: model.url, model: "m", retries: 0 }, teacher: null } },
+  });
+  t.after(() => h.close());
+  h.start();
+  h.about.setName("Robin");
+  h.about.setCompany("Acme Orbs");
+  for (const [id, name, sp, hue] of [["max", "Max", "ceo", "honey"], ["pip", "Pip", "assistant", "azure"], ["ada", "Ada", "frontend", "amber"], ["bea", "Bea", "frontend", "teal"]] as const) h.inbox.addOrb(id, name, sp, { shape: "bean", eyes: "classic", hue });
+  h.boardroom.elect();
+  const d = await serve(h, { port: 0, appDir: dist });
+  t.after(() => d.close());
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: "dark" });
+  t.after(() => ctx.close());
+  const page = await ctx.newPage();
+  await page.goto(d.pairLink());
+  await page.locator(".orbs-window").waitFor({ timeout: 30_000 });
+  await page.evaluate(() => (location.hash = "#/org"));
+  const board = page.locator("[data-board]");
+  await board.waitFor({ timeout: 20_000 });
+  assert.equal(await board.locator("[data-board-size]").innerText(), "3 seats, always an odd number");
+  assert.deepEqual(await board.locator("[data-seat]").evaluateAll((ss) => ss.map((x) => x.getAttribute("data-seat"))), ["chair", "secretary", "vice"], "the CEO in the Chair, your assistant its Secretary, the best of the rest its Vice Chair");
+  assert.match(await board.locator('[data-seat="chair"]').innerText(), /Max\s+Chairperson/);
+  model.replies.push("YES — we need one.", "YES — agreed.", "NO — too soon.");
+  await board.getByLabel("Put a proposal to the board").fill("Hire a CTO this month");
+  await board.getByRole("button", { name: "Put it to the vote" }).click();
+  const carried = board.locator('[data-proposal="carried"]');
+  await carried.waitFor({ timeout: 20_000 });
+  assert.match(await carried.innerText(), /Hire a CTO this month[\s\S]*Carried 2–1/);
+  assert.deepEqual(await carried.locator("[data-vote]").evaluateAll((vs) => vs.map((v) => v.getAttribute("data-vote"))), ["yes", "yes", "no"], "each member's vote");
+  assert.match(await carried.innerText(), /Max \(Chairperson\): Yes, we need one\./);
+  assert.deepEqual(await measure(page), [], "the board, at desk size");
+  const phone = await (await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: "dark", hasTouch: true, isMobile: true })).newPage();
+  t.after(() => phone.context().close());
+  await phone.goto(d.pairLink());
+  await phone.locator(".orbs-window").waitFor({ timeout: 30_000 });
+  await phone.evaluate(() => (location.hash = "#/org"));
+  await phone.locator("[data-board] [data-proposal]").first().waitFor({ timeout: 20_000 });
+  await phone.waitForTimeout(500);
+  assert.deepEqual(await measure(phone), [], "and at phone size");
 });

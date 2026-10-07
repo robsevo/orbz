@@ -633,7 +633,7 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ('"at", "outside", "team"', '"at", "team"'),
     ], ["finder.test.ts"]),
     ("a trade on a connector does not ask", "src/rules/floor.ts", [
-        ("|order|sell|trade|swap|withdraw|deposit|stake|unstake|bridge)$/],", "|order)$/],"),
+        ("|order|sell|trade|swap|withdraw|deposit|stake|unstake|bridge|bet|", "|order|bet|"),
     ], ["connectors.test.ts"]),
     ("an order on an exchange does not ask", "src/rules/floor.ts", [
         ("  /\\b(binance|kraken|robinhood|etoro|alpaca|bybit|okx|kucoin|bitstamp|bitfinex|uniswap)\\b/i,\n  /\\b(sell|trade|swap|withdraw|stake|unstake)\\b/i,\n", ""),
@@ -1214,7 +1214,7 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ("    this.social.due(); // two free orbs meet, in the office's day (PLAN 5.9)\n", ''),
     ], ['social.test.ts']),
     ('the home does not wake for a meeting', 'src/home.ts', [
-        ('this.reading.nextAt(), this.social.nextAt()]', 'this.reading.nextAt()]'),
+        ('this.reading.nextAt(), this.social.nextAt(), ', 'this.reading.nextAt(), '),
     ], ['social.test.ts']),
     ('an orb with work waiting meets', 'src/home.ts', [
         ('      free: (orb) => !db.prepare(', '      free: (orb) => true || !db.prepare('),
@@ -1259,6 +1259,44 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("a bet goes without asking", "src/rules/floor.ts", [
         ("|deposit|stake|unstake|bridge|bet|bets|wager|wagers|parlay)$/],", "|deposit|stake|unstake|bridge)$/],"),
     ], ["connectors.test.ts"]),
+    # the board's daily report (PLAN 5.18; owner, 10-07): from 08:00, each idea an orb's, its XP yours to give
+    ("the report goes out before 08:00", "src/report.ts", [
+        ("    if (this.#making || now < reportTimeOn(now)) return null;", "    if (this.#making) return null;"),
+    ], ["report.test.ts"]),
+    ("the same orbs pitch every day", "src/report.ts", [
+        ("  return [...office].sort((a, b) => lastAsked(a.id) - lastAsked(b.id) || seat(a.id) - seat(b.id)", "  return [...office].sort((a, b) => seat(a.id) - seat(b.id)"),
+    ], ["report.test.ts"]),
+    ("an approved idea gives its orb no XP", "src/gym/xp.ts", [
+        ("        if (e.orb) this.#give(e.orb, XP.ideaApproved, \"an idea you approved from the board's report\", e);\n", ""),
+    ], ["report.test.ts"]),
+    ("an idea is judged twice", "src/report.ts", [
+        ("    if (found.verdict) throw new Error(`that idea is already ${found.verdict}`);\n", ""),
+    ], ["report.test.ts"]),
+    ("the orbs do not hear the ideas you approved", "src/company.ts", [
+        ("  if (o.ideas?.length) lines.push(", "  if (false) lines.push("),
+    ], ["report.test.ts"]),
+    ("a run that failed counts as a job done", "src/report.ts", [
+        ('        if (orb && e.data.outcome === "ok") jobs.set(', "        if (orb) jobs.set("),
+    ], ["report.test.ts"]),
+    # the company's board (owner, 10-07): odd, its officers by their posts, everyone's election, proposals voted
+    ("the board has an even number of seats", "src/boardroom.ts", [
+        ("  const odd = orbs % 2 ? orbs : orbs - 1;", "  const odd = orbs;"),
+    ], ["boardroom.test.ts"]),
+    ("an orb votes for itself", "src/boardroom.ts", [
+        ("      if (c.id === voter.id) continue;\n", ""),
+    ], ["boardroom.test.ts"]),
+    ("the officers are voted onto the board, not seated by their posts", "src/boardroom.ts", [
+        ('  const officers = new Set(["ceo", "assistant", "cfo"].map((s) => officer(office, s)?.id).filter(Boolean));', "  const officers = new Set<string>();"),
+    ], ["boardroom.test.ts"]),
+    ("a proposal carries without a majority", "src/boardroom.ts", [
+        ("    const carried = yes > no;", "    const carried = yes > 0;"),
+    ], ["boardroom.test.ts"]),
+    ("the board is not elected again when it grows", "src/boardroom.ts", [
+        ("if (!last || last.size !== seatsFor(office.length) || ", "if (!last || "),
+    ], ["boardroom.test.ts"]),
+    ("the orbs do not hear what the board decided", "src/company.ts", [
+        ('  if (o.decisions?.length) lines.push(`The board has decided: ${o.decisions.map((d) => `"${d}"`).join("; ")}.`);\n', ""),
+    ], ["boardroom.test.ts"]),
     # the company (owner, 10-07): the CEO and your assistant first; each department with its head; the tandem
     ("anyone joins before your CEO", "src/company.ts", [
         ("  if (next && specialty !== next) return `Appoint your ${POST[next]} first", "  if (false && next && specialty !== next) return `Appoint your ${POST[next]} first"),
@@ -1403,7 +1441,7 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ('      return hint ? { ...out, content: `${out.content}\\n\\n${hint}` } : out;', '      return hint ? out : out;'),
     ], ['reading.test.ts']),
     ("the home does not wake for the night's read", 'src/home.ts', [
-        ('this.recruiter.nextAt(), this.reading.nextAt(), this.social.nextAt()]', 'this.recruiter.nextAt(), this.social.nextAt()]'),
+        ('this.recruiter.nextAt(), this.reading.nextAt(), this.social.nextAt(), ', 'this.recruiter.nextAt(), this.social.nextAt(), '),
     ], ['reading.test.ts']),
     ('the tick never reads', 'src/home.ts', [
         ("    void this.reading.due(); // the reading library's next read, one at a time (PLAN 3.12)\n", ''),
@@ -1575,7 +1613,7 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ('this.#reg.model = defaultMain(models);', 'this.#reg.model = models[0]?.slug ?? null;'),
     ], ['chatgpt.test.ts']),
     ('helpers run on the main model', 'src/home.ts', [
-        ('if (!cur || !o?.light) return cur?.ep ?? null;', 'return cur?.ep ?? null;'),
+        ('endpoint: (o) => (o?.light ? this.lightBrain() : ', 'endpoint: (o) => (false ? this.lightBrain() : '),
     ], ['chatgpt.test.ts']),
     ('a chime-in thinks and talks at length', 'src/agent/responses.ts', [
         ('const asked = body.brief ? Object.keys(BRIEF_FIELDS).filter((k) => !refused.has(k)) : [];', 'const asked: string[] = [];'),
@@ -1888,6 +1926,32 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("the click is a high tok again", "src/ui/sound.ts", [
         ("      return click(0, 170, 0.25);", "      return click(0, 540, 0.25);"),
     ], ["feel.test.ts"]),
+    # the board's report in the app (PLAN 5.18), the office as a camera room, an orb's page, the lab's flask (owner, 10-07)
+    ("the report's notice does not open it", "src/rooms/Notices.tsx", [
+        ('onClick={() => o.go({ room: "report" })}', "onClick={() => undefined}"),
+    ], ["report-view.test.ts"]),
+    ("an idea's verdict is never sent", "src/rooms/Report.tsx", [
+        ("const judge = (id: string, verdict: \"approve\" | \"pass\"): void => void home.judgeIdea(id, verdict)", "const judge = (id: string, verdict: \"approve\" | \"pass\"): void => void Promise.resolve(id + verdict)"),
+    ], ["report-view.test.ts"]),
+    ("the camera's glass takes the presses", "src/floor/camera.tsx", [
+        ('<div aria-hidden data-camera-glass style={{ position: "absolute", inset: 0, pointerEvents: "none",', '<div aria-hidden data-camera-glass style={{ position: "absolute", inset: 0,'),
+    ], ["floor-view.test.ts"]),
+    ("the camera's clock stops", "src/floor/camera.tsx", [
+        ("    const t = setInterval(() => setNow(new Date()), 1000);", "    const t = setInterval(() => undefined, 1000);"),
+    ], ["floor-view.test.ts"]),
+    ("an orb's gestures are as loud as its moods", "src/orbs.tsx", [
+        ('style={{ font: "600 12px/16px var(--font)", color: "var(--text-3)", background: "var(--fill)", boxShadow: "inset 0 0 0 .5px var(--hairline)", border: 0, borderRadius: 8,', 'style={{ font: "600 13px/18px var(--font)", color: "var(--text-2)", background: "var(--fill)", boxShadow: "inset 0 0 0 .5px var(--hairline)", border: 0, borderRadius: 8,'),
+    ], ["phones.test.ts"]),
+    ("the lab's mark is a star again", "src/orbs.tsx", [
+        ('{navItem("The lab", room === "lab", { room: "lab" }, <FlaskIcon />)}', '{navItem("The lab", room === "lab", { room: "lab" }, "✦")}'),
+    ], ["nav.test.ts"]),
+    # the board in the app (owner, 10-07): the Board room's table, the org chart's board
+    ("a board vote does not gather at the Board room's table", "src/floor/Floor.tsx", [
+        ('        if (e.type === "board.proposed" && Array.isArray(d.members)) setMeeting(', '        if (false && e.type === "board.proposed" && Array.isArray(d.members)) setMeeting('),
+    ], ["floor-view.test.ts"]),
+    ("the org chart hides the board", "src/rooms/Org.tsx", [
+        ("      {board && (\n        <section aria-label=\"The board\" data-board", "      {false && board && (\n        <section aria-label=\"The board\" data-board"),
+    ], ["org-view.test.ts"]),
     # the company in the app (owner, 10-07)
     ("the creator offers everything before your CEO", "src/orbs.tsx", [
         ('      {tab === "Specialty" && founding && (', '      {tab === "Specialty" && false && founding && ('),

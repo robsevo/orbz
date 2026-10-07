@@ -39,7 +39,7 @@ after(async () => {
 async function open(size: keyof typeof SIZES): Promise<Page> {
   const page = await browser.newPage({ viewport: SIZES[size], colorScheme: "dark" });
   await page.goto(`${site.url}/orbs.html?splash=0&intro=0`);
-  await page.waitForSelector("canvas", { state: "attached" });
+  await page.waitForSelector("canvas", { state: "attached", timeout: 90_000 }); // a busy gate draws slowly
   return page;
 }
 
@@ -118,6 +118,10 @@ test("a roll of the dice that lands on another page turns to it", { skip }, asyn
     pagesSeen.add((await on.evaluate((b) => b.closest("[data-page]")!.getAttribute("data-page")))!);
   }
   assert.ok(pagesSeen.size > 1, `control: the rolls landed on more than one page (${[...pagesSeen]})`);
+  // the last to use the two kept pages: closed now, so their thumbnails stop drawing beside the tests after (a busy
+  // gate let a new page's first canvas wait past 30 s while they drew, 10-07)
+  for (const p of sized.values()) await (await p).close().catch(() => {});
+  sized.clear();
 });
 
 /** The mean colour of the top `share` of a thumbnail's body (where a hat sits), or of a band (glasses). */
@@ -202,26 +206,26 @@ test("the first of his kind starts as the Senior, the next of that kind a Junior
     await page.getByRole("tab", { name: "Specialty" }).click();
     await page.getByRole("button", { name: new RegExp(`^${title}`) }).click();
   };
-  // the first orb is the assistant (owner, 10-04): hired first, the Senior of its kind
-  await page.getByText("Starts as the Senior: your first Personal Assistant", { exact: true }).waitFor();
+  // the first orb is your CEO, the next your assistant (owner, 10-07): each the first, so the Senior of its kind
+  await page.getByText("Starts as the Senior: your first Chief Executive Officer", { exact: true }).waitFor();
   await page.getByRole("textbox", { name: "Name" }).fill("Maya");
   await page.getByRole("button", { name: "Create Maya" }).click();
   await page.getByRole("heading", { name: "Maya" }).waitFor();
   await page.getByRole("button", { name: "New orb" }).first().click({ timeout: 90_000 }); // a busy gate draws slowly
-  await pick("Frontend Builder");
-  await page.getByText("Starts as the Senior: your first Frontend Builder", { exact: true }).waitFor();
+  await page.getByText("Starts as the Senior: your first Personal Assistant", { exact: true }).waitFor();
   await page.getByRole("textbox", { name: "Name" }).fill("Pip");
   await page.getByRole("button", { name: "Create Pip" }).click();
   await page.getByRole("heading", { name: "Pip" }).waitFor();
   assert.match(await page.locator("main").innerText(), /Senior · 0 XP/, "and his card says so");
+  // a second assistant: a Junior (Life is open, its head your assistant)
   await page.getByRole("button", { name: "New orb" }).first().click({ timeout: 90_000 }); // a busy gate draws slowly
-  await pick("Frontend Builder");
+  await pick("Personal Assistant");
   await page.getByText("Starts as a Junior", { exact: true }).waitFor();
   assert.deepEqual(await measure(page), [], "nothing spills at desk size");
   await page.setViewportSize(SIZES.phone);
   assert.deepEqual(await measure(page), [], "nor at phone size");
-  await pick("All-Rounder");
-  await page.getByText("Starts as the Senior: your first All-Rounder", { exact: true }).waitFor();
+  await pick("Travel Planner");
+  await page.getByText("Starts as the Senior: your first Travel Planner", { exact: true }).waitFor();
   assert.deepEqual(await measure(page), [], "the Senior's line fits a phone too");
   await page.close();
 });

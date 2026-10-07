@@ -17,6 +17,8 @@ export const XP = {
   planRow: 15, habitPromoted: 25, habitAnswered: 1, lessonKept: 5,
   /** A task type its own brain cleared the exam's bar on (PLAN 3.4); taken back when it no longer holds. */
   examCleared: 20,
+  /** An idea of its in the board's report that you approved (PLAN 5.18; owner, 10-07: "so they get xp if we approve it"). */
+  ideaApproved: 30,
   denied: -5, habitRolledBack: -25, never: -10,
 } as const;
 /** The most an orb earns in a day (losses are not capped). */
@@ -130,6 +132,9 @@ export class Xp {
         return;
       case "ladder.answered":
         if (e.data.tier === "habit" && e.orb) this.#give(e.orb, XP.habitAnswered, `its habit answered (${String(e.data.kind)})`, e);
+        return;
+      case "report.idea_approved":
+        if (e.orb) this.#give(e.orb, XP.ideaApproved, "an idea you approved from the board's report", e);
         return;
       case "orb.learned":
         if (e.orb) this.#give(e.orb, XP.lessonKept, "a lesson you kept", e);

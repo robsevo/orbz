@@ -7,17 +7,28 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { Orb } from "../orb/Orb.tsx";
 import { FAMILIES, SPECIALTIES, type Character, type Family } from "../orb/spec.ts";
-import { idOf, type OrgState, type Office } from "../home/link.ts";
+import { idOf, type BoardPost, type BoardState, type OrgState, type Office } from "../home/link.ts";
+import { Tall } from "../ui/Balanced.tsx";
 import { Balanced } from "../ui/Balanced.tsx";
 import { ReportCard, SchoolSheet } from "./School.tsx";
 
 const small: CSSProperties = { font: "500 12px/16px var(--font)", color: "var(--text-3)", textWrap: "pretty" };
+const POST: Record<BoardPost, string> = { chair: "Chairperson", vice: "Vice Chair", secretary: "Secretary", treasurer: "Treasurer", director: "Director" };
+const VOTE: Record<"yes" | "no" | "abstain", string> = { yes: "Yes", no: "No", abstain: "Abstained" };
 const head: CSSProperties = { font: "700 11px/16px var(--font)", letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)" };
 /** Each department's head's post (home org.ts HEAD_OF). */
 const HEAD_OF: Record<Family, keyof typeof SPECIALTIES> = { exec: "ceo", build: "cto", think: "chiefofstaff", make: "cmo", finance: "cfo", business: "coo", life: "assistant" };
 
 export function OrgRoom({ home, office, open, rehired, school = null }: { home: Office | null; office: Character[]; open: (c: Character) => void; rehired: () => void; school?: string | null }) {
   const [org, setOrg] = useState<OrgState | null>(null);
+  const [board, setBoard] = useState<BoardState | null>(null);
+  const [motion, setMotion] = useState(""); // a proposal being written
+  useEffect(() => {
+    if (!home) return;
+    const load = (): void => void home.board().then(setBoard, () => setBoard(null));
+    load();
+    return home.watch({ event: (e) => void (/^(board\.|orb\.)/.test(e.type) && load()) }); // a vote, an election, a hire
+  }, [home]);
   const [said, setSaid] = useState<string | null>(null);
   // whose school sheet is open (PLAN 5.7): the orb you let go to send to school, from its profile (owner, 10-06)
   const [sending, setSending] = useState<string | null>(school);
@@ -67,6 +78,72 @@ export function OrgRoom({ home, office, open, rehired, school = null }: { home: 
         <section aria-label="Chief" style={{ display: "grid", justifyItems: "center", gap: 6 }}>
           <span style={{ font: "700 11px/16px var(--font)", letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)" }}>Chief</span>
           {card(org.chief, true)}
+        </section>
+      )}
+      {/* the board (PLAN 5.16; owner, 10-07): always odd, its officers by their posts, the rest elected by everyone; a
+          proposal put to it is read and voted on by each member */}
+      {board && (
+        <section aria-label="The board" data-board style={{ display: "grid", gap: "var(--s3)", padding: "var(--s4)", borderRadius: 18, background: "linear-gradient(160deg, var(--accent-wash), var(--fill) 60%)", boxShadow: "inset 0 0 0 .5px var(--hairline)", minWidth: 0 }} data-orb="honey">
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, flexWrap: "wrap", minWidth: 0 }}>
+            <span style={{ font: "800 17px/22px var(--font)", color: "var(--text-1)" }}>The board</span>
+            <span data-board-size style={small}>{board.size ? `${board.size} ${board.size === 1 ? "seat" : "seats"}, always an odd number` : "No board yet"}</span>
+          </div>
+          {board.size < 3 ? (
+            <span style={small}>The board sits once the company has three orbs. Until then your CEO decides alone.</span>
+          ) : (
+            <Balanced min={130}>
+              {board.seats.map((st) => {
+                const c = face(st.orb);
+                const votes = board.election?.votes.filter((v) => v.for === st.orb).length ?? 0;
+                return (
+                  <button key={st.orb} type="button" data-seat={st.post} data-orb={c?.hue} onClick={() => c && open(c)} style={{ display: "grid", justifyItems: "center", gap: 2, padding: "10px 8px", border: 0, borderRadius: 14, cursor: "pointer", background: st.post === "chair" ? "var(--accent-fill)" : "var(--fill)", boxShadow: st.post === "chair" ? "inset 0 0 0 1.5px var(--accent)" : "none", minWidth: 0 }}>
+                    {c && <Orb character={c} size={52} poke={false} still />}
+                    <span style={{ font: "700 13px/18px var(--font)", color: "var(--text-1)" }}>{st.name}</span>
+                    <span style={small}>{(st.post === "vice" || st.post === "director") && votes ? `${POST[st.post]} · ${votes} ${votes === 1 ? "vote" : "votes"}` : POST[st.post]}</span>
+                  </button>
+                );
+              })}
+            </Balanced>
+          )}
+          {board.size >= 3 && (
+            <form
+              data-propose
+              onSubmit={(e) => {
+                e.preventDefault();
+                const t = motion.trim();
+                if (t) void home.propose(t).then(() => setMotion(""), (err: Error) => setSaid(err.message));
+              }}
+              style={{ display: "grid", gap: 6 }}
+            >
+              <label style={head} htmlFor="board-motion">Put a proposal to the board</label>
+              <textarea id="board-motion" value={motion} onChange={(e) => setMotion(e.target.value)} maxLength={600} rows={2} placeholder="Hire a CFO and open Finance this month" style={{ font: "500 15px/21px var(--font)", color: "var(--text-1)", background: "var(--card)", border: 0, borderRadius: 12, padding: "10px 12px", resize: "vertical", boxShadow: "inset 0 0 0 1px var(--hairline)", minWidth: 0 }} />
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+                <span style={small}>Each member reads it and votes, with a line why; a majority carries it, and every orb follows it.</span>
+                <button type="submit" disabled={!motion.trim()} style={{ font: "700 13px/18px var(--font)", border: 0, borderRadius: 10, padding: "8px 14px", background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)", color: "var(--text-1)", cursor: "pointer", opacity: motion.trim() ? 1 : 0.5 }}>Put it to the vote</button>
+              </div>
+            </form>
+          )}
+          {board.proposals.length > 0 && (
+            <Tall max="40dvh" label="The board's proposals">
+              <ul style={{ display: "grid", gap: 10, margin: 0, padding: 0, listStyle: "none" }}>
+                {board.proposals.map((p) => {
+                  const yes = p.votes.filter((v) => v.vote === "yes").length;
+                  const no = p.votes.filter((v) => v.vote === "no").length;
+                  return (
+                    <li key={p.id} data-proposal={p.carried === null ? "voting" : p.carried ? "carried" : "rejected"} style={{ display: "grid", gap: 4, padding: "10px 12px", borderRadius: 12, background: "var(--card)", boxShadow: "inset 0 0 0 .5px var(--hairline)" }}>
+                      <span style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
+                        <span style={{ font: "600 14px/20px var(--font)", color: "var(--text-1)", minWidth: 0, overflowWrap: "anywhere" }}>{p.text}</span>
+                        <b style={{ font: "800 12px/16px var(--font)", color: p.carried === null ? "var(--text-3)" : p.carried ? "var(--accent)" : "var(--alert)", whiteSpace: "nowrap" }}>{p.carried === null ? "Voting…" : `${p.carried ? "Carried" : "Rejected"} ${yes}–${no}`}</b>
+                      </span>
+                      {p.votes.map((v) => (
+                        <span key={v.orb} data-vote={v.vote} style={small}>{`${v.name} (${POST[v.post]}): ${VOTE[v.vote]}${v.why ? `, ${v.why}` : ""}`}</span>
+                      ))}
+                    </li>
+                  );
+                })}
+              </ul>
+            </Tall>
+          )}
         </section>
       )}
       {/* let go (PLAN 5.5): out of the office, still learning, a press from coming back */}

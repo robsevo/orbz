@@ -632,6 +632,36 @@ async function handle(
       throw new HttpError(409, e instanceof Error ? e.message : String(e));
     }
   }
+  // the company's board (PLAN 5.16): who sits, its last election, its proposals and their votes; a proposal put to it
+  // (each member votes on the cheapest brain, the votes coming as events); an election now
+  if (method === "GET" && url.pathname === "/board") {
+    const seats = home.boardroom.seats();
+    return { size: seats.length, seats, election: home.boardroom.lastElection(), proposals: home.boardroom.proposals() };
+  }
+  if (method === "POST" && url.pathname === "/board/proposals") {
+    const t = text(await body(req), "text");
+    if (t.length > 600) throw new HttpError(400, "a proposal is 600 letters at most: say it in a few lines");
+    if (!home.boardroom.seats().length) throw new HttpError(409, "there is no board yet: appoint your CEO first");
+    void home.boardroom.propose(t, "founder").catch(() => undefined); // its votes come as board.* events
+    return { put: true };
+  }
+  if (method === "POST" && url.pathname === "/board/election") return { election: home.boardroom.elect() };
+  // the board's daily report (PLAN 5.18): the last week's, newest first; one made now (the day's own comes at 08:00);
+  // your verdict on an idea (approved gives its orb XP, once)
+  if (method === "GET" && url.pathname === "/reports") return { reports: home.reports.list() };
+  if (method === "POST" && url.pathname === "/reports") {
+    if (!home.inbox.orbs().length) throw new HttpError(409, "there is no one to report yet: appoint your CEO first");
+    void home.reports.make().catch(() => undefined); // it comes as a report.made event
+    return { making: true };
+  }
+  const idea = /^\/reports\/ideas\/(\d+\.\d+)\/(approve|pass)$/.exec(url.pathname);
+  if (method === "POST" && idea) {
+    try {
+      return { idea: home.reports.judge(idea[1]!, idea[2] === "approve" ? "approved" : "passed") };
+    } catch (e) {
+      throw new HttpError(409, e instanceof Error ? e.message : String(e));
+    }
+  }
   // the home page's look at the office (owner, 10-07: "a nice home page the app can default to ... with a nice dashboard
   // and stats"): by code, no brain asked
   if (method === "GET" && url.pathname === "/dashboard") return dashboardOf(home);

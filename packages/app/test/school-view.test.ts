@@ -61,8 +61,11 @@ test("send an orb you let go to school, rate its answers, change a syllabus; a d
   t.after(() => h.close());
   h.start();
   h.about.setName("Robin");
-  // the office has its personal assistant: the Recruiter opens only once there is one (owner, 10-04)
+  // the office has its CEO and personal assistant, and a COO to open Business, where support works: the Recruiter and
+  // a department open only then (owner, 10-07)
+  h.inbox.addOrb("max", "Max", "ceo", { shape: "egg", eyes: "classic", hue: "honey" });
   h.inbox.addOrb("pa", "Pip", "assistant", { shape: "egg", eyes: "classic", hue: "azure" });
+  h.inbox.addOrb("oto", "Oto", "coo", { shape: "bean", eyes: "classic", hue: "teal" });
   h.inbox.addOrb("cy", "Cy", "support", { shape: "bean", eyes: "classic", hue: "rose" });
   h.inbox.letGo("cy");
   const d = await serve(h, { port: 0, appDir: dist });
