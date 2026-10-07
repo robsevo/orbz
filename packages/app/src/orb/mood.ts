@@ -42,6 +42,12 @@ export class MoodOf {
   hear(e: Heard): Moment | null {
     if (e.type === "gym.night") this.#gym = true;
     if (e.type === "gym.night_done" || e.type === "gym.night_failed") this.#gym = false;
+    // a moment with another orb (owner, 10-07: "situations between orbs that affect friendships that affect their mood"):
+    // it went well, a hop; it fell flat, a pout; either way it is awake
+    if (e.type === "social.moment" && (e.data?.a === this.#orb || e.data?.b === this.#orb)) {
+      this.#last = Math.max(this.#last, e.at ?? this.#last);
+      return e.data?.tone === "warm" ? "hop" : "pout";
+    }
     if (e.orb !== this.#orb) return null;
     this.#last = Math.max(this.#last, e.at ?? this.#last);
     const d = e.data ?? {};

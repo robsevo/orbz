@@ -986,6 +986,7 @@ export class Home {
     this.recruiter.due(); // the Recruiter's list turns over at midnight (PLAN 5.8)
     void this.reading.due(); // the reading library's next read, one at a time (PLAN 3.12)
     this.social.due(); // two free orbs meet, in the office's day (PLAN 5.9)
+    this.social.momentDue(); // and now and then run into each other (owner, 10-07: "micro interactions")
     this.boardroom.due(); // the board's election: when there is none, when its size changes, once a week (PLAN 5.16)
     if (this.#reportsOn) void this.reports.due()?.catch(() => undefined); // the board's report, from 08:00 each day (PLAN 5.18)
     await this.triggers.poll({ all: woke });
@@ -996,7 +997,7 @@ export class Home {
     this.#cancelTimer?.();
     const now = this.clock.now();
     let delay = this.#heartbeatMs;
-    for (const at of [this.schedules.nextDueAt(), this.notices.nextDueAt(), this.loops.nextDueAt(), this.triggers.nextPollAt(), this.gym.nextAt(), this.school.nextAt(), this.recruiter.nextAt(), this.reading.nextAt(), this.social.nextAt(), this.boardroom.nextAt(), this.#reportsOn ? this.reports.nextAt() : null]) {
+    for (const at of [this.schedules.nextDueAt(), this.notices.nextDueAt(), this.loops.nextDueAt(), this.triggers.nextPollAt(), this.gym.nextAt(), this.school.nextAt(), this.recruiter.nextAt(), this.reading.nextAt(), this.social.nextAt(), this.social.nextMomentAt(), this.boardroom.nextAt(), this.#reportsOn ? this.reports.nextAt() : null]) {
       if (at !== null) delay = Math.min(delay, at - now);
     }
     this.#cancelTimer = this.clock.timer(Math.max(MIN_DELAY_MS, delay), () => void this.tick());

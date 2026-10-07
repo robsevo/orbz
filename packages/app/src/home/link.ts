@@ -57,6 +57,12 @@ export type SocialState = {
   friendships: { a: string; b: string; score: number; word: FriendWord; meetings: number; lastAt: number | null }[];
   meetings: Meeting[]; current: Meeting[];
   lessons: { id: number; at: number; from: string; to: string; line: string; state: string }[];
+  /** The moments under way: two orbs run into each other, a line each (the home's social/rules.ts pickMoment). */
+  moments?: MomentState[];
+};
+export type MomentState = {
+  kind: "bump" | "highfive" | "cookie" | "joke" | "mug" | "sticky" | "trip" | "dance"; place: "aisle" | "kitchen" | "desk"; tone: "warm" | "flat";
+  lines: [string, string]; gestures: [string, string]; delta: number; a: string; b: string; names: [string, string]; score: number; at: number; until: number;
 };
 /** The morning card (PLAN 3.5): yesterday's work, orb by orb, and the night after it. */
 export type Undo = { kind: "lesson"; orb: string; line: string; index: number } | { kind: "habit"; orb: string; habit: string; version: number };

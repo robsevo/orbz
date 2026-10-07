@@ -10,7 +10,7 @@
 //   - each orb's desk is in its department, six to a department, the seventh at a free desk elsewhere.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { CELL, CORRIDOR, DESKS, GH, GRID, GW, POIS, SEATS, W, ZONES, clear, dice, isMeeting, meetSpot, next, route, seating, sentBy, speed, type PoiId, type Traits } from "../src/floor/plan.ts";
+import { CELL, CORRIDOR, DESKS, FOOD, GH, GRID, GW, POIS, SEATS, W, ZONES, clear, dice, dwell, isMeeting, meetSpot, momentPlan, next, route, seating, sentBy, speed, type MomentKind, type Plan, type PoiId, type Traits } from "../src/floor/plan.ts";
 
 const corridor = { x: 600, y: CORRIDOR.y + CORRIDOR.h / 2 };
 const spots = [...DESKS.map((d) => [`desk ${d.zone}${d.n}`, d.approach] as const), ...SEATS.map((s, i) => [`seat ${i}`, s.approach] as const), ...POIS.map((p) => [`${p.id}`, p.approach] as const)];
@@ -33,7 +33,7 @@ test("every desk, seat and place to go is reachable from the corridor, and no wa
 });
 
 test("every side of every meeting place (office life, PLAN 5.9) is inside the floor and reachable, the two apart", () => {
-  for (const place of ["coffee", "cooler", "bistro1", "bistro2", "pingpong", "arcade"] as const) {
+  for (const place of ["coffee", "cooler", "bistro1", "bistro2", "pingpong", "arcade", "fridge", "plant1", "plant2", "plant3"] as const) {
     const [a, b] = [meetSpot(place, 0), meetSpot(place, 1)];
     for (const [side, x] of [[0, a], [1, b]] as const) {
       for (const p of [x.approach, x.at]) assert.ok(p.x >= 48 && p.x <= W - 48, `${place}, side ${side}: inside the floor (x ${p.x})`);
@@ -85,6 +85,44 @@ test("free, it never takes a spot someone holds; someone waiting at the ping-pon
   const drawn = count("ping1", new Set<PoiId>(["ping1"]));
   assert.ok(drawn > 400, `with a player waiting, the other end often (${drawn} of 2000)`);
   assert.ok(speed({ ...even, Pace: 16 }) > speed({ ...even, Pace: 4 }));
+});
+
+test("a moment (owner, 10-07: \"micro interactions ... goofy and funny\"): each kind at its spot, the two tags naming each other, a line each, the second a beat after the first", () => {
+  const kinds: MomentKind[] = ["bump", "highfive", "cookie", "joke", "mug", "sticky", "trip", "dance"];
+  for (const [i, kind] of kinds.entries()) {
+    const m = { a: "Ada", b: "Bo", kind, lines: ["first line", "second line"] as [string, string], gestures: ["hop", "nod"] as [string, string], at: 1_000 * i, until: 30_000 };
+    const [pa, pb] = [momentPlan(m, "Ada"), momentPlan(m, "Bo")];
+    assert.equal(pa.place, pb.place, `${kind}: one place for the two`);
+    assert.deepEqual([pa.side, pb.side, pa.with, pb.with], [0, 1, "Bo", "Ada"]);
+    assert.deepEqual([pa.say, pb.say], [{ line: "first line", gesture: "hop", after: 0 }, { line: "second line", gesture: "nod", after: 1600 }], `${kind}: a line each, the reply a beat later`);
+    assert.ok(pa.mark && pa.label && pb.label && pa.label !== "" && (pa.label.includes("Bo") || kind === "trip" || kind === "mug" || kind === "sticky"), `${kind}: ${pa.label} / ${pb.label}`);
+    if (["bump", "highfive", "trip"].includes(kind)) assert.match(pa.place, /^plant[123]$/, `${kind}: in an aisle`);
+    if (["joke", "sticky"].includes(kind)) assert.equal(pa.place, "desk", `${kind}: at the first one's desk`);
+  }
+});
+
+test("a calmer office (owner, 10-07: \"slow down the amount of things they do ... they go eat a lot\"): 20 to 60 s a stay; food and drink a small share and never twice running; back to its desk more after an outing", () => {
+  const r = dice("pace");
+  for (let i = 0; i < 300; i++) {
+    const d = dwell(even, r);
+    assert.ok(d >= 20_000 && d <= 60_000, `a stay of ${d} ms`);
+  }
+  assert.ok(dwell({ ...even, Calm: 20 }, () => 0.5) > dwell({ ...even, Calm: 4 }, () => 0.5), "longer the calmer");
+  const none = { pois: new Set<PoiId>(), seats: new Set<number>(), waitingAt: null };
+  const desk: Plan = { kind: "desk", why: "tidy", label: "At the desk", mark: "🗂" };
+  const draw = (prev: Plan | null, n = 4000): Plan[] => {
+    const rr = dice(`draw:${prev?.kind ?? "none"}:${prev?.kind === "poi" ? prev.poi : ""}`);
+    return Array.from({ length: n }, () => next({ name: "A", mood: "idle", meeting: false, traits: even }, none, ["B"], rr, prev));
+  };
+  const share = (ps: Plan[], f: (p: Plan) => boolean): number => ps.filter(f).length / ps.length;
+  const food = (p: Plan): boolean => p.kind === "poi" && FOOD.has(p.poi);
+  const fromDesk = draw(desk);
+  assert.ok(share(fromDesk, food) <= 0.25, `food and drink a small share (${share(fromDesk, food).toFixed(2)})`);
+  assert.ok(share(fromDesk, food) >= 0.05, "control: a coffee still happens");
+  assert.equal(share(draw({ kind: "poi", poi: "coffee", label: "Getting a coffee", mark: "☕" }), food), 0, "never two in a row");
+  const fromBooks = draw({ kind: "poi", poi: "books", label: "Reading", mark: "📖" });
+  const atDesk = (p: Plan): boolean => p.kind === "desk";
+  assert.ok(share(fromBooks, atDesk) > share(fromDesk, atDesk) * 1.5, `back to its desk after an outing (${share(fromBooks, atDesk).toFixed(2)} vs ${share(fromDesk, atDesk).toFixed(2)})`);
 });
 
 test("each orb's desk is in its department, six to one; the seventh sits at a free desk elsewhere", () => {

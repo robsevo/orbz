@@ -542,7 +542,9 @@ async function handle(
   // waiting for your yes; an orb's traits as the app's DNA has them; Keep or Not now for a lesson
   if (method === "GET" && url.pathname === "/social") {
     // `now` is the home's clock: a device times the meetings by it, whatever its own clock says
-    return { now: home.clock.now(), friendships: home.social.friendships(), meetings: home.social.recent(20), current: home.social.current(), lessons: home.social.lessons("waiting") };
+    return { now: home.clock.now(), friendships: home.social.friendships(), meetings: home.social.recent(20), current: home.social.current(), lessons: home.social.lessons("waiting"),
+      // the moments under way (owner, 10-07: "micro interactions"), for the floor to play
+      moments: home.social.moments(6).filter((m) => m.until > home.clock.now()) };
   }
   if (method === "GET" && parts[0] === "orbs" && parts.length === 3 && parts[2] === "friends") {
     const id = decodeURIComponent(parts[1]!);

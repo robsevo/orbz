@@ -325,11 +325,12 @@ export type Plan =
   | { kind: "meeting"; seat: number; label: string; mark: string }
   | { kind: "poi"; poi: PoiId; label: string; mark: string; with?: string }
   | { kind: "visit"; who: string; label: string; mark: string }
-  /** A meeting the home decided (PLAN 5.9): the two go to its place together, side 0 and side 1. */
-  | { kind: "meet"; with: string; place: MeetPlace; side: 0 | 1; until: number; label: string; mark: string };
+  /** A meeting the home decided (PLAN 5.9): the two go to its place together, side 0 and side 1; a moment's (owner, 10-07)
+   * also says a line and makes a gesture there, `after` ms once it has arrived. */
+  | { kind: "meet"; with: string; place: MeetPlace; side: 0 | 1; until: number; label: string; mark: string; say?: { line: string; gesture: string; after: number } };
 
 /** Where the home's meetings happen (home/src/social/rules.ts Place). */
-export type MeetPlace = "coffee" | "cooler" | "bistro1" | "bistro2" | "pingpong" | "arcade" | "desk";
+export type MeetPlace = "coffee" | "cooler" | "bistro1" | "bistro2" | "pingpong" | "arcade" | "desk" | "fridge" | "plant1" | "plant2" | "plant3";
 export type MeetKind = "coffee" | "ideas" | "game" | "lesson";
 
 /** Where one side of a meeting stands at a spot (not a desk: that is the teacher's own): the two ends of
@@ -358,6 +359,31 @@ export function meetPlan(m: { a: string; b: string; kind: MeetKind; place: MeetP
   return { ...base, label: m.place === "cooler" ? `At the cooler with ${other}` : `Having a coffee with ${other}`, mark: "☕" };
 }
 
+/** A moment the home decided (owner, 10-07: "more micro interactions and situations between orbs ... goofy and funny as
+ * well. fun to watch"; home/src/social/rules.ts pickMoment): where the two run into each other, what each tag says, and
+ * the line each says there, the second a beat after the first, with a gesture each. A bump, a high five or a trip is in
+ * an aisle by a plant; the last cookie at the fridge, a mug at the coffee, a dance at the cooler; a joke or a sticky note
+ * at the first one's desk. */
+export type MomentKind = "bump" | "highfive" | "cookie" | "joke" | "mug" | "sticky" | "trip" | "dance";
+export const MOMENT_MARK: Record<MomentKind, string> = { bump: "💥", highfive: "✋", cookie: "🍪", joke: "😂", mug: "☕", sticky: "📝", trip: "🌀", dance: "🕺" };
+export function momentPlan(m: { a: string; b: string; kind: MomentKind; lines: [string, string]; gestures: [string, string]; at: number; until: number }, me: string): Extract<Plan, { kind: "meet" }> {
+  const side: 0 | 1 = me === m.a ? 0 : 1;
+  const other = side === 0 ? m.b : m.a;
+  const aisle = (["plant1", "plant2", "plant3"] as const)[Math.floor(m.at / 1000) % 3]!;
+  const place: MeetPlace = { bump: aisle, highfive: aisle, trip: aisle, cookie: "fridge", mug: "coffee", dance: "cooler", joke: "desk", sticky: "desk" }[m.kind] as MeetPlace;
+  const label = {
+    bump: `Bumped into ${other}`,
+    highfive: `A high five with ${other}`,
+    trip: side === 0 ? "Tripped!" : `Helping ${other} up`,
+    cookie: `The last cookie, with ${other}`,
+    mug: side === 0 ? "Looking for a mug" : `Helping ${other} find a mug`,
+    dance: `A kitchen dance with ${other}`,
+    joke: side === 0 ? `Telling ${other} a joke` : `Hearing ${other}'s joke`,
+    sticky: side === 0 ? "A note on the screen" : `Owning up to ${other}`,
+  }[m.kind];
+  return { kind: "meet", with: other, place, side, until: m.until, label, mark: MOMENT_MARK[m.kind], say: { line: m.lines[side], gesture: m.gestures[side], after: side === 0 ? 0 : 1600 } };
+}
+
 const AT_DESK: Partial<Record<Mood, Extract<Plan, { kind: "desk" }>>> = {
   working: { kind: "desk", why: "work", label: "Working", mark: "⌨" },
   thinking: { kind: "desk", why: "think", label: "Thinking", mark: "…" },
@@ -374,9 +400,15 @@ export function sentBy(mood: Mood, meeting: boolean): "desk" | "meeting" | "rest
   return null;
 }
 
+/** Where food and drink are: the kitchen's spots, the snack tables, the water cooler. */
+export const FOOD: ReadonlySet<PoiId> = new Set<PoiId>(["coffee", "fridge", "cooler", "vending", "bistro1", "bistro2"]);
+
 /** What it does now. `busy` are the spots others hold (a POI, a meeting seat), `idle` the others free to
- * visit (with their desks), `r` the dice. */
-export function next(o: { name: string; mood: Mood; meeting: boolean; traits: Traits }, busy: { pois: Set<PoiId>; seats: Set<number>; waitingAt: PoiId | null }, others: string[], r: () => number): Plan {
+ * visit (with their desks), `r` the dice; `prev` what it did last. A calmer office (owner, 10-07: "slow down the amount of
+ * things they do it seems like they go eat a lot then do something else then do another thing, its too much. lively pace
+ * please"): food and drink are a small share of what a free orb does and never twice running; after an outing it is
+ * likelier to go back to its desk, so the day has a home base. */
+export function next(o: { name: string; mood: Mood; meeting: boolean; traits: Traits }, busy: { pois: Set<PoiId>; seats: Set<number>; waitingAt: PoiId | null }, others: string[], r: () => number, prev: Plan | null = null): Plan {
   const sent = sentBy(o.mood, o.meeting);
   if (sent === "desk") return AT_DESK[o.mood] ?? AT_DESK.working!;
   if (sent === "meeting") {
@@ -390,16 +422,17 @@ export function next(o: { name: string; mood: Mood; meeting: boolean; traits: Tr
   // free: where its traits take it
   const t = o.traits;
   const pull: [Plan, number][] = [];
+  const ate = prev?.kind === "poi" && FOOD.has(prev.poi);
   const poi = (id: PoiId, w: number): void => {
-    if (busy.pois.has(id)) return;
+    if (busy.pois.has(id) || (ate && FOOD.has(id))) return;
     const x = POIS.find((q) => q.id === id)!;
     pull.push([{ kind: "poi", poi: id, label: x.label, mark: x.mark }, w]);
   };
-  poi("coffee", 2 + t.Pace * 0.12);
-  poi("cooler", 1.2 + t.Humour * 0.05);
-  poi("fridge", 0.6 + t.Humour * 0.04);
-  poi("vending", 0.5 + t.Pace * 0.03);
-  poi(r() < 0.5 ? "bistro1" : "bistro2", 0.6 + t.Calm * 0.04);
+  poi("coffee", 1.2 + t.Pace * 0.05);
+  poi("cooler", 0.4 + t.Humour * 0.02);
+  poi("fridge", 0.15 + t.Humour * 0.01);
+  poi("vending", 0.1 + t.Pace * 0.01);
+  poi(r() < 0.5 ? "bistro1" : "bistro2", 0.2 + t.Calm * 0.01);
   poi("books", 0.4 + t.Curiosity * 0.16);
   poi("window", 0.3 + t.Calm * 0.08);
   poi(["sofa1", "sofa2", "sofa3"][Math.floor(r() * 3)] as PoiId, 0.3 + t.Calm * 0.1);
@@ -413,15 +446,18 @@ export function next(o: { name: string; mood: Mood; meeting: boolean; traits: Tr
     const who = others[Math.floor(r() * others.length)]!;
     pull.push([{ kind: "visit", who, label: `Chatting with ${who}`, mark: "💬" }, 0.4 + t.Humour * 0.06 + t.Care * 0.06]);
   }
-  pull.push([{ kind: "desk", why: "tidy", label: "At the desk", mark: "🗂" }, 0.6 + t.Focus * 0.14]);
+  // its desk, the day's home base: more so after an outing
+  const out = prev !== null && prev.kind !== "desk";
+  pull.push([{ kind: "desk", why: "tidy", label: "At the desk", mark: "🗂" }, (1.5 + t.Focus * 0.2) * (out ? 2 : 1)]);
   const sum = pull.reduce((n, [, w]) => n + w, 0);
   let x = r() * sum;
   for (const [plan, w] of pull) if ((x -= w) <= 0) return plan;
   return pull[pull.length - 1]![0];
 }
 
-/** How long it stays, in ms: longer the calmer. */
-export const dwell = (traits: Traits, r: () => number): number => Math.round((7 + r() * 11) * (0.8 + traits.Calm / 30) * 1000);
+/** How long it stays, in ms: 20 to 45 s, longer the calmer (owner, 10-07: "slow down the amount of things they do"; it
+ * was 7 to 18 s, a new errand every few seconds). */
+export const dwell = (traits: Traits, r: () => number): number => Math.round((20 + r() * 25) * (0.8 + traits.Calm / 30) * 1000);
 /** How fast it walks, in plan units a second: quicker the more Pace it has. */
 export const speed = (traits: Traits): number => 52 + traits.Pace * 3.4;
 

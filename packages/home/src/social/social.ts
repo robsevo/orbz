@@ -13,7 +13,7 @@ import type { Clock } from "../clock.ts";
 import { tx } from "../db.ts";
 import type { EventLog } from "../events.ts";
 import {
-  clampScore, compat, deltaOf, inOfficeDay, type Kind, NEUTRAL, nextOpening, pickKind, pickPair, type Place, placeOf, readTraits, type Traits, winnerOf, type Word, wordOf,
+  clampScore, compat, deltaOf, inOfficeDay, type Kind, type Moment, NEUTRAL, nextOpening, pickKind, pickMoment, pickPair, type Place, placeOf, readTraits, type Traits, winnerOf, type Word, wordOf,
 } from "./rules.ts";
 
 const MIN = 60_000;
@@ -24,11 +24,18 @@ export const GAP_MAX_MS = 40 * MIN;
 export const MEETING_MS = 10 * MIN;
 /** With fewer than two free, looked at again after this. */
 const RETRY_MS = 5 * MIN;
+/** A moment (owner, 10-07: "more micro interactions ... but not too many"): one every 6 to 12 minutes in the office's
+ * day, a few seconds each, the floor's walk to it included. */
+export const MOMENT_GAP_MIN_MS = 6 * MIN;
+export const MOMENT_GAP_MAX_MS = 12 * MIN;
+export const MOMENT_MS = 30_000;
 /** What a point of friendship weighs, in XP, when who fits a team's row is ranked (org.ts). */
 export const FRIEND_XP = 2;
 
 export type Meeting = { id: number; at: number; until: number; a: string; b: string; kind: Kind; place: Place; winner: string | null; delta: number; score: number };
 export type Friendship = { a: string; b: string; score: number; word: Word; meetings: number; lastAt: number | null };
+/** A moment between two orbs, as the log keeps it: `a` started it. */
+export type MomentEvent = Moment & { a: string; b: string; names: [string, string]; score: number; word: Word; at: number; until: number };
 export type SharedLesson = { id: number; at: number; from: string; to: string; line: string; state: "waiting" | "kept" | "dropped" };
 
 type MeetingRow = { id: number; at: number; until: number; a: string; b: string; kind: Kind; place: Place; winner: string | null; delta: number; score: number };
@@ -57,6 +64,7 @@ export class Social {
   readonly #clock: Clock;
   readonly #o: Required<SocialOptions>;
   #retryAt = 0;
+  #momentRetryAt = 0;
 
   constructor(db: DatabaseSync, events: EventLog, clock: Clock, o: SocialOptions) {
     this.#db = db;
@@ -129,6 +137,63 @@ export class Social {
     const worst = scores.filter((x) => x.s <= -20).map((x) => name(x.o));
     const why = [best.length ? `works well with ${best.join(" and ")}` : "", worst.length ? `some friction with ${worst.join(" and ")}` : ""].filter(Boolean).join("; ");
     return { score, why: why || null };
+  }
+
+  // ── moments (owner, 10-07: "more micro interactions ... that affect friendships that affect their mood in office, but
+  // not too many") ──────────────────────────────────────────────────────────────────────────────
+
+  /** The moments lately, newest first: who, what, how it went (the floor plays the ones under way). */
+  moments(limit = 10): MomentEvent[] {
+    return this.#events.ofType("social.moment").slice(-limit).reverse().map((e) => ({ ...(e.data as Omit<MomentEvent, "at">), at: e.at }));
+  }
+
+  /** When the next moment is due: 6 to 12 minutes after the last, in the office's day; none while office life is off. */
+  nextMomentAt(): number | null {
+    if (!this.#o.on) return null;
+    const last = this.#events.ofType("social.moment").at(-1);
+    const gap = last ? MOMENT_GAP_MIN_MS + ((last.seq * 2654435761) % 1000) / 1000 * (MOMENT_GAP_MAX_MS - MOMENT_GAP_MIN_MS) : MOMENT_GAP_MIN_MS;
+    let at = Math.max(last ? last.at + Math.round(gap) : 0, this.#momentRetryAt);
+    if (!inOfficeDay(Math.max(at, this.#clock.now()))) at = nextOpening(Math.max(at, this.#clock.now()));
+    return at;
+  }
+
+  /** The tick's: a moment, if one is due and two orbs are free (and neither is in a meeting under way). */
+  momentDue(): MomentEvent | null {
+    if (!this.#o.on) return null;
+    const now = this.#clock.now();
+    if (now < this.nextMomentAt()! || !inOfficeDay(now)) return null;
+    const m = this.moment();
+    if (!m) this.#momentRetryAt = now + RETRY_MS;
+    return m;
+  }
+
+  /** Two free orbs run into each other now: a line each, a gesture each, a point or two on their friendship. */
+  moment(): MomentEvent | null {
+    const r = this.#o.dice;
+    const now = this.#clock.now();
+    const office = this.#o.office();
+    const meeting = new Set(this.current().flatMap((m) => [m.a, m.b]));
+    const free = office.map((o) => o.id).filter((id) => this.#o.free(id) && !meeting.has(id));
+    const last = this.#events.ofType("social.moment").at(-1);
+    const pair = pickPair(free, (o) => this.traitsOf(o), (x, y) => this.score(x, y), last ? [String(last.data.a), String(last.data.b)] : null, r);
+    if (!pair) return null;
+    const [x, y] = pair;
+    const m = pickMoment(this.traitsOf(x), this.traitsOf(y), r);
+    const before = this.score(x, y);
+    const after = clampScore(before + m.delta);
+    const [a, b] = pairOf(x, y);
+    const nameOf = (id: string): string => office.find((o) => o.id === id)?.name ?? id;
+    const ev: MomentEvent = { a: x, b: y, ...m, score: after, word: wordOf(after), names: [nameOf(x), nameOf(y)], at: now, until: now + MOMENT_MS };
+    tx(this.#db, () => {
+      this.#db
+        .prepare("INSERT INTO friendships (a, b, score, meetings, last_at) VALUES (?, ?, ?, 0, ?) ON CONFLICT (a, b) DO UPDATE SET score = excluded.score, last_at = excluded.last_at")
+        .run(a, b, after, now);
+      const { at: _, ...data } = ev;
+      this.#events.append("social.moment", data);
+      if (before < 50 && after >= 50) this.#events.append("social.friends", { a: x, b: y, names: ev.names });
+      if (before > -50 && after <= -50) this.#events.append("social.fell_out", { a: x, b: y, names: ev.names });
+    });
+    return ev;
   }
 
   // ── meetings ──────────────────────────────────────────────────────────────────────────────

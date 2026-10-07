@@ -55,3 +55,17 @@ test("the night's gym, a doze, sleep late at night; anything of his wakes him", 
   n.hear({ type: "notice.added", orb: "milo", at: night + SLEEP_AFTER_MS, data: {} });
   assert.equal(n.at(night + SLEEP_AFTER_MS), "asleep", "another orb's news does not");
 });
+
+test("a moment with another orb (owner, 10-07: \"situations between orbs that affect friendships that affect their mood\"): warm, a hop for both; flat, a pout; it wakes them; a third orb is untouched", () => {
+  const t0 = 1_000_000;
+  const ada = new MoodOf("ada", t0), bo = new MoodOf("bo", t0), cy = new MoodOf("cy", t0);
+  const late = t0 + DOZE_AFTER_MS + 1;
+  assert.equal(ada.at(late), "dozing", "control: quiet, it dozes");
+  const warm = { type: "social.moment", orb: null, at: late, data: { a: "ada", b: "bo", tone: "warm" } };
+  assert.deepEqual([ada.hear(warm), bo.hear(warm), cy.hear(warm)], ["hop", "hop", null]);
+  assert.equal(ada.at(late + 1000), "idle", "a moment wakes it");
+  assert.equal(cy.at(late + 1000), "dozing", "the third orb was not in it");
+  const flat = { type: "social.moment", orb: null, at: late, data: { a: "bo", b: "ada", tone: "flat" } };
+  assert.deepEqual([ada.hear(flat), bo.hear(flat)], ["pout", "pout"]);
+});
+

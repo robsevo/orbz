@@ -123,3 +123,98 @@ export function readTraits(v: unknown): Traits | null {
   }
   return out;
 }
+
+// ── moments: small run-ins between two orbs (owner, 10-07: "more micro interactions and situations between orbs that
+// affect friendships that affect their mood in office, but not too many ... lively pace please, but goofy and funny as
+// well. fun to watch") ─────────────────────────────────────────────────────────────────────────────
+// A moment is a few seconds: two lines said, a gesture each, a point or two on their friendship, which way decided by
+// how they get on and by the one it happened to. By code; the lines are ours, never a model's.
+
+export type MomentKind = "bump" | "highfive" | "cookie" | "joke" | "mug" | "sticky" | "trip" | "dance";
+/** Where a moment happens: in an aisle between two desks, in the kitchen, or at the first one's desk. */
+export type MomentPlace = "aisle" | "kitchen" | "desk";
+/** How it went: warm (both glad), flat (it fell flat, or it stung). */
+export type MomentTone = "warm" | "flat";
+export type Moment = { kind: MomentKind; place: MomentPlace; tone: MomentTone; lines: [string, string]; gestures: [string, string]; delta: number };
+
+type Script = { place: MomentPlace; warm: [string, string][]; flat: [string, string][]; gestures: { warm: [string, string]; flat: [string, string] }; weight: (a: Traits, b: Traits) => number; lands: (a: Traits, b: Traits, c: number) => number };
+const SCRIPTS: Record<MomentKind, Script> = {
+  bump: {
+    place: "aisle",
+    warm: [["Oops! After you.", "No, after you!"], ["Beep beep!", "Traffic jam in Build again."], ["Whoa, nearly!", "Ha, we need indicators."]],
+    flat: [["Watch it!", "You walked into me!"], ["Excuse me.", "...Hmph."]],
+    gestures: { warm: ["squish", "wiggle"], flat: ["pout", "pout"] },
+    weight: (a, b) => 1 + (a.Pace + b.Pace) / 20,
+    lands: (a, b, c) => 0.55 + c * 0.6 + (b.Calm - 10) * 0.03,
+  },
+  highfive: {
+    place: "aisle",
+    warm: [["Up top!", "Yes!"], ["Nice work today!", "You too!"]],
+    flat: [["Up top!", "...Oh. Sorry, hands full."], ["High five?", "Maybe later."]],
+    gestures: { warm: ["hop", "hop"], flat: ["hop", "squish"] },
+    weight: (a, b) => 0.6 + (a.Humour + b.Care) / 20,
+    lands: (a, b, c) => 0.75 + c * 0.5,
+  },
+  cookie: {
+    place: "kitchen",
+    warm: [["Last cookie. Half each?", "Deal!"], ["You have it.", "No, you!"]],
+    flat: [["Mine! Last one.", "Hey! I had my eye on that."], ["Who ate all the cookies?", "...Not me. (crumbs)"]],
+    gestures: { warm: ["hop", "nod"], flat: ["wiggle", "pout"] },
+    weight: (a, b) => 0.8 + (a.Humour + b.Humour) / 40,
+    lands: (a, b, c) => 0.5 + c * 0.6 + (a.Care - 10) * 0.04,
+  },
+  joke: {
+    place: "desk",
+    warm: [["Why did the orb cross the office? The other desk had snacks.", "Ha! Stealing that."], ["I'm not lazy, I'm on energy-saving mode.", "Same."]],
+    flat: [["Knock knock.", "...We're working."], ["Get it? Orb-ital?", "Tough crowd, huh."]],
+    gestures: { warm: ["wiggle", "jelly"], flat: ["wink", "doze"] },
+    weight: (a) => 0.6 + a.Humour / 10,
+    lands: (a, b, c) => 0.45 + c * 0.6 + (b.Humour - 10) * 0.05 - (b.Focus - 10) * 0.02,
+  },
+  mug: {
+    place: "kitchen",
+    warm: [["Has anyone seen my mug?", "It's in your hand."], ["Who took my mug?", "Sorry! Washed it for you."]],
+    flat: [["That's my mug.", "It was in the sink!"]],
+    gestures: { warm: ["look", "nod"], flat: ["pout", "squish"] },
+    weight: (a, b) => 0.5 + (b.Care - 10) * 0.03,
+    lands: (a, b, c) => 0.7 + c * 0.4 + (a.Calm - 10) * 0.03,
+  },
+  sticky: {
+    place: "desk",
+    warm: [["Who put a sticky note on my screen?", "It says 'you're doing great'!"], ["A note on my desk!", "Drink some water, it says."]],
+    flat: [["Who put a sticky note on my screen?", "...It says 'boo'."]],
+    gestures: { warm: ["hop", "wink"], flat: ["pout", "wink"] },
+    weight: (a, b) => 0.4 + (b.Humour + b.Care) / 40,
+    lands: (a, b, c) => 0.6 + c * 0.5 + (b.Care - 10) * 0.04,
+  },
+  trip: {
+    place: "aisle",
+    warm: [["Whoa—!", "You OK? Very graceful."], ["The beanbag got me again.", "It's a menace."]],
+    flat: [["Whoa—!", "Ha! Did you see that?"]],
+    gestures: { warm: ["squish", "nod"], flat: ["squish", "wiggle"] },
+    weight: (a) => 0.4 + (20 - a.Calm) / 40,
+    lands: (a, b, c) => 0.65 + c * 0.4 + (b.Care - 10) * 0.05,
+  },
+  dance: {
+    place: "kitchen",
+    warm: [["This song is a bop.", "Kitchen disco!"], ["Coffee's ready! Little dance.", "Joining in."]],
+    flat: [["This song is a bop.", "Please, no dancing in the kitchen."]],
+    gestures: { warm: ["jelly", "wiggle"], flat: ["jelly", "doze"] },
+    weight: (a, b) => 0.3 + (a.Humour + b.Humour + a.Nerve) / 60,
+    lands: (a, b, c) => 0.5 + c * 0.6 + (b.Humour - 10) * 0.05,
+  },
+};
+export const MOMENT_KINDS = Object.keys(SCRIPTS) as MomentKind[];
+
+/** A moment between `a` (it starts it) and `b`: which, where, how it went, the lines, the gestures and the friendship's
+ * change (warm +1 to +3, more the better they get on; flat -1 to -2). */
+export function pickMoment(a: Traits, b: Traits, r: () => number): Moment {
+  const c = compat(a, b);
+  const kind = weighted(MOMENT_KINDS, (k) => Math.max(0.05, SCRIPTS[k].weight(a, b)), r);
+  const s = SCRIPTS[kind];
+  const tone: MomentTone = r() < clamp(s.lands(a, b, c), 0.1, 0.95) ? "warm" : "flat";
+  const pool = tone === "warm" ? s.warm : s.flat;
+  const lines = pool[Math.floor(r() * pool.length)]!;
+  const delta = tone === "warm" ? clamp(Math.round(1 + c * 2 + r()), 1, 3) : -clamp(Math.round(1 + r()), 1, 2);
+  return { kind, place: s.place, tone, lines, gestures: s.gestures[tone], delta };
+}

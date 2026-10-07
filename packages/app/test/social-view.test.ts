@@ -18,7 +18,7 @@ import { findChrome, launch, measure } from "./harness.ts";
 import { Home } from "../../home/src/home.ts";
 import { serve } from "../../home/src/api.ts";
 import { NEUTRAL } from "../../home/src/social/rules.ts";
-import { meetPlan } from "../src/floor/plan.ts";
+import { meetPlan, momentPlan } from "../src/floor/plan.ts";
 
 const APP = fileURLToPath(new URL("..", import.meta.url));
 const skip = findChrome() ? false : "no Chromium on this machine";
@@ -136,3 +136,52 @@ test("office life: traits sent, a meeting played on the floor, colleagues on the
   await note.waitFor({ state: "detached", timeout: 20_000 });
   assert.ok(h.learned.list(lesson.to).includes(lesson.line), "Keep it: learned");
 });
+
+test("a moment on the floor (owner, 10-07: \"micro interactions ... goofy and funny as well. fun to watch\"): the two meet at its spot, each says its line, the feed has it, their friendship moved; desk", { skip, timeout: 150_000 }, async (t) => {
+  const data = mkdtempSync(join(tmpdir(), "orbs-moment-home-"));
+  t.after(() => rmSync(data, { recursive: true, force: true }));
+  const h = Home.open({ dataDir: data, protect: [], spendCapUsd: null });
+  t.after(() => h.close());
+  h.start();
+  h.about.setName("Robin");
+  h.inbox.addOrb("ada", "Ada", "assistant", { shape: "egg", eyes: "classic", hue: "azure" });
+  h.inbox.addOrb("bo", "Bo", "frontend", { shape: "bean", eyes: "classic", hue: "coral" });
+  const d = await serve(h, { port: 0, appDir: dist });
+  t.after(() => d.close());
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: "dark" });
+  t.after(() => ctx.close());
+  const page = await ctx.newPage();
+  const ten = new Date();
+  ten.setHours(10, 0, 0, 0);
+  await page.clock.install({ time: ten }); // the floor's orbs are awake from 06:00
+  await page.goto(d.pairLink());
+  await page.locator(".orbs-window").waitFor({ timeout: 30_000 });
+  await page.evaluate(() => (location.hash = "#/office"));
+  await page.locator("[data-floor]").waitFor({ timeout: 20_000 });
+
+  const before = h.social.score("ada", "bo");
+  const mo = h.social.moment()!;
+  assert.ok(mo, "two free orbs ran into each other");
+  assert.equal(h.social.score("ada", "bo"), before + mo.delta, "their friendship moved by the moment's delta");
+  const name = (id: string): string => (id === "ada" ? "Ada" : "Bo");
+  const shown = { ...mo, a: name(mo.a), b: name(mo.b) };
+  for (const who of ["Ada", "Bo"]) {
+    const plan = momentPlan(shown, who);
+    await page.waitForFunction(
+      ({ who, where }) => {
+        const b = document.querySelector(`[data-floor-orb="${who}"]`);
+        return b?.getAttribute("data-at") === where && b?.getAttribute("data-arrived") === "true";
+      },
+      { who, where: `meet:${plan.place}:${plan.with}` },
+      { timeout: 60_000 },
+    );
+    assert.match(await page.locator("[data-floor]").innerText(), new RegExp(plan.label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), `${who}: ${plan.label}`);
+  }
+  // each says its line there, the second a beat after the first
+  for (const line of mo.lines) {
+    await page.waitForFunction((line) => [...document.querySelectorAll("[data-speech]")].some((el) => el.textContent === line), line, { timeout: 15_000 });
+  }
+  assert.match(await page.locator('[aria-label="Activity"]').innerText(), new RegExp(`${name(mo.a)}: “`), "the feed has it");
+  assert.deepEqual(await measure(page), [], "the floor, with a moment on it");
+});
+

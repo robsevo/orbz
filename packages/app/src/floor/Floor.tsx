@@ -12,7 +12,7 @@ import type { Gesture } from "../orb/life.ts";
 import type { Mood } from "../orb/mood.ts";
 import { WORN } from "../orb/useMood.ts";
 import { Balanced, OneLine } from "../ui/Balanced.tsx";
-import { idOf, type CalendarEntry, type Meeting, type Notice, type Office } from "../home/link.ts";
+import { idOf, type CalendarEntry, type Meeting, type MomentState, type Notice, type Office } from "../home/link.ts";
 
 /** A meeting under way, by the orbs' names (the home's ids turned to names). */
 type Meet = Meeting;
@@ -22,7 +22,7 @@ import type { Route } from "../ui/nav.ts";
 import { CameraFeed } from "./camera.tsx";
 import { DeskPiece, FLOOR_CSS, MeetingTable, PingPong, Room, SideTables, skyAt, type Screen } from "./art.tsx";
 import { busiest, VIEWS, viewRect, zoneOf, type ViewId } from "./plan.ts";
-import { DESKS, H, POIS, ROOMS, SEATS, W, WALL, ZONES, dice, dwell, meetPlan, meetSpot, next, route, seating, sentBy, speed, type Desk, type Plan, type PoiId, type Spot, type Traits } from "./plan.ts";
+import { DESKS, H, POIS, ROOMS, SEATS, W, WALL, ZONES, dice, dwell, meetPlan, meetSpot, momentPlan, next, route, seating, sentBy, speed, type Desk, type Plan, type PoiId, type Spot, type Traits } from "./plan.ts";
 
 /** An orb's size on the plan (its window's width). */
 const ORB = 84;
@@ -115,6 +115,8 @@ export function Floor({ home, office, moods, person, go }: { home: Office | null
   const [sessions, setSessions] = useState<Record<number, string>>({});
   // office life (PLAN 5.9): the meetings the home decided that are under way, by the orbs' names
   const [meets, setMeets] = useState<Meet[]>([]);
+  // the moments under way (owner, 10-07: "micro interactions"), by the orbs' names
+  const [moments, setMoments] = useState<MomentState[]>([]);
   const skew = useRef(0); // the home's clock less this device's: a meeting is timed by the home's
   const nameOf = useMemo(() => new Map(office.map((c) => [idOf(c.name), c.name])), [office]);
   useEffect(() => {
@@ -123,7 +125,11 @@ export function Floor({ home, office, moods, person, go }: { home: Office | null
     const loadHiring = (): void => void home.recruiting().then((r) => setHiring(r.positions), () => {});
     const loadSessions = (): void => void home.sessions().then((ss) => setSessions(Object.fromEntries(ss.map((x) => [x.id, x.title]))), () => {});
     const loadMeets = (): void => void home.socialOf().then(
-      (x) => (skew.current = x.now - Date.now(), setMeets(x.current.map((m) => ({ ...m, a: nameOf.get(m.a) ?? m.a, b: nameOf.get(m.b) ?? m.b, winner: m.winner ? (nameOf.get(m.winner) ?? m.winner) : null })))),
+      (x) => (
+        skew.current = x.now - Date.now(),
+        setMeets(x.current.map((m) => ({ ...m, a: nameOf.get(m.a) ?? m.a, b: nameOf.get(m.b) ?? m.b, winner: m.winner ? (nameOf.get(m.winner) ?? m.winner) : null }))),
+        setMoments((x.moments ?? []).map((m) => ({ ...m, a: nameOf.get(m.a) ?? m.a, b: nameOf.get(m.b) ?? m.b })))
+      ),
       () => {},
     );
     loadDay();
@@ -193,8 +199,10 @@ export function Floor({ home, office, moods, person, go }: { home: Office | null
   const widths = useRef(new Map<HTMLElement, number>());
   const [shown, setShown] = useState<Record<string, Shown>>({});
   const [gest, setGest] = useState<Record<string, { name: Gesture; n: number }>>({});
-  const live = useRef({ moods, meeting, scale, desks, meets });
-  live.current = { moods, meeting, scale, desks, meets };
+  const live = useRef({ moods, meeting, scale, desks, meets, moments });
+  live.current = { moods, meeting, scale, desks, meets, moments };
+  const saying = useRef<number[]>([]); // a moment's lines waiting their beat
+  useEffect(() => () => saying.current.forEach((t) => window.clearTimeout(t)), []);
 
   const targetOf = (s: Sim, plan: Plan): { approach: Spot; at: Spot } => {
     const desk = live.current.desks.get(s.c.name);
@@ -281,6 +289,13 @@ export function Floor({ home, office, moods, person, go }: { home: Office | null
       // orbs are interacting or playing a game the animation restarts"); one that has just begun, they walk to
       return assign(s, meetPlan(meet, s.c.name), instant || homeNow - meet.at > MEET_WALK_MS);
     }
+    // a moment the home decided (owner, 10-07): the two run into each other, a line each
+    const moment = sent === null ? live.current.moments.find((x) => x.until > homeNow && (x.a === s.c.name || x.b === s.c.name)) : undefined;
+    if (moment) {
+      s.mood = mood;
+      if (s.plan?.kind === "meet" && s.plan.until === moment.until && s.plan.with === (moment.a === s.c.name ? moment.b : moment.a)) return;
+      return assign(s, momentPlan(moment, s.c.name), instant || homeNow - moment.at > MEET_WALK_MS);
+    }
     const cur = s.plan;
     const resting = cur?.kind === "poi" && POIS.find((p) => p.id === cur.poi)?.rest;
     const fits = cur && (sent === "desk" ? cur.kind === "desk" && cur.why !== "tidy" : sent === "meeting" ? cur.kind === "meeting" : sent === "rest" ? Boolean(resting) || (cur.kind === "desk" && cur.mark === "💤") : cur.kind !== "meeting" && !(cur.kind === "desk" && cur.why !== "tidy") && !resting && cur.mark !== "💤");
@@ -299,7 +314,7 @@ export function Floor({ home, office, moods, person, go }: { home: Office | null
     busy.waitingAt = p1 && !p2 ? "ping1" : p2 && !p1 ? "ping2" : null;
     // a colleague to drop in on: only one that is at its desk, so the chat is where it sits
     const others = [...sims.current.values()].filter((o) => o !== s && o.plan?.kind === "desk" && o.arrived && live.current.desks.has(o.c.name)).map((o) => o.c.name);
-    assign(s, next({ name: s.c.name, mood, meeting: inMeeting, traits: s.traits }, busy, others, s.r), instant);
+    assign(s, next({ name: s.c.name, mood, meeting: inMeeting, traits: s.traits }, busy, others, s.r, s.plan), instant);
   }
 
   // every half second: does anyone's state send it somewhere new, or is a break over?
@@ -349,7 +364,20 @@ export function Floor({ home, office, moods, person, go }: { home: Office | null
             s.arrived = true;
             const name = s.c.name;
             setShown((m) => (m[name] ? { ...m, [name]: { ...m[name]!, arrived: true } } : m));
-            if (s.plan?.kind === "poi" || s.plan?.kind === "visit" || s.plan?.kind === "meet") setGest((g) => ({ ...g, [name]: { name: s.plan?.mark === "💤" ? "doze" : "nod", n: (g[name]?.n ?? 0) + 1 } }));
+            const say = s.plan?.kind === "meet" ? s.plan.say : undefined;
+            if (say) {
+              // a moment's line, the second a beat after the first, with its gesture; gone a few seconds later
+              const id = s.id;
+              saying.current.push(window.setTimeout(() => {
+                setGest((g) => ({ ...g, [name]: { name: say.gesture as Gesture, n: (g[name]?.n ?? 0) + 1 } }));
+                setSpeech((sp) => ({ ...sp, [id]: say.line }));
+                saying.current.push(window.setTimeout(() => setSpeech((sp) => {
+                  if (sp[id] !== say.line) return sp;
+                  const { [id]: _, ...rest } = sp;
+                  return rest;
+                }), 5_000));
+              }, say.after));
+            } else if (s.plan?.kind === "poi" || s.plan?.kind === "visit" || s.plan?.kind === "meet") setGest((g) => ({ ...g, [name]: { name: s.plan?.mark === "💤" ? "doze" : "nod", n: (g[name]?.n ?? 0) + 1 } }));
           }
         }
         const el = els.current.get(s.c.name);
@@ -637,6 +665,12 @@ const where = (conversation: string | null): string =>
 
 /** An event, as a line of the office's activity; null for what is not worth a line. */
 function eventLine(type: string, who: string | null, d: Record<string, unknown>, conversation: string | null): string | null {
+  // a moment (owner, 10-07) names its two in its data: its first line, said by who started it
+  if (type === "social.moment") {
+    const [first] = (d.names as string[] | undefined) ?? [];
+    const [line] = (d.lines as string[] | undefined) ?? [];
+    return first && line ? `${first}: “${line}”` : null;
+  }
   if (!who) return null;
   switch (type) {
     case "run.started":

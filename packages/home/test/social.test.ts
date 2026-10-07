@@ -11,7 +11,8 @@ import { test, type TestContext } from "node:test";
 import { serve } from "../src/api.ts";
 import { FakeClock } from "../src/clock.ts";
 import { whoFits } from "../src/org.ts";
-import { NEUTRAL, type Traits } from "../src/social/rules.ts";
+import { MOMENT_KINDS, NEUTRAL, pickMoment, type Traits } from "../src/social/rules.ts";
+import { MEETING_MS, MOMENT_GAP_MAX_MS, MOMENT_GAP_MIN_MS } from "../src/social/social.ts";
 import { agentHome } from "./helpers.ts";
 
 const HOUR = 3_600_000;
@@ -70,6 +71,66 @@ test("on: two free orbs meet every 20 to 40 minutes by the home's own timer, nev
   const before = home.events.ofType("social.met").length;
   await clock.advance(7 * HOUR); // to 08:00
   assert.ok(home.events.ofType("social.met").length > before, "the office's day starts again at 07:00");
+});
+
+// moments (owner, 10-07: "more micro interactions and situations between orbs that affect friendships that affect their
+// mood in office, but not too many ... goofy and funny as well")
+test("a moment: which, how it went and a line each, by code; warm moves a friendship up a point or three, flat down one or two; it lands more between orbs that get on", () => {
+  const r = dice(3);
+  const kinds = new Set<string>();
+  const GESTURES = ["hop", "wink", "wiggle", "squish", "jelly", "look", "pout", "doze", "nod"];
+  for (let i = 0; i < 2000; i++) {
+    const m = pickMoment(T({ Humour: 12 }), T({ Care: 12 }), r);
+    kinds.add(m.kind);
+    assert.ok(m.lines.every((l) => l.trim().length > 1), "a line each");
+    assert.ok(m.gestures.every((g) => GESTURES.includes(g)), `gestures an orb has (${m.gestures})`);
+    if (m.tone === "warm") assert.ok(m.delta >= 1 && m.delta <= 3, `warm: +1 to +3 (${m.delta})`);
+    else assert.ok(m.delta <= -1 && m.delta >= -2, `flat: -1 or -2 (${m.delta})`);
+  }
+  assert.deepEqual([...kinds].sort(), [...MOMENT_KINDS].sort(), "every kind comes up");
+  const warmth = (a: Traits, b: Traits): number => {
+    const rr = dice(9);
+    let n = 0;
+    for (let i = 0; i < 2000; i++) if (pickMoment(a, b, rr).tone === "warm") n++;
+    return n / 2000;
+  };
+  const click = warmth(T({ Humour: 16, Pace: 12, Care: 14 }), T({ Humour: 16, Pace: 12, Care: 14 }));
+  const rub = warmth(T({ Nerve: 18, Focus: 18, Humour: 3 }), T({ Calm: 18, Humour: 18, Care: 4 }));
+  assert.ok(click > rub + 0.15, `it lands more between orbs that get on (${click.toFixed(2)} vs ${rub.toFixed(2)})`);
+});
+
+test("moments: one every 6 to 12 minutes in the office's day between two free orbs not in a meeting; each moves their friendship by its delta; none at night; none while office life is off", async (t) => {
+  const { home, clock } = await office(t, true);
+  home.inbox.pause("cy");
+  home.inbox.send("cy", "chat:cy", "please write the newsletter"); // Cy has work waiting
+  home.start();
+  await clock.advance(3 * 3_600_000); // 09:00 to 12:00
+  const ms = home.events.ofType("social.moment");
+  assert.ok(ms.length >= 12 && ms.length <= 31, `every 6 to 12 minutes, alongside the meetings (${ms.length} in three hours)`);
+  const gaps = ms.slice(1).map((e, i) => e.at - ms[i]!.at);
+  // one due while the two are in a meeting waits for it to end (looked at again every five minutes)
+  assert.ok(gaps.every((g) => g >= MOMENT_GAP_MIN_MS && g <= MOMENT_GAP_MAX_MS + MEETING_MS + 5 * 60_000 + 60_000), `6 to 12 minutes apart, or once the two are out of a meeting (${gaps.map((g) => Math.round(g / 60_000)).join(", ")} min)`);
+  assert.ok(gaps.filter((g) => g <= MOMENT_GAP_MAX_MS + 60_000).length >= gaps.length / 2, "mostly within 12 minutes");
+  for (const e of ms) assert.deepEqual([e.data.a, e.data.b].sort(), ["ada", "bo"], "Cy has work waiting: only Ada and Bo are free");
+  // never with one in a meeting under way
+  const met = home.events.ofType("social.met");
+  for (const e of ms) assert.ok(!met.some((m) => m.at <= e.at && Number(m.data.until) > e.at), "not while a meeting is under way");
+  // the friendship is the meetings' and the moments' deltas, summed
+  const sum = [...met, ...ms].reduce((n, e) => n + Number(e.data.delta), 0);
+  assert.equal(home.social.score("ada", "bo"), Math.max(-100, Math.min(100, sum)), "each moment moved it by its own delta");
+  assert.match(String(ms[0]!.data.lines), /\w/);
+  assert.deepEqual(ms[0]!.data.names, [ms[0]!.data.a === "ada" ? "Ada" : "Bo", ms[0]!.data.a === "ada" ? "Bo" : "Ada"]);
+  await clock.advance(11 * 3_600_000); // to 23:00
+  const night = home.events.ofType("social.moment").filter((e) => new Date(e.at).getHours() >= 23 || new Date(e.at).getHours() < 7);
+  assert.equal(night.length, 0, "none at night");
+});
+
+test("off in a test home: no moments, and the timer does not wake for them", async (t) => {
+  const { home, clock } = await office(t, false);
+  home.start();
+  await clock.advance(5 * 3_600_000);
+  assert.equal(home.events.ofType("social.moment").length, 0);
+  assert.equal(home.social.nextMomentAt(), null);
 });
 
 test("a friendship grows into good friends (a notice); orbs that rub fall out", async (t) => {

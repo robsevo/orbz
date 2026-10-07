@@ -1220,7 +1220,7 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ('      free: (orb) => !db.prepare(', '      free: (orb) => true || !db.prepare('),
     ], ['social.test.ts']),
     ('orbs meet at night', 'src/social/social.ts', [
-        ('    if (!inOfficeDay(Math.max(at, this.#clock.now()))) at = nextOpening(Math.max(at, this.#clock.now()));\n', ''),
+        ('this.#retryAt);\n    if (!inOfficeDay(Math.max(at, this.#clock.now()))) at = nextOpening(Math.max(at, this.#clock.now()));\n', 'this.#retryAt);\n'),
         ('    if (now < this.nextAt()! || !inOfficeDay(now)) return null;', '    if (now < this.nextAt()!) return null;'),
     ], ['social.test.ts']),
     ('a lesson is learned without your yes', 'src/social/social.ts', [
@@ -1259,6 +1259,19 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("a bet goes without asking", "src/rules/floor.ts", [
         ("|deposit|stake|unstake|bridge|bet|bets|wager|wagers|parlay)$/],", "|deposit|stake|unstake|bridge)$/],"),
     ], ["connectors.test.ts"]),
+    # moments (PLAN 5.19; owner, 10-07: "more micro interactions ... but not too many")
+    ("a moment moves no friendship", "src/social/social.ts", [
+        ("    const after = clampScore(before + m.delta);", "    const after = clampScore(before);"),
+    ], ["social.test.ts"]),
+    ("orbs run into each other at night", "src/social/social.ts", [
+        ("    if (now < this.nextMomentAt()! || !inOfficeDay(now)) return null;\n    const m = this.moment();", "    if (now < this.nextMomentAt()!) return null;\n    const m = this.moment();"),
+    ], ["social.test.ts"]),
+    ("a moment pulls an orb out of a meeting", "src/social/social.ts", [
+        ("    const free = office.map((o) => o.id).filter((id) => this.#o.free(id) && !meeting.has(id));", "    const free = office.map((o) => o.id).filter((id) => this.#o.free(id));"),
+    ], ["social.test.ts"]),
+    ("moments come every minute", "src/social/social.ts", [
+        ("export const MOMENT_GAP_MIN_MS = 6 * MIN;", "export const MOMENT_GAP_MIN_MS = 1 * MIN;"),
+    ], ["social.test.ts"]),
     # the board's daily report (PLAN 5.18; owner, 10-07): from 08:00, each idea an orb's, its XP yours to give
     ("the report goes out before 08:00", "src/report.ts", [
         ("    if (this.#making || now < reportTimeOn(now)) return null;", "    if (this.#making) return null;"),
@@ -1926,6 +1939,23 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("the click is a high tok again", "src/ui/sound.ts", [
         ("      return click(0, 170, 0.25);", "      return click(0, 540, 0.25);"),
     ], ["feel.test.ts"]),
+    # a calmer floor and its moments (PLAN 5.19; owner, 10-07: "slow down the amount of things they do ... lively pace
+    # please, but goofy and funny as well")
+    ("orbs go back for food straight after eating", "src/floor/plan.ts", [
+        ("    if (busy.pois.has(id) || (ate && FOOD.has(id))) return;", "    if (busy.pois.has(id)) return;"),
+    ], ["floor.test.ts"]),
+    ("orbs stay only seconds anywhere", "src/floor/plan.ts", [
+        ("Math.round((20 + r() * 25) * (0.8 + traits.Calm / 30) * 1000)", "Math.round((7 + r() * 11) * (0.8 + traits.Calm / 30) * 1000)"),
+    ], ["floor.test.ts"]),
+    ("a moment leaves an orb's mood alone", "src/orb/mood.ts", [
+        ('    if (e.type === "social.moment" && (e.data?.a === this.#orb || e.data?.b === this.#orb)) {', '    if (false && e.type === "social.moment" && (e.data?.a === this.#orb || e.data?.b === this.#orb)) {'),
+    ], ["mood.test.ts"]),
+    ("the floor ignores a moment", "src/floor/Floor.tsx", [
+        ("    const moment = sent === null ? live.current.moments.find(", "    const moment = sent !== sent ? live.current.moments.find("),
+    ], ["social-view.test.ts"]),
+    ("a moment's lines are never said", "src/floor/Floor.tsx", [
+        ("                setSpeech((sp) => ({ ...sp, [id]: say.line }));", "                void id;"),
+    ], ["social-view.test.ts"]),
     # the board's report in the app (PLAN 5.18), the office as a camera room, an orb's page, the lab's flask (owner, 10-07)
     ("the report's notice does not open it", "src/rooms/Notices.tsx", [
         ('onClick={() => o.go({ room: "report" })}', "onClick={() => undefined}"),
@@ -2423,7 +2453,7 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ('instant || homeNow - meet.at > MEET_WALK_MS);', 'instant);'),
     ], ['social-view.test.ts']),
     ("a device's own clock times the meetings", 'src/floor/Floor.tsx', [
-        ('(x) => (skew.current = x.now - Date.now(), setMeets(', '(x) => (skew.current = 0, setMeets('),
+        ('        skew.current = x.now - Date.now(),\n', '        skew.current = 0,\n'),
     ], ['social-view.test.ts']),
     # office life in the app (PLAN 5.9)
     ("a meeting by a wall stands off the floor", 'src/floor/plan.ts', [
