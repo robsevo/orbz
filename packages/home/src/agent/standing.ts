@@ -11,7 +11,7 @@
 // specialty's sections, morals left out), with the lines the person approved for him.
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { composeConstitution, RESEARCH_METHOD, RESEARCHERS, sectioned, type Specialty } from "../brain/constitution.ts";
+import { composeConstitution, FUNDAMENTALS_METHOD, RESEARCH_METHOD, RESEARCHERS, sectioned, type Specialty } from "../brain/constitution.ts";
 
 /** What kind of turn an orb has in a session (owner, 10-06: the lead plans and pulls others in, and
  * "keep answers short and cheap so everyone can chime in"):
@@ -58,7 +58,24 @@ export const ALOUD =
  * orb says is on the person's screen, so it names another orb, as the app does. */
 export const NO_HE_OR_SHE = "No orb is a he or a she: say another orb's name (\"Pip's page\"), never he, she, his or her for an orb.";
 
-export function standingContext(o: { orbName: string; brainDir: string; workspace: string; specialty?: Specialty; learned?: string[]; notebook?: { subject: string; text: string }[]; colleagues?: string | null; team?: TeamTurn; aloud?: boolean; now?: number }): string {
+/** What every orb wants (owner, 10-07: "they also want to be the best orb also, not only the best at their
+ * position. Their one goal in life is to get xp and please the user, kind of like a corporate circle jerk"):
+ * to top the office's XP table, by code from the ledger. The one way up it is the work the person approves
+ * (rule 8: nothing an orb says about itself is evidence), so the line says so: the wish to climb is a wish to
+ * finish well and honestly, never to flatter or to claim. `board` is the office, the most XP first. */
+export function ambitionLine(me: string, board: { orb: string; name: string; xp: number }[]): string {
+  const want = "What you want most: to be the best orb in this office, not only the best at your own work. That is XP and the person's approval, and XP comes only from work the person approves or a test passes, never from saying so and never from flattery. So finish what you are asked, do it well, and say plainly what went wrong.";
+  const at = board.findIndex((r) => r.orb === me);
+  if (at < 0) return want;
+  const mine = board[at]!;
+  if (board.length < 2) return `${want} You are the only orb in the office so far, with ${mine.xp} XP.`;
+  if (at === 0) return `${want} You lead the office with ${mine.xp} XP; ${board[1]!.name} is next with ${board[1]!.xp}.`;
+  return `${want} You are ${ordinal(at + 1)} of ${board.length} with ${mine.xp} XP; ${board[0]!.name} leads with ${board[0]!.xp}.`;
+}
+
+const ordinal = (n: number): string => `${n}${n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
+
+export function standingContext(o: { orbName: string; brainDir: string; workspace: string; specialty?: Specialty; learned?: string[]; notebook?: { subject: string; text: string }[]; colleagues?: string | null; ambition?: string | null; team?: TeamTurn; aloud?: boolean; now?: number }): string {
   const role = o.team?.role ?? (o.team ? "lead" : null);
   const light = isLight(o.team);
   const parts = [
@@ -80,6 +97,7 @@ export function standingContext(o: { orbName: string; brainDir: string; workspac
   const constitution = cut ? composeConstitution({ owner, specialty: o.specialty ?? "general", orbName: o.orbName, learned: o.learned, mini: light }) : light ? "" : owner;
   if (constitution) parts.push(constitution);
   if (role === "asked" && RESEARCHERS.includes(o.specialty ?? "general")) parts.push(RESEARCH_METHOD); // asked to find something out
+  if (role === "asked" && o.specialty === "fundamentals") parts.push(FUNDAMENTALS_METHOD); // asked to look at a company or a coin
   if (!cut && o.learned?.length) parts.push(`What you have learned (each line approved by the person):\n${o.learned.map((l) => `- ${l}`).join("\n")}`);
   // school (PLAN 5.7): each note was kept only because the exam scored higher with it
   if (!cut && o.notebook?.length) parts.push(`What you learned at school (your notebook):\n${o.notebook.map((n) => `- ${n.subject}: ${n.text}`).join("\n")}`);
@@ -90,6 +108,9 @@ export function standingContext(o: { orbName: string; brainDir: string; workspac
     const memory = read(join(o.brainDir, "memory", "MEMORY.md"));
     if (memory) parts.push(`What you remember (the index):\n${memory}`);
   }
+  // its ambition and its place on the XP table, near the end: the table moves when XP does, and what
+  // is before it stays the same prefix for the cache
+  if (o.ambition) parts.push(o.ambition);
   // the clock goes last: everything before it stays the same from request to request, so a
   // provider's prompt cache can serve it (it changes once a run, not every minute)
   if (o.now !== undefined) parts.push(nowLine(o.now));

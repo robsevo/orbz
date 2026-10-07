@@ -7,12 +7,15 @@
 //   - an interview: the brain answers as the applicant, told it can only talk, asked only when you
 //     speak, its cost recorded; hired, the interview is the new orb's first chat;
 //   - the orbs you let go apply again for an open position, the most qualified first;
+//   - several positions at once (owner, 10-07: "an all filter ... and also give them groups"): every
+//     kind of work, or a department's, in one go, each opened once; a wrong name in the list changes none;
 //   - the door's routes.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { FakeClock } from "../src/clock.ts";
 import { PER_DAY, WAIT_DAYS } from "../src/recruiter.ts";
 import { levelOf } from "../src/gym/levels.ts";
+import { SPECIALTY_FAMILIES } from "../src/brain/constitution.ts";
 import { serve } from "../src/api.ts";
 import { agentHome } from "./helpers.ts";
 
@@ -136,4 +139,31 @@ test("the orbs you let go apply again for an open position, the most qualified f
   assert.equal(home.inbox.orb("iris")?.specialty, "design");
   assert.equal((await call("POST", `/applicants/${one.id}/pass`)).status, 409, "hired already: no one by that number is waiting");
   assert.equal((await call("PUT", "/recruiter/positions/wizardry", { open: true })).status, 400);
+});
+
+test("several positions at once: every kind of work, or a department's, each opened once; a wrong name changes none; the door", async (t) => {
+  const { home } = await agentHome(t, []);
+  const every = Object.keys(SPECIALTY_FAMILIES);
+  home.recruiter.setPosition("design", true);
+  assert.deepEqual(new Set(home.recruiter.setPositions(every, true)), new Set(every), "every kind of work, in one go");
+  assert.equal(home.events.ofType("position.opened").length, every.length, "each opened once (design was open already)");
+  assert.equal(home.recruiting().applicants.length, every.length * PER_DAY, "and today's applicants for each");
+  assert.throws(() => home.recruiter.setPositions(["frontend", "wizardry"], false), /"wizardry" is not a kind of work/);
+  assert.equal(home.recruiter.positions().length, every.length, "a wrong name in the list: none closed");
+  const business = every.filter((k) => SPECIALTY_FAMILIES[k as keyof typeof SPECIALTY_FAMILIES] === "business");
+  assert.ok(business.includes("fundamentals"), "the fundamental analyst is Business's (owner, 10-07)");
+  home.recruiter.setPositions(business, false);
+  assert.deepEqual(home.recruiter.positions().filter((k) => business.includes(k)), [], "a department closed in one go");
+  assert.equal(home.recruiter.positions().length, every.length - business.length, "and only it");
+
+  const d = await serve(home, { port: 0 });
+  t.after(() => d.close());
+  const put = async (body: unknown) => {
+    const r = await fetch(`http://127.0.0.1:${d.port}/recruiter/positions`, { method: "PUT", headers: { authorization: `Bearer ${d.token}`, "content-type": "application/json" }, body: JSON.stringify(body) });
+    return { status: r.status, json: (await r.json()) as { positions?: string[] } };
+  };
+  assert.deepEqual((await put({ specialties: business, open: true })).json.positions?.length, every.length, "Business open again, through the door");
+  assert.equal((await put({ specialties: "business", open: true })).status, 400, "not a list");
+  assert.equal((await put({ specialties: ["fundamentals", "wizardry"], open: false })).status, 400, "a wrong name");
+  assert.ok(home.recruiter.positions().includes("fundamentals"), "and nothing closed by it");
 });

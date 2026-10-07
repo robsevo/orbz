@@ -38,6 +38,7 @@ import { type Level, LEVELS, levelOf, nextFor, tenureOf } from "./gym/levels.ts"
 import { orgTools, whoFits } from "./org.ts";
 import { recital } from "./plans/recite.ts";
 import { recentWork } from "./worklog.ts";
+import { ambitionLine } from "./agent/standing.ts";
 import { interviewSystem, Recruiter, RecruiterError } from "./recruiter.ts";
 import { type Fetcher, Reading, type Sleep } from "./reading/reading.ts";
 import { readingTools, withReading } from "./reading/tools.ts";
@@ -438,6 +439,7 @@ export class Home {
           learned: (orb) => this.learned.list(orb),
           notebook: (orb) => this.school.notebook(orb), // what it kept at school (PLAN 5.7) goes to work with it
           colleagues: (orb) => this.social.colleaguesLine(orb), // its friends and frictions (PLAN 5.9)
+          ambition: (orb) => ambitionLine(orb, this.ranking()), // to top the office (owner, 10-07)
           searchKey: () => this.brains.searchKey(),
           remind: (orb, conversation, r) => {
             const keeper = this.plannerFor(orb, r.kind);
@@ -747,6 +749,13 @@ export class Home {
     const res = await chat(ep, [...(r.system ? [{ role: "system" as const, content: r.system }] : []), ...r.messages], { maxTokens: Math.min(8000, r.maxTokens) });
     this.spend.record({ tier: "big", model: ep.model, costUsd: res.costUsd, costSource: res.costSource, promptTokens: res.promptTokens, completionTokens: res.completionTokens });
     return { model: ep.model, text: res.text };
+  }
+
+  /** The office by XP (owner, 10-07: every orb wants "to be the best orb ... get xp and please the user"):
+   * each orb in it, the most XP first, a tie to whoever came first. */
+  ranking(): { orb: string; name: string; xp: number }[] {
+    const xp = this.xp.totals();
+    return this.inbox.orbs().map((o) => ({ orb: o.id, name: o.name, xp: xp[o.id] ?? 0 })).sort((a, b) => b.xp - a.xp);
   }
 
   /** The recruiter's room (PLAN 5.8): the positions you are hiring for, who applied for them (each a

@@ -99,6 +99,8 @@ export type CareerState = Standing & {
   meetings?: { at: number; with: string; kind: string; place: string; word: string; delta: number; won: boolean | null; brought: string | null; heard: string | null }[];
   friends?: { name: string; word: string; score: number; meetings: number }[];
   lessons?: { at: number; from: string; to: string; line: string; state: string }[];
+  /** The office by XP, the most first (owner, 10-07: each wants "to be the best orb"). */
+  ranking?: { orb: string; name: string; xp: number }[];
 };
 
 /** The recruiter (PLAN 5.8): the positions you are hiring for, who applied (a seed each, made whole
@@ -169,6 +171,8 @@ export interface Office {
    * answers as the applicant, with no tools); hire (as applied, the interview the first chat) or pass. */
   recruiting(): Promise<RecruiterState>;
   setPosition(specialty: string, open: boolean): Promise<string[]>;
+  /** Several at once: All, or all of a department (owner, 10-07). */
+  setPositions(specialties: string[], open: boolean): Promise<string[]>;
   interviewOf(applicant: number): Promise<InterviewLine[]>;
   interview(applicant: number, c: Character, text: string): Promise<string>;
   hireApplicant(applicant: number, c: Character): Promise<void>;
@@ -437,6 +441,9 @@ export function doorOffice(base: Character): Office {
     },
     async setPosition(specialty, open) {
       return (await call<{ positions: string[] }>(`../recruiter/positions/${encodeURIComponent(specialty)}`, { method: "PUT", body: JSON.stringify({ open }) })).positions;
+    },
+    async setPositions(specialties, open) {
+      return (await call<{ positions: string[] }>("../recruiter/positions", { method: "PUT", body: JSON.stringify({ specialties, open }) })).positions;
     },
     async interviewOf(applicant) {
       return (await call<{ said: InterviewLine[] }>(`../applicants/${applicant}/interview`)).said;

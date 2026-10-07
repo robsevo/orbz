@@ -11,6 +11,9 @@
 //   - an orb you let go applies again for its old kind of work, and is rehired from here;
 //   - the floor's Hiring tags (owner, 10-06: "should bring us to those who can build and think"): each
 //     opens on who applied to its department, in view, with All and the other departments a press away;
+//   - the positions in their departments, each named (owner, 10-07: "an all filter ... and also give them
+//     groups"): one department's or All, and every one shown ticked or unticked in one press, one request;
+//     the fundamental analyst among Business's;
 //   - nothing spills.
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -25,7 +28,7 @@ import { Home } from "../../home/src/home.ts";
 import { serve } from "../../home/src/api.ts";
 import { fakeModel } from "../../home/test/fakes/model.ts";
 import { levelOf } from "../../home/src/gym/levels.ts";
-import { applicant } from "../src/orb/spec.ts";
+import { applicant, SPECIALTIES } from "../src/orb/spec.ts";
 import { toHome } from "../src/home/link.ts";
 
 const APP = fileURLToPath(new URL("..", import.meta.url));
@@ -215,4 +218,68 @@ test("the floor's Hiring tags open on who applied to their department; All and t
   await phone.waitForTimeout(300);
   assert.ok(await inView(phone), "in view on a phone too");
   assert.deepEqual(await measure(phone), [], "and at phone size");
+});
+
+test("the positions in their departments, each named; one department's or All; every one shown ticked in one press; desk and phone", { skip, timeout: 150_000 }, async (t) => {
+  const model = await fakeModel(t, []);
+  const data = mkdtempSync(join(tmpdir(), "orbs-recruiter-home-"));
+  t.after(() => rmSync(data, { recursive: true, force: true }));
+  const h = Home.open({
+    dataDir: data, protect: [], spendCapUsd: null,
+    brain: { preset: { id: "t", title: "t", own: null, big: { name: "big", baseUrl: model.url, model: "m", retries: 0 }, teacher: null } },
+  });
+  t.after(() => h.close());
+  h.start();
+  h.about.setName("Robin");
+  h.inbox.addOrb("pa", "Pip", "assistant", { shape: "egg", eyes: "classic", hue: "azure" });
+  const d = await serve(h, { port: 0, appDir: dist });
+  t.after(() => d.close());
+  const open = async (size: { width: number; height: number }): Promise<Page> => {
+    const ctx = await browser.newContext({ viewport: size, colorScheme: "dark" });
+    t.after(() => ctx.close());
+    const page = await ctx.newPage();
+    await page.goto(d.pairLink());
+    await page.locator(".orbs-window").waitFor({ timeout: 30_000 });
+    await page.evaluate(() => (location.hash = "#/recruiter"));
+    await page.locator("[data-recruiter]").waitFor({ timeout: 20_000 });
+    return page;
+  };
+  const groups = (page: Page) => page.locator("[data-position-group]").evaluateAll((gs) => gs.map((g) => g.getAttribute("data-position-group")));
+  const all = (page: Page) => page.locator("[data-tick-shown]");
+  const page = await open({ width: 1280, height: 900 });
+  assert.deepEqual(await groups(page), ["build", "think", "make", "business", "life"], "All: every department");
+  const business = Object.entries(SPECIALTIES).filter(([, v]) => v.family === "business").map(([k]) => k);
+  assert.match(await page.locator('[data-position-group="business"]').innerText(), new RegExp(`^Business\\s+0 of ${business.length}`), "each named, with how many are ticked");
+  assert.equal(await page.locator('[data-position-group="business"] [data-position="fundamentals"]').innerText(), "Fundamental Analyst");
+
+  // one department: its positions alone, and all of them in one press, one request
+  await page.locator('[data-position-filter="business"]').click();
+  assert.deepEqual(await groups(page), ["business"], "Business alone");
+  const puts: string[] = [];
+  page.on("request", (r) => void (r.method() === "PUT" && /\/recruiter\/positions/.test(r.url()) && puts.push(r.url())));
+  assert.equal(await all(page).innerText(), "All of Business");
+  await all(page).click();
+  await page.waitForFunction(() => document.querySelector("[data-tick-shown]")?.getAttribute("aria-pressed") === "true", undefined, { timeout: 10_000 });
+  assert.deepEqual(new Set(h.recruiter.positions()), new Set(business), "every Business position, and only those");
+  assert.equal(puts.length, 1, "in one request, not one each");
+  assert.equal(await all(page).innerText(), "✓ All of Business");
+  await page.locator('[data-applying="fundamentals"] [data-applicant]').first().waitFor({ timeout: 20_000 });
+  assert.deepEqual(await measure(page), [], "a department's positions, at desk size");
+
+  // All: every position in one press, then none
+  await page.locator('[data-position-filter="all"]').click();
+  assert.equal((await groups(page)).length, 5);
+  assert.equal(await all(page).innerText(), "All positions", "not all of them yet");
+  await all(page).click();
+  await page.waitForFunction(() => document.querySelector("[data-tick-shown]")?.textContent === "✓ All positions", undefined, { timeout: 20_000 });
+  assert.equal(h.recruiter.positions().length, Object.keys(SPECIALTIES).length, "every position");
+  await all(page).click();
+  await page.waitForFunction(() => document.querySelector("[data-tick-shown]")?.textContent === "All positions", undefined, { timeout: 20_000 });
+  assert.deepEqual(h.recruiter.positions(), [], "and none, in one press");
+  assert.equal(puts.length, 3);
+
+  const phone = await open({ width: 390, height: 844 });
+  await phone.locator('[data-position-filter="life"]').click();
+  assert.deepEqual(await groups(phone), ["life"]);
+  assert.deepEqual(await measure(phone), [], "at phone size");
 });

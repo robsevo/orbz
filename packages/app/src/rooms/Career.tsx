@@ -4,6 +4,8 @@
 // more intricate", "its where we see the orbs growth"): the friends it made, the meetings and the ideas
 // traded in them (each orb's own latest work, by code), the lessons passed; then its habits, reviews, its
 // weekly card and its report card. Promote and Not yet when it is ready: only you promote.
+// And what it wants (owner, 10-07: "they also want to be the best orb also, not only the best at their
+// position. Their one goal in life is to get xp and please the user"): the office by XP, where it stands.
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { Orb } from "../orb/Orb.tsx";
 import { sheetOf, SPECIALTIES, type Character } from "../orb/spec.ts";
@@ -23,6 +25,14 @@ const SUGGEST: Record<string, string> = { promote: "Ready for a promotion", keep
 /** The ladder, as the home has it (gym/levels.ts). */
 const LADDER = ["Junior", "Mid", "Senior", "Staff", "Principal", "Chief"] as const;
 const PLACE: Record<string, string> = { coffee: "over a coffee", cooler: "at the water cooler", bistro1: "at the bistro table", bistro2: "at the bistro table", pingpong: "at the ping-pong table", arcade: "at the arcade", desk: "at a desk" };
+const ordinal = (n: number): string => `${n}${n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
+/** Where it stands, against the one just ahead (or, at the top, just behind). */
+function standing(board: { name: string; xp: number }[], at: number): string {
+  if (board.length < 2) return "The only orb in the office so far.";
+  const other = board[at === 0 ? 1 : at - 1]!;
+  const gap = Math.abs(board[at]!.xp - other.xp);
+  return `${ordinal(at + 1)} of ${board.length}, ${gap === 0 ? `level with ${other.name}` : `${gap.toLocaleString("en-GB")} XP ${at === 0 ? "ahead of" : "behind"} ${other.name}`}.`;
+}
 const when = (at: number): string => new Date(at).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
 function Section({ title, children, label }: { title: string; children: ReactNode; label?: string }) {
@@ -42,7 +52,8 @@ export function CareerRoom({ home, orb }: { home: Office | null; orb: Character 
     const load = (): void => void home.career(orb).then(setC, (e: Error) => setSaid(e.message));
     load();
     // its work, its level, and its life with the others: a meeting, a friendship, a lesson
-    return home.watch({ event: (e) => void ((e.orb === idOf(orb.name) || /^social\./.test(e.type)) && /^(xp\.|orb\.|promotion\.|habit\.|performance\.|board\.|run\.finished|social\.)/.test(e.type) && load()) });
+    // (anyone's XP moves the office's table)
+    return home.watch({ event: (e) => void ((e.orb === idOf(orb.name) || /^(social|xp)\./.test(e.type)) && /^(xp\.|orb\.|promotion\.|habit\.|performance\.|board\.|run\.finished|social\.)/.test(e.type) && load()) });
   }, [home, orb.name]);
   if (!home) return <p style={{ ...small, padding: "var(--s5)" }}>Careers are the home's: open the app from your home to see one.</p>;
   if (!c) return <p style={{ ...small, padding: "var(--s5)" }}>{said ?? "Loading…"}</p>;
@@ -54,6 +65,9 @@ export function CareerRoom({ home, orb }: { home: Office | null; orb: Character 
   const rung = LADDER.indexOf(c.level as (typeof LADDER)[number]);
   const peak = Math.max(...grown.traits.map((t) => t.value), TOTAL / 7);
   const meetings = c.meetings ?? [];
+  const board = c.ranking ?? [];
+  const at = board.findIndex((r) => r.orb === idOf(orb.name));
+  const most = Math.max(1, ...board.map((r) => r.xp));
   return (
     <div data-career={idOf(orb.name)} data-orb={orb.hue} style={{ display: "grid", gap: "var(--s4)", padding: "var(--s5)", alignContent: "start", minWidth: 0 }}>
       {/* who, and where it stands: the whole orb, its hat and all (10-07: the close-up cut its top off) */}
@@ -92,6 +106,32 @@ export function CareerRoom({ home, orb }: { home: Office | null; orb: Character 
           </div>
         )}
       </header>
+
+      {/* what it wants most: the top of the office's XP table, and your approval */}
+      {at >= 0 && (
+        <Section title="In the office" label="The office by XP">
+          <span data-ambition style={body}>{`${orb.name} wants to be the best orb in the office, not only the best ${SPECIALTIES[orb.specialty].title}: the most XP, and your approval.`}</span>
+          <span data-standing style={{ font: "800 16px/22px var(--font)", color: "var(--text-1)" }}>
+            {standing(board, at)}
+          </span>
+          {board.length > 1 && (
+            <ol aria-label="The office by XP" style={{ display: "grid", gap: 6, margin: 0, padding: 0, listStyle: "none" }}>
+              {board.map((r, i) => (
+                <li key={r.orb} data-rank-orb={r.orb} aria-current={i === at ? "true" : undefined} style={{ display: "grid", gridTemplateColumns: "2ch minmax(0, 1fr) auto", gap: 8, alignItems: "center" }}>
+                  <b style={{ ...small, fontWeight: 800, color: "var(--text-2)", fontVariantNumeric: "tabular-nums" }}>{i + 1}</b>
+                  <span style={{ display: "grid", gap: 3, minWidth: 0 }}>
+                    <span style={{ ...small, fontWeight: i === at ? 800 : 600, color: i === at ? "var(--accent)" : "var(--text-2)" }}>{r.name}</span>
+                    <span style={{ display: "block", height: 6, borderRadius: 3, background: "var(--fill-2)", overflow: "hidden" }}>
+                      <i style={{ display: "block", height: "100%", width: `${(r.xp / most) * 100}%`, background: i === at ? "var(--accent)" : "var(--text-3)", opacity: i === at ? 0.9 : 0.5 }} />
+                    </span>
+                  </span>
+                  <span style={{ ...small, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{`${r.xp.toLocaleString("en-GB")} XP`}</span>
+                </li>
+              ))}
+            </ol>
+          )}
+        </Section>
+      )}
 
       <div className="orbs-pair" style={{ display: "grid", gap: "var(--s4)", minWidth: 0 }}>
         <Section title={`${orb.name}'s traits`} label="Traits">

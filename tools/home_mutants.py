@@ -931,6 +931,13 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("researchers lose their method", "src/brain/constitution.ts", [
         ("  if (!o.mini && RESEARCHERS.includes(o.specialty)) parts.push(RESEARCH_METHOD);\n", ""),
     ], ["web.test.ts"]),
+    # the fundamental analyst (owner, 10-07)
+    ("the fundamental analyst does not read the books", "src/brain/constitution.ts", [
+        ('  if (!o.mini && o.specialty === "fundamentals") parts.push(FUNDAMENTALS_METHOD);\n', ""),
+    ], ["constitution.test.ts"]),
+    ("asked, the fundamental analyst forgets how to read the books", "src/agent/standing.ts", [
+        ('  if (role === "asked" && o.specialty === "fundamentals") parts.push(FUNDAMENTALS_METHOD); // asked to look at a company or a coin\n', ""),
+    ], ["constitution.test.ts"]),
     # his computer (PLAN 4.1): his own browser, its proxy, the vault, a page checked before it is done
     ('his browser is given your home folder', 'src/computer/browser.ts', [
         ('  return { ...env, HOME: home, XDG_CONFIG_HOME: join(home, ".config"), XDG_CACHE_HOME: join(home, ".cache"), XDG_DATA_HOME: join(home, ".local", "share") };', '  return { ...env, HOME: process.env.HOME ?? home, XDG_CONFIG_HOME: join(home, ".config"), XDG_CACHE_HOME: join(home, ".cache"), XDG_DATA_HOME: join(home, ".local", "share") };'),
@@ -1249,6 +1256,16 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ('good friends go unsaid', 'src/social/social.ts', [
         ('      if (before < 50 && after >= 50) this.#events.append("social.friends", { a: x, b: y, names: [nameOf(x), nameOf(y)] });\n', ''),
     ], ['social.test.ts']),
+    # what every orb wants (owner, 10-07): the top of the office's XP table
+    ("an orb does not want to be the best", "src/agent/standing.ts", [
+        ("  if (o.ambition) parts.push(o.ambition);\n", ""),
+    ], ["org.test.ts"]),
+    ("the office's table is upside down", "src/home.ts", [
+        ("xp: xp[o.id] ?? 0 })).sort((a, b) => b.xp - a.xp);", "xp: xp[o.id] ?? 0 })).sort((a, b) => a.xp - b.xp);"),
+    ], ["org.test.ts"]),
+    ("an orb is told it leads when it does not", "src/agent/standing.ts", [
+        ("  if (at === 0) return `${want} You lead", "  if (at >= 0) return `${want} You lead"),
+    ], ["org.test.ts"]),
     ('an orb does not know its friends', 'src/agent/standing.ts', [
         ('  if (o.colleagues) parts.push(o.colleagues); // its friends and frictions in the office (PLAN 5.9)\n', ''),
     ], ['social.test.ts']),
@@ -1356,6 +1373,12 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ('      this.#db.prepare("DELETE FROM reading_pages WHERE source = ?").run(id);\n', ''),
     ], ['reading.test.ts']),
     # the recruiter: positions, applicants, an interview, hire and pass (PLAN 5.8)
+    ("All ticks only the first position", "src/recruiter.ts", [
+        ("      for (const specialty of new Set(specialties)) {", "      for (const specialty of new Set(specialties.slice(0, 1))) {"),
+    ], ["recruiter.test.ts"]),
+    ("a wrong name in the list still changes the rest", "src/recruiter.ts", [
+        ('    for (const s of specialties) if (!(s in SPECIALTY_FAMILIES)) throw new RecruiterError(`"${s}" is not a kind of work`);\n', ""),
+    ], ["recruiter.test.ts"]),
     ("an unticked position's applicants stay in sight", 'src/recruiter.ts', [
         ('      .filter((r) => open.has(r.specialty))', '      .filter(() => true)'),
     ], ['recruiter.test.ts']),
@@ -1823,6 +1846,16 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("the click is a high tok again", "src/ui/sound.ts", [
         ("      return click(0, 170, 0.25);", "      return click(0, 540, 0.25);"),
     ], ["feel.test.ts"]),
+    # the Recruiter's departments and All (owner, 10-07)
+    ("a department shows every department's positions", "src/rooms/Recruiter.tsx", [
+        ("        {(group ? [group] : families).map((f) => {", "        {families.map((f) => {"),
+    ], ["recruiter-view.test.ts"]),
+    ("All ticks one position at a time", "src/rooms/Recruiter.tsx", [
+        ("  const tickShown = (): void => void home.setPositions(shownKinds, !allShown)", "  const tickShown = (): void => void Promise.all(shownKinds.map((k) => home.setPosition(k, !allShown))).then((r) => r.at(-1)!)"),
+    ], ["recruiter-view.test.ts"]),
+    ("the career page does not mark the orb on the table", "src/rooms/Career.tsx", [
+        ('aria-current={i === at ? "true" : undefined}', "aria-current={undefined}"),
+    ], ["org-view.test.ts"]),
     ("he does not react to what you choose", "src/orbs.tsx", [
         ("    if (g && Object.keys(patch).length < 4", "    if (false && g && Object.keys(patch).length < 4"),
     ], ["feel.test.ts"]),
@@ -2353,7 +2386,7 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("the page numbers spill past a phone's width", "src/ui/Paged.tsx", [
         ('style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", alignItems: "center", gap: 5, rowGap: 6 }}', 'style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 6 }}'),
         ('<button className="orbs-narrow" aria-label="Previous page"', '<button aria-label="Previous page"'),
-        ('              className="orbs-narrow"\n              data-sound="pick"', '              data-sound="pick"'),
+        ('              className="orbs-narrow"\n              aria-label={`Page ${p + 1}`}', '              aria-label={`Page ${p + 1}`}'),
         ('<button className="orbs-narrow" aria-label="Next page"', '<button aria-label="Next page"'),
     ], ["office.test.ts", "creator.test.ts"]),
     # the New orb seat and the menu's New orb, inviting (owner, 10-03)

@@ -4,6 +4,8 @@
 // the core and his specialty's sections and nothing else, in his own name; a line the person
 // approved reaches that orb only, and taking it back removes it; and the owner's file is never
 // written. (That the home's roster is the app's, family for family, is the app's test: roster.test.ts.)
+// The fundamental analyst (owner, 10-07) carries the money and reasoning sections and how to read the books;
+// no other orb does, nor a chime-in, and asked by another orb it reads as one.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -11,6 +13,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { serve } from "../src/api.ts";
 import { composeConstitution, coverage, parseSections, SECTION_MAP, SPECIALTY_FAMILIES } from "../src/brain/constitution.ts";
+import { standingContext } from "../src/agent/standing.ts";
 import { text } from "./fakes/model.ts";
 import { agentHome } from "./helpers.ts";
 
@@ -107,4 +110,22 @@ test("only the person adds a line (the door), and taking it back removes it", as
   assert.deepEqual(home.events.since(0, 1000).filter((e) => e.orb === "theo" && e.type.startsWith("orb.")).map((e) => e.type), ["orb.added", "orb.learned", "orb.learned", "orb.unlearned"]);
   // no tool lets a model write it: the only writer is the door
   assert.ok(!home.agent || !JSON.stringify(home.agent).includes("learned"), "control: the agent holds no learned writer");
+});
+
+test("the fundamental analyst: the money and reasoning sections, and how to read the books; no other orb, nor a chime-in; asked, it reads as one", () => {
+  const file = standIn();
+  const text = composeConstitution({ owner: file, specialty: "fundamentals", orbName: "Mike" });
+  const got = marks(text);
+  for (const k of ["financial_advice", "critical_thinking", "reasoning_method", "reasoning_before_acting", "synthesizing_results"]) assert.ok(got.includes(k), `it has ${k}`);
+  assert.ok(!got.includes("frontend_and_ux") && !got.includes("user_wellbeing"), "not a builder's or a coach's");
+  assert.match(text, /\n## How you read the books\n/);
+  assert.match(text, /operating cash flow[\s\S]*Beneish[\s\S]*what would prove you wrong[\s\S]*Never tell the person to buy, sell or short/);
+  assert.match(text, /## How you research/, "and it researches, as the researchers do");
+  // controls: the other money orbs, and a chime-in
+  for (const sp of ["investor", "crypto", "analyst", "accountant", "frontend"] as const) assert.doesNotMatch(composeConstitution({ owner: file, specialty: sp, orbName: "X" }), /How you read the books/, sp);
+  assert.doesNotMatch(composeConstitution({ owner: file, specialty: "fundamentals", orbName: "Mike", mini: true }), /How you read the books/, "a chime-in carries the mini cut only");
+  // asked by another orb (the light brain, no owner's file): it still reads the books as it should
+  const turn = (role: "asked" | "chime") => standingContext({ orbName: "Mike", brainDir: "/nonexistent-orbs-brain", workspace: "/tmp", specialty: "fundamentals", team: { session: 1, title: "Q3", tab: "brainstorm", with: ["Mike", "Ada"], role } });
+  assert.match(turn("asked"), /## How you read the books/);
+  assert.doesNotMatch(turn("chime"), /How you read the books/, "control: a chime-in is a line or three");
 });

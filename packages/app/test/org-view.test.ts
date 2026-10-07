@@ -81,6 +81,11 @@ test("the org chart and a career page; let go with a hand-off, away, rehired; le
   assert.equal(await career.locator("[data-trait]").count(), 7);
   assert.match(await career.locator("[data-level]").innerText(), /^Lv\. \d+$/);
   assert.equal(await career.locator("[data-career-portrait]").evaluate((el) => getComputedStyle(el.querySelector("canvas")!.parentElement!).overflow === "hidden" ? "cut" : "whole"), "whole");
+  // what it wants, and the office by XP (owner, 10-07: "they also want to be the best orb also")
+  assert.match(await career.locator("[data-ambition]").innerText(), /^Ada wants to be the best orb in the office, not only the best Frontend Builder: the most XP, and your approval\.$/);
+  assert.deepEqual(await career.locator("[data-rank-orb]").evaluateAll((ls) => ls.map((l) => l.getAttribute("data-rank-orb"))), h.ranking().map((r) => r.orb), "the office by XP, the most first");
+  assert.equal(await career.locator('[data-rank-orb][aria-current="true"]').getAttribute("data-rank-orb"), "ada", "it, marked");
+  assert.match(await career.locator("[data-standing]").innerText(), new RegExp(`^${h.ranking().findIndex((r) => r.orb === "ada") + 1}(st|nd|rd|th) of 3, `));
   assert.deepEqual(await measure(page), [], "his career page, at desk size");
 
   // his week: a notice for you, a press from his career page

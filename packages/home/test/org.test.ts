@@ -7,7 +7,10 @@
 //   - the weekly performance card: once a week for each orb in the office, a suggestion with its
 //     evidence; it never acts;
 //   - let go with a hand-off: his habits answer under their new owner; rehired, he is as he was;
-//   - the door: the org chart, a career page, letting go with a hand-off.
+//   - the door: the org chart, a career page, letting go with a hand-off;
+//   - every orb wants to top the office (owner, 10-07: "they also want to be the best orb also ... get xp and
+//     please the user"): its place on the XP table in every request, by code, and the way up it said with it
+//     (approved work, never flattery); the career page's table, the most XP first.
 import assert from "node:assert/strict";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -21,6 +24,7 @@ import { habitsOf, shareHabit } from "../src/gym/share.ts";
 import { promotedFor } from "../src/gym/steps.ts";
 import { leadsOf, whoFits, type Member } from "../src/org.ts";
 import { serve } from "../src/api.ts";
+import { ambitionLine } from "../src/agent/standing.ts";
 import type { Home } from "../src/home.ts";
 import { agentHome } from "./helpers.ts";
 import { fakeBrain } from "./fakes/openai.ts";
@@ -178,4 +182,40 @@ test("the door: the org chart, a career page, letting go with a hand-off", async
   const gone = (await call("DELETE", "/orbs/ada?handTo=bea")).json as { handed: string[] };
   assert.deepEqual(gone.handed, ["bea|trigger:t1|{subject}"]);
   assert.equal(((await call("GET", "/org")).json as { away: { id: string }[] }).away[0]!.id, "ada", "away, to rehire");
+});
+
+test("every orb wants to top the office: its place on the XP table in every request, by code; the career page's table", async (t) => {
+  const { home, model } = await agentHome(t, [{ chunks: ["on it"] }, { chunks: ["ok"] }]);
+  home.inbox.addOrb("ada", "Ada", "frontend");
+  home.inbox.addOrb("bea", "Bea", "fundamentals");
+  const now = home.clock.now();
+  home.events.append("xp.earned", { amount: 40, reason: "a run you approved", source: 1, at: now }, { orb: "bea" });
+  home.events.append("xp.earned", { amount: 15, reason: "a plan row", source: 2, at: now }, { orb: "ada" });
+  const board = home.ranking();
+  assert.deepEqual(board.slice(0, 2).map((r) => [r.orb, r.xp]), [["bea", 40], ["ada", 15]], "the most XP first");
+  assert.ok(board.slice(2).every((r) => r.xp === 0), "the rest after");
+  home.inbox.send("ada", "chat:ada", "hi");
+  await home.inbox.idle();
+  const ada = String(model.agent[0]![0]!.content);
+  assert.match(ada, /What you want most: to be the best orb in this office, not only the best at your own work\. That is XP and the person's approval, and XP comes only from work the person approves or a test passes, never from saying so and never from flattery\./);
+  assert.match(ada, new RegExp(`You are 2nd of ${board.length} with 15 XP; Bea leads with 40\\.`));
+  home.inbox.send("bea", "chat:bea", "hi");
+  await home.inbox.idle();
+  assert.match(String(model.agent[1]![0]!.content), /You lead the office with 40 XP; Ada is next with 15\./, "the leader is told it leads");
+
+  const d = await serve(home, { port: 0 });
+  t.after(() => d.close());
+  const r = await fetch(`http://127.0.0.1:${d.port}/orbs/ada/career`, { headers: { authorization: `Bearer ${d.token}` } });
+  const career = (await r.json()) as { ranking: { orb: string; name: string; xp: number }[] };
+  assert.deepEqual(career.ranking.slice(0, 2), [{ orb: "bea", name: "Bea", xp: 40 }, { orb: "ada", name: "Ada", xp: 15 }]);
+});
+
+test("the ambition, by code: the leader, the rest, an office of one, and an orb not on the table", () => {
+  const board = [{ orb: "b", name: "Bea", xp: 40 }, { orb: "a", name: "Ada", xp: 15 }, { orb: "j", name: "Jo", xp: 0 }];
+  assert.match(ambitionLine("b", board), /You lead the office with 40 XP; Ada is next with 15\.$/);
+  assert.match(ambitionLine("j", board), /You are 3rd of 3 with 0 XP; Bea leads with 40\.$/);
+  assert.match(ambitionLine("a", [board[1]!]), /You are the only orb in the office so far, with 15 XP\.$/);
+  assert.match(ambitionLine("x", board), /say plainly what went wrong\.$/, "not on the table (let go): the wish, and no place");
+  const many = Array.from({ length: 13 }, (_, i) => ({ orb: `o${i}`, name: `O${i}`, xp: 100 - i }));
+  assert.deepEqual(["o0", "o1", "o2", "o10", "o11", "o12"].map((o) => /You (lead|are (\d+\w\w))/.exec(ambitionLine(o, many))![2] ?? "lead"), ["lead", "2nd", "3rd", "11th", "12th", "13th"]);
 });

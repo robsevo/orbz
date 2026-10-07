@@ -550,6 +550,11 @@ export const SPECIALTIES = {
   events: { family: "life", label: "Events", title: "Event Planner", focus: "parties and events: guests, venues, timings, the cake", lean: [5, 1, 2, 3, 3, 2, 3, 4], hat: "party hat", glasses: "stars" },
   career: { family: "life", label: "Career", title: "Career Coach", focus: "CVs, applications, interviews and the next move", lean: [4, 1, 1, 2, 5, 3, 2, 4], hat: "none", glasses: "half-rims" },
   language: { family: "life", label: "Languages", title: "Language Buddy", focus: "practising a language with you, a little every day", lean: [3, 1, 1, 1, 5, 2, 1, 4], hat: "beret", glasses: "none" },
+  // owner, 10-07: "add fundamental analysis as one of the position for stocks and crypto, one where the orb acts
+  // like a really good and well trained fundamental analyst, looks at the compaies books, finds where they might
+  // be lying or there might be a crash, like a michael burry kind of character or Mark Baum". A detective's hat:
+  // it reads the footnotes. Last in the list, as every addition is (strand.ts keeps a specialty by its place)
+  fundamentals: { family: "business", label: "Fundamentals", title: "Fundamental Analyst", focus: "stocks and crypto read to the bone: the filings and their footnotes, cash against earnings, debt, dilution, a token's supply and who holds it; where the story and the numbers part ways, before the crash", lean: [3, 1, 5, 1, 3, 5, 5, 1], hat: "deerstalker", glasses: "half-rims", limits: "Not a licensed financial adviser: reads the books and says what does not add up; every buy, sell or short is yours to make." },
 } satisfies Record<string, Specialty>;
 export type SpecialtyName = keyof typeof SPECIALTIES;
 

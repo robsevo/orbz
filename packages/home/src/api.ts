@@ -579,6 +579,16 @@ async function handle(
   }
   // the recruiter (PLAN 5.8): the positions you are hiring for, who applied, an interview, hire or pass
   if (method === "GET" && url.pathname === "/recruiter") return home.recruiting();
+  if (method === "PUT" && parts[0] === "recruiter" && parts[1] === "positions" && parts.length === 2) {
+    // several at once: All, or a department's all (owner, 10-07)
+    const b = await body(req);
+    if (!Array.isArray(b.specialties) || !b.specialties.every((s) => typeof s === "string")) throw new HttpError(400, "specialties: a list of kinds of work");
+    try {
+      return { positions: home.recruiter.setPositions(b.specialties as string[], b.open === true) };
+    } catch (e) {
+      throw new HttpError(400, e instanceof Error ? e.message : String(e));
+    }
+  }
   if (method === "PUT" && parts[0] === "recruiter" && parts[1] === "positions" && parts.length === 3) {
     const b = await body(req);
     try {
@@ -646,6 +656,8 @@ async function handle(
       // its growth with the others (owner, 10-07: "put it in the career section too, its where we see the orbs
       // growth"): its latest work, its meetings and the ideas traded in them, its friends, the lessons passed
       work: recentWork(home.events, orb, { limit: 6 }),
+      // the office by XP, the most first (owner, 10-07: each wants "to be the best orb ... get xp and please the user")
+      ranking: home.ranking(),
       meetings: home.events.ofType("social.met").filter((e) => e.data.a === orb || e.data.b === orb).slice(-8).reverse().map((e) => {
         const other = String(e.data.a === orb ? e.data.b : e.data.a);
         const ideas = (Array.isArray(e.data.ideas) ? e.data.ideas : []) as { orb: string; text: string }[];

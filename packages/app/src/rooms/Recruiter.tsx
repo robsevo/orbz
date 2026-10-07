@@ -11,6 +11,9 @@
 // A department's applicants have an address of their own (owner, 10-06: the floor's Hiring tags "should
 // bring us to those who can build and think"): #/recruiter/build opens on who applied to Build, ranked
 // among themselves, with All and the other departments you are hiring in one press away.
+// The positions in their departments, each named, and All (owner, 10-07: "an all filter so if were looking for
+// all positions, we can see everything instead of clicking, and also give them groups"): show one department's
+// positions or all of them, and tick every one shown in one press (one request to the home, not one each).
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Orb } from "../orb/Orb.tsx";
@@ -36,6 +39,7 @@ export function RecruiterRoom({ home, office, family, pick, hired, profile }: { 
   const [said, setSaid] = useState<string | null>(null);
   const [open, setOpen] = useState<number | null>(null); // whose interview is open
   const [seeing, setSeeing] = useState<number | null>(null); // whose profile is open
+  const [group, setGroup] = useState<Family | null>(null); // the positions shown: one department's, or all
   const applying = useRef<HTMLElement>(null);
   const dept = family && family in FAMILIES ? (family as Family) : null; // the department shown, or all
   useEffect(() => {
@@ -60,6 +64,9 @@ export function RecruiterRoom({ home, office, family, pick, hired, profile }: { 
   const familyOf = (k: string): Family | undefined => SPECIALTIES[k as Kind]?.family;
   const inDept = (k: string): boolean => !dept || familyOf(k) === dept;
   const hiringIn = families.filter((f) => state.positions.some((k) => familyOf(k) === f)); // the departments you are hiring in
+  const shownKinds = (Object.keys(SPECIALTIES) as Kind[]).filter((k) => !group || SPECIALTIES[k].family === group);
+  const allShown = shownKinds.every((k) => state.positions.includes(k));
+  const tickShown = (): void => void home.setPositions(shownKinds, !allShown).then((positions) => setState({ ...state, positions }), (e: Error) => setSaid(e.message));
   // everyone applying for a position you are hiring for (in the department shown), ranked by how well each would suit the office
   const order = ranked(
     state.applicants.filter((a) => state.positions.includes(a.specialty) && inDept(a.specialty)).map((a) => ({ a, c: applicant(a.seed, a.specialty as Kind, taken) })),
@@ -74,21 +81,41 @@ export function RecruiterRoom({ home, office, family, pick, hired, profile }: { 
       <h2 style={{ margin: 0, font: "800 22px/28px var(--font)", color: "var(--text-1)" }}>Recruiter</h2>
       <section aria-label="Positions" style={{ display: "grid", gap: 10, minWidth: 0 }}>
         <span style={head}>Positions you are hiring for</span>
-        {families.map((f) => (
-          <div key={f} role="group" aria-label={FAMILIES[f]} style={{ minWidth: 0 }}>
-            {/* a balanced grid: never one position alone on a row */}
-            <Balanced min={150} gap={6}>
-              {(Object.keys(SPECIALTIES) as Kind[]).filter((k) => SPECIALTIES[k].family === f).map((k) => {
-                const on = state.positions.includes(k);
-                return (
-                  <button key={k} type="button" aria-pressed={on} data-position={k} onClick={() => tick(k)} style={{ ...(on ? strong : button), minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {on ? "✓ " : ""}{SPECIALTIES[k].title}
-                  </button>
-                );
-              })}
-            </Balanced>
-          </div>
-        ))}
+        {/* which department's positions are shown, or all of them (a balanced grid: never one alone on a row) */}
+        <Balanced min={96} gap={6}>
+          {[null, ...families].map((f) => (
+            <button key={f ?? "all"} type="button" aria-pressed={group === f} data-position-filter={f ?? "all"} onClick={() => setGroup(f)} style={{ ...(group === f ? strong : button), ...fits }}>
+              {f ? FAMILIES[f] : "All"}
+            </button>
+          ))}
+        </Balanced>
+        {/* every position shown, ticked (or unticked) in one press */}
+        <button type="button" aria-pressed={allShown} data-tick-shown onClick={tickShown} style={{ ...(allShown ? strong : button), ...fits, justifySelf: "start", maxWidth: "100%" }}>
+          {`${allShown ? "✓ " : ""}${group ? `All of ${FAMILIES[group]}` : "All positions"}`}
+        </button>
+        {(group ? [group] : families).map((f) => {
+          const kinds = shownKinds.filter((k) => SPECIALTIES[k].family === f);
+          const ticked = kinds.filter((k) => state.positions.includes(k)).length;
+          return (
+            <div key={f} role="group" aria-label={FAMILIES[f]} data-position-group={f} style={{ display: "grid", gap: 6, minWidth: 0 }}>
+              <span style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, minWidth: 0 }}>
+                <b style={{ font: "800 14px/20px var(--font)", color: "var(--text-1)" }}>{FAMILIES[f]}</b>
+                <span style={{ ...small, whiteSpace: "nowrap" }}>{`${ticked} of ${kinds.length}`}</span>
+              </span>
+              {/* a balanced grid: never one position alone on a row */}
+              <Balanced min={150} gap={6}>
+                {kinds.map((k) => {
+                  const on = state.positions.includes(k);
+                  return (
+                    <button key={k} type="button" aria-pressed={on} data-position={k} onClick={() => tick(k)} style={{ ...(on ? strong : button), minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {on ? "✓ " : ""}{SPECIALTIES[k].title}
+                    </button>
+                  );
+                })}
+              </Balanced>
+            </div>
+          );
+        })}
       </section>
       {(hiringIn.length > 0 || dept) && (
         <section ref={applying} data-applicants-of={dept ?? "all"} aria-label="Who applied" style={{ display: "grid", gap: 8, minWidth: 0, scrollMarginTop: "var(--s5)" }}>

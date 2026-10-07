@@ -61,15 +61,26 @@ export class Recruiter {
 
   /** Ticks a position, or unticks it (its applicants wait on, out of sight, until it opens again the same day or the day turns). */
   setPosition(specialty: string, open: boolean): Specialty[] {
-    if (!(specialty in SPECIALTY_FAMILIES)) throw new RecruiterError(`"${specialty}" is not a kind of work`);
-    const was = this.positions().includes(specialty as Specialty);
-    if (open && !was) {
-      this.#db.prepare("INSERT INTO positions (specialty, opened_at) VALUES (?, ?)").run(specialty, this.#clock.now());
-      this.#events.append("position.opened", { specialty });
-    } else if (!open && was) {
-      this.#db.prepare("DELETE FROM positions WHERE specialty = ?").run(specialty);
-      this.#events.append("position.closed", { specialty });
-    }
+    return this.setPositions([specialty], open);
+  }
+
+  /** Ticks or unticks several at once (owner, 10-07: "an all filter so if were looking for all positions, we
+   * can see everything instead of clicking"): every name is checked first, so one that is not a kind of
+   * work changes none. */
+  setPositions(specialties: string[], open: boolean): Specialty[] {
+    for (const s of specialties) if (!(s in SPECIALTY_FAMILIES)) throw new RecruiterError(`"${s}" is not a kind of work`);
+    tx(this.#db, () => {
+      const was = new Set<string>(this.positions());
+      for (const specialty of new Set(specialties)) {
+        if (open && !was.has(specialty)) {
+          this.#db.prepare("INSERT INTO positions (specialty, opened_at) VALUES (?, ?)").run(specialty, this.#clock.now());
+          this.#events.append("position.opened", { specialty });
+        } else if (!open && was.has(specialty)) {
+          this.#db.prepare("DELETE FROM positions WHERE specialty = ?").run(specialty);
+          this.#events.append("position.closed", { specialty });
+        }
+      }
+    });
     return this.positions();
   }
 
