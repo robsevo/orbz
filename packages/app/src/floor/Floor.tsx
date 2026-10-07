@@ -530,12 +530,14 @@ export function Floor({ home, office, moods, person, go }: { home: Office | null
                 </button>
               );
             })()}
-            {/* an empty desk where you are hiring: it opens on who applied to that department (owner, 10-06) */}
+            {/* an empty desk where you are hiring: it opens on who applied to that department (owner, 10-06); above every
+                orb (an orb drawn by its feet is stacked by them), so one sitting by it never takes its press (10-07: Cos at
+                think1 covered Think's tag) */}
             {hiringTags.map((h) => {
               const z = h.family;
               return (
                 <button key={z} type="button" className="orbs-tag" data-hiring={z} onClick={() => go({ room: "recruiter", family: z })} aria-label={`Hiring for ${FAMILIES[z]}: see who applied`} data-orb={h.hue}
-                  style={{ position: "absolute", left: px(h.x), top: px(h.y), translate: "-50% 0", zIndex: h.z, ...tag, cursor: "pointer", border: 0, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1px var(--accent)", color: "var(--text-1)" }}>
+                  style={{ position: "absolute", left: px(h.x), top: px(h.y), translate: "-50% 0", zIndex: H + 10, ...tag, cursor: "pointer", border: 0, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1px var(--accent)", color: "var(--text-1)" }}>
                   + Hiring
                 </button>
               );

@@ -13,6 +13,7 @@ import { AmendmentError, type Amendments } from "./amendments.ts";
 import { ClaimError, type Claims } from "./claims.ts";
 import type { Board } from "./plans/board.ts";
 import { parseTabConversation, type Team } from "./team.ts";
+import { GROUPS } from "./agent/groups.ts";
 
 /** How deep a request of a request may go: you → an orb → another, never a third hand. */
 export const DEPTH = 2;
@@ -31,6 +32,7 @@ export function teamTools(o: { claims: Claims; amendments: Amendments; board: Bo
   return [
     {
       name: "claim_rows",
+      group: GROUPS.team,
       label: "Claiming work",
       description:
         "Before working on rows of the session's approved plan, claim them and the files they will touch (paths in the team's workspace; a folder covers what is in it). They are yours until you hand_off; another orb's claim is refused, naming whose it is.",
@@ -67,6 +69,7 @@ export function teamTools(o: { claims: Claims; amendments: Amendments; board: Bo
     },
     {
       name: "hand_off",
+      group: GROUPS.team,
       label: "Handing off",
       description: "Hand off the rows you hold: the team is told what changed, which tests ran and the next row nobody holds.",
       parameters: obj({}, []),
@@ -115,6 +118,7 @@ export function teamTools(o: { claims: Claims; amendments: Amendments; board: Bo
     },
     {
       name: "propose_change",
+      group: GROUPS.team,
       label: "Proposing a change",
       description: "Propose a new row for the session's approved plan, with its test row. It changes the board only when another orb of the session, or the person, agrees.",
       parameters: obj(
@@ -139,6 +143,7 @@ export function teamTools(o: { claims: Claims; amendments: Amendments; board: Bo
     },
     {
       name: "agree_change",
+      group: GROUPS.team,
       label: "Agreeing a change",
       description: "Second another orb's proposed change to the plan: it becomes ✓ Agreed, and the board has its row.",
       parameters: obj({ id: { type: "number" } }, ["id"]),

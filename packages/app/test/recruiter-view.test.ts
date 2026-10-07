@@ -194,6 +194,20 @@ test("the floor's Hiring tags open on who applied to their department; All and t
   });
 
   const page = await open({ width: 1280, height: 900 });
+  // a tag above every orb, wherever an orb walks or sits (10-07: in a busy gate an orb passing over Think's tag took its
+  // press): every tag stacks above every orb on the floor
+  const stacking = await page.evaluate(() => {
+    const zOf = (el: Element): number => {
+      for (let e: Element | null = el; e && !e.hasAttribute("data-floor-plan"); e = e.parentElement) {
+        const z = (e as HTMLElement).style.zIndex;
+        if (z) return Number(z);
+      }
+      return 0;
+    };
+    const orbs = [...document.querySelectorAll("[data-floor-orb]")].map(zOf);
+    return { tags: [...document.querySelectorAll("[data-hiring]")].map(zOf), top: Math.max(...orbs) };
+  });
+  assert.ok(stacking.tags.length >= 2 && stacking.tags.every((z) => z > stacking.top), `every Hiring tag above every orb (${stacking.tags} over ${stacking.top})`);
   await page.getByRole("button", { name: "Hiring for Build: see who applied" }).click();
   await page.waitForFunction(() => location.hash === "#/recruiter/build", undefined, { timeout: 10_000 });
   await page.locator('[data-applying="backend"] [data-applicant]').first().waitFor({ timeout: 20_000 });

@@ -23,6 +23,7 @@ import { transportCause } from "./stream.ts";
 import { type SearchKey, webFetch, webSearch } from "./web.ts";
 import type { Wrap } from "../computer/sandbox.ts";
 import { noteAsk, type TeamNotes } from "../notes.ts";
+import { GROUPS, type ToolGroup } from "./groups.ts";
 
 export type Decision = "allow" | "ask" | "never";
 export type ToolResult = { content: string; isError?: boolean; stoppedByUser?: boolean };
@@ -32,6 +33,9 @@ export type ToolContext = {
   sandbox?: Wrap | null;
   /** A command's output as it comes, for his terminal on the person's screen (never stored). */
   onOutput?: (chunk: string) => void;
+  /** The kinds of tools this run has to hand (agent/groups.ts); more_tools adds to it (a call's own copy of the context
+   * shares it). */
+  kinds?: Set<string>;
   /** How many hands deep this run's request is (PLAN 5.1): an orb's ask is 1, an ask of an ask 2. */
   depth?: number;
   /** In a session (PLAN 5.1): who else holds `path` in the team's claims, by name, or null. */
@@ -64,6 +68,9 @@ type Args = Record<string, unknown>;
 
 export type ToolDef = {
   name: string;
+  /** The kind of tool it is, when only some work needs it (agent/groups.ts): an orb starts a run with its department's
+   * groups and loads another with more_tools. None: every orb's, every run. */
+  group?: ToolGroup;
   label: string;
   description: string;
   parameters: Record<string, unknown>;
@@ -421,6 +428,7 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: "agree",
+    group: GROUPS.team,
     label: "Agreeing",
     description: "In a session: record a decision the orbs and the person have agreed on, in one short line. It shows to everyone as ✓ Agreed. Use it once per decision, when it is settled.",
     parameters: obj({ decision: { type: "string", description: "What was agreed, in one line." } }, ["decision"]),
@@ -435,6 +443,7 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: "remind",
+    group: GROUPS.day,
     label: "Keeping a reminder",
     description:
       "Keep a bill or a reminder for the person: it goes on their calendar in Orbz on its day (at its time, if it has one) and comes up in their notification centre ahead of time (a bill 3 days before it is due unless you say otherwise; a reminder on its day, or at its time). This is how you put something on their calendar: when they ask to add a pick-up, an appointment, a payment or a deadline to their calendar, keep it here (their own Google or Outlook calendars are read only to orbs). Use it too for a bill you found, a renewal, anything they asked you to remember.",
@@ -466,6 +475,7 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: "plan_templates",
+    group: GROUPS.plans,
     label: "Looking at my plan templates",
     description:
       "Your plan templates: plans the person approved three times the same way, each passed by the plan gate. When a job is one of these, start its plan from the template (then propose_plan it as usual: it is checked again).",
@@ -505,6 +515,7 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: "schedule_job",
+    group: GROUPS.day,
     label: "Setting a schedule",
     description:
       "Set yourself a job that comes back on its own: daily at a time (on chosen days, 1 Monday to 7 Sunday), or every 15, 20 or 30 minutes, or every 1, 2, 3, 4, 6, 8 or 12 hours. Each run starts fresh, in its own conversation, from your instruction, so write it whole. The person approves it first.",
@@ -547,6 +558,7 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: "list_reminders",
+    group: GROUPS.day,
     label: "Looking at the calendar",
     description: "List the bills and reminders kept for the person (yours and the other orbs'), with their ids and when each is due.",
     parameters: obj({}, []),
@@ -559,6 +571,7 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: "move_reminder",
+    group: GROUPS.day,
     label: "Moving something on the calendar",
     description: "Propose moving a bill or a reminder to another day (or time). The person sees it as a card and nothing moves until they approve: moving what is on their calendar is never silent.",
     parameters: obj(

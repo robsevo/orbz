@@ -11,7 +11,8 @@
 // specialty's sections, morals left out), with the lines the person approved for him.
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { composeConstitution, FUNDAMENTALS_METHOD, RESEARCH_METHOD, RESEARCHERS, sectioned, type Specialty } from "../brain/constitution.ts";
+import { composeConstitution, FUNDAMENTALS_METHOD, loads, RESEARCH_METHOD, RESEARCHERS, SECTION_MAP, sectioned, type Specialty } from "../brain/constitution.ts";
+import { SEARCH_BRIEF, valuesBrief, valuesFor } from "../brain/values.ts";
 
 /** What kind of turn an orb has in a session (owner, 10-06: the lead plans and pulls others in, and
  * "keep answers short and cheap so everyone can chime in"):
@@ -75,13 +76,16 @@ export function ambitionLine(me: string, board: { orb: string; name: string; xp:
 
 const ordinal = (n: number): string => `${n}${n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
 
-export function standingContext(o: { orbName: string; brainDir: string; workspace: string; specialty?: Specialty; learned?: string[]; notebook?: { subject: string; text: string }[]; colleagues?: string | null; ambition?: string | null; company?: string | null; team?: TeamTurn; aloud?: boolean; now?: number }): string {
+export function standingContext(o: { orbName: string; brainDir: string; workspace: string; specialty?: Specialty; learned?: string[]; notebook?: { subject: string; text: string }[]; colleagues?: string | null; ambition?: string | null; company?: string | null; team?: TeamTurn; aloud?: boolean; now?: number; kinds?: ReadonlySet<string>; used?: ReadonlySet<string> }): string {
   const role = o.team?.role ?? (o.team ? "lead" : null);
   const light = isLight(o.team);
   const parts = [
     `You are ${o.orbName}, one of the person's orbs: an AI character and assistant that works on its own computer and asks before anything that matters.`,
     NO_HE_OR_SHE,
     `Working directory: ${o.workspace}`,
+    // Orbs' own values (owner, 10-07: "develop our own, a safe one everyone can use"), whatever the owner's file holds;
+    // in brief on a light turn
+    light ? valuesBrief(o.orbName) : valuesFor(o.orbName),
   ];
   // the company and its part in it (PLAN 5.14: the CEO and the assistant in tandem, the CFO's books), by code
   if (o.company) parts.push(o.company);
@@ -96,8 +100,12 @@ export function standingContext(o: { orbName: string; brainDir: string; workspac
   // a file not in sections (no ## or ### heading) is read whole, as before; a light turn carries the
   // mini cut of it, or none when the file cannot be cut
   const cut = Boolean(owner) && sectioned(owner);
-  const constitution = cut ? composeConstitution({ owner, specialty: o.specialty ?? "general", orbName: o.orbName, learned: o.learned, mini: light }) : light ? "" : owner;
+  // the craft sections its tools bring (`kinds`, `used`: brain/constitution.ts When), beside its department's
+  const constitution = cut ? composeConstitution({ owner, specialty: o.specialty ?? "general", orbName: o.orbName, learned: o.learned, mini: light, kinds: o.kinds, used: o.used }) : light ? "" : owner;
   if (constitution) parts.push(constitution);
+  // searching (owner, 10-07: "chop up the constitution in a very very logical way where it cuts token cost"): the owner's
+  // knowledge_and_search is the researching orbs' craft; every other orb that has tools gets its rule in brief
+  if (role !== "chime" && !(cut && !light && loads(SECTION_MAP.knowledge_and_search, o.specialty ?? "general", { kinds: o.kinds, used: o.used }))) parts.push(SEARCH_BRIEF);
   if (role === "asked" && RESEARCHERS.includes(o.specialty ?? "general")) parts.push(RESEARCH_METHOD); // asked to find something out
   if (role === "asked" && o.specialty === "fundamentals") parts.push(FUNDAMENTALS_METHOD); // asked to look at a company or a coin
   if (!cut && o.learned?.length) parts.push(`What you have learned (each line approved by the person):\n${o.learned.map((l) => `- ${l}`).join("\n")}`);

@@ -10,6 +10,7 @@
 import type { ToolDef, ToolResult } from "../agent/tools.ts";
 import { focus } from "../agent/web.ts";
 import { PAGES_PER_READ, type Reading, ReadingError } from "./reading.ts";
+import { GROUPS } from "../agent/groups.ts";
 
 const obj = (properties: Record<string, unknown>, required: string[]): Record<string, unknown> => ({ type: "object", properties, required, additionalProperties: false });
 const s = (v: unknown): string => (typeof v === "string" ? v : v === undefined || v === null ? "" : String(v));
@@ -20,6 +21,7 @@ export function readingTools(reading: Reading, nameOf: (orb: string) => string):
   return [
     {
       name: "follow_source",
+      group: GROUPS.reading,
       label: "Following a source",
       description:
         "Follow a site worth keeping up with (official docs, a changelog, a blog, a project's news): the home reads it now and then again each night, politely (it obeys the site's robots.txt and reads a page every few seconds), and keeps the pages in your office's reading library for search_reading. It reads the folder of the address you give and the pages under it, two links deep. Follow what you will need again; for a page you need once, web_fetch it.",
@@ -50,6 +52,7 @@ export function readingTools(reading: Reading, nameOf: (orb: string) => string):
     },
     {
       name: "search_reading",
+      group: GROUPS.reading,
       label: "Searching the reading library",
       description:
         "Search the pages your office already read from the sources it follows: free and instant, each result dated (when it was read, when it last changed) with a snippet. It knows only what was read; for anything newer or not followed, use web_search. Read a whole page with read_reading.",
@@ -79,6 +82,7 @@ export function readingTools(reading: Reading, nameOf: (orb: string) => string):
     },
     {
       name: "read_reading",
+      group: GROUPS.reading,
       label: "Reading from the library",
       description: "A page from the reading library, as it was last read (no request to the site): its text, focused on `prompt` when long. For the page as it is right now, web_fetch it.",
       parameters: obj({ url: { type: "string" }, prompt: { type: "string", description: "What you want from the page." } }, ["url"]),
@@ -100,6 +104,7 @@ export function readingTools(reading: Reading, nameOf: (orb: string) => string):
     },
     {
       name: "list_reading",
+      group: GROUPS.reading,
       label: "Looking at the reading library",
       description: "What your office follows: each source's number, its site and folder, who follows it and why, its pages, and how its last read went.",
       parameters: obj({}, []),
@@ -115,6 +120,7 @@ export function readingTools(reading: Reading, nameOf: (orb: string) => string):
     },
     {
       name: "unfollow_source",
+      group: GROUPS.reading,
       label: "Unfollowing a source",
       description: "Stop following a source (its number from list_reading); its pages leave the reading library.",
       parameters: obj({ source: { type: "number" } }, ["source"]),

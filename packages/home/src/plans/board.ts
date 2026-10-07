@@ -27,6 +27,7 @@ import { inWorkspace, runCommand, type ToolContext, type ToolDef } from "../agen
 import type { PageCheck } from "../computer/tools.ts";
 import { LEVELS, type Level } from "../gym/levels.ts";
 import { parseTabConversation } from "../team.ts";
+import { GROUPS } from "../agent/groups.ts";
 
 /** Whose rows are reviewed before they are ticked, and who may review (PLAN 5.4): in a team (a
  * session's tab) only; an orb working alone with you ticks his own on the home's run. */
@@ -217,6 +218,7 @@ export function boardTools(
   return [
     {
       name: "start_row",
+      group: GROUPS.plans,
       label: "Starting a row",
       description:
         "Start a row of an approved plan ([ ] → [~]) and name the command that tests it — the one its _t row describes. " +
@@ -244,6 +246,7 @@ export function boardTools(
     },
     {
       name: "check_row",
+      group: GROUPS.plans,
       label: "Testing a row",
       description: "Ask the home to run a started row's test command. It ticks the row [x] only if the command passes.",
       parameters: {
@@ -300,6 +303,7 @@ export function boardTools(
     },
     {
       name: "review_row",
+      group: GROUPS.plans,
       label: "Reviewing a row",
       description: "Review a junior's row that passed its test and waits for a review: approve it (it is ticked [x]) or ask for changes (it stays [~], with your note). A Senior reviews: the Senior of the junior's own kind when the office has one.",
       parameters: {

@@ -4,7 +4,8 @@
 //     their share; claimed for them; each other orb sent to build its own; the lead told which are its;
 //   - claim_rows refuses more than an even share while others work the tab;
 //   - a tool result from before the latest message to an orb reaches the model as its head only; a
-//     request to another orb, or another orb's words, begin nothing;
+//     request to another orb, or another orb's words, begin nothing; within a turn, a long result from before
+//     its latest two steps its head too (10-07);
 //   - a session can be deleted: what waits is dropped, its cards put away, its chats gone;
 //   - the clock is the standing context's last line; a chime-in carries the mini constitution, an
 //     asked researcher its method.
@@ -13,7 +14,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { Background, type ToolContext, type ToolDef } from "../src/agent/tools.ts";
-import { OLD_RESULT, trimOld } from "../src/agent/conversation.ts";
+import { OLD_RESULT, STALE_KEEP, STALE_MAX, trimOld, trimStale } from "../src/agent/conversation.ts";
 import { standingContext } from "../src/agent/standing.ts";
 import { MINI, SECTION_MAP } from "../src/brain/constitution.ts";
 import { dealRows } from "../src/team.ts";
@@ -125,6 +126,30 @@ test("an earlier turn's tool results reach the model as their head; this turn's 
   assert.equal(trimOld("short"), "short", "a short result is left as it is");
   const milo = c.toModel(c.history(conv), { me: "milo", nameOf: (o) => o });
   assert.ok(!milo.some((m) => m.role === "tool"), "Milo never sees Ash's results");
+});
+
+test("within a turn (owner, 10-07: \"do both\"): the latest two steps' results whole; a long result from an older step its head; a short one whole; a step's every result whole on the next", async (t) => {
+  const { home } = await agentHome(t, []);
+  const c = home.conversations;
+  const conv = "chat:ash";
+  const page = "p".repeat(9000);
+  c.add({ conversation: conv, orb: "ash", role: "user", content: "Compare five shops" });
+  // step 1: five pages at once; step 2: one more and a short note; step 3: one more
+  c.add({ conversation: conv, orb: "ash", role: "assistant", content: "", toolCalls: [1, 2, 3, 4, 5].map((i) => ({ id: `s1-${i}`, name: "web_fetch", arguments: "{}" })) });
+  for (const i of [1, 2, 3, 4, 5]) c.add({ conversation: conv, orb: "ash", role: "tool", toolCallId: `s1-${i}`, content: page });
+  const atStepTwo = c.toModel(c.history(conv), { me: "ash" }).filter((m) => m.role === "tool").map((m) => m.content);
+  assert.ok(atStepTwo.every((r) => r === page), "control: a step's every result whole on the next step, five pages or one");
+  c.add({ conversation: conv, orb: "ash", role: "assistant", content: "", toolCalls: [{ id: "s2-a", name: "web_fetch", arguments: "{}" }, { id: "s2-b", name: "read_file", arguments: "{}" }] });
+  c.add({ conversation: conv, orb: "ash", role: "tool", toolCallId: "s2-a", content: page });
+  c.add({ conversation: conv, orb: "ash", role: "tool", toolCallId: "s2-b", content: "a short note" });
+  c.add({ conversation: conv, orb: "ash", role: "assistant", content: "", toolCalls: [{ id: "s3", name: "web_fetch", arguments: "{}" }] });
+  c.add({ conversation: conv, orb: "ash", role: "tool", toolCallId: "s3", content: page });
+  const seen = c.toModel(c.history(conv), { me: "ash" }).filter((m) => m.role === "tool").map((m) => m.content);
+  assert.equal(seen.length, 8);
+  assert.ok(seen.slice(0, 5).every((r) => r === trimStale(page)), "step 1's pages: their heads, two steps on");
+  assert.ok(seen[0]!.length < STALE_KEEP + 200 && /7,500 more characters, read a few steps ago: run the tool again/.test(seen[0]!));
+  assert.deepEqual(seen.slice(5), [page, "a short note", page], "the latest two steps whole");
+  assert.equal(trimStale("q".repeat(STALE_MAX)), "q".repeat(STALE_MAX), "a result no longer than the bar is left whole");
 });
 
 test("deleting a session stops its work, puts its cards away and removes its chats; the door says so", async (t) => {

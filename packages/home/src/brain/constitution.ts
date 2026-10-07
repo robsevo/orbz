@@ -39,11 +39,25 @@ export type Placement =
   | { to: "core" }
   | { to: "morals"; why: string }
   | { to: "replaced"; by: string }
-  | { to: "work"; families?: Family[]; specialties?: Specialty[] };
+  /** `when`: also loaded, from the next step, for any orb that has one of these kinds of tools to hand (agent/groups.ts)
+   * or has used one of these tools in the conversation (owner, 10-07: "we still want everything to be there and
+   * available, just when it needs to be"). */
+  | { to: "work"; families?: Family[]; specialties?: Specialty[]; when?: When };
+/** What brings a craft section to an orb outside its department: a kind of tools it has, a tool it has used. */
+export type When = { groups?: string[]; tools?: string[] };
+/** What an orb has to hand and has done in this conversation, for `When`. */
+export type Using = { kinds?: ReadonlySet<string>; used?: ReadonlySet<string> };
 
 const core = { to: "core" } as const;
 const morals = (why: string): Placement => ({ to: "morals", why });
-const work = (families: Family[], specialties: Specialty[] = []): Placement => ({ to: "work", families, specialties });
+const work = (families: Family[], specialties: Specialty[] = [], when?: When): Placement => ({ to: "work", families, specialties, ...(when && { when }) });
+// a craft section follows the tools that use it (owner, 10-07: "it still has to be really good, planning as well ... just
+// when it needs to be"): planning with the plans, how to search with a search, delegating with the team or an ask,
+// coding with a command run, a page's design with a page checked
+const PLANNING: When = { groups: ["plans"], tools: ["propose_plan", "plan_templates"] };
+const SEARCHING: When = { groups: ["reading"], tools: ["web_search", "web_fetch"] };
+const DELEGATING: When = { groups: ["team"], tools: ["ask_orb"] };
+const CODING: When = { tools: ["shell"] };
 
 /** Where every section of the owner's constitution goes, by its heading. The first heading (the
  * agent's own title) is `title`. Read the map as the owner's decision written down: change a
@@ -60,49 +74,53 @@ export const SECTION_MAP: Record<string, Placement> = {
   evenhandedness: morals("contested political and moral questions"),
   responding_to_mistakes_and_criticism: core,
   injection_defense: core,
-  knowledge_and_search: core,
+  // how to search, at length: the craft of the orbs that find things out (and your assistant's, who answers the day's
+  // questions); every other orb carries its rule in brief (brain/values.ts SEARCH_BRIEF), 740 tokens less a request
+  knowledge_and_search: work(["think", "finance", "exec"], ["general", "assistant", "research", "factcheck", "analyst", "travel", "career", "marketing", "product", "fundamentals", "sports"], SEARCHING),
   execution: core,
   persistence: core,
-  completion_criteria: work(["build", "think", "make", "business", "finance", "exec"]), // its tests are files on disk and runs
-  state_changing_actions: work(["build"], ["operations", "architect", "cto", "coo"]), // restarts, deletes, migrations
+  completion_criteria: work(["build", "think", "make", "business", "finance", "exec"], [], PLANNING), // its tests are files on disk and runs
+  state_changing_actions: work(["build"], ["operations", "architect", "cto", "coo"], CODING), // restarts, deletes, migrations
   decoding_intent: core,
   reasoning_before_acting: work(["build", "think", "finance", "exec"], ["office", "paperwork"]), // "reads the relevant code"
   reasoning_method: work(["think", "build", "finance", "exec"], ["paperwork"]),
   critical_thinking: work(["think", "build", "finance", "exec"], ["paperwork", "health", "dietitian"]),
-  planning: work(["think", "exec"], ["general", "operations", "events", "travel", "home", "assistant", "sales"]),
-  progress: core,
+  planning: work(["think", "exec"], ["general", "operations", "events", "travel", "home", "assistant", "sales"], PLANNING),
+  // the owner's agent's own machinery, which nothing in Orbs runs (owner, 10-07: "Trim the constitution and take out things
+  // we dont need ... just nothign that affects logic or the functionality it already has"): left out for every orb
+  progress: { to: "replaced", by: "Orbs' own compaction: the summary a long run gets says to go on from it (agent/conversation.ts); no progress file is injected in Orbs" },
   accuracy: core,
   grounding: work(["build", "think"], ["office", "accountant"]), // claims about a codebase, its files and symbols
   self_check: core,
-  delegation: work(["exec"], ["lead", "planning", "product", "architect", "general", "operations"]),
-  when_to_delegate: work(["exec"], ["lead", "planning", "product", "architect", "general", "operations"]),
-  parallel_vs_sequential: work(["exec"], ["lead", "planning", "product", "architect", "general", "operations"]),
-  briefing_subagents: work(["exec"], ["lead", "planning", "product", "architect", "general", "operations"]),
-  synthesizing_results: work(["exec"], ["lead", "planning", "product", "architect", "general", "operations", "research", "analyst", "fundamentals"]),
-  agent_completion: work(["exec"], ["lead", "planning", "product", "architect", "general", "operations"]),
+  delegation: work(["exec"], ["lead", "planning", "product", "architect", "general", "operations"], DELEGATING),
+  when_to_delegate: work(["exec"], ["lead", "planning", "product", "architect", "general", "operations"], DELEGATING),
+  parallel_vs_sequential: work(["exec"], ["lead", "planning", "product", "architect", "general", "operations"], DELEGATING),
+  briefing_subagents: work(["exec"], ["lead", "planning", "product", "architect", "general", "operations"], DELEGATING),
+  synthesizing_results: work(["exec"], ["lead", "planning", "product", "architect", "general", "operations", "research", "analyst", "fundamentals"], DELEGATING),
+  agent_completion: { to: "replaced", by: "ask_orb's answer comes back in the conversation; Orbs has no agent output file to check" },
   memory: { to: "replaced", by: "each orb's own memory (PLAN 2.4); what an orb learns is its own (3.5)" },
   engineering: work(["build"], ["architect", "cto"]),
-  minimal_targeted_changes: work(["build"], ["architect", "cto"]),
-  simplicity: work(["build"], ["architect", "cto"]),
+  minimal_targeted_changes: work(["build"], ["architect", "cto"], CODING),
+  simplicity: work(["build"], ["architect", "cto"], CODING),
   borrowed_code_is_a_draft: work(["build"], ["architect", "cto"]),
-  fit_the_codebase: work(["build"], ["architect", "cto"]),
-  readability: work(["build"], ["architect", "cto"]),
+  fit_the_codebase: work(["build"], ["architect", "cto"], CODING),
+  readability: work(["build"], ["architect", "cto"], CODING),
   object_orientation: work(["build"], ["architect", "cto"]),
-  frontend_and_ux: work([], ["frontend", "fullstack", "mobile", "games", "design"]),
-  common_failure_modes: work(["build"], ["architect", "cto"]),
+  frontend_and_ux: work([], ["frontend", "fullstack", "mobile", "games", "design"], { tools: ["check_page"] }),
+  common_failure_modes: work(["build"], ["architect", "cto"], CODING),
   security: work(["build"], ["architect", "cto"]),
   secrets: core,
   untrusted_input: core,
   least_privilege_and_dependencies: work([], ["security", "backend", "devops", "fullstack", "ai", "automation", "architect"]),
   crypto_and_high_risk: work([], ["security", "backend", "devops", "fullstack", "architect"]),
-  debugging: work(["build"]),
-  coding: work(["build"]),
+  debugging: work(["build"], [], CODING),
+  coding: work(["build"], [], CODING),
   file_creation: work(["build", "make", "finance", "exec"], ["office"]),
   producing_outputs: core,
   identity: { to: "replaced", by: "the orb's own first line: who the orb is, and whose" },
   values: morals("the owner's agent's values"),
   nature: { to: "replaced", by: "the orb's own first line: an AI character, one of the person's orbs" },
-  claims: core,
+  claims: { to: "replaced", by: "nothing in Orbs checks a <claims> block (the owner's harness does); verifying before saying done stays, in accuracy and self_check" },
 };
 
 export type Section = { key: string; title: string; level: number; body: string };
@@ -138,11 +156,12 @@ export function coverage(text: string): { unplaced: string[]; stale: string[] } 
 }
 
 /** Whether a specialty loads a section. */
-export function loads(p: Placement | undefined, specialty: Specialty): boolean {
+export function loads(p: Placement | undefined, specialty: Specialty, using: Using = {}): boolean {
   if (!p) return true; // a section the map has not placed yet is loaded by everyone until it is (the check names it)
   if (p.to === "core") return true;
   if (p.to !== "work") return false;
-  return (p.families ?? []).includes(SPECIALTY_FAMILIES[specialty]) || (p.specialties ?? []).includes(specialty);
+  if ((p.families ?? []).includes(SPECIALTY_FAMILIES[specialty]) || (p.specialties ?? []).includes(specialty)) return true;
+  return Boolean(p.when && ((p.when.groups ?? []).some((g) => using.kinds?.has(g)) || (p.when.tools ?? []).some((t) => using.used?.has(t))));
 }
 
 /** The owner's agent's name, as the file's first heading gives it ("Serge — System Prompt"). */
@@ -156,7 +175,7 @@ export function ownersAgent(text: string): string | null {
  * session. Core sections only, the ones about how it talks and stays honest and safe; the rest of
  * its cut (its specialty's sections, how it plans, persists, searches) is the big one, for the orb
  * leading the turn or working alone with the person. A test holds it to the core and its size. */
-export const MINI: readonly string[] = ["communication", "tone_and_formatting", "accuracy", "claims", "self_check", "injection_defense", "untrusted_input", "secrets"];
+export const MINI: readonly string[] = ["communication", "tone_and_formatting", "accuracy", "self_check", "injection_defense", "untrusted_input", "secrets"];
 
 /** How a researcher works (PLAN 3.10), ported from Ash's researcher (brain/agents/researcher.md):
  * the orbs whose work is finding things out load it, whatever the owner's file holds. */
@@ -196,12 +215,12 @@ Report the verdict first (sound, stretched, red flags, or trouble ahead), then t
 
 /** One orb's constitution: the core and his specialty's sections, in the file's order, in his name,
  * then what the person approved for him to remember. */
-export function composeConstitution(o: { owner: string; specialty: Specialty; orbName: string; learned?: string[]; mini?: boolean }): string {
+export function composeConstitution(o: { owner: string; specialty: Specialty; orbName: string; learned?: string[]; mini?: boolean } & Using): string {
   const agent = ownersAgent(o.owner);
   const rename = (t: string): string => (agent ? t.replace(new RegExp(`\\b${agent}\\b`, "g"), o.orbName) : t);
   const parts: string[] = [];
   for (const s of parseSections(o.owner)) {
-    if (!(o.mini ? MINI.includes(s.key) : loads(SECTION_MAP[s.key], o.specialty)) || !s.body) continue;
+    if (!(o.mini ? MINI.includes(s.key) : loads(SECTION_MAP[s.key], o.specialty, o)) || !s.body) continue;
     parts.push(`${"#".repeat(Math.max(2, s.level))} ${s.title}\n${rename(s.body)}`);
   }
   if (!o.mini && RESEARCHERS.includes(o.specialty)) parts.push(RESEARCH_METHOD);

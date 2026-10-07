@@ -10,6 +10,7 @@ import type { EventLog } from "../events.ts";
 import type { ToolDef } from "../agent/tools.ts";
 import { summary } from "./format.ts";
 import { gate } from "./gate.ts";
+import { GROUPS } from "../agent/groups.ts";
 
 export type PlanStatus = "submitted" | "approved" | "changed" | "saved" | "declined";
 export type Plan = {
@@ -118,6 +119,7 @@ function toPlan(r: Row): Plan {
 export function planTool(plans: Plans, roots: (workspace: string) => string[]): ToolDef {
   return {
     name: "propose_plan",
+    group: GROUPS.plans,
     label: "Writing a plan",
     description:
       "Show the person a plan before any job bigger than one small step, and wait for Approve, Change, Save or Decline. " +

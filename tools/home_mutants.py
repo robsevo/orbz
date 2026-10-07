@@ -1259,6 +1259,37 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("a bet goes without asking", "src/rules/floor.ts", [
         ("|deposit|stake|unstake|bridge|bet|bets|wager|wagers|parlay)$/],", "|deposit|stake|unstake|bridge)$/],"),
     ], ["connectors.test.ts"]),
+    # what a request costs (PLAN 1.13) and Orbs' own values (1.14; owner, 10-07)
+    ("every orb has every tool again", "src/agent/groups.ts", [
+        ('  if (o.specialty === "general" || o.family === null) return new Set(all.map((g) => g.id));', "  return new Set(all.map((g) => g.id));"),
+    ], ["tool-groups.test.ts"]),
+    ("more_tools loads nothing", "src/agent/loop.ts", [
+        ("        loaded.add(g.id);\n", ""),
+    ], ["tool-groups.test.ts"]),
+    ("a kind used before is not kept to hand", "src/agent/loop.ts", [
+        ("      if (g) loaded.add(g.id);\n", ""),
+    ], ["tool-groups.test.ts"]),
+    ("an older step's page is sent whole", "src/agent/conversation.ts", [
+        ("return at < turnAt ? trimOld(r) : at < wholeFrom ? trimStale(r) : r;", "return at < turnAt ? trimOld(r) : r;"),
+    ], ["session-cost.test.ts"]),
+    ("a step's own pages are cut before it reads them", "src/agent/conversation.ts", [
+        ("export const STEPS_WHOLE = 2;", "export const STEPS_WHOLE = 0;"),
+    ], ["session-cost.test.ts"]),
+    ("an orb stands for nothing", "src/agent/standing.ts", [
+        ("    light ? valuesBrief(o.orbName) : valuesFor(o.orbName),\n", ""),
+    ], ["values.test.ts"]),
+    ("the owner's claims block comes back", "src/brain/constitution.ts", [
+        ('  claims: { to: "replaced", by:', '  claims: { to: "core", by:'),
+    ], ["values.test.ts"]),
+    ("the plans come without how to plan", "src/brain/constitution.ts", [
+        ('const PLANNING: When = { groups: ["plans"], tools: ["propose_plan", "plan_templates"] };', 'const PLANNING: When = { tools: ["propose_plan", "plan_templates"] };'),
+    ], ["values.test.ts"]),
+    ("a search brings no search craft", "src/brain/constitution.ts", [
+        ('const SEARCHING: When = { groups: ["reading"], tools: ["web_search", "web_fetch"] };', 'const SEARCHING: When = { groups: ["reading"] };'),
+    ], ["values.test.ts"]),
+    ("the summary no longer says to go on", "src/agent/conversation.ts", [
+        (" (go on from here: the latest request is the one to finish, and what this says is done is done):", ":"),
+    ], ["lab.test.ts"]),
     # moments (PLAN 5.19; owner, 10-07: "more micro interactions ... but not too many")
     ("a moment moves no friendship", "src/social/social.ts", [
         ("    const after = clampScore(before + m.delta);", "    const after = clampScore(before);"),
@@ -1581,7 +1612,7 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ('role: named.length || i === 0 ? "lead" : "chime"', 'role: "lead" as const'),
     ], ['team.test.ts']),
     ('a chime-in is handed every tool', 'src/agent/loop.ts', [
-        ('const tools = role === "chime" ? [] : this.#all();', 'const tools = this.#all();'),
+        ('toolSpecs(role === "chime" ? [] : this.#toolsFor(loaded))', 'toolSpecs(this.#toolsFor(loaded))'),
     ], ['team.test.ts']),
     ('a pass is posted as a reply', 'src/agent/loop.ts', [
         ('if (role === "chime" && (isPass(r.text) || !r.text.trim())) {', 'if (role === "chime" && !r.text.trim()) {'),
@@ -1599,7 +1630,7 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ('if (members.length > 1 && would.size > share) {', 'if (false) {'),
     ], ['session-cost.test.ts']),
     ("an earlier turn's results go to the model whole", 'src/agent/conversation.ts', [
-        ('return at < turnAt ? trimOld(r) : r;', 'return r;'),
+        ('return at < turnAt ? trimOld(r) : at < wholeFrom', 'return at < turnAt ? r : at < wholeFrom'),
     ], ['session-cost.test.ts']),
     ("a request to another orb begins this orb's turn", 'src/agent/conversation.ts', [
         ('m.role === "user" && (m.meta.asked === undefined || m.meta.asked === o.me));', 'm.role === "user");'),
@@ -1614,7 +1645,7 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ('  if (o.now !== undefined) parts.push(nowLine(o.now));\n  return parts.join', '  if (o.now !== undefined) parts.splice(3, 0, nowLine(o.now));\n  return parts.join'),
     ], ['session-cost.test.ts']),
     ('a chime-in carries the big constitution', 'src/brain/constitution.ts', [
-        ('if (!(o.mini ? MINI.includes(s.key) : loads(SECTION_MAP[s.key], o.specialty)) || !s.body) continue;', 'if (!loads(SECTION_MAP[s.key], o.specialty) || !s.body) continue;'),
+        ('if (!(o.mini ? MINI.includes(s.key) : loads(SECTION_MAP[s.key], o.specialty, o)) || !s.body) continue;', 'if (!loads(SECTION_MAP[s.key], o.specialty, o) || !s.body) continue;'),
     ], ['session-cost.test.ts']),
     ("a stream error's code read only at its top (10-06)", 'src/agent/responses.ts', [
         ('errorOf({ code: e.code ?? e.error?.code, type: e.error?.type, message: e.message ?? e.error?.message })', 'errorOf({ code: e.code, message: e.message })'),
@@ -1939,6 +1970,9 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("the click is a high tok again", "src/ui/sound.ts", [
         ("      return click(0, 170, 0.25);", "      return click(0, 540, 0.25);"),
     ], ["feel.test.ts"]),
+    ("a Hiring tag sits under the orbs", "src/floor/Floor.tsx", [
+        ('translate: "-50% 0", zIndex: H + 10, ...tag, cursor: "pointer",', 'translate: "-50% 0", zIndex: h.z, ...tag, cursor: "pointer",'),
+    ], ["recruiter-view.test.ts"]),
     # a calmer floor and its moments (PLAN 5.19; owner, 10-07: "slow down the amount of things they do ... lively pace
     # please, but goofy and funny as well")
     ("orbs go back for food straight after eating", "src/floor/plan.ts", [

@@ -24,6 +24,7 @@ import { inWorkspace, type ToolDef, type ToolResult } from "../agent/tools.ts";
 import { FLOOR_WORDS, type FloorCategory, type FloorHit } from "../rules/floor.ts";
 import { ComputerError, type Computers } from "./browser.ts";
 import { hostOf, type Vault, VaultError } from "./vault.ts";
+import { GROUPS } from "../agent/groups.ts";
 
 const CLICK_FLOOR: [FloorCategory, RegExp][] = [
   ["money", /\b(pay|payment|pay now|buy|buy now|purchase|place (an |your |my |the )?order|order now|complete (the |your )?order|checkout|check out|subscribe|subscriptions?|donate|tip|bid|upgrade|renew|add (a )?(card|payment)|trade|sell|swap|withdraw|transfer|deposit)\b/i],
@@ -78,6 +79,7 @@ export function computerTools(c: Computers, vault: Vault, pageCheck: PageCheck |
   return [
     {
       name: "open_page",
+      group: GROUPS.computer,
       label: "Opening a page",
       description:
         "Open a web page in your own browser (it keeps your sign-ins). Then read_page to see what it says, click by its visible words and type_into its fields. Only the web: never this machine or its network.",
@@ -100,6 +102,7 @@ export function computerTools(c: Computers, vault: Vault, pageCheck: PageCheck |
     },
     {
       name: "read_page",
+      group: GROUPS.computer,
       label: "Reading the page",
       description: "The words on the page open in your browser, as a person sees them (and its address and title).",
       parameters: obj({}, []),
@@ -118,6 +121,7 @@ export function computerTools(c: Computers, vault: Vault, pageCheck: PageCheck |
     },
     {
       name: "click",
+      group: GROUPS.computer,
       label: "Using the computer",
       description:
         'Click something on the page by its visible words (a button, a link, a tab), e.g. "Next" or "Row F, seat 12". Use the words exactly as read_page shows them. Paying, sending, deleting and booking always ask the person first.',
@@ -144,6 +148,7 @@ export function computerTools(c: Computers, vault: Vault, pageCheck: PageCheck |
     },
     {
       name: "type_into",
+      group: GROUPS.computer,
       label: "Typing on the computer",
       description:
         "Type into a field on the page, found by its label, placeholder or name; submit presses Enter after. Never a password (sign_in types saved ones). In a turn that read a page, typing asks the person first.",
@@ -175,6 +180,7 @@ export function computerTools(c: Computers, vault: Vault, pageCheck: PageCheck |
     },
     {
       name: "sign_in",
+      group: GROUPS.computer,
       label: "Signing in",
       description:
         "Fill the sign-in form on the page you are on with the password the person saved for THIS site (you never see it; it is typed only on the site it was saved for). Open the site's sign-in page first; afterwards click its sign-in button yourself.",
@@ -197,6 +203,7 @@ export function computerTools(c: Computers, vault: Vault, pageCheck: PageCheck |
     },
     {
       name: "check_page",
+      group: GROUPS.computer,
       label: "Checking a page",
       description:
         "Before calling a page you built done: Ash's pagecheck loads it in a browser of its own and asks what really rendered: that it answered, that its stylesheet produced rules, that its classes are styled, that its pictures loaded (no placeholders), that no build error covers it. Give the path of a built page in your workspace, or the address your dev server serves it at (localhost).",

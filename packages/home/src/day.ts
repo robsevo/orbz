@@ -12,6 +12,7 @@ import type { Kit } from "./kit.ts";
 import type { ToolDef } from "./agent/tools.ts";
 import type { Notices } from "./notices.ts";
 import type { Schedules } from "./schedule.ts";
+import { GROUPS } from "./agent/groups.ts";
 
 export type DayClash = { kind: "overlap" | "prep" | "travel"; first: string; second: string; at: number; gapMinutes: number | null };
 export type Day = { brief: string; clashes: DayClash[]; owed: Owed[] } | { why: string };
@@ -82,6 +83,7 @@ export function dayTools(h: Home, now: () => number): ToolDef[] {
   return [
     {
       name: "ask_day",
+      group: GROUPS.day,
       label: "Looking at your day",
       description: "Ask about the person's day in plain words ('what's next', 'what's my day', 'am I free thursday afternoon', 'plan my day'): answered from their own calendars and the bills and reminders you keep, by code. It never books, moves or cancels anything.",
       parameters: { type: "object", properties: { question: { type: "string" } }, required: ["question"], additionalProperties: false },

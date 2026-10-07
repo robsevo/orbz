@@ -26,7 +26,8 @@ const once = (msgs: Record<string, unknown>[]): boolean => MARKERS.every((m) => 
 async function survivor(t: TestContext, dataDir = tempDir(t)) {
   brain(dataDir);
   const turns = Array.from({ length: 40 }, () => ({ chunks: ["ok"] }));
-  return agentHome(t, turns, { dataDir, agent: { compactAtTokens: 3000, keepRecentTokens: 1200 } });
+  // 3,000 till 10-07; Orbs' own values (brain/values.ts) put some 700 tokens more in every standing context
+  return agentHome(t, turns, { dataDir, agent: { compactAtTokens: 3700, keepRecentTokens: 1200 } });
 }
 
 const talk = async (home: Awaited<ReturnType<typeof survivor>>["home"], n: number, from = 0): Promise<void> => {

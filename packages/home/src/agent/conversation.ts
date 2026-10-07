@@ -98,11 +98,23 @@ export const NOT_RUN = "(not run: the turn ended before this call was made)";
 export const OLD_RESULT = 600;
 /** How many of the latest lines a chime-in reads. */
 export const TALK_LINES = 8;
+/** Within a turn (owner, 10-07: "cut token use but also keep the same functions"; then "do both"): the results of its
+ * latest STEPS_WHOLE steps are read whole; an older step's result longer than STALE_MAX keeps its first STALE_KEEP
+ * characters, since every later step would carry all of it again (a fetched page, some 2,000 tokens, up to 5,000). */
+export const STEPS_WHOLE = 2;
+export const STALE_MAX = 4_000;
+export const STALE_KEEP = 1_500;
 
 /** An earlier turn's result, cut to its head, saying how much was left out and how to get it back. */
 export function trimOld(r: string): string {
   if (r.length <= OLD_RESULT * 2) return r;
   return `${r.slice(0, OLD_RESULT)}\n… (${(r.length - OLD_RESULT).toLocaleString("en")} more characters, from an earlier turn: run the tool again if you need them)`;
+}
+
+/** A result from a few steps back in this turn, cut to its head, saying how much was left out and how to get it back. */
+export function trimStale(r: string): string {
+  if (r.length <= STALE_MAX) return r;
+  return `${r.slice(0, STALE_KEEP)}\n… (${(r.length - STALE_KEEP).toLocaleString("en")} more characters, read a few steps ago: run the tool again if you need them)`;
 }
 
 export class Conversations {
@@ -183,7 +195,8 @@ export class Conversations {
    *
    * What it costs (owner, 10-06: a five-orb session spent 1.54M tokens in half an hour): a tool's
    * result from before the latest message to answer is kept only as its head (`OLD_RESULT`), since
-   * every later request would carry all of it again; and a chime-in (`talk`) reads only what was
+   * every later request would carry all of it again; within this turn, a long result from before its latest
+   * `STEPS_WHOLE` steps keeps its first `STALE_KEEP` characters (10-07); and a chime-in (`talk`) reads only what was
    * said, the latest `TALK_LINES` of it, with what was agreed: no calls, no results. */
   toModel(history: Message[], o: { me?: string; nameOf?: (orb: string) => string; talk?: boolean; brief?: boolean } = {}): ModelMessage[] {
     if (o.talk) return this.#talk(history, o);
@@ -199,9 +212,12 @@ export class Conversations {
     // where this turn began: the latest message put to `me` (the person's, or a request to me); a
     // request to another orb, another orb's words or a card answered mid-turn begin nothing
     const turnAt = history.findLastIndex((m) => m.role === "user" && (m.meta.asked === undefined || m.meta.asked === o.me));
+    // this turn's steps (its own calls), the latest STEPS_WHOLE of them read whole
+    const steps = [...history.entries()].filter(([at, m]) => at >= turnAt && m.role === "assistant" && m.toolCalls?.length && (!o.me || m.orb === o.me)).map(([at]) => at);
+    const wholeFrom = steps.length > STEPS_WHOLE ? steps[steps.length - STEPS_WHOLE]! : turnAt;
     const resultOf = (c: ToolCall, at: number): string => {
       const r = results.get(c.id)?.content ?? NOT_RUN;
-      return at < turnAt ? trimOld(r) : r;
+      return at < turnAt ? trimOld(r) : at < wholeFrom ? trimStale(r) : r;
     };
     const out: ModelMessage[] = [];
     for (const [at, m] of history.entries()) {
@@ -215,7 +231,8 @@ export class Conversations {
       // what another orb did on the plan's board (took rows, handed off, proposed a change, asked for
       // a review) reaches everyone in the session, so no one works blind to it (PLAN 5.1)
       else if (m.role === "notice" && o.me && m.orb !== o.me && m.meta.board === true) out.push({ role: "user", content: `[Board]: ${m.content}` });
-      else if (m.role === "summary") out.push({ role: "system", content: `${m.meta.section === true ? "A part of the earlier conversation, summarised" : "Summary of the earlier conversation"}:\n${m.content}` });
+      // the turn goes on across a summary (what the owner's progress section asked of its agent, said here instead, 10-07)
+      else if (m.role === "summary") out.push({ role: "system", content: `${m.meta.section === true ? "A part of the earlier conversation, summarised" : "Summary of the earlier conversation"} (go on from here: the latest request is the one to finish, and what this says is done is done):\n${m.content}` });
       else if (m.role === "assistant") {
         if (!m.toolCalls?.length) {
           if (m.content) out.push({ role: "assistant", content: m.content });

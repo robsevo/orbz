@@ -24,7 +24,8 @@ import type { EventLog } from "../events.ts";
 import type { RunContext, RunResult, Runner } from "../inbox.ts";
 import { BrainCallError, chat, type Endpoint, type Limited } from "../brain/openai.ts";
 import { type BrainChain, explain, type LinkId, restFor } from "../brain/chain.ts";
-import type { Specialty } from "../brain/constitution.ts";
+import { SPECIALTY_FAMILIES, type Specialty } from "../brain/constitution.ts";
+import { startingGroups, type ToolGroup } from "./groups.ts";
 import type { SearchKey } from "./web.ts";
 import { isLight, isPass, type TeamTurn } from "./standing.ts";
 import { LoopGuard } from "./loopguard.ts";
@@ -157,18 +158,63 @@ export const REASONING_SALVAGE_MARK = "(No reply was written: below is what it t
 /** The same call, unchanged, this many times in one run ends it (Ash: three flags, the fourth stops). */
 export const REPEAT_LIMIT = 4;
 
+/** The tools an orb has called in a conversation, by name. */
+const usedBy = (history: Message[], orb: string): Set<string> => new Set(history.flatMap((m) => (m.orb === orb && m.toolCalls ? m.toolCalls.map((c) => c.name) : [])));
+
 /** The session turn a run is for, if any (team.ts). */
 const teamOf = (ctx: RunContext): TeamTurn | undefined => ctx.items.map((i) => i.data.team as TeamTurn | undefined).find(Boolean);
 
 export class AgentRunner implements Runner {
   readonly #o: Required<Omit<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned" | "notebook" | "colleagues" | "ambition" | "company" | "searchKey" | "remind" | "reminders" | "moveReminder" | "lessonGate" | "learn" | "habits" | "own" | "templates" | "schedule" | "extraTools" | "sandbox" | "onTerminal" | "workspaceFor" | "heldBy" | "pulse" | "recite">> & Pick<AgentOptions, "redact" | "onText" | "planLimited" | "ready" | "chain" | "orbSpecialty" | "learned" | "notebook" | "colleagues" | "ambition" | "company" | "searchKey" | "remind" | "reminders" | "moveReminder" | "lessonGate" | "learn" | "habits" | "own" | "templates" | "schedule" | "extraTools" | "sandbox" | "onTerminal" | "workspaceFor" | "heldBy" | "pulse" | "recite">;
   readonly #tools: Map<string, ToolDef>;
+  readonly #more: ToolDef;
   /** Each run's calls so far, by name and arguments (the repeat guard). */
   readonly #repeats = new WeakMap<RunContext, Map<string, number>>();
 
   constructor(opts: AgentOptions) {
     this.#o = { tools: TOOLS, maxSteps: 50, compactAtTokens: 100_000, keepRecentTokens: 20_000, passWaitMs: 1000, ...opts };
     this.#tools = new Map(this.#o.tools.map((t) => [t.name, t]));
+    // more of an orb's tools, by kind, for the rest of its run (owner, 10-07: "cut token use but also keep the same
+    // functions"): what it says and which groups it offers are the run's own (#toolsFor), its work is here
+    this.#more = {
+      name: "more_tools",
+      label: "Getting more tools",
+      description: "Load more of your tools for this run, by kind.",
+      parameters: { type: "object", properties: { group: { type: "string", description: "The kind of tools to load." } }, required: ["group"], additionalProperties: false },
+      describe: (a) => `More tools: ${String(a.group ?? "")}`,
+      decision: "allow",
+      run: async (args, tctx) => {
+        const loaded = tctx.kinds;
+        const groups = this.#groups();
+        const g = groups.find((x) => x.id === String(args.group ?? "").trim().toLowerCase());
+        if (!loaded || !g) return { content: `There is no kind of tools called "${String(args.group ?? "")}". The kinds: ${groups.map((x) => x.id).join(", ")}.`, isError: true };
+        loaded.add(g.id);
+        const names = this.#all().filter((t) => t.group?.id === g.id).map((t) => t.name);
+        return { content: `Loaded ${g.id}: ${names.join(", ")}. They are yours from your next step.` };
+      },
+    };
+  }
+
+  /** Every kind of tool there is now (the connectors' mail and calendars only once there are some). */
+  #groups(): ToolGroup[] {
+    const out = new Map<string, ToolGroup>();
+    for (const t of this.#all()) if (t.group) out.set(t.group.id, t.group);
+    return [...out.values()];
+  }
+
+  /** The tools a run's next step offers: those of no group, those of a group it has, and more_tools while there is a
+   * group it has not. */
+  #toolsFor(loaded: Set<string>): ToolDef[] {
+    const tools = this.#all().filter((t) => !t.group || loaded.has(t.group.id));
+    const rest = this.#groups().filter((g) => !loaded.has(g.id));
+    if (rest.length) {
+      tools.push({
+        ...this.#more,
+        description: `Load more of your tools for this run, by kind; they are yours from your next step. ${rest.map((g) => `${g.id}: ${g.about}`).join(". ")}.`,
+        parameters: { type: "object", properties: { group: { type: "string", enum: rest.map((g) => g.id), description: "The kind of tools to load." } }, required: ["group"], additionalProperties: false },
+      });
+    }
+    return tools;
   }
 
   /** Its own tools and, as they are up now, the person's connectors' (PLAN 4.2). */
@@ -177,6 +223,7 @@ export class AgentRunner implements Runner {
   }
 
   #tool(name: string): ToolDef | undefined {
+    if (name === "more_tools") return this.#more;
     return this.#tools.get(name) ?? this.#o.extraTools?.().find((t) => t.name === name);
   }
 
@@ -285,7 +332,15 @@ export class AgentRunner implements Runner {
     const role = team?.role;
     const light = isLight(team);
     const steps = role === "asked" ? Math.min(ASKED_STEPS, this.#o.maxSteps) : this.#o.maxSteps;
-    const tools = role === "chime" ? [] : this.#all();
+    // its tools to hand (agent/groups.ts): its department's kinds, a session's plans and team, and any kind it used before
+    // in this conversation; more_tools loads another
+    const specialty = this.#o.orbSpecialty?.(ctx.orb) ?? null;
+    const loaded = startingGroups({ family: specialty ? (SPECIALTY_FAMILIES[specialty as Specialty] ?? null) : null, specialty, session: Boolean(team) });
+    for (const m of conv.history(ctx.conversation)) for (const c of m.toolCalls ?? []) {
+      const g = m.orb === ctx.orb ? this.#tool(c.name)?.group : undefined;
+      if (g) loaded.add(g.id);
+    }
+    tctx.kinds = loaded;
     const runNow = this.#o.clock.now(); // once a run: the standing context stays the same from step to step
     // a reply written only in the reasoning channel (Ash's salvage): one nudge, then its reasoning is shown, marked
     let nudge: string | null = null;
@@ -317,6 +372,8 @@ export class AgentRunner implements Runner {
         specialty: this.#o.orbSpecialty?.(ctx.orb), learned: this.#o.learned?.(ctx.orb), notebook: this.#o.notebook?.(ctx.orb), colleagues: this.#o.colleagues?.(ctx.orb) ?? null, ambition: this.#o.ambition?.(ctx.orb) ?? null, company: this.#o.company?.(ctx.orb) ?? null, ...(team && { team }),
         aloud: ctx.items.some((i) => i.data.said === true), // you spoke (PLAN 4.7): his answer is heard, not read
         now: runNow,
+        // the craft its tools bring (brain/constitution.ts When): what it has to hand, and what it has used here
+        kinds: loaded, used: usedBy(conv.history(ctx.conversation), ctx.orb),
       });
       await this.#compact(ctx, ep, est(standing));
       if (!own) ep = this.#o.endpoint({ light }) ?? ep; // compaction may have met the plan's limit and moved on
@@ -333,7 +390,7 @@ export class AgentRunner implements Runner {
       const cut = new AbortController();
       const r = await streamChat(
         ep,
-        { messages, tools: toolSpecs(tools), brief: role === "chime" },
+        { messages, tools: toolSpecs(role === "chime" ? [] : this.#toolsFor(loaded)), brief: role === "chime" },
         {
           signal: AbortSignal.any([ctx.signal, cut.signal]),
           onText: (delta) => {

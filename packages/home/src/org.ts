@@ -18,6 +18,7 @@ import { AREAS, type Area, BY_EXTENSION, radarOf } from "./gym/specialty.ts";
 import type { Diploma } from "./school/school.ts";
 import { inSubject } from "./school/subjects.ts";
 import { FRIEND_XP } from "./social/social.ts";
+import { GROUPS } from "./agent/groups.ts";
 
 /** An orb of the office, as the org reads it; `xp`, its experience in its position (the ledger's total). */
 export type Member = { id: string; name: string; specialty: Specialty; level: Level; createdAt: number; xp?: number };
@@ -116,6 +117,7 @@ export function orgTools(o: {
   return [
     {
       name: "who_fits",
+      group: GROUPS.team,
       label: "Finding who fits",
       description:
         "For a row of the session's approved plan: the orbs of this tab ranked for it (its kind of work, the XP they earned in it, their level), each with why. As the lead, hand each row to the best fit (ask_orb).",
@@ -134,6 +136,7 @@ export function orgTools(o: {
     },
     {
       name: "share_habit",
+      group: GROUPS.team,
       label: "Passing a habit on",
       description:
         "Mentoring: pass one of your habits (by its task) to a junior of your own kind. It becomes the junior's, under the junior's own rules; yours stays yours. Name no task to see your habits. The person says yes first.",

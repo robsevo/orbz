@@ -76,7 +76,7 @@ test("what one orb agreed reaches the others; a brainstorm reopened is a session
     await new Promise((r) => setTimeout(r, 30));
   }
   const hazel = text(h.model.agent[3]!);
-  assert.match(hazel, /Summary of the earlier conversation:[\s\S]*"A birthday party", reopened[\s\S]*What was agreed then:\n- Saturday, at the park[\s\S]*Where it was left: Agreed: Saturday\./);
+  assert.match(hazel, /Summary of the earlier conversation \(go on from here[^)]*\):[\s\S]*"A birthday party", reopened[\s\S]*What was agreed then:\n- Saturday, at the park[\s\S]*Where it was left: Agreed: Saturday\./);
   assert.throws(() => reopen(h.home, 99), /no session 99/);
   // Milo, named, agreed; Hazel heard it on her next turn, as agreed, by no one's mouth
   const later = await agentHome(t, [
