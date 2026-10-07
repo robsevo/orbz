@@ -386,7 +386,7 @@ function LevelUp({ c, g }: { c: Character; g: Growth }) {
 
 // `applying`: an applicant's profile, from the Recruiter (owner, 10-05: "recruiter should also be able to show
 // the orbs profile when we click on it")
-function Sheet({ c, onRename, replies, standing, startsAs, career, applying, friends }: { c: Character; onRename?: (name: string) => void; replies: Replies; standing?: Standing | null; startsAs?: "Junior" | "Senior"; career?: CareerState | null; applying?: boolean; friends?: Friend[] | null }) {
+function Sheet({ c, onRename, replies, standing, startsAs, career, applying, friends, onChat, onCareer }: { c: Character; onRename?: (name: string) => void; replies: Replies; standing?: Standing | null; startsAs?: "Junior" | "Senior"; career?: CareerState | null; applying?: boolean; friends?: Friend[] | null; onChat?: () => void; onCareer?: () => void }) {
   const sh = sheetOf(c);
   // what his graded work has grown him into (PLAN 3.11), once a home has some to show
   const grown = career ? grownOf(c, sh.leans, career.radar, career.niches, sh.dna, standing?.xp ?? career.xp) : null;
@@ -409,7 +409,21 @@ function Sheet({ c, onRename, replies, standing, startsAs, career, applying, fri
             <Die label="Name" said="Roll a name" onRoll={() => onRename(orbName(() => Math.random()))} />
           </div>
         ) : (
-          <h2 style={{ ...name, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</h2>
+          // its name, and beside it Chat and its career, small (owner, 10-07: "put chat and career for orb on orb page
+          // next to the orbs name, but just put chat and career as smaller buttons")
+          <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+            <h2 style={{ ...name, margin: 0, flex: "1 1 auto", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</h2>
+            {onChat && (
+              <button data-sound="pick" data-chat-with aria-label={`Chat with ${c.name}`} onClick={onChat} style={{ ...s.chip, flex: "0 0 auto", background: "var(--accent)", color: "var(--ground)", fontWeight: 800 }}>
+                Chat
+              </button>
+            )}
+            {onCareer && (
+              <button data-career-open aria-label={`${c.name}'s career`} onClick={onCareer} style={{ ...s.chip, flex: "0 0 auto", background: "var(--accent-wash)", boxShadow: "inset 0 0 0 1.5px var(--accent)", color: "var(--text-1)", fontWeight: 800 }}>
+                Career
+              </button>
+            )}
+          </div>
         )}
         <span style={{ font: "600 15px/20px var(--font)", color: "var(--text-1)" }}>{cap(sh.title)}</span>
         <span style={{ font: "400 13px/18px var(--font)", color: "var(--text-3)" }}>
@@ -1360,19 +1374,9 @@ function App() {
             {making ? (
               <Sheet c={before ?? me} key={before ? "was" : "now"} onRename={(n) => edit({ name: n })} replies={replies} standing={null} startsAs={startsAs} career={null} friends={null} />
             ) : (
-              <div data-orb={me.hue} style={{ display: "grid", gap: "var(--s3)", alignContent: "start", minWidth: 0 }}>
-                {/* what you do with an orb, right above who it is (owner, 10-07: "put the chat with OrbName right above the
-                    container containing their name etc level", "make the career page button more visible") */}
-                <Balanced min={150} gap={8}>
-                  <button data-sound="pick" data-chat-with onClick={() => go({ room: "chat", orb: me.name })} style={{ ...s.btn, background: "var(--accent)", color: "var(--ground)", fontWeight: 800 }}>
-                    Chat with {me.name}
-                  </button>
-                  <button data-career-open onClick={() => go({ room: "career", orb: me.name })} style={{ ...s.btn, background: "var(--accent-wash)", boxShadow: "inset 0 0 0 1.5px var(--accent)", color: "var(--text-1)", fontWeight: 800 }}>
-                    {me.name}'s career
-                  </button>
-                </Balanced>
-                <Sheet c={before ?? me} key={before ? "was" : "now"} replies={replies} standing={standing} startsAs={startsAs} career={career} friends={friends} />
-              </div>
+              // Chat and its career beside its name (owner, 10-07)
+              <Sheet c={before ?? me} key={before ? "was" : "now"} replies={replies} standing={standing} startsAs={startsAs} career={career} friends={friends}
+                onChat={() => go({ room: "chat", orb: me.name })} onCareer={() => go({ room: "career", orb: me.name })} />
             )}
             {making ? <Creator me={me} edit={edit} replies={replies} setReplies={setReplies} first={!office.length} /> : <Card c={me} replies={replies} setReplies={setReplies} onDelete={(handTo, school) => remove(me.name, handTo, school)} others={office.filter((o) => o.name !== me.name)} />}
           </div>

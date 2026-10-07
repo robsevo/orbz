@@ -11,8 +11,10 @@
 //     the page's viewport caps its scale; as an Android phone, it does not (it would lose pinch-to-zoom);
 //   - a row too wide for a phone (owner, 10-07: "change the containers and add arrows to every side scroll") sits in
 //     a track with an arrow at each end, dimmed where there is no more, a press moving it; a row that fits has none;
-//   - an orb's profile (10-07: "put the chat with OrbName right above the container containing their name etc
-//     level", "make the career page button more visible"): Chat and its career side by side, right above it;
+//   - an orb's profile (10-07: "put chat and career for orb on orb page next to the orbs name, but just put chat and
+//     career as smaller buttons"): Chat and Career on its name's line, in its sheet;
+//   - its career page on a phone (10-07: "organize it, put scrolls for sections that are too long and center the
+//     orb"): the orb in the middle, the ladder in two rows of three, the long lists scrolling inside their cards;
 //   - under 480, the app edge to edge.
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -168,7 +170,7 @@ test("an iPhone never zooms into a text box: as an iPhone the page caps its scal
   assert.doesNotMatch(await viewport("Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36"), /maximum-scale/, "control: Android keeps pinch-to-zoom");
 });
 
-test("a row too wide for a phone sits in a track with an arrow at each end, dimmed where there is no more; a row that fits has none; Chat and the career right above the sheet", { skip, timeout: 120_000 }, async () => {
+test("a row too wide for a phone sits in a track with an arrow at each end, dimmed where there is no more; a row that fits has none; Chat and Career beside the name; the career page centred, its long lists scrolling", { skip, timeout: 120_000 }, async () => {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: "dark", hasTouch: true, isMobile: true });
   try {
     const page = await ctx.newPage();
@@ -198,13 +200,26 @@ test("a row too wide for a phone sits in a track with an arrow at each end, dimm
     const moods = page.locator(".side-scroll", { has: page.getByRole("button", { name: "Listening" }) });
     assert.equal(await moods.getAttribute("data-over"), null);
     assert.equal(await moods.locator(".side-arrow").count(), 0, "no arrows on a row that fits");
-    // Chat and its career, side by side, right above the sheet with its name and level
-    const chat = (await page.locator("[data-chat-with]").boundingBox())!;
-    const career = (await page.locator("[data-career-open]").boundingBox())!;
-    const sheet = (await page.locator(".orbs-sheet").boundingBox())!;
-    assert.ok(Math.abs(chat.y - career.y) < 2, "side by side");
-    assert.ok(chat.y + chat.height <= sheet.y && sheet.y - (chat.y + chat.height) <= 24, `right above the sheet (${Math.round(chat.y + chat.height)} then ${Math.round(sheet.y)})`);
-    assert.equal(await page.locator("[data-career-open]").innerText(), "Ada's career");
+    // Chat and Career, small, on the name's line in its sheet
+    const sheet = page.locator(".orbs-sheet");
+    const name = (await sheet.locator("h2").boundingBox())!;
+    for (const [sel, words, label] of [["[data-chat-with]", "Chat", "Chat with Ada"], ["[data-career-open]", "Career", "Ada's career"]] as const) {
+      const b = sheet.locator(sel);
+      const box = (await b.boundingBox())!;
+      assert.ok(box.y < name.y + name.height && box.y + box.height > name.y, `${words} on the name's line`);
+      assert.ok(box.x > name.x, `${words} after the name`);
+      assert.deepEqual([await b.innerText(), await b.getAttribute("aria-label")], [words, label]);
+    }
+    // its career page: the orb in the middle, the ladder two rows of three, the long lists scrolling in their cards
+    await page.evaluate(() => (location.hash = "#/career/Ada"));
+    const head = page.locator("[data-career-head]");
+    await head.waitFor({ timeout: 20_000 });
+    await page.waitForTimeout(500);
+    const [orb, card] = [(await page.locator("[data-career-portrait]").boundingBox())!, (await head.boundingBox())!];
+    assert.ok(Math.abs(orb.x + orb.width / 2 - (card.x + card.width / 2)) <= 3, `the orb in the middle (${Math.round(orb.x + orb.width / 2)} of ${Math.round(card.x + card.width / 2)})`);
+    const rungs = await page.locator("[data-rung]").evaluateAll((ls) => ls.map((l) => Math.round(l.getBoundingClientRect().top)));
+    assert.deepEqual([new Set(rungs.slice(0, 3)).size, new Set(rungs.slice(3)).size, rungs[3]! > rungs[0]!], [1, 1, true], "the ladder: two rows of three");
+    assert.ok(await page.locator('[data-career="ada"] .orbs-tall').count() >= 1, "a long list scrolls inside its card");
   } finally {
     await ctx.close();
   }

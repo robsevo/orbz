@@ -6,6 +6,9 @@
 // weekly card and its report card. Promote and Not yet when it is ready: only you promote.
 // And what it wants (owner, 10-07: "they also want to be the best orb also, not only the best at their
 // position. Their one goal in life is to get xp and please the user"): the office by XP, where it stands.
+// On a phone (owner, 10-07: "career page on mobile is not organized. organize it, put scrolls for sections that are
+// too long and center the orb"): who it is in one centred column, the ladder in two rows of three, its traits two
+// across, and every list that runs long (the office, its work, its meetings, its habits) scrolls inside its card.
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { Orb } from "../orb/Orb.tsx";
 import { sheetOf, SPECIALTIES, type Character } from "../orb/spec.ts";
@@ -13,7 +16,8 @@ import { grownOf, TOTAL } from "../orb/dna.ts";
 import { idOf, type CareerState, type Office } from "../home/link.ts";
 import { span } from "../orb/age.ts";
 import { Radar } from "../ui/Radar.tsx";
-import { Balanced } from "../ui/Balanced.tsx";
+import { Balanced, Tall } from "../ui/Balanced.tsx";
+import { useCramped } from "../ui/fill.ts";
 import { ReportCard } from "./School.tsx";
 
 const head: CSSProperties = { font: "700 11px/16px var(--font)", letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)" };
@@ -47,6 +51,7 @@ function Section({ title, children, label }: { title: string; children: ReactNod
 export function CareerRoom({ home, orb }: { home: Office | null; orb: Character }) {
   const [c, setC] = useState<CareerState | null>(null);
   const [said, setSaid] = useState<string | null>(null);
+  const phone = useCramped("(max-width: 760px)");
   useEffect(() => {
     if (!home) return;
     const load = (): void => void home.career(orb).then(setC, (e: Error) => setSaid(e.message));
@@ -72,23 +77,24 @@ export function CareerRoom({ home, orb }: { home: Office | null; orb: Character 
     <div data-career={idOf(orb.name)} data-orb={orb.hue} style={{ display: "grid", gap: "var(--s4)", padding: "var(--s5)", alignContent: "start", minWidth: 0 }}>
       {/* who, and where it stands: the whole orb, its hat and all (10-07: the close-up cut its top off) */}
       <header style={{ ...card, gap: "var(--s3)", background: "linear-gradient(160deg, var(--accent-wash), var(--fill) 60%)" }}>
-        <div style={{ display: "flex", gap: "var(--s4)", alignItems: "center", flexWrap: "wrap", minWidth: 0 }}>
+        {/* a phone: one centred column, the orb at its top (it sat alone at the left when the row wrapped, 10-07) */}
+        <div data-career-head style={{ display: "flex", flexDirection: phone ? "column" : "row", gap: phone ? "var(--s2)" : "var(--s4)", alignItems: "center", textAlign: phone ? "center" : undefined, flexWrap: phone ? "nowrap" : "wrap", minWidth: 0 }}>
           <div data-career-portrait style={{ flex: "0 0 auto" }}>
             {/* the whole orb on its stage, its hat with it (a close-up cut the hat off, 10-07) */}
-            <Orb character={orb} size={136} poke={false} />
+            <Orb character={orb} size={phone ? 120 : 136} poke={false} />
           </div>
-          <div style={{ display: "grid", gap: 2, minWidth: 0, flex: "1 1 200px" }}>
+          <div style={{ display: "grid", gap: 2, minWidth: 0, flex: phone ? "0 0 auto" : "1 1 200px", justifyItems: phone ? "center" : undefined }}>
             <h2 style={{ margin: 0, font: "800 26px/32px var(--font)", color: "var(--accent)" }}>{orb.name}</h2>
             <span style={{ font: "600 15px/20px var(--font)", color: "var(--text-1)" }}>{`${c.level} ${SPECIALTIES[orb.specialty].title}`}</span>
             <span data-tenure style={small}>{`Age ${span(c.born, c.now)} · ${c.left === null ? `${span(c.hired, c.now)} in the company` : `${span(c.hired, c.left)} in the company, then let go`}`}</span>
           </div>
-          <div style={{ display: "grid", justifyItems: "end", gap: 2, flex: "0 0 auto" }}>
+          <div style={phone ? { display: "flex", alignItems: "baseline", gap: 8 } : { display: "grid", justifyItems: "end", gap: 2, flex: "0 0 auto" }}>
             <span data-level style={{ font: "800 22px/26px var(--font)", color: "var(--text-1)" }}>{`Lv. ${grown.level.level}`}</span>
             <span style={small}>{`${c.xp.toLocaleString("en-GB")} XP`}</span>
           </div>
         </div>
         {/* the ladder, Junior to Chief: where it is, and what the next rung asks */}
-        <ol aria-label="The ladder" style={{ display: "flex", gap: 4, margin: 0, padding: 0, listStyle: "none", flexWrap: "wrap" }}>
+        <ol aria-label="The ladder" style={{ display: phone ? "grid" : "flex", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 4, margin: 0, padding: 0, listStyle: "none", flexWrap: "wrap" }}>
           {LADDER.map((l, i) => (
             <li key={l} data-rung={l} aria-current={i === rung ? "step" : undefined} style={{ flex: "1 1 70px", textAlign: "center", padding: "6px 4px", borderRadius: 10, font: `${i === rung ? 800 : 600} 12px/16px var(--font)`, color: i <= rung ? "var(--text-1)" : "var(--text-3)", background: i === rung ? "var(--accent-fill)" : i < rung ? "var(--fill-2)" : "transparent", boxShadow: i === rung ? "inset 0 0 0 1.5px var(--accent)" : "inset 0 0 0 .5px var(--hairline)" }}>
               {l}
@@ -115,6 +121,7 @@ export function CareerRoom({ home, orb }: { home: Office | null; orb: Character 
             {standing(board, at)}
           </span>
           {board.length > 1 && (
+            <Tall max="30dvh" label="The office by XP, every orb">
             <ol aria-label="The office by XP" style={{ display: "grid", gap: 6, margin: 0, padding: 0, listStyle: "none" }}>
               {board.map((r, i) => (
                 <li key={r.orb} data-rank-orb={r.orb} aria-current={i === at ? "true" : undefined} style={{ display: "grid", gridTemplateColumns: "2ch minmax(0, 1fr) auto", gap: 8, alignItems: "center" }}>
@@ -129,14 +136,17 @@ export function CareerRoom({ home, orb }: { home: Office | null; orb: Character 
                 </li>
               ))}
             </ol>
+            </Tall>
           )}
         </Section>
       )}
 
       <div className="orbs-pair" style={{ display: "grid", gap: "var(--s4)", minWidth: 0 }}>
         <Section title={`${orb.name}'s traits`} label="Traits">
+          {/* two across: seven bars under one another were most of a phone's screen */}
+          <Balanced min={140} gap={10}>
           {grown.traits.map((t) => (
-            <div key={t.name} data-trait={t.name} style={{ display: "grid", gap: 3 }}>
+            <div key={t.name} data-trait={t.name} style={{ display: "grid", gap: 3, minWidth: 0 }}>
               <span style={{ ...small, color: "var(--text-2)", display: "flex", justifyContent: "space-between", gap: 8 }}>
                 {t.name}
                 <b style={{ fontWeight: 700, color: "var(--text-1)", fontVariantNumeric: "tabular-nums" }}>{t.value}</b>
@@ -146,6 +156,7 @@ export function CareerRoom({ home, orb }: { home: Office | null; orb: Character 
               </div>
             </div>
           ))}
+          </Balanced>
           <span style={small}>{`${TOTAL} points for every orb, moved by what it is made of and by its work, one more each level.`}</span>
         </Section>
         <Section title={`What ${orb.name} does`}>
@@ -156,6 +167,7 @@ export function CareerRoom({ home, orb }: { home: Office | null; orb: Character 
 
       <Section title="Lately" label="Its latest work">
         {c.work?.length ? (
+          <Tall max="34dvh" label="Its latest work, every piece">
           <ul style={{ display: "grid", gap: 8, margin: 0, padding: 0, listStyle: "none" }}>
             {c.work.map((w) => (
               <li key={w.at} data-work style={{ display: "grid", gap: 1 }}>
@@ -164,13 +176,16 @@ export function CareerRoom({ home, orb }: { home: Office | null; orb: Character 
               </li>
             ))}
           </ul>
+          </Tall>
         ) : <span style={small}>Nothing finished yet.</span>}
       </Section>
 
       {/* its life with the others: who it gets on with, what they traded, what it learned from whom */}
       <Section title="With the others" label="With the others">
         {c.friends?.length ? (
-          // a balanced grid: never one friend alone on a row (a wrapping row left one at 768 px, 10-07)
+          // a balanced grid: never one friend alone on a row (a wrapping row left one at 768 px, 10-07); a big office's
+          // scrolls on a phone
+          <Tall max="24dvh" label="Its friends, every one">
           <Balanced min={170} gap={6}>
             {c.friends.map((f) => (
               <span key={f.name} data-friend={f.name} style={{ display: "flex", gap: 6, alignItems: "baseline", minWidth: 0, padding: "4px 10px", borderRadius: 999, background: "var(--fill-2)" }}>
@@ -179,8 +194,10 @@ export function CareerRoom({ home, orb }: { home: Office | null; orb: Character 
               </span>
             ))}
           </Balanced>
+          </Tall>
         ) : <span style={small}>It has not met the others yet: free orbs meet through the office's day.</span>}
         {meetings.length > 0 && (
+          <Tall max="44dvh" label="Its meetings, every one">
           <ul style={{ display: "grid", gap: 10, margin: 0, padding: 0, listStyle: "none" }}>
             {meetings.map((m) => (
               <li key={m.at} data-meeting={m.kind} style={{ display: "grid", gap: 3, paddingLeft: 12, boxShadow: "inset 2px 0 0 var(--accent)" }}>
@@ -197,6 +214,7 @@ export function CareerRoom({ home, orb }: { home: Office | null; orb: Character 
               </li>
             ))}
           </ul>
+          </Tall>
         )}
         {c.lessons?.length ? (
           <div style={{ display: "grid", gap: 4 }}>
@@ -209,9 +227,15 @@ export function CareerRoom({ home, orb }: { home: Office | null; orb: Character 
 
       <div className="orbs-pair" style={{ display: "grid", gap: "var(--s4)", minWidth: 0 }}>
         <Section title="Habits">
-          {c.habits.length ? c.habits.map((h) => (
-            <span key={h.task} style={small}>{`${h.task.split("|").slice(1).join(" ")} (v${h.version})${h.shared ? `, from ${h.shared.from}` : ""}`}</span>
-          )) : <span style={small}>None yet: a job it does on a schedule, done the same way and approved three times, becomes one, night by night.</span>}
+          {c.habits.length ? (
+            <Tall max="30dvh" label="Its habits, every one">
+              <div style={{ display: "grid", gap: 6 }}>
+                {c.habits.map((h) => (
+                  <span key={h.task} style={small}>{`${h.task.split("|").slice(1).join(" ")} (v${h.version})${h.shared ? `, from ${h.shared.from}` : ""}`}</span>
+                ))}
+              </div>
+            </Tall>
+          ) : <span style={small}>None yet: a job it does on a schedule, done the same way and approved three times, becomes one, night by night.</span>}
         </Section>
         <Section title="Reviews">
           <span style={small}>{`${c.reviews.given} given · ${c.reviews.received} asked of others`}</span>

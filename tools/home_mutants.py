@@ -1876,9 +1876,11 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ("  if (!meta || !isIOS(nav) || /maximum-scale/.test(meta.content)) return false;", "  if (!meta || /maximum-scale/.test(meta.content)) return false;"),
     ], ["zoom.test.ts", "phones.test.ts"]),
     # Chat and the career, right above who the orb is (owner, 10-07)
-    ("Chat sits below the sheet again", "src/orbs.tsx", [
-        ("                <Sheet c={before ?? me} key={before ? \"was\" : \"now\"} replies={replies} standing={standing} startsAs={startsAs} career={career} friends={friends} />\n              </div>", "              </div>"),
-        ("              <div data-orb={me.hue} style={{ display: \"grid\", gap: \"var(--s3)\", alignContent: \"start\", minWidth: 0 }}>", "              <div data-orb={me.hue} style={{ display: \"grid\", gap: \"var(--s3)\", alignContent: \"start\", minWidth: 0 }}>\n                <Sheet c={before ?? me} key={before ? \"was\" : \"now\"} replies={replies} standing={standing} startsAs={startsAs} career={career} friends={friends} />"),
+    ("Chat and Career leave the orb's name", "src/orbs.tsx", [
+        ("\n                onChat={() => go({ room: \"chat\", orb: me.name })} onCareer={() => go({ room: \"career\", orb: me.name })} />", " />"),
+    ], ["phones.test.ts"]),
+    ("the career page's orb sits at the left on a phone", "src/rooms/Career.tsx", [
+        ('flexDirection: phone ? "column" : "row"', 'flexDirection: "row"'),
     ], ["phones.test.ts"]),
     # the Recruiter's departments and All (owner, 10-07)
     ("a department shows every department's positions", "src/rooms/Recruiter.tsx", [
