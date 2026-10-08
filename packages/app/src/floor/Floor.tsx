@@ -21,7 +21,7 @@ const MEET_WALK_MS = 12_000;
 import type { Route } from "../ui/nav.ts";
 import { CameraFeed } from "./camera.tsx";
 import { DeskPiece, FLOOR_CSS, MeetingTable, PingPong, Room, SideTables, skyAt, type Screen } from "./art.tsx";
-import { busiest, VIEWS, viewRect, zoneOf, type ViewId } from "./plan.ts";
+import { busiest, MARKS, VIEWS, viewRect, zoneOf, type ViewId } from "./plan.ts";
 import { DESKS, H, POIS, ROOMS, SEATS, W, WALL, ZONES, dice, dwell, meetPlan, meetSpot, momentPlan, next, route, seating, sentBy, speed, type Desk, type Plan, type PoiId, type Spot, type Traits } from "./plan.ts";
 
 /** An orb's size on the plan (its window's width). */
@@ -29,7 +29,6 @@ const ORB = 84;
 const head: CSSProperties = { font: "700 11px/16px var(--font)", letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)" };
 const small: CSSProperties = { font: "500 13px/18px var(--font)", color: "var(--text-3)", textWrap: "pretty", overflowWrap: "anywhere" };
 const panel: CSSProperties = { display: "grid", gap: 10, alignContent: "start", padding: "var(--s4)", borderRadius: 18, background: "var(--fill)", boxShadow: "inset 0 0 0 1px var(--hairline)", minWidth: 0 };
-const ICON: Record<Family | "play", string> = { exec: "👑", build: "🛠", think: "💡", make: "🎨", finance: "💰", business: "📈", life: "🌿", play: "🎮" };
 
 type Sim = {
   c: Character; id: string; x: number; y: number; path: Spot[]; i: number; plan: Plan | null;
@@ -509,7 +508,7 @@ export function Floor({ home, office, moods, person, go }: { home: Office | null
             {/* the signs */}
             {ZONES.map((z) => (
               <span key={z.id} data-orb={z.hue} data-zone={z.id} style={{ ...sign, left: px(z.rect.x + 14), top: px(z.rect.y - 34) }}>
-                <span aria-hidden>{ICON[z.id]}</span> {z.id === "play" ? "Games" : FAMILIES[z.id]}
+                <span aria-hidden>{MARKS[z.id]}</span> {z.id === "play" ? "Games" : FAMILIES[z.id]}
               </span>
             ))}
             {ROOMS.map((r) => (

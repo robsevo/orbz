@@ -292,8 +292,9 @@ function staticVars(): string {
   // rank you can see (owner, 10-07: "maybe a special glow or smt to let you know theyre the CEO or CFO"): the CEO's gold
   // and the CFO's green, the same in every theme
   Object.assign(v, { "--rank-ceo": "rgba(255, 198, 66, 0.95)", "--rank-ceo-soft": "rgba(255, 198, 66, 0.42)", "--rank-cfo": "rgba(56, 214, 150, 0.95)", "--rank-cfo-soft": "rgba(56, 214, 150, 0.42)" });
-  // the office as a camera room (owner, 10-07): the camera's glass over the floor, the same in every theme
-  Object.assign(v, { "--cam-ink": "rgba(255, 255, 255, 0.9)", "--cam-plate": "rgba(6, 8, 12, 0.55)", "--cam-rec": "#ff4a4a", "--cam-scan": "rgba(0, 0, 0, 0.13)", "--cam-vignette": "rgba(0, 0, 0, 0.42)" });
+  // the office as a camera room (owner, 10-07): the camera's REC light, the same in every theme; no glass over the
+  // floor since 10-08 ("we want to see them")
+  Object.assign(v, { "--cam-rec": "#ff4a4a" });
   for (const [k, px] of Object.entries(SPACE)) v[`--s${k}`] = `${px}px`;
   for (const [k, px] of Object.entries(RADIUS)) v[`--r-${k}`] = `${px}px`;
   for (const [k, [size, line, weight]] of Object.entries(TYPE)) v[`--t-${k}`] = `${weight} ${size}px/${line}px ${FONT}`;

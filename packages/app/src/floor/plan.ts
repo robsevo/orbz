@@ -49,6 +49,8 @@ export const ZONES: Zone[] = [
   zone("play", "Games", "pink", 1, ROW_B),
   zone("life", FAMILIES.life, "mint", 2, ROW_B),
 ];
+/** Each department's mark, on its sign on the floor and its branch of the org chart. */
+export const MARKS: Record<Family | "play", string> = { exec: "👑", build: "🛠", think: "💡", make: "🎨", finance: "💰", business: "📈", life: "🌿", play: "🎮" };
 
 export type Room = { id: "lounge" | "meeting" | "kitchen"; name: string; hue: HueName; rect: Rect; door: { x: number; w: number } };
 const TOP_H = 300 - WALL;

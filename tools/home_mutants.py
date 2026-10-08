@@ -2037,8 +2037,8 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("an idea's verdict is never sent", "src/rooms/Report.tsx", [
         ("const judge = (id: string, verdict: \"approve\" | \"pass\"): void => void home.judgeIdea(id, verdict)", "const judge = (id: string, verdict: \"approve\" | \"pass\"): void => void Promise.resolve(id + verdict)"),
     ], ["report-view.test.ts"]),
-    ("the camera's glass takes the presses", "src/floor/camera.tsx", [
-        ('<div aria-hidden data-camera-glass style={{ position: "absolute", inset: 0, pointerEvents: "none",', '<div aria-hidden data-camera-glass style={{ position: "absolute", inset: 0,'),
+    ("the camera's glass is back over the orbs", "src/floor/camera.tsx", [
+        ('      <div style={{ position: "relative", minWidth: 0 }}>{children}</div>\n', '      <div style={{ position: "relative", minWidth: 0 }}>{children}<div aria-hidden style={{ position: "absolute", inset: 0, pointerEvents: "none", background: "repeating-linear-gradient(to bottom, rgba(0, 0, 0, .13) 0 1px, transparent 1px 3px)" }} /></div>\n'),
     ], ["floor-view.test.ts"]),
     ("the camera's clock stops", "src/floor/camera.tsx", [
         ("    const t = setInterval(() => setNow(new Date()), 1000);", "    const t = setInterval(() => undefined, 1000);"),
@@ -2420,8 +2420,21 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ], ['team-board-view.test.ts']),
     # the org chart, career pages, the weekly card, letting go and rehiring in the app (PLAN 5.5, 5.6)
     ('the org chart shows no lead first', 'src/rooms/Org.tsx', [
-        ('{[lead && lead !== org.chief ? card(lead, true) : null, ...rest.map((id) => card(id, false))].filter(Boolean)}', '{[...rest.map((id) => card(id, false))].filter(Boolean)}'),
+        ('    const cards = [t.lead ? card(t.lead, { lead: true }) : null, ...t.rest.map((id) => card(id))].filter(Boolean);', '    const cards = [...t.rest.map((id) => card(id))].filter(Boolean);'),
     ], ['org-view.test.ts']),
+    # the org chart as a tree (owner, 10-08: "like a family tree or corporate latter")
+    ("the org chart's tree has no lines", "src/rooms/Org.tsx", [
+        ('      <style>{TREE_CSS}</style>\n', ''),
+    ], ['org-view.test.ts']),
+    ('the org chart never hangs down like a family tree', 'src/rooms/Org.tsx', [
+        ('  const down = width >= Math.max(1, chart.branches.length) * COLUMN;', '  const down = width < 0;'),
+    ], ['org-view.test.ts']),
+    ('a head stands in its own team as well', 'src/rooms/chart.ts', [
+        ('return { kind: k, lead: lead && !isHead.has(lead) ? lead : null,', 'return { kind: k, lead,'),
+    ], ['chart.test.ts']),
+    ('a second CTO works in the Executive, not under the CTO in Build', 'src/rooms/chart.ts', [
+        ('  if (family !== "exec") return family;\n', '  return family;\n'),
+    ], ['chart.test.ts']),
     ('a face does not open his career page', 'src/rooms/Org.tsx', [
         ('onClick={() => open(c)}', 'onClick={() => undefined}'),
     ], ['org-view.test.ts']),

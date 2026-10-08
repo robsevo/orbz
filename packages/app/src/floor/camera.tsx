@@ -1,8 +1,7 @@
 // The office as a camera room (owner, 10-07: "keep the style of the office the same but vibe it like a camera room"):
-// the floor's own drawings untouched, seen as a camera sees them: REC, which camera and the time to the second on a
-// strip above it, a viewfinder's corners, faint scanlines and the lens's darker edges over it. The glass lies over the
-// view rather than the plan, so it stays put while a phone pans, and it takes no presses: every orb and tag under it
-// is pressed through it.
+// the floor's own drawings untouched, under a camera's REC, which camera and the time to the second on a strip above
+// it. Nothing lies over the picture (owner, 10-08: "Camera view is too camera ey, we want to see them"): the
+// scanlines, darker edges and viewfinder corners it had at first washed the orbs out.
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 
 const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
@@ -24,17 +23,10 @@ export const CAMERA_CSS = `
 @media (prefers-reduced-motion: reduce) { .orbs-cam-rec { animation: none; } }
 `;
 
-const corner = (at: "tl" | "tr" | "bl" | "br"): CSSProperties => ({
-  position: "absolute", width: 18, height: 18, opacity: 0.7,
-  [at[0] === "t" ? "top" : "bottom"]: 8, [at[1] === "l" ? "left" : "right"]: 8,
-  [at[0] === "t" ? "borderTop" : "borderBottom"]: "2px solid var(--cam-ink)",
-  [at[1] === "l" ? "borderLeft" : "borderRight"]: "2px solid var(--cam-ink)",
-});
 const bar: CSSProperties = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "0 6px 6px", font: "700 11px/16px var(--mono)", letterSpacing: ".06em", color: "var(--text-3)", whiteSpace: "nowrap", minWidth: 0 };
 
 /** The floor seen through a camera: `n` and `room` name the camera shown. Its REC, name and stamp sit on a strip
- * above the picture, as a monitor's bezel would carry them, so nothing of the office is covered; the corners,
- * scanlines and darker edges lie over it. */
+ * above the picture, as a monitor's bezel would carry them, and nothing of the camera's lies over the office. */
 export function CameraFeed({ n, room, children }: { n: number; room: string; children: ReactNode }) {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
@@ -52,14 +44,7 @@ export function CameraFeed({ n, room, children }: { n: number; room: string; chi
         </span>
         <span data-camera-stamp className="num" style={{ flex: "0 0 auto" }}>{stamp(now)}</span>
       </div>
-      <div style={{ position: "relative", minWidth: 0 }}>
-        {children}
-        <div aria-hidden data-camera-glass style={{ position: "absolute", inset: 0, pointerEvents: "none", borderRadius: 20, overflow: "hidden", zIndex: 2 }}>
-          <div style={{ position: "absolute", inset: 0, background: "repeating-linear-gradient(to bottom, var(--cam-scan) 0 1px, transparent 1px 3px)" }} />
-          <div style={{ position: "absolute", inset: 0, background: "radial-gradient(130% 100% at 50% 50%, transparent 60%, var(--cam-vignette))" }} />
-          {(["tl", "tr", "bl", "br"] as const).map((c) => <span key={c} style={corner(c)} />)}
-        </div>
-      </div>
+      <div style={{ position: "relative", minWidth: 0 }}>{children}</div>
     </div>
   );
 }

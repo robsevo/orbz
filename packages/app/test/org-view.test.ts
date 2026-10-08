@@ -1,5 +1,7 @@
 // PLAN 5.6_t: the org chart and career pages, on a real home, at desk and phone sizes.
 //   - the org chart: everyone by the kind of work they do, the lead of each kind first;
+//   - drawn as a tree (owner, 10-08: "like a family tree or corporate latter"): you, the CEO, the heads, the teams,
+//     with its lines; hung down on a desk, run down the page on a phone;
 //   - a face opens his career page: his level and the next one's evidence, his age and days in the
 //     company, the radar, his habits;
 //   - his weekly card: a notice that opens his career page;
@@ -68,7 +70,7 @@ test("the org chart and a career page; let go with a hand-off, away, rehired; le
   // the company's shape (owner, 10-07): you at its top, the Founder; each department under its head, or none yet
   assert.match(await org.locator("[data-founder]").innerText(), /Founder\s+Robin/i);
   assert.deepEqual(await org.locator("[data-department]").evaluateAll((ds) => ds.map((d) => d.getAttribute("data-department"))), ["build", "make"], "the departments with orbs, in the company's order");
-  assert.equal(await org.locator('[data-department="build"] [data-head]').innerText(), "No Chief Technology Officer yet");
+  assert.equal(await org.locator('[data-department="build"] [data-head]').innerText(), "No CTO yet");
   assert.equal(await org.locator('[data-department="build"] [data-kind="frontend"]').count(), 1, "its kinds of work inside it");
   assert.deepEqual(await measure(page), [], "the org chart, at desk size");
 
@@ -191,4 +193,93 @@ test("the board on the org chart (owner, 10-07): its seats by their posts, an od
   await phone.locator("[data-board] [data-proposal]").first().waitFor({ timeout: 20_000 });
   await phone.waitForTimeout(500);
   assert.deepEqual(await measure(phone), [], "and at phone size");
+});
+
+test("the org chart is a tree (owner, 10-08: \"like a family tree or corporate latter\"): you, the CEO, each head on a bar under the CEO, each team under its head, every orb once, with its lines; hung down on a desk, run down the page on a phone", { skip, timeout: 150_000 }, async (t) => {
+  const data = mkdtempSync(join(tmpdir(), "orbs-org-tree-"));
+  t.after(() => rmSync(data, { recursive: true, force: true }));
+  const h = Home.open({ dataDir: data, protect: [], spendCapUsd: null });
+  t.after(() => h.close());
+  h.start();
+  h.about.setName("Robin");
+  h.about.setCompany("Acme Orbs");
+  // Tess a second CTO: in Build's team under Gus, its head
+  const crew = [["max", "Max", "ceo"], ["pip", "Pip", "assistant"], ["gus", "Gus", "cto"], ["ada", "Ada", "frontend"], ["bea", "Bea", "frontend"], ["tess", "Tess", "cto"], ["cy", "Cy", "writing"]] as const;
+  for (const [id, name, sp] of crew) h.inbox.addOrb(id, name, sp, { shape: "bean", eyes: "classic", hue: "teal" });
+  const d = await serve(h, { port: 0, appDir: dist });
+  t.after(() => d.close());
+  const open = async (size: { width: number; height: number }, phone: boolean) => {
+    const ctx = await browser.newContext({ viewport: size, colorScheme: "dark", ...(phone && { hasTouch: true, isMobile: true }) });
+    t.after(() => ctx.close());
+    const page = await ctx.newPage();
+    await page.goto(d.pairLink());
+    await page.locator(".orbs-window").waitFor({ timeout: 30_000 });
+    await page.evaluate(() => (location.hash = "#/org"));
+    await page.locator('[data-org-tree] [data-org-orb="tess"]').waitFor({ timeout: 20_000 });
+    await page.waitForTimeout(400);
+    return page;
+  };
+  /** Where each part of the tree is, and the lines drawn for it. */
+  const read = (page: Awaited<ReturnType<typeof open>>) => page.evaluate(() => {
+    const box = (el: Element | null) => {
+      const r = el!.getBoundingClientRect();
+      return { top: Math.round(r.top), bottom: Math.round(r.bottom), left: Math.round(r.left), right: Math.round(r.right), mid: Math.round(r.left + r.width / 2) };
+    };
+    const tree = document.querySelector("[data-org-tree]")!;
+    const pseudo = (el: Element, which: "::before" | "::after") => {
+      const s = getComputedStyle(el, which);
+      return s.content === "none" ? null : { top: s.borderTopWidth, left: s.borderLeftWidth, right: s.borderRightWidth, bottom: s.borderBottomWidth };
+    };
+    const branches = [...tree.querySelectorAll(".orbs-tree-rung > li")];
+    return {
+      layout: tree.getAttribute("data-layout"),
+      departments: [...tree.querySelectorAll("[data-department]")].map((x) => x.getAttribute("data-department")),
+      heads: Object.fromEntries([...tree.querySelectorAll("[data-department]")].map((x) => [x.getAttribute("data-department"), x.querySelector("[data-head]")!.getAttribute("data-head")])),
+      orbs: [...tree.querySelectorAll("[data-org-orb]")].map((x) => x.getAttribute("data-org-orb")),
+      founder: box(tree.querySelector("[data-founder]")),
+      ceo: box(tree.querySelector('[data-department="exec"] [data-head]')),
+      branchHeads: branches.map((b) => box(b.querySelector("[data-head]"))),
+      branches: branches.map((b) => box(b)),
+      teams: [...tree.querySelectorAll('[data-department="build"] [data-kind]')].map((k) => ({ kind: k.getAttribute("data-kind"), top: box(k).top, orbs: [...k.querySelectorAll("[data-org-orb]")].map((x) => x.getAttribute("data-org-orb")) })),
+      stems: [...tree.querySelectorAll(".orbs-tree-stem")].map((x) => box(x)),
+      lines: { branch: branches.map((b) => [pseudo(b, "::before"), pseudo(b, "::after")]), kind: pseudo(tree.querySelector('[data-department="build"] [data-kind]')!, "::before") },
+    };
+  });
+
+  // a desk: hung down like a family tree
+  const page = await open({ width: 1280, height: 900 }, false);
+  let at = await read(page);
+  assert.equal(at.layout, "down");
+  assert.deepEqual(at.departments, ["exec", "build", "make", "life"], "the CEO, then the departments in the company's order");
+  assert.deepEqual(at.heads, { exec: "max", build: "gus", make: "none", life: "pip" });
+  assert.equal(await page.locator('[data-department="make"] [data-head]').innerText(), "No CMO yet");
+  assert.deepEqual([...at.orbs].sort(), crew.map(([id]) => id).sort(), "every orb on the tree once");
+  assert.deepEqual(at.teams, [{ kind: "frontend", top: at.teams[0]!.top, orbs: ["ada", "bea"] }, { kind: "cto", top: at.teams[1]!.top, orbs: ["tess"] }], "Build's team under Gus: Ada leading Bea, then Tess");
+  // its rungs: you over the CEO over the heads, the heads side by side, each team under its head
+  assert.ok(at.founder.bottom < at.ceo.top && at.ceo.bottom < Math.min(...at.branchHeads.map((b) => b.top)), `you, then the CEO, then the heads (${JSON.stringify([at.founder, at.ceo, at.branchHeads[0]])})`);
+  assert.ok(at.branchHeads.every((b) => Math.abs(b.top - at.branchHeads[0]!.top) <= 1), "the heads on one rung");
+  assert.ok(at.branchHeads.every((b, i) => i === 0 || b.left > at.branchHeads[i - 1]!.right), "side by side");
+  assert.ok(at.teams.every((k) => k.top > at.branchHeads[0]!.bottom), "Build's team under its head");
+  // its lines: a stem from you to the CEO and from the CEO to the bar, which reaches every head (a drop to each, the
+  // bar's ends rounded), and an elbow to each kind of work
+  assert.equal(at.stems.length, 2);
+  assert.ok(at.stems[0]!.top >= at.founder.bottom - 1 && at.stems[0]!.bottom <= at.ceo.top + 1 && at.stems[1]!.top >= at.ceo.bottom - 1, "the stems between the rungs");
+  assert.ok(at.stems[1]!.mid > at.branches[0]!.mid && at.stems[1]!.mid < at.branches.at(-1)!.mid, "the CEO's stem lands on the bar");
+  assert.deepEqual(at.lines.branch.map(([b, a]) => [b?.top ?? "0px", b?.right ?? "0px", a?.top ?? "0px", a?.left ?? "0px"]), [["0px", "0px", "2px", "2px"], ["2px", "0px", "2px", "2px"], ["2px", "2px", "0px", "0px"]], "first: a drop and the bar on; between: the bar both ways; last: the bar in and its drop");
+  assert.deepEqual(at.lines.kind && [at.lines.kind.left, at.lines.kind.bottom], ["2px", "2px"], "an elbow to a kind of work");
+  assert.deepEqual(await measure(page), [], "the tree, at desk size");
+  // a face on it still opens a career page
+  await page.locator('[data-org-tree] [data-org-orb="tess"]').click();
+  await page.locator('[data-career="tess"]').waitFor({ timeout: 20_000 });
+
+  // a phone: the same tree run down the page, each rung stepped in under the one above
+  const phone = await open({ width: 390, height: 844 }, true);
+  at = await read(phone);
+  assert.equal(at.layout, "side");
+  assert.deepEqual([...at.orbs].sort(), crew.map(([id]) => id).sort());
+  assert.ok(at.founder.bottom < at.ceo.top && at.ceo.bottom < at.branchHeads[0]!.top, "you, then the CEO, then the heads");
+  assert.ok(at.branches.every((b, i) => i === 0 || b.top > at.branches[i - 1]!.bottom), "one department under another");
+  assert.ok(at.branchHeads.every((b) => b.left > at.ceo.left + 10), "stepped in under the CEO");
+  assert.deepEqual(at.lines.branch.map(([b]) => b && [b.left, b.bottom]), at.branches.map(() => ["2px", "2px"]), "an elbow to each department");
+  assert.deepEqual(await measure(phone), [], "the tree, at phone size");
 });

@@ -186,8 +186,8 @@ test("on a phone the office goes room by room: it opens on the busiest departmen
   assert.ok(360 * a.k <= 0.8 * a.w, `Build at most four fifths of it, floor round it (${Math.round(360 * a.k)} of ${a.w})`);
   assert.deepEqual(await measure(page), [], "nothing spills, a room at a time");
   // seen through a camera (owner, 10-07: "keep the style of the office the same but vibe it like a camera room"): each
-  // room a camera of its own, REC and the time to the second on a strip above the picture, never over it; the glass
-  // over the picture takes no presses (an orb pressed through it opens its profile: the test above)
+  // room a camera of its own, REC and the time to the second on a strip above the picture, and nothing of the
+  // camera's over the picture (owner, 10-08: "Camera view is too camera ey, we want to see them")
   const cam = (n: string, room: string): string => `CAM ${String(VIEWS.findIndex((v) => v.id === n) + 1).padStart(2, "0")} · ${room}`;
   assert.equal(await page.locator("[data-camera]").getAttribute("data-camera"), cam("build", "BUILD"));
   const stampAt = await page.locator("[data-camera-stamp]").innerText();
@@ -195,7 +195,19 @@ test("on a phone the office goes room by room: it opens on the busiest departmen
   await page.waitForFunction((was) => document.querySelector("[data-camera-stamp]")?.textContent !== was, stampAt, { timeout: 3_000 });
   const [strip, view] = [(await page.locator("[data-camera-rec]").boundingBox())!, (await page.locator("[data-floor-view]").boundingBox())!];
   assert.ok(strip.y + strip.height <= view.y + 1, "REC above the picture, covering none of it");
-  assert.equal(await page.locator("[data-camera-glass]").evaluate((el) => getComputedStyle(el).pointerEvents), "none");
+  // every box the camera draws, outside the floor itself, keeps off the picture: no scanlines, darker edges or corners
+  const over = await page.evaluate(() => {
+    const view = document.querySelector<HTMLElement>("[data-floor-view]")!;
+    const v = view.getBoundingClientRect();
+    return [...document.querySelectorAll<HTMLElement>("[data-camera] *")]
+      .filter((el) => !view.contains(el) && !el.contains(view) && el.tagName !== "STYLE")
+      .filter((el) => {
+        const r = el.getBoundingClientRect();
+        return r.width > 0 && r.height > 0 && r.left < v.right - 1 && r.right > v.left + 1 && r.top < v.bottom - 1 && r.bottom > v.top + 1;
+      })
+      .map((el) => el.outerHTML.slice(0, 80));
+  });
+  assert.deepEqual(over, [], "nothing of the camera's over the office");
   // the kitchen
   await page.locator('[data-view-choice="kitchen"]').click();
   await page.waitForTimeout(300);
