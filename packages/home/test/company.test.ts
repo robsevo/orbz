@@ -50,7 +50,12 @@ test("the door: the CEO first, then your assistant, then each department with it
 test("each is told its part: the CEO and the assistant in tandem, the CFO the books, a money orb its CFO; nothing before a company", async (t) => {
   const office = [{ id: "max", name: "Max", specialty: "ceo" }, { id: "pip", name: "Pip", specialty: "assistant" }, { id: "fin", name: "Fin", specialty: "cfo" }, { id: "coin", name: "Coin", specialty: "crypto" }, { id: "ada", name: "Ada", specialty: "frontend" }];
   const at = (id: string) => companyLine({ me: office.find((o) => o.id === id)!, founder: "Robin", company: "Acme Orbs", office })!;
-  assert.match(at("ada"), /^The company, Acme Orbs: Robin is its Founder; Max is the CEO and runs it; Pip is Robin's personal assistant; Fin is the CFO and keeps the books\. Take direction from the CEO and follow what the board decides\.$/);
+  assert.match(at("ada"), /^The company, Acme Orbs: Robin is its Founder; Max is the CEO and runs it; Pip is Robin's personal assistant; Fin is the CFO and keeps the books\. Take direction from the CEO and follow what the board decides\.$/m);
+  // what the company can spend (PLAN 5.20, owner 10-08), for its work: never said is nothing, and nothing is free tools
+  assert.match(at("ada"), /^Robin has not said yet what Acme Orbs can spend, so take it as nothing\. The company's work uses free tools and free tiers only, and signs up for nothing paid\.$/m);
+  const spends = (budget: { start: number; month: number }) => companyLine({ me: office[4]!, founder: "Robin", company: "Acme Orbs", budget, office })!;
+  assert.match(spends({ start: 0, month: 0 }), /^Acme Orbs has no money to spend yet\. The company's work uses free tools and free tiers only/m);
+  assert.match(spends({ start: 50, month: 20 }), /^Acme Orbs can spend up to \$50 to start and \$20 a month in all, on hosting, tools and ads\. Anything the company's work costs is Robin's yes first\.$/m);
   assert.match(at("max"), /You are the CEO\. Pip keeps Robin's day and brings you what the company should do: take it, decide who does it[\s\S]*send Robin the result through Pip[\s\S]*You chair the board\./);
   assert.match(at("pip"), /You are Robin's personal assistant: you keep their day[\s\S]*Hand what is company work[\s\S]*to the CEO, Max, with ask_orb[\s\S]*the board's secretary/);
   assert.match(at("fin"), /You are the CFO: you keep every money record[\s\S]*books\/[\s\S]*Coin reports to you\.[\s\S]*Every payment, trade and transfer is Robin's yes\. You are the board's treasurer\./);
@@ -58,15 +63,20 @@ test("each is told its part: the CEO and the assistant in tandem, the CFO the bo
   assert.equal(companyLine({ me: office[4]!, founder: "Robin", office: [office[4]!] }), null, "no company yet: nothing said (control)");
 
   // in a run's standing context, with the company's name kept by the home
-  const { home, model } = await agentHome(t, [{ chunks: ["ok"] }]);
+  const { home, model } = await agentHome(t, [{ chunks: ["ok"] }, { chunks: ["ok"] }]);
   home.about.setName("Robin");
   home.about.setCompany("Acme Orbs");
   home.inbox.addOrb("max", "Max", "ceo");
   home.inbox.addOrb("pip", "Pip", "assistant");
   home.inbox.send("pip", "chat:pip", "hi");
   await home.inbox.idle();
-  assert.match(String(model.agent[0]![0]!.content), /The company, Acme Orbs: Robin is its Founder; Max is the CEO[\s\S]*You are Robin's personal assistant/);
+  assert.match(String(model.agent[0]![0]!.content), /The company, Acme Orbs: Robin is its Founder; Max is the CEO[\s\S]*Robin has not said yet what Acme Orbs can spend[\s\S]*You are Robin's personal assistant/);
   assert.deepEqual(home.about.get().company, "Acme Orbs");
+  // the budget changed (owner, 10-08: "Lets be able to change the budget as well"): the next turn hears it
+  home.about.setBudget({ start: 50, month: 20 });
+  home.inbox.send("pip", "chat:pip", "and now?");
+  await home.inbox.idle();
+  assert.match(String(model.agent[1]![0]!.content), /Acme Orbs can spend up to \$50 to start and \$20 a month in all/);
 });
 
 test("your company's name, through the door, is kept beside yours", async (t) => {

@@ -12,6 +12,7 @@ import { play } from "../ui/sound.ts";
 import { startMusic, stopMusic } from "../ui/music.ts";
 import { checkCompany, checkName, line, NEWBORN, NEWBORN_PLATE, skipTo, STORY, type Beat, type Person } from "./story.ts";
 import type { Brains as BrainsNow, ChatGPT, Office } from "../home/link.ts";
+import { BudgetChoice } from "../ui/Budget.tsx";
 
 const TYPE_MS = 26;
 
@@ -92,7 +93,7 @@ export function Onboarding({ office, person, home, onDone, story: told = STORY, 
       return;
     }
     setWhy("");
-    setNamed({ name: r.name, since: Date.now(), company: named?.company ?? null });
+    setNamed({ name: r.name, since: Date.now(), company: named?.company ?? null, budget: named?.budget ?? null });
     next();
   };
   const submitCompany = (): void => {
@@ -102,11 +103,11 @@ export function Onboarding({ office, person, home, onDone, story: told = STORY, 
       return;
     }
     setWhy("");
-    setNamed((p) => ({ name: p?.name ?? "boss", since: p?.since ?? Date.now(), company: r.company }));
+    setNamed((p) => ({ name: p?.name ?? "boss", since: p?.since ?? Date.now(), company: r.company, budget: p?.budget ?? null }));
     next();
   };
   const advance = (): void => {
-    if (beat.kind === "ask-name" || beat.kind === "ask-company" || beat.kind === "hire" || beat.kind === "brains") return; // these wait for their own answer
+    if (beat.kind === "ask-name" || beat.kind === "ask-company" || beat.kind === "ask-budget" || beat.kind === "hire" || beat.kind === "brains") return; // these wait for their own answer
     if (typing) {
       // the whole line at once: the typing stops, or it would carry on from where it was
       if (typer.current) clearInterval(typer.current);
@@ -224,7 +225,7 @@ export function Onboarding({ office, person, home, onDone, story: told = STORY, 
       </div>
       <div style={{ alignSelf: "center", display: "grid", justifyItems: "center", minWidth: 0, maxWidth: "100%" }}>{stage()}</div>
       <div style={box} data-orb={who.hue}>
-        {(beat.kind === "say" || beat.kind === "ask-name" || beat.kind === "ask-company" || beat.kind === "hire" || beat.kind === "brains" || beat.kind === "tour") && (
+        {(beat.kind === "say" || beat.kind === "ask-name" || beat.kind === "ask-company" || beat.kind === "ask-budget" || beat.kind === "hire" || beat.kind === "brains" || beat.kind === "tour") && (
           <span style={{ position: "absolute", top: -14, left: 18, font: "800 13px/18px var(--font)", letterSpacing: ".04em", color: "var(--text-1)", background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)", borderRadius: 999, padding: "4px 12px" }}>
             {plate}
           </span>
@@ -282,6 +283,20 @@ export function Onboarding({ office, person, home, onDone, story: told = STORY, 
             </div>
             {why && <span style={{ font: "500 14px/20px var(--font)", color: "var(--alert)" }}>{why}</span>}
           </form>
+        ) : beat.kind === "ask-budget" ? (
+          // what the company can spend (PLAN 5.20; owner, 10-08: "the user may not have any money to start with. so ask
+          // how much they are willing to spend on infrastructure etc."): nothing is a fine answer, and it changes any time
+          <div data-budget-step style={{ display: "grid", gap: "var(--s3)", minWidth: 0 }}>
+            <span>{line("What can you put into {company}, for hosting, tools and ads?", named)}</span>
+            <BudgetChoice
+              value={named?.budget ?? null}
+              onPick={(b) => {
+                setNamed((p) => ({ name: p?.name ?? "boss", since: p?.since ?? Date.now(), company: p?.company ?? null, budget: b }));
+                next();
+              }}
+            />
+            <span style={note}>The board's ideas to make money will fit it. You can change it any time, in Settings.</span>
+          </div>
         ) : beat.kind === "brains" ? (
           <BrainsStep home={home} next={next} />
         ) : beat.kind === "hire" ? (

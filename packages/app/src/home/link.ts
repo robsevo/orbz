@@ -99,7 +99,10 @@ export type BoardPost = "chair" | "vice" | "secretary" | "treasurer" | "director
 export type Report = {
   id: number; at: number; day: string;
   chair: { orb: string; name: string } | null;
-  ideas: { id: string; orb: string; name: string; text: string; verdict: "approved" | "passed" | null }[];
+  /** each idea an orb's; since 10-08 (PLAN 5.20) who pays, what it costs (inside the budget) and the first step */
+  ideas: { id: string; orb: string; name: string; text: string; verdict: "approved" | "passed" | null; who?: string | null; start?: number; month?: number; first?: string | null }[];
+  /** pitches left out: they cost more than the company can spend, or did not say what they cost */
+  left?: number;
   world: { title: string; url: string; host: string; orb: string; name: string }[];
   office: { text: string; orb: string | null }[];
   people: { well: { orb: string; name: string; why: string }[]; fit: { orb: string; name: string; why: string }[] };
@@ -551,11 +554,11 @@ export function doorOffice(base: Character): Office {
       await call("../board/election", { method: "POST" });
     },
     async me() {
-      const { me } = await call<{ me: { name: string | null; since: number | null; company?: string | null } }>("../me");
-      return me.name ? { name: me.name, since: me.since ?? Date.now(), company: me.company ?? null } : null;
+      const { me } = await call<{ me: { name: string | null; since: number | null; company?: string | null; budget?: Person["budget"] } }>("../me");
+      return me.name ? { name: me.name, since: me.since ?? Date.now(), company: me.company ?? null, budget: me.budget ?? null } : null;
     },
     async setName(p) {
-      await call("../me", { method: "PUT", body: JSON.stringify({ name: p.name, ...(p.company && { company: p.company }) }) });
+      await call("../me", { method: "PUT", body: JSON.stringify({ name: p.name, ...(p.company && { company: p.company }), ...(p.budget && { budget: p.budget }) }) });
     },
     async messages(conversation, since = 0) {
       const r = await call<{ messages: Message[]; card: Card | null }>(`../conversations/${encodeURIComponent(conversation)}/messages?since=${since}`);

@@ -13,6 +13,7 @@
 // what is company work it hands to the CEO, who decides who does it and leads it, and sends the result back to you
 // through the assistant. The CFO keeps every money record in one place (its books, and the bills: Home.plannerFor),
 // and every money orb reports to it. Everyone takes direction from the CEO and follows what the board decides.
+import { budgetLine, type Budget } from "./about.ts";
 import { SPECIALTY_FAMILIES, type Family, type Specialty } from "./brain/constitution.ts";
 
 /** The two appointed first, in this order: nothing else joins before both are in. */
@@ -50,13 +51,17 @@ export function openDepartments(office: readonly string[]): Family[] {
 type Who = { id: string; name: string; specialty: string };
 
 /** What an orb is told about the company and its part in it, by code; null when there is no company yet. */
-export function companyLine(o: { me: Who; founder: string | null; company?: string | null; office: readonly Who[]; decisions?: readonly string[]; ideas?: readonly { name: string; text: string }[] }): string | null {
+export function companyLine(o: { me: Who; founder: string | null; company?: string | null; budget?: Budget | null; office: readonly Who[]; decisions?: readonly string[]; ideas?: readonly { name: string; text: string }[] }): string | null {
   const F = o.founder ?? "the Founder";
   const first = (s: string): Who | undefined => o.office.find((w) => w.specialty === s);
   const ceo = first("ceo"), pa = first("assistant"), cfo = first("cfo");
   if (!ceo && !pa && !cfo) return null;
   const who = [ceo && `${ceo.name} is the CEO and runs it`, pa && `${pa.name} is ${F}'s personal assistant`, cfo && `${cfo.name} is the CFO and keeps the books`].filter(Boolean).join("; ");
   const lines = [`The company${o.company ? `, ${o.company}` : ""}: ${F} is its Founder; ${who}. Take direction from the CEO and follow what the board decides.`];
+  // what the company can spend (PLAN 5.20; owner, 10-08: "the user may not have any money to start with"), for its work
+  // alone: never said is nothing, and nothing means free tools and free tiers
+  const free = !o.budget || (o.budget.start === 0 && o.budget.month === 0);
+  lines.push(`${budgetLine(o.budget ?? null, { founder: F, company: o.company ?? "the company" })} ${free ? "The company's work uses free tools and free tiers only, and signs up for nothing paid." : `Anything the company's work costs is ${F}'s yes first.`}`);
   // what the board has carried, newest first: every orb follows it ("and the orbs really do listen")
   if (o.decisions?.length) lines.push(`The board has decided: ${o.decisions.map((d) => `"${d}"`).join("; ")}.`);
   // the ideas the Founder approved from the board's report (PLAN 5.18), newest first: the office works toward them

@@ -195,3 +195,43 @@ test("a moment on the floor (owner, 10-07: \"micro interactions ... goofy and fu
   assert.deepEqual(await measure(page), [], "the floor, with a moment on it");
 });
 
+test("a game of ping-pong the home decided (10-08, seen while filming: no ball in play): the two at the table's ends, and the ball in play; desk", { skip, timeout: 120_000 }, async (t) => {
+  const data = mkdtempSync(join(tmpdir(), "orbs-pingpong-home-"));
+  t.after(() => rmSync(data, { recursive: true, force: true }));
+  // one meet()'s dice, in the order rules.ts draws them: who meets (two), a game (the last kind), at the table (under 0.7)
+  const dice = [0.5, 0.5, 0.999, 0.1];
+  const h = Home.open({ dataDir: data, protect: [], spendCapUsd: null, social: { dice: () => dice.shift() ?? 0.5 } });
+  t.after(() => h.close());
+  h.start();
+  h.about.setName("Robin");
+  h.inbox.addOrb("ada", "Ada", "assistant", { shape: "egg", eyes: "classic", hue: "azure" });
+  h.inbox.addOrb("bo", "Bo", "frontend", { shape: "bean", eyes: "classic", hue: "coral" });
+  const d = await serve(h, { port: 0, appDir: dist });
+  t.after(() => d.close());
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: "dark" });
+  t.after(() => ctx.close());
+  const page = await ctx.newPage();
+  const ten = new Date();
+  ten.setHours(10, 0, 0, 0);
+  await page.clock.install({ time: ten }); // the floor's orbs are awake from 06:00
+  await page.goto(d.pairLink());
+  await page.locator(".orbs-window").waitFor({ timeout: 30_000 });
+  await page.evaluate(() => (location.hash = "#/office"));
+  await page.locator("[data-floor]").waitFor({ timeout: 20_000 });
+
+  const m = h.social.meet()!;
+  assert.equal(`${m.kind} at ${m.place}`, "game at pingpong", "the dice make a game at the table (if not, rules.ts draws in another order now)");
+  const name = (id: string): string => (id === "ada" ? "Ada" : "Bo");
+  for (const [who, other] of [[name(m.a), name(m.b)], [name(m.b), name(m.a)]] as const) {
+    await page.waitForFunction(
+      ({ who, where }) => {
+        const b = document.querySelector(`[data-floor-orb="${who}"]`);
+        return b?.getAttribute("data-at") === where && b?.getAttribute("data-arrived") === "true";
+      },
+      { who, where: `meet:pingpong:${other}` },
+      { timeout: 60_000 },
+    );
+  }
+  // the table plays a rally for two at its ends, whether a break took them there or the home's game
+  await page.locator(".orbs-floor-ball").waitFor({ state: "attached", timeout: 10_000 });
+});

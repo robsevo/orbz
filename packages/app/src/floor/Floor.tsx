@@ -249,10 +249,11 @@ export function Floor({ home, office, moods, person, go }: { home: Office | null
       s.i = 1;
       s.arrived = false;
     }
-    // where it is headed, said plainly on the page (desk:build0, meeting:2, poi:coffee, visit:Pip)
+    // where it is headed, said plainly on the page (desk:build0, meeting:2, poi:coffee, visit:Pip), and the spot it holds,
+    // a break's or a game the home decided (ping1, ping2): the table rallies for either
     const desk = live.current.desks.get(s.c.name);
     const where = plan.kind === "desk" ? (desk ? `desk:${desk.zone}${desk.n}` : "desk:none") : plan.kind === "meeting" ? `meeting:${plan.seat}` : plan.kind === "poi" ? `poi:${plan.poi}` : plan.kind === "meet" ? `meet:${plan.place}:${plan.with}` : `visit:${plan.who}`;
-    setShown((m) => ({ ...m, [s.c.name]: { label: plan.label, mark: plan.mark, kind: plan.kind, arrived: s.arrived, at: where, ...(plan.kind === "poi" && { poi: plan.poi }) } }));
+    setShown((m) => ({ ...m, [s.c.name]: { label: plan.label, mark: plan.mark, kind: plan.kind, arrived: s.arrived, at: where, ...(s.hold.poi && { poi: s.hold.poi }) } }));
   };
 
   // the orbs come and go with the office

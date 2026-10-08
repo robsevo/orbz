@@ -12,8 +12,11 @@
 // name and your company's, you are its Founder, and the orb who woke up is the one you make your CEO. Once it is made,
 // your CEO shows you round (the TOUR, skippable) and asks you to hire your personal assistant.
 import type { Character } from "../orb/spec.ts";
+import type { Budget } from "../ui/budget.ts";
 
-export type Person = { name: string; since: number; company?: string | null };
+/** You, as the home keeps you ("about you"): your name, since when, your company's name, and what it can spend (PLAN
+ * 5.20; null or missing, never said). */
+export type Person = { name: string; since: number; company?: string | null; budget?: Budget | null };
 
 /** Who tells it: your first orb, before you have made him (a plain bean, no name yet). */
 export const NEWBORN: Character = {
@@ -29,6 +32,8 @@ export type Beat =
   | { kind: "ask-name" }
   | { kind: "ask-company" }
   | { kind: "founder" }
+  /** what the company can spend (PLAN 5.20; owner, 10-08: "ask how much they are willing to spend on infrastructure") */
+  | { kind: "ask-budget" }
   | { kind: "brains" }
   /** a stop on the tour: a room, what it is for */
   | { kind: "tour"; room: "home" | "office" | "sessions" | "recruiter" | "org"; title: string; text: string }
@@ -45,6 +50,10 @@ export const STORY: readonly Beat[] = [
   { kind: "ask-company" },
   { kind: "founder" },
   { kind: "say", who: "new", text: "Congratulations, {name}. You're the Founder of {company}." },
+  // what it can spend (owner, 10-08: "we have to keep in mind that the user may not have any money to start with. so ask
+  // how much they are willing to spend on infrastructure etc.")
+  { kind: "say", who: "new", text: "Plenty of startups begin with no money at all, and that's fine: we'll look for ways to earn that start free." },
+  { kind: "ask-budget" },
   { kind: "say", who: "new", text: "Every startup starts with two: a CEO to run the company, and a personal assistant to keep your day. The rest you hire as you grow, each department with its head." },
   // the brains (owner, 10-02: "after asking name and showing CEO badge, ask user to sign into chatgpt and input gemini
   // api key and if they want to add a local coder, then go to create orb screen")
@@ -76,12 +85,14 @@ export function storyFor(names: readonly string[]): Beat[] {
 /** A line with the person, and their company, in it. */
 export const line = (text: string, p: Pick<Person, "name" | "company"> | null): string => text.replaceAll("{name}", p?.name ?? "boss").replaceAll("{company}", p?.company ?? "your company");
 
-/** The first beat a skip lands on: your name, then your company's, if we have them not yet, else the brains (setting
- * up, not story: skipping the story never skips choosing what he thinks with), else the hire (the tour's skip). */
-export function skipTo(person: Pick<Person, "name" | "company"> | null, story: readonly Beat[] = STORY): number {
+/** The first beat a skip lands on: your name, then your company's, then what it can spend, if we have them not yet, else
+ * the brains (setting up, not story: skipping the story never skips choosing what he thinks with), else the hire (the
+ * tour's skip). */
+export function skipTo(person: Pick<Person, "name" | "company" | "budget"> | null, story: readonly Beat[] = STORY): number {
   const at = (k: Beat["kind"]): number => story.findIndex((b) => b.kind === k);
   if (!person && at("ask-name") >= 0) return at("ask-name");
   if (!person?.company && at("ask-company") >= 0) return at("ask-company");
+  if (!person?.budget && at("ask-budget") >= 0) return at("ask-budget");
   const brains = at("brains");
   return brains >= 0 ? brains : at("hire");
 }

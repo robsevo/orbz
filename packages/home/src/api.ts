@@ -809,10 +809,11 @@ async function handle(
   if (method === "GET" && url.pathname === "/me") return { me: home.about.get() };
   if (method === "PUT" && url.pathname === "/me") {
     try {
-      // your name, your company's name (owner, 10-07), or both
+      // your name, your company's name (owner, 10-07), what it can spend (PLAN 5.20, owner 10-08), or any of them
       const b = await body(req);
       if (typeof b.company === "string") home.about.setCompany(b.company);
-      return { me: typeof b.name === "string" || b.company === undefined ? home.about.setName(text(b, "name")) : home.about.get() };
+      if (b.budget !== undefined) home.about.setBudget(b.budget);
+      return { me: typeof b.name === "string" || (b.company === undefined && b.budget === undefined) ? home.about.setName(text(b, "name")) : home.about.get() };
     } catch (e) {
       throw new HttpError(400, e instanceof Error ? e.message : String(e));
     }

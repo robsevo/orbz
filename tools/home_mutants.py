@@ -1326,6 +1326,37 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("a run that failed counts as a job done", "src/report.ts", [
         ('        if (orb && e.data.outcome === "ok") jobs.set(', "        if (orb) jobs.set("),
     ], ["report.test.ts"]),
+    # ideas that fit what the company can spend (PLAN 5.20; owner, 10-08: "the user may not have any money to start with")
+    ("a pitch is not told what the company can spend", "src/report.ts", [
+        ("    `${budgetLine(o.budget, o)} ${free ?", "    `${free ?"),
+    ], ["report.test.ts"]),
+    ("an idea that costs more than the company can spend is kept", "src/report.ts", [
+        ("  if (start > cap.start || month > cap.month) return", "  if (false) return"),
+    ], ["report.test.ts"]),
+    ("an idea that does not say what it costs is kept", "src/report.ts", [
+        ('  if (start === null || month === null) return "does not say what it costs";', "  if (start === null || month === null) return null;"),
+    ], ["report.test.ts"]),
+    ("an idea that does not fit is never asked again", "src/report.ts", [
+        ("          const again = readPitch(await this.#o.ask(o.id, ", "          const again = null && readPitch(await this.#o.ask(o.id, "),
+    ], ["report.test.ts"]),
+    ("a cost a month is read as a cost to start", "src/report.ts", [
+        ("monthly\\b|\\/m\\b|pm\\b)/.test(after)) month ??= Math.round(top);", "monthly\\b|\\/m\\b|pm\\b)/.test(after)) start ??= Math.round(top);"),
+    ], ["report.test.ts"]),
+    ("a cost per sale counts against the budget", "src/report.ts", [
+        ("(?:sale|order|transaction|user|customer|signup|booking)s?\\b/.test(after)) continue;", "(?:sale|order|transaction|user|customer|signup|booking)s?\\b/.test(after)) void 0;"),
+    ], ["report.test.ts"]),
+    ("the orbs never hear what the company can spend", "src/company.ts", [
+        ("  lines.push(`${budgetLine(o.budget ?? null", "  if (false) lines.push(`${budgetLine(o.budget ?? null"),
+    ], ["company.test.ts"]),
+    ("the budget is never kept", "src/about.ts", [
+        ("    this.#db.prepare(\"INSERT INTO about (key, value, updated_at) VALUES ('budget', ?, ?)", "    if (false) this.#db.prepare(\"INSERT INTO about (key, value, updated_at) VALUES ('budget', ?, ?)"),
+    ], ["report.test.ts", "company.test.ts"]),
+    ("a budget below nothing is kept", "src/about.ts", [
+        ('      if (typeof v !== "number" || !Number.isFinite(v) || v < 0) throw', '      if (false) throw'),
+    ], ["report.test.ts"]),
+    ("the door ignores a budget", "src/api.ts", [
+        ("      if (b.budget !== undefined) home.about.setBudget(b.budget);\n", ""),
+    ], ["report.test.ts"]),
     # the company's board (owner, 10-07): odd, its officers by their posts, everyone's election, proposals voted
     ("the board has an even number of seats", "src/boardroom.ts", [
         ("  const odd = orbs % 2 ? orbs : orbs - 1;", "  const odd = orbs;"),
@@ -2034,6 +2065,40 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("the report's notice does not open it", "src/rooms/Notices.tsx", [
         ('onClick={() => o.go({ room: "report" })}', "onClick={() => undefined}"),
     ], ["report-view.test.ts"]),
+    # what the company can spend, in the app (PLAN 5.20; owner, 10-08): asked, kept, changed on the report and in Settings
+    ("the first open never asks what the company can spend", "src/onboarding/story.ts", [
+        ('  { kind: "ask-budget" },\n', ""),
+    ], ["onboarding.test.ts"]),
+    ("a skip skips what the company can spend", "src/onboarding/story.ts", [
+        ('  if (!person?.budget && at("ask-budget") >= 0) return at("ask-budget");\n', ""),
+    ], ["onboarding.test.ts"]),
+    ("the first open's budget never reaches the home", "src/home/link.ts", [
+        ("...(p.company && { company: p.company }), ...(p.budget && { budget: p.budget }) })", "...(p.company && { company: p.company }) })"),
+    ], ["link.test.ts"]),
+    ("the report never asks what the company can spend", "src/rooms/Report.tsx", [
+        ("      {person && (!budget || choosing ? (", "      {person && budget && (choosing ? ("),
+    ], ["report-view.test.ts"]),
+    ("the report asks even once you have said", "src/rooms/Report.tsx", [
+        ("      {person && (!budget || choosing ? (", "      {person && (true ? ("),
+    ], ["report-view.test.ts"]),
+    ("Change does nothing", "src/rooms/Report.tsx", [
+        ("<button data-budget-change onClick={() => setChoosing(true)}", "<button data-budget-change onClick={() => undefined}"),
+    ], ["report-view.test.ts"]),
+    ("a budget chosen on the report is not kept", "src/rooms/Report.tsx", [
+        ("    if (person) keep({ ...person, budget: b });\n", ""),
+    ], ["report-view.test.ts"]),
+    ("your own amounts are never kept", "src/ui/Budget.tsx", [
+        ('    setWhy("");\n    onPick(r.budget);\n', '    setWhy("");\n'),
+    ], ["report-view.test.ts"]),
+    ("Settings' budget does nothing", "src/rooms/Settings.tsx", [
+        ("onPick={(b) => o.rename({ ...o.person!, budget: b })}", "onPick={() => undefined}"),
+    ], ["report-view.test.ts"]),
+    ("an idea's costs are not shown", "src/rooms/Report.tsx", [
+        ("                      {x.start !== undefined && <><span style={factHead}>Costs</span>", "                      {false && <><span style={factHead}>Costs</span>"),
+    ], ["report-view.test.ts"]),
+    ("the ideas left out are not counted on the page", "src/rooms/Report.tsx", [
+        ("            {r.left ? (", "            {false ? ("),
+    ], ["report-view.test.ts"]),
     ("an idea's verdict is never sent", "src/rooms/Report.tsx", [
         ("const judge = (id: string, verdict: \"approve\" | \"pass\"): void => void home.judgeIdea(id, verdict)", "const judge = (id: string, verdict: \"approve\" | \"pass\"): void => void Promise.resolve(id + verdict)"),
     ], ["report-view.test.ts"]),
@@ -2551,6 +2616,9 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ], ['social-view.test.ts']),
     ("the floor ignores the home's meetings", 'src/floor/Floor.tsx', [
         ('    if (meet) {\n      s.mood = mood;', '    if (false && meet) {\n      s.mood = mood;'),
+    ], ['social-view.test.ts']),
+    ("a ping-pong game the home decided has no ball", 'src/floor/Floor.tsx', [
+        ('at: where, ...(s.hold.poi && { poi: s.hold.poi }) } }));', 'at: where, ...(plan.kind === "poi" && { poi: plan.poi }) } }));'),
     ], ['social-view.test.ts']),
     ('Keep it does nothing', 'src/rooms/Notices.tsx', [
         ('<button data-sound="pick" onClick={() => lesson(n, true)}', '<button data-sound="pick" onClick={() => undefined}'),

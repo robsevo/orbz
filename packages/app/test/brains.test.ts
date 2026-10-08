@@ -142,6 +142,9 @@ test("the first open asks what he thinks with: a Gemini key kept there, then you
   await page.getByRole("textbox", { name: "Your company's name" }).fill("Acme Orbs");
   await page.keyboard.press("Enter");
   await page.getByRole("button", { name: "Skip the story" }).click();
+  // what it can spend (PLAN 5.20, owner 10-08): a skip still asks
+  await page.getByRole("button", { name: "Nothing yet" }).click();
+  await page.getByRole("button", { name: "Skip the story" }).click();
   const step = page.locator("[data-brains-step]");
   await step.getByLabel("Your Gemini key", { exact: true }).fill(KEY);
   await step.getByRole("button", { name: "Keep" }).first().click();

@@ -71,6 +71,9 @@ test("the pairing link opens the app on the home: your name and your first orb a
   await page.getByRole("textbox", { name: "Your company's name" }).fill("Acme Orbs");
   await page.keyboard.press("Enter");
   await page.getByRole("button", { name: "Skip the story" }).click();
+  // what it can spend (PLAN 5.20, owner 10-08): a skip still asks
+  await page.getByRole("button", { name: "A little" }).click();
+  await page.getByRole("button", { name: "Skip the story" }).click();
   assert.deepEqual(home.inbox.orbs(), [], "a fresh home's office is empty: the first orb is the one you make");
   // the brains, on a real home: what he can think with, none of it required
   const step = page.locator("[data-brains-step]");
@@ -81,6 +84,8 @@ test("the pairing link opens the app on the home: your name and your first orb a
   await page.getByRole("button", { name: "Make me" }).click();
   await page.getByText("Founder Robin").waitFor();
   assert.equal(home.about.get().name, "Robin", "the home keeps what the office calls you");
+  for (let i = 0; i < 50 && !home.about.get().budget; i++) await new Promise((r) => setTimeout(r, 50));
+  assert.deepEqual(home.about.get().budget, { start: 50, month: 20 }, "and what the company can spend, as you chose it");
 
   // your first orb, your CEO (owner, 10-07), who then shows you round: skipped, it ends on making your assistant
   await page.getByRole("textbox", { name: "Name" }).fill("Pip");

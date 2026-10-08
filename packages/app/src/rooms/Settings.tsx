@@ -9,6 +9,7 @@ import { applyTheme, savedTheme } from "../ui/theme.ts";
 import { baseOf, HUES, SURFACES, THEMES, type ThemeId } from "../design/tokens.ts";
 import { hex } from "../design/color.ts";
 import { checkName, type Person } from "../onboarding/story.ts";
+import { BudgetChoice } from "../ui/Budget.tsx";
 import type { Office, ProjectsState } from "../home/link.ts";
 import { Devices } from "./Devices.tsx";
 import { Brains } from "./Brains.tsx";
@@ -93,7 +94,7 @@ export function Settings(o: {
   const save = (): void => {
     const r = checkName(draft);
     if (!r.ok) return setSaid({ ok: false, text: r.why });
-    o.rename({ name: r.name, since: o.person?.since ?? Date.now() });
+    o.rename({ ...o.person, name: r.name, since: o.person?.since ?? Date.now() }); // your company and its budget kept
     setSaid({ ok: true, text: `The office calls you ${r.name} now.` });
   };
   return (
@@ -117,6 +118,15 @@ export function Settings(o: {
           Play the opening story again
         </button>
       </Panel>
+      {o.person && (
+        // what the company can spend (PLAN 5.20; owner, 10-08: "Lets be able to change the budget as well")
+        <Panel title="Budget">
+          <span style={{ font: "400 14px/20px var(--font)", color: "var(--text-2)", textWrap: "pretty" }}>
+            {`What ${o.person.company ?? "your company"} can spend, to start and each month, on hosting, tools and ads. The board's ideas to make money fit it, and every orb keeps to it.${o.person.budget ? "" : " Not said yet, so it is taken as nothing."}`}
+          </span>
+          <BudgetChoice value={o.person.budget ?? null} onPick={(b) => o.rename({ ...o.person!, budget: b })} />
+        </Panel>
+      )}
       <Panel title="Theme">
         <Balanced min={118} gap={8}>
           {([null, ...(Object.keys(THEMES) as ThemeId[])] as (ThemeId | null)[]).map((t) => (

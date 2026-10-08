@@ -4,6 +4,11 @@
 // comes from too as well(which orb in the office, so they get xp if we approve it)"): `#/report`. The ideas first, each
 // with the orb whose idea it is and what approving it gives that orb; then who to hire today (ranked by fit, orb/fit.ts,
 // as the Recruiter ranks them), the people, the office, the world and the money. Earlier days a press away.
+//
+// Since 10-08 (PLAN 5.20; owner: "we have to keep in mind that the user may not have any money to start with. so ask how
+// much they are willing to spend on infrastructure etc."; "Lets be able to change the budget as well"): the page asks
+// what the company can spend until you have said, says what the ideas fit after, with Change; each idea says who pays,
+// what it costs and the first step, and the report says how many were left out for costing more.
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { Orb } from "../orb/Orb.tsx";
 import { applicant, SPECIALTIES, type Character } from "../orb/spec.ts";
@@ -11,6 +16,9 @@ import { fitOf, ranked } from "../orb/fit.ts";
 import { idOf, type Office, type RecruiterState, type Report } from "../home/link.ts";
 import { Balanced, OneLine } from "../ui/Balanced.tsx";
 import type { Route } from "../ui/nav.ts";
+import type { Person } from "../onboarding/story.ts";
+import { BudgetChoice } from "../ui/Budget.tsx";
+import { budgetWords, costWords, type Budget } from "../ui/budget.ts";
 
 /** What an approved idea gives its orb (the home's gym/xp.ts XP.ideaApproved; test/report-view.test.ts holds them alike). */
 export const IDEA_XP = 30;
@@ -20,11 +28,14 @@ const small: CSSProperties = { font: "500 13px/18px var(--font)", color: "var(--
 const panel: CSSProperties = { display: "grid", gap: 10, alignContent: "start", padding: "var(--s4)", borderRadius: 18, background: "var(--fill)", boxShadow: "inset 0 0 0 1px var(--hairline)", minWidth: 0, height: "100%" };
 const button: CSSProperties = { font: "700 13px/18px var(--font)", color: "var(--text-1)", background: "var(--card)", border: 0, borderRadius: 10, padding: "7px 12px", cursor: "pointer", boxShadow: "inset 0 0 0 1px var(--hairline)" };
 const dayWords = (r: Report): string => new Date(r.at).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+const fact: CSSProperties = { font: "500 14px/20px var(--font)", color: "var(--text-2)", textWrap: "pretty", overflowWrap: "anywhere" };
+const factHead: CSSProperties = { font: "700 11px/20px var(--font)", letterSpacing: ".08em", textTransform: "uppercase", color: "var(--text-3)", whiteSpace: "nowrap" };
 const usd = (n: number): string => (n === 0 ? "nothing" : n < 0.01 ? "under a cent" : `$${n.toFixed(2)}`);
 type Kind = keyof typeof SPECIALTIES;
 
-export function ReportRoom({ home, office, go }: { home: Office | null; office: Character[]; go: (r: Route) => void }) {
+export function ReportRoom({ home, office, go, person, keep }: { home: Office | null; office: Character[]; go: (r: Route) => void; person: Person | null; keep: (p: Person) => void }) {
   const [reports, setReports] = useState<Report[] | null>(null);
+  const [choosing, setChoosing] = useState(false); // Change, pressed: the budget's choices again
   const [hiring, setHiring] = useState<RecruiterState | null>(null);
   const [at, setAt] = useState(0); // which report, newest first
   const [said, setSaid] = useState<string | null>(null);
@@ -52,6 +63,13 @@ export function ReportRoom({ home, office, go }: { home: Office | null; office: 
     </button>
   );
   const judge = (id: string, verdict: "approve" | "pass"): void => void home.judgeIdea(id, verdict).catch((e: Error) => setSaid(e.message));
+  // what the company can spend: asked until you have said (the board takes it as nothing till then), then a line
+  const budget = person?.budget ?? null;
+  const pick = (b: Budget): void => {
+    if (person) keep({ ...person, budget: b });
+    setChoosing(false);
+  };
+  const company = person?.company ?? "your company";
   const who = (orb: string | null, name: string, size = 30): ReactNode => {
     const c = face(orb);
     return c ? <Orb character={c} size={size} poke={false} still /> : <span aria-hidden style={{ width: size, height: size, borderRadius: "50%", background: "var(--card)" }} title={name} />;
@@ -73,6 +91,19 @@ export function ReportRoom({ home, office, go }: { home: Office | null; office: 
         {askButton}
       </div>
       {said && <p role="alert" style={{ ...small, margin: 0, color: "var(--alert)" }}>{said}</p>}
+      {person && (!budget || choosing ? (
+        <section aria-label="What the company can spend" data-report-budget={budget ? "change" : "ask"} style={{ ...panel, height: "auto" }}>
+          <span style={head}>Budget</span>
+          <span style={{ font: "700 16px/22px var(--font)", color: "var(--text-1)", textWrap: "balance" }}>{`What can ${company} spend, for hosting, tools and ads?`}</span>
+          {!budget && <span style={small}>The board's ideas to make money fit what you say. Until you say, it takes it as nothing, and every idea starts free.</span>}
+          <BudgetChoice value={budget} onPick={pick} />
+        </section>
+      ) : (
+        <div data-report-budget="fits" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "4px 10px", minWidth: 0 }}>
+          <span style={{ ...small, color: "var(--text-2)" }}>{`The board's ideas fit what ${company} can spend: ${budgetWords(budget)}.`}</span>
+          <button data-budget-change onClick={() => setChoosing(true)} style={{ ...button, padding: "4px 10px" }}>Change</button>
+        </div>
+      ))}
       {reports.length > 1 && (
         <OneLine style={{ justifyContent: "flex-start" }} gap={6}>
           {reports.map((x, i) => (
@@ -90,7 +121,7 @@ export function ReportRoom({ home, office, go }: { home: Office | null; office: 
           {/* the ideas, each an orb's: approving one gives that orb XP */}
           <section aria-label="Ideas to make money" data-report-ideas style={{ ...panel, height: "auto" }}>
             <span style={head}>Ideas to make money</span>
-            {!r.ideas.length && <span style={small}>No ideas today: no brain answered the board. They come again tomorrow.</span>}
+            {!r.ideas.length && !r.left && <span style={small}>No ideas today: no brain answered the board. They come again tomorrow.</span>}
             {r.ideas.map((x) => (
               <article key={x.id} data-idea={x.id} data-idea-by={x.orb} data-verdict={x.verdict ?? "open"} data-orb={face(x.orb)?.hue}
                 style={{ display: "grid", gridTemplateColumns: "auto minmax(0, 1fr)", gap: "6px 12px", alignItems: "start", padding: "12px", borderRadius: 14, background: "var(--card)", boxShadow: x.verdict === "approved" ? "inset 0 0 0 1.5px var(--accent)" : "inset 0 0 0 1px var(--hairline)" }}>
@@ -101,6 +132,14 @@ export function ReportRoom({ home, office, go }: { home: Office | null; office: 
                     <span style={{ fontWeight: 600, color: "var(--text-3)" }}>{face(x.orb) ? ` · ${SPECIALTIES[face(x.orb)!.specialty].title}` : ""}</span>
                   </span>
                   <span style={{ font: "500 15px/21px var(--font)", color: "var(--text-1)", textWrap: "pretty" }}>{x.text}</span>
+                  {/* who pays, what it costs and the first step (since 10-08): a label beside each, never in its line */}
+                  {(x.who || x.start !== undefined || x.first) && (
+                    <span data-idea-facts style={{ display: "grid", gridTemplateColumns: "auto minmax(0, 1fr)", gap: "2px 10px", alignItems: "start" }}>
+                      {x.who && <><span style={factHead}>Who pays</span><span data-idea-who style={fact}>{x.who}</span></>}
+                      {x.start !== undefined && <><span style={factHead}>Costs</span><span data-idea-costs style={fact}>{costWords(x.start, x.month ?? 0)}</span></>}
+                      {x.first && <><span style={factHead}>First step</span><span data-idea-first style={fact}>{x.first}</span></>}
+                    </span>
+                  )}
                   <span style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
                     {x.verdict === null ? (
                       <>
@@ -118,6 +157,11 @@ export function ReportRoom({ home, office, go }: { home: Office | null; office: 
                 </span>
               </article>
             ))}
+            {r.left ? (
+              <span data-report-left style={small}>
+                {r.left === 1 ? "1 idea was left out: it cost more than you can spend, or did not say what it costs." : `${r.left} ideas were left out: they cost more than you can spend, or did not say what they cost.`}
+              </span>
+            ) : null}
           </section>
 
           <Balanced min={300} gap={12}>

@@ -451,7 +451,7 @@ export class Home {
           company: (orb) => {
             const me = this.inbox.orb(orb);
             const you = this.about.get();
-            return me ? companyLine({ me, founder: you.name, company: you.company, office: this.inbox.orbs(), decisions: this.boardroom.decisions(), ideas: this.reports.approved() }) : null;
+            return me ? companyLine({ me, founder: you.name, company: you.company, budget: you.budget, office: this.inbox.orbs(), decisions: this.boardroom.decisions(), ideas: this.reports.approved() }) : null;
           },
           searchKey: () => this.brains.searchKey(),
           remind: (orb, conversation, r) => {
@@ -570,12 +570,13 @@ export class Home {
       board: () => this.boardroom.seats(),
       company: () => this.about.get().company,
       founder: () => this.about.get().name,
-      // an idea on the cheapest brain, as a vote is, its cost recorded as the report's
+      budget: () => this.about.get().budget,
+      // an idea on the cheapest brain, as a vote is, its cost recorded as the report's (four short lines, PLAN 5.20)
       ask: async (orb, prompt) => {
         const ep = this.lightBrain();
         if (!ep) return null;
         this.spend.check();
-        const r = await chat(ep, [{ role: "user", content: prompt }], { maxTokens: 160 });
+        const r = await chat(ep, [{ role: "user", content: prompt }], { maxTokens: 320 });
         this.spend.record({ tier: "big", model: ep.model, costUsd: r.costUsd, costSource: r.costSource, promptTokens: r.promptTokens, completionTokens: r.completionTokens, orb, turn: "report" });
         return r.text;
       },

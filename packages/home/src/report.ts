@@ -5,7 +5,12 @@
 //
 // Once a day, from 08:00, the board's Chair (the CEO) sends you one report:
 //   - ideas to make money, each from a named orb, asked of the cheapest brain; a few orbs a day, in turn, so everyone
-//     is asked; one you approve gives its orb XP (gym/xp.ts hears `report.idea_approved`), and the orbs hear it;
+//     is asked; one you approve gives its orb XP (gym/xp.ts hears `report.idea_approved`), and the orbs hear it. Since
+//     10-08 (PLAN 5.20; owner: "we have to keep in mind that the user may not have any money to start with. so ask how
+//     much they are willing to spend on infrastructure etc."), each pitch is told what the company can spend (never
+//     said is nothing), who is in the office and the ideas approved and passed, and comes in four lines (the idea, who
+//     pays, what it costs, the first step); its costs are read by code, and one that costs more than the company can
+//     spend, or does not say, is asked again once, then left out (the report says how many);
 //   - the world: what the reading library (PLAN 3.12) brought in since the last report, each with the orb who follows it;
 //   - the office: who joined and left, promotions, the board's elections and decisions, friendships, habits learned,
 //     the jobs each finished, by code from the log;
@@ -14,6 +19,7 @@
 //   - hiring: today's applicants and who is applying again, for the app to rank by fit (orb/fit.ts);
 //   - money: what the brain cost yesterday and this week, and the bills coming up, kept by the CFO.
 // Kept as events (report.*), so the log replays to the same reports. The office's own news is never asked of a model.
+import { budgetLine, dollars, type Budget } from "./about.ts";
 import type { Clock } from "./clock.ts";
 import type { EventLog, HomeEvent } from "./events.ts";
 
@@ -23,7 +29,12 @@ export const REPORT_HOUR = 8;
 /** How many orbs are asked for an idea each day. */
 export const PITCHERS = 3;
 
-export type Idea = { id: string; orb: string; name: string; text: string; verdict: "approved" | "passed" | null };
+/** An idea: its orb's, in its words; who pays, what it costs (whole dollars, inside the budget), the first step. A report
+ * from before 10-08 has the words alone. */
+export type Idea = {
+  id: string; orb: string; name: string; text: string; verdict: "approved" | "passed" | null;
+  who?: string | null; start?: number; month?: number; first?: string | null;
+};
 export type NewsItem = { title: string; url: string; host: string; orb: string; name: string };
 export type OfficeItem = { text: string; orb: string | null };
 export type PersonNote = { orb: string; name: string; why: string };
@@ -31,6 +42,8 @@ export type Report = {
   id: number; at: number; day: string;
   chair: { orb: string; name: string } | null;
   ideas: Idea[];
+  /** Pitches left out: they cost more than the company can spend, or did not say what they cost (none before 10-08). */
+  left?: number;
   world: NewsItem[];
   office: OfficeItem[];
   people: { well: PersonNote[]; fit: PersonNote[] };
@@ -47,6 +60,8 @@ export type ReportOptions = {
   board: () => { orb: string; name: string; post: string }[];
   company: () => string | null;
   founder: () => string | null;
+  /** What the company can spend (about.ts); null, never said: nothing. */
+  budget: () => Budget | null;
   /** One orb's idea, asked of the cheapest brain; null when no brain answers. */
   ask: (orb: string, prompt: string) => Promise<string | null>;
   /** What the reading library brought in after `since`, newest first. */
@@ -76,6 +91,85 @@ export function readIdea(text: string | null): string | null {
   const t = (text ?? "").replace(/\s+/g, " ").replace(/^(idea|my idea|pitch)\s*[:\-–]\s*/i, "").replace(/^["“]|["”]$/g, "").trim();
   if (t.length < 12) return null;
   return t.length > 400 ? `${t.slice(0, 399).replace(/\s+\S*$/, "")}…` : t;
+}
+
+/** What a pitch says it costs: whole dollars to start and each month, null where it does not say. */
+export type Costs = { start: number | null; month: number | null };
+/** A pitch as read by code: the idea, who pays, what it costs, the first step. */
+export type Pitch = { text: string; who: string | null; costs: Costs; first: string | null };
+
+/** What a pitch's Costs line says, by code: the first amount it gives to start and the first it gives a month. "Free"
+ * and "nothing" are $0; an amount a year is paid at the start; one per sale comes out of what it earns, so it is no
+ * cost here; a range, its top. Said for one and not the other, the other is nothing; for neither, both unknown. */
+export function costsOf(raw: string | null): Costs {
+  if (!raw) return { start: null, month: null };
+  const s = ` ${raw.toLowerCase()} `.replace(/(\d),(?=\d{3}\b)/g, "$1").replace(/\b(free|nothing|none|zero|no cost|no money)\b/g, "$$0");
+  let start: number | null = null;
+  let month: number | null = null;
+  for (const m of s.matchAll(/\$\s?(\d+(?:\.\d+)?)\s*(k\b)?(?:\s*(?:-|–|to)\s*\$?\s?(\d+(?:\.\d+)?)\s*(k\b)?)?/g)) {
+    const top = Number(m[3] ?? m[1]) * ((m[3] ? m[4] : m[2]) ? 1000 : 1);
+    const after = s.slice(m.index + m[0].length, m.index + m[0].length + 24);
+    if (/^\s*(?:\/\s*|a |an |per |each |every )?(?:sale|order|transaction|user|customer|signup|booking)s?\b/.test(after)) continue;
+    if (/^\s*(?:\/\s*(?:mo|month)\b|(?:a|per|each|every) month\b|monthly\b|\/m\b|pm\b)/.test(after)) month ??= Math.round(top);
+    else start ??= Math.round(top); // to start, up front, once, a year (paid at the start), or said plainly
+  }
+  return start === null && month === null ? { start: null, month: null } : { start: start ?? 0, month: month ?? 0 };
+}
+
+const LABEL = /^(idea|who pays|costs?|first step)\s*[:\-–—]\s*(.*)$/i;
+
+/** A pitch read by code: the four lines asked for (Idea, Who pays, Costs, First step), each running on until the next;
+ * from a brain that did not keep to them, the whole answer as the idea and its costs unknown. Null: no idea in it. */
+export function readPitch(raw: string | null): Pitch | null {
+  const parts: Record<string, string[]> = {};
+  const loose: string[] = [];
+  let at: string | null = null;
+  for (const line of (raw ?? "").split(/\r?\n/)) {
+    const l = line.replace(/\*\*|__/g, "").replace(/^\s*(?:[-*•]|\d+[.)])\s+/, "").trim();
+    if (!l) continue;
+    const m = LABEL.exec(l);
+    if (m) (parts[(at = m[1]!.toLowerCase().replace(/^cost$/, "costs"))] ??= []).push(m[2]!);
+    else (at ? parts[at]! : loose).push(l);
+  }
+  const text = readIdea((parts.idea ?? loose).join(" "));
+  if (!text) return null;
+  const said = (k: string): string | null => {
+    const s = (parts[k] ?? []).join(" ").replace(/\s+/g, " ").trim();
+    return !s ? null : s.length > 200 ? `${s.slice(0, 199).replace(/\s+\S*$/, "")}…` : s;
+  };
+  return { text, who: said("who pays"), costs: costsOf(parts.costs ? parts.costs.join(" ") : null), first: said("first step") };
+}
+
+/** Why a pitch cannot be kept as it is: it does not say what it costs, or costs more than the company can spend (never
+ * said: nothing); null, it fits. */
+export function overBy(p: Pitch, budget: Budget | null): string | null {
+  const cap = budget ?? { start: 0, month: 0 };
+  const { start, month } = p.costs;
+  if (start === null || month === null) return "does not say what it costs";
+  if (start > cap.start || month > cap.month) return `costs ${dollars(start)} to start and ${dollars(month)} a month, more than the company can spend`;
+  return null;
+}
+
+/** Each kind of work in words, for a pitch: an officer by its post, anyone else by its kind of work. */
+const WORDS: Record<string, string> = { ceo: "CEO", cfo: "CFO", coo: "COO", cto: "CTO", cmo: "CMO", chiefofstaff: "Chief of Staff", assistant: "personal assistant", qa: "QA", ai: "AI", factcheck: "fact-checking", fundamentals: "stocks and crypto analysis" };
+const kindWords = (specialty: string): string => WORDS[specialty] ?? specialty;
+
+/** What one orb is asked for its idea (PLAN 5.18, 5.20): what the company can spend and what that asks of an idea, who
+ * is in the office, the ideas you approved and passed, and the four lines a pitch comes in. */
+export function pitchPrompt(o: { company: string; founder: string; me: ReportOrb; office: readonly ReportOrb[]; budget: Budget | null; approved: readonly string[]; passed: readonly string[] }): string {
+  const free = !o.budget || (o.budget.start === 0 && o.budget.month === 0);
+  return [
+    `You work at ${o.company}, an Orb startup its Founder ${o.founder} runs; your part in it: ${kindWords(o.me.specialty)}. The board's report today asks a few colleagues for one idea each to make the company money.`,
+    `${budgetLine(o.budget, o)} ${free ? "The idea has to start free: free tools and free tiers only, and the office's own work; it earns before it buys anything." : "The idea has to fit inside that, and costing less is better."}`,
+    `The office: ${o.office.map((w) => `${w.name} (${kindWords(w.specialty)})`).join(", ")}. Pitch work these orbs can do.`,
+    o.approved.length ? `${o.founder} approved these already, and the office works toward them: ${o.approved.map((x) => `"${x}"`).join("; ")}.` : "",
+    o.passed.length ? `${o.founder} passed these, so never pitch them again: ${o.passed.map((x) => `"${x}"`).join("; ")}.` : "",
+    "Give the one idea you think is best, from what your work knows: something the office can start this week. Answer in these four lines, plain words, nothing before or after:",
+    "Idea: what to do, in one or two sentences.",
+    "Who pays: who pays for it, and about how much.",
+    "Costs: $_ to start, $_ a month, before it earns anything.",
+    "First step: what the office does first, this week.",
+  ].filter(Boolean).join("\n");
 }
 
 /** Who pitches today: the orbs asked longest ago first (never asked, first of all), then the board's, then the first
@@ -217,20 +311,38 @@ export class BoardReports {
     const company = this.#o.company() ?? "the company";
     const founder = this.#o.founder() ?? "the Founder";
 
-    // ideas to make money, a few orbs a day, in turn
+    // ideas to make money, a few orbs a day, in turn: each told what the company can spend, who is in the office, and
+    // what you approved and passed lately
     const asked = new Map<string, number>();
     for (const e of this.#events.ofType("report.asked")) asked.set(String(e.orb), e.at);
+    const budget = this.#o.budget();
+    const lately = this.list(30).flatMap((r) => r.ideas);
+    const approved = lately.filter((x) => x.verdict === "approved").slice(0, 5).map((x) => x.text);
+    const passed = lately.filter((x) => x.verdict === "passed").slice(0, 5).map((x) => x.text);
     const ideas: Omit<Idea, "id" | "verdict">[] = [];
+    let left = 0;
     for (const o of pitchers(office, board.map((s) => s.orb), (id) => asked.get(id) ?? 0)) {
       this.#events.append("report.asked", {}, { orb: o.id });
-      const prompt = `You work at ${company}, an Orb startup its Founder ${founder} runs, as its ${o.specialty === "assistant" ? "personal assistant" : o.specialty}. The board's report today asks a few colleagues for one idea each to make the company money. Give the one idea you think is best, from what your work knows: what to do, and why it would pay. Two sentences, plain words, no preamble.`;
-      let text: string | null = null;
+      const prompt = pitchPrompt({ company, founder, me: o, office, budget, approved, passed });
+      let kept: Pitch | null = null;
       try {
-        text = readIdea(await this.#o.ask(o.id, prompt));
+        const first = readPitch(await this.#o.ask(o.id, prompt));
+        const why = first && overBy(first, budget);
+        if (first && !why) kept = first;
+        else if (first && why) {
+          // asked again, once: an idea the company cannot pay for, or one that does not say, is no use to you
+          const again = readPitch(await this.#o.ask(o.id, `${prompt}\n\nYour idea, "${first.text}", ${why}. Answer again in the same four lines, with an idea that fits what the company can spend.`));
+          const still = again ? overBy(again, budget) : "is no idea";
+          if (again && !still) kept = again;
+          else {
+            left++;
+            this.#events.append("report.left_out", { why: still, text: again?.text ?? first.text }, { orb: o.id });
+          }
+        }
       } catch (e) {
         this.#events.append("report.ask_failed", { why: e instanceof Error ? e.message : String(e) }, { orb: o.id });
       }
-      if (text) ideas.push({ orb: o.id, name: o.name, text });
+      if (kept) ideas.push({ orb: o.id, name: o.name, text: kept.text, who: kept.who, start: kept.costs.start!, month: kept.costs.month!, first: kept.first });
     }
 
     const world = this.#o.news(since).slice(0, 6).map((n) => ({ ...n, name: nameOf(n.orb) }));
@@ -242,6 +354,7 @@ export class BoardReports {
       day: dayOf(now),
       chair: chair ? { orb: chair.orb, name: chair.name } : null,
       ideas,
+      left,
       world,
       office: officeNews(happened, nameOf),
       people: peopleNotes(office, this.#o.week),

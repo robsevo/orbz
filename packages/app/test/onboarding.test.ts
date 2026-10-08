@@ -11,7 +11,9 @@
 //     CEO (only the CEO to choose), "Surprise me" rolls him. Made, your CEO shows you round (a skippable tour) and
 //     asks you to hire your personal assistant (only the assistant to choose); the office then holds the two.
 //   - The sidebar calls you the Founder, under your company's name; a reload does not play it again.
-//   - "Skip the story" still asks your name and your company's; skipping never skips the brains. "Skip the tour"
+//   - Since 10-08 (PLAN 5.20; owner: "ask how much they are willing to spend on infrastructure etc."), what the company
+//     can spend, after the Founder card: four choices or your own amounts; it waits for an answer, kept with you.
+//   - "Skip the story" still asks your name, your company's and what it can spend; skipping never skips the brains. "Skip the tour"
 //     goes to your assistant. The layout rule holds on every beat.
 //   - `?intro=0` skips it (the control the other render checks rely on).
 import assert from "node:assert/strict";
@@ -23,7 +25,7 @@ import { after, before, test } from "node:test";
 import { build } from "vite";
 import type { Browser, Page } from "playwright-core";
 import { findChrome, launch, measure, serveDir, SIZES } from "./harness.ts";
-import { checkCompany, checkName, line, NEWBORN_PLATE, STORY, TOUR } from "../src/onboarding/story.ts";
+import { checkCompany, checkName, line, NEWBORN_PLATE, skipTo, STORY, TOUR } from "../src/onboarding/story.ts";
 
 const APP = fileURLToPath(new URL("..", import.meta.url));
 const skip = findChrome() ? false : "no Chromium on this machine";
@@ -73,7 +75,10 @@ test("the story's lines: a name is needed, and the person's name is in what is s
   assert.ok(!STORY.some((b) => b.kind === "say" && /You're the CEO/.test(b.text)), "never its CEO (owner, 10-07)");
   assert.ok(STORY.every((b) => b.kind !== "say" || b.who === "new"), "told by your first orb, and no one else (there is no one else yet)");
   const at = (k: string) => STORY.findIndex((b) => b.kind === k);
-  assert.ok(at("ask-name") < at("ask-company") && at("ask-company") < at("founder") && at("founder") < at("brains") && at("brains") < at("hire"), "your name, your company's, the Founder card, the brains; then you make him");
+  assert.ok(at("ask-name") < at("ask-company") && at("ask-company") < at("founder") && at("founder") < at("ask-budget") && at("ask-budget") < at("brains") && at("brains") < at("hire"), "your name, your company's, the Founder card, what it can spend, the brains; then you make him");
+  // a skip lands on what is not answered yet: your name, your company's, what it can spend (PLAN 5.20), then the brains
+  assert.deepEqual([skipTo(null), skipTo({ name: "Sam" }), skipTo({ name: "Sam", company: "Sam & Co" }), skipTo({ name: "Sam", company: "Sam & Co", budget: null }), skipTo({ name: "Sam", company: "Sam & Co", budget: { start: 0, month: 0 } })],
+    [at("ask-name"), at("ask-company"), at("ask-budget"), at("ask-budget"), at("brains")], "nothing is an answer: $0 and $0 is said");
   assert.deepEqual(STORY.at(-1), { kind: "hire", role: "ceo" }, "and he is your CEO");
   // the tour your CEO gives once made: its rooms, then your assistant
   assert.ok(TOUR.every((b) => b.kind !== "say" || b.who === "ceo"), "told by your CEO");
@@ -115,6 +120,13 @@ test("a first open plays the story: your name, your company's, the Founder card;
     await page.keyboard.press("Enter");
     await page.waitForTimeout(100);
     assert.match(await page.locator("[data-onboarding]").innerText(), /You're the Founder of Acme Orbs/);
+    // what it can spend (PLAN 5.20; owner, 10-08: "the user may not have any money to start with. so ask how much they
+    // are willing to spend on infrastructure etc."): asked, and nothing is a fine answer
+    await until(page, "ask-budget");
+    assert.match(await page.locator("[data-budget-step]").innerText(), /What can you put into Acme Orbs, for hosting, tools and ads\?[\s\S]*Nothing yet[\s\S]*Free tools only[\s\S]*A little[\s\S]*\$50 to start[\s\S]*\$20 a month[\s\S]*change it any time, in Settings/);
+    await page.keyboard.press("Enter");
+    assert.equal(await beat(page), "ask-budget", "it waits for an answer");
+    await page.getByRole("button", { name: "A little" }).click();
     // then what he thinks with (owner, 10-02); with no home behind the page it says where to choose them
     await until(page, "brains");
     assert.match(await page.locator("[data-brains-step]").innerText(), /in Settings once this app is connected to your home/);
@@ -146,6 +158,7 @@ test("a first open plays the story: your name, your company's, the Founder card;
     assert.deepEqual(await page.locator("aside button[data-orb] span span:first-child").allTextContents(), ["Pip", "Bea"], "the office: your CEO and your assistant");
     assert.equal(await page.getByText("Founder Robin").count(), 1, "and the office knows its Founder (owner, 10-07)");
     assert.equal(await page.locator("aside [data-company]").innerText(), "Acme Orbs", "under its company's name");
+    assert.deepEqual(await page.evaluate(() => (JSON.parse(localStorage.getItem("orbs.person") ?? "null") as { budget?: unknown } | null)?.budget), { start: 50, month: 20 }, "and what it can spend, with you");
     await page.reload();
     await page.waitForSelector("canvas", { state: "attached" });
     assert.equal(await page.locator("[data-onboarding]").count(), 0, "a second open does not play it again");
@@ -164,6 +177,8 @@ test("'Surprise me' rolls him, ready to create", { skip }, async () => {
     await page.getByRole("button", { name: "Skip the story" }).click();
     await page.getByRole("textbox", { name: "Your company's name" }).fill("Sam & Co");
     await page.keyboard.press("Enter");
+    await page.getByRole("button", { name: "Skip the story" }).click();
+    await page.getByRole("button", { name: "Nothing yet" }).click(); // what it can spend: a skip still asks
     await page.getByRole("button", { name: "Skip the story" }).click();
     await page.getByRole("button", { name: "Next" }).click(); // the brains: a skip never skips them
     await until(page, "hire");
@@ -187,6 +202,9 @@ test("'Skip the story' still asks what to call you, then lets you in", { skip },
     assert.equal(await beat(page), "ask-company", "nor your company's name");
     await page.getByRole("textbox", { name: "Your company's name" }).fill("Sam & Co");
     await page.keyboard.press("Enter");
+    await page.getByRole("button", { name: "Skip the story" }).click();
+    assert.equal(await beat(page), "ask-budget", "nor what it can spend (PLAN 5.20)");
+    await page.getByRole("button", { name: "Nothing yet" }).click();
     await page.getByRole("button", { name: "Skip the story" }).click();
     assert.equal(await beat(page), "brains", "skipping the story never skips choosing what he thinks with");
     await page.getByRole("button", { name: "Next" }).click();
@@ -229,6 +247,8 @@ test("the music (owner, 10-02): from the first press, off with its own switch or
     await page.getByRole("button", { name: "Skip the story" }).click();
     await page.getByRole("textbox", { name: "Your company's name" }).fill("Sam & Co");
     await page.keyboard.press("Enter");
+    await page.getByRole("button", { name: "Skip the story" }).click();
+    await page.getByRole("button", { name: "Nothing yet" }).click(); // what it can spend: a skip still asks
     await page.getByRole("button", { name: "Skip the story" }).click();
     await page.getByRole("button", { name: "Next" }).click();
     await until(page, "hire");
@@ -294,11 +314,12 @@ for (const size of ["phone", "desk"] as const) {
         } else if (b === "ask-company") {
           await page.getByRole("textbox", { name: "Your company's name" }).fill("Acme Orbs");
           await page.keyboard.press("Enter");
-        } else if (b === "brains") await page.getByRole("button", { name: "Next" }).click(); // it waits for its own answer
+        } else if (b === "ask-budget") await page.getByRole("button", { name: "Nothing yet" }).click(); // it waits for its own answer
+        else if (b === "brains") await page.getByRole("button", { name: "Next" }).click(); // it waits for its own answer
         else await page.keyboard.press("Enter");
         await page.waitForTimeout(40);
       }
-      assert.deepEqual([...seen].sort(), ["ask-company", "ask-name", "brains", "founder", "hire", "say"]);
+      assert.deepEqual([...seen].sort(), ["ask-budget", "ask-company", "ask-name", "brains", "founder", "hire", "say"]);
     } finally {
       await page.context().close();
     }
@@ -324,6 +345,8 @@ test("'Skip the tour' goes to your assistant", { skip, timeout: 90_000 }, async 
     await page.getByRole("button", { name: "Skip the story" }).click();
     await page.getByRole("textbox", { name: "Your company's name" }).fill("Sam & Co");
     await page.keyboard.press("Enter");
+    await page.getByRole("button", { name: "Skip the story" }).click();
+    await page.getByRole("button", { name: "Nothing yet" }).click(); // what it can spend: a skip still asks
     await page.getByRole("button", { name: "Skip the story" }).click();
     await page.getByRole("button", { name: "Next" }).click();
     await until(page, "hire");

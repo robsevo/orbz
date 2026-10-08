@@ -147,6 +147,10 @@ test("the org chart and a career page; let go with a hand-off, away, rehired; le
   assert.ok(h.inbox.orb("cy")!.letGoAt, "Cy was let go");
   await sheet.getByRole("button", { name: "Send Cy to school" }).waitFor();
   assert.deepEqual(await measure(page), [], "the school sheet, opened from a profile, at phone size");
+  // leaving the chart once Cy's sheet was scrolled into view: the next room opens, the page whole (an effect that hands
+  // React scrollIntoView's Promise as its clean-up tears the page down as the chart closes)
+  await page.evaluate(() => (location.hash = "#/office"));
+  await page.locator("[data-floor]").waitFor({ timeout: 20_000 });
 });
 
 test("the board on the org chart (owner, 10-07): its seats by their posts, an odd number; a proposal put from it is voted, each member's vote and why; desk and phone", { skip, timeout: 150_000 }, async (t) => {

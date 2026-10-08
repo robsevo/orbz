@@ -1335,7 +1335,7 @@ function App() {
         ) : room === "lab" ? (
           <LabRoom home={home} office={office} go={go} />
         ) : room === "report" ? (
-          <ReportRoom home={home} office={office} go={go} />
+          <ReportRoom home={home} office={office} go={go} person={person} keep={keep} />
         ) : room === "calendar" ? (
           <CalendarRoom home={home} office={office} />
         ) : room === "notices" ? (
