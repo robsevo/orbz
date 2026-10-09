@@ -1983,6 +1983,10 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("the harness does not see a spill", "test/harness.ts", [
         ("      if (!inScroller && (r.left < -1 || r.right > vw + 1)) out.push(", "      if (false) out.push("),
     ], ["render.test.ts"]),
+    ("the harness counts a word on the line it begins on", "test/harness.ts", [
+        ("        const rect = [...r.getClientRects()].filter((x) => x.width > 0).at(-1);",
+         "        const rect = [...r.getClientRects()].filter((x) => x.width > 0)[0];"),
+    ], ["render.test.ts"]),
     ("a mouth is drawn below his eyes", "src/orb/glsl.ts", [
         ("      body = mix(body, eyeC, eyeA*0.92*faceA);",
          "      body = mix(body, eyeC, eyeA*0.92*faceA);\n      body = mix(body, eyeC, smoothstep(0.03, 0.012, abs(length(f - vec2(0.0, 0.30)) - 0.12)) * step(0.34, f.y) * step(abs(f.x), 0.12) * faceA);"),

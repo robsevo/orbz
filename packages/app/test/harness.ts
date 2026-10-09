@@ -188,7 +188,9 @@ export async function measure(page: Page): Promise<Finding[]> {
         const r = document.createRange();
         r.setStart(n, m.index);
         r.setEnd(n, m.index + m[0].length);
-        const rect = [...r.getClientRects()].filter((x) => x.width > 0)[0];
+        // the line a word ends on: one wrapped at its hyphen ("a two- / colour gradient.") leaves two words on the
+        // last line as the eye reads it, and one whose tail drops alone ("kept on- / chain") leaves one
+        const rect = [...r.getClientRects()].filter((x) => x.width > 0).at(-1);
         if (!rect) continue;
         // a word split across lines: its column is too narrow for it (owner, 10-02: "the container is
         // elongated on mobile", a notice's words cut "promotio / n"). An address or a link may break,

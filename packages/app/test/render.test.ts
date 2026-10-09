@@ -117,6 +117,36 @@ test("controls: a planted too-wide row, a 9 px label, a lone last item, a one-wo
   }
 });
 
+// the gate of 10-08: a new orb's words ended "… from a two- / colour gradient." and the widow check, placing a word
+// where it began, read "gradient." alone; a word wrapped at its hyphen counts on the line it ends on
+test("a word wrapped at its hyphen counts on the line it ends on: 'a two- / colour gradient.' ends on two words, 'kept on- / chain' on one", { skip }, async () => {
+  const page = await open("dark", "phone");
+  try {
+    const splits = await page.evaluate(() =>
+      [["Its glow comes from a two-colour gradient.", "Its glow comes from a two-", "two-colour"], ["Its trades are all kept on-chain", "Its trades are all kept on-", "on-chain"]].map(([text, first, word]) => {
+        // squeezed to just wider than its first line, wrapped greedily, so the line breaks at the hyphen
+        const p = document.createElement("p");
+        p.textContent = text!;
+        p.style.cssText = "width:max-content;font:400 15px/21px sans-serif;text-wrap:wrap;margin:0";
+        document.querySelector("section")!.append(p);
+        const r = document.createRange();
+        r.setStart(p.firstChild!, 0);
+        r.setEnd(p.firstChild!, first!.length);
+        p.style.width = `${r.getBoundingClientRect().width + 2}px`;
+        r.setStart(p.firstChild!, text!.indexOf(word!));
+        r.setEnd(p.firstChild!, text!.indexOf(word!) + word!.length);
+        return new Set([...r.getClientRects()].filter((x) => x.width > 0).map((x) => Math.round(x.top))).size;
+      }),
+    );
+    assert.deepEqual(splits, [2, 2], "control: each hyphenated word wraps at its hyphen");
+    const widows = (await measure(page)).filter((f) => f.kind === "widow").map((f) => f.what);
+    assert.ok(!widows.some((w) => w.includes("Its glow comes")), `"colour gradient." is two words on the last line: ${widows.join("; ")}`);
+    assert.ok(widows.some((w) => w.includes("Its trades are")), `"chain" is alone on the last line: ${widows.join("; ")}`);
+  } finally {
+    await page.close();
+  }
+});
+
 // the themes besides light and dark (owner, 10-02): each on the design system's page, its own ground,
 // every orb name in its base's colour, and the checks clean (contrast read off what is really behind)
 for (const t of (Object.keys(THEMES) as ThemeId[]).filter((x) => x !== "dark" && x !== "light")) {
