@@ -178,7 +178,7 @@ test("a DNA strand makes the same orb again, name and traits and all; a typo is 
     assert.equal(readStrand(swapped).ok, false, `a swap at ${i} read as another orb`);
   }
   assert.equal(readStrand("").ok, false);
-  assert.equal(readStrand(`2${flat.slice(1)}`).ok, false, "a newer version is refused, not misread");
+  assert.equal(readStrand(`3${flat.slice(1)}`).ok, false, "a newer version is refused, not misread (2 is any colour's, PLAN 2.20)");
 });
 
 test("the skills web is weighed like the traits: 24 points for every orb, pulled by its traits", async () => {

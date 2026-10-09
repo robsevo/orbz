@@ -5,6 +5,7 @@
 // here names a colour (design/tokens.ts is the only place one is written).
 import type { CSSProperties, ReactNode } from "react";
 import type { HueName } from "../design/tokens.ts";
+import type { OrbHue } from "../orb/spec.ts";
 import { CLASS_DESKS, CORRIDOR, DESK, DESKS, H, HALL, LOW, PIECES, POIS, ROOMS, W, WAITING, WALL, ZONES, type Desk, type Rect, type Room as Place } from "./plan.ts";
 
 const f = (v: string): CSSProperties => ({ fill: `var(--${v})` });
@@ -438,7 +439,7 @@ function Piece({ r, up = 0, z, children, label }: { r: Rect; up?: number; z: num
 export type Screen = "work" | "think" | "wait" | "gym" | "idle" | "off";
 
 /** A desk: its top, its front, a monitor showing what its orb is doing, a keyboard, a mug. */
-export function DeskPiece({ d, screen, hue }: { d: Desk; screen: Screen; hue: HueName | null }) {
+export function DeskPiece({ d, screen, hue }: { d: Desk; screen: Screen; hue: OrbHue | null }) {
   const r = d.rect;
   const mx = d.monitor === "left" ? r.x + 6 : r.x + r.w - 40;
   return (

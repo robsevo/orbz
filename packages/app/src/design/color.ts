@@ -57,6 +57,9 @@ export function oklch(L: number, C: number, h: number): RGB {
   return [clamp(r), clamp(g), clamp(b)];
 }
 
+/** A colour by its OKLCH lightness, strength and hue, as hex (in the sRGB gamut), for a picker outside the design system. */
+export const colourAt = (L: number, C: number, h: number): string => hex(oklch(L, C, h));
+
 export function hex(c: RGB): string {
   return `#${c.map((v) => v.toString(16).padStart(2, "0")).join("").toUpperCase()}`;
 }

@@ -5,7 +5,8 @@
 // when he is left alone, which voices suit him, and how he talks, so the parts you pick go together.
 // The starter shapes are our own; the owner names and redraws them. No mouth on any of them, no
 // cheeks (owner, 2026-09-24): the eyes carry every mood.
-import { HUES, MATERIALS, type HueName, type Material } from "../design/tokens.ts";
+import { DARK_ORB, HUES, MATERIALS, type HueName, type Material } from "../design/tokens.ts";
+import { glassOf, hexOf, rgb01 } from "./colour.ts";
 import { type Dna, dnaOf, dnaSays, leansOf } from "./dna.ts";
 import { ORB_TURNS } from "./hues.ts";
 import type { Gesture } from "./life.ts";
@@ -197,10 +198,16 @@ export type EyesName = keyof typeof EYES;
 // Two choices, not one (owner, 2026-10-01: "what if we want glasses and a hat? make them 2
 // categories ... different glasses, different hats ... can also be sunglasses").
 type Paint = "accent" | Material;
-/** What a hat or frames may be painted: one of his 24 colours, or white or black (owner, 10-03). */
+/** What a hat or frames may be painted: one of his 24 colours, or white or black (owner, 10-03); any other colour is
+ * the hat's or the frames' tint (PLAN 2.20). */
 export type AccessoryHue = HueName | "white" | "black";
+/** An orb's own colour: one of the 24, or Dark (PLAN 2.20; owner, 10-08: "a black version, but call it dark lol"). Any
+ * other colour is his `tint`, over the nearest of the 24. */
+export type OrbHue = HueName | "dark";
+/** Where an orb's colour sits on the wheel of 24: Dark at Ash's azure (its schemes, its gradients' distance). */
+export const wheelOf = (h: OrbHue): HueName => (h === "dark" ? "azure" : h);
 /** An accessory's own colour: white and black are materials, the rest his colours. */
-const tone = (h: AccessoryHue, hue: HueName): [number, number, number] => (h === "white" || h === "black" ? paint(h, hue) : paint("accent", h));
+const tone = (h: AccessoryHue, c: Pick<Character, "hue" | "tint">): [number, number, number] => (h === "white" || h === "black" ? paint(h, c) : paint("accent", { hue: h }));
 /** A hat: the shader's shape number, what its two parts are made of, and its slant. */
 export const HATS = {
   none: { id: 0, main: "ink", second: "ink", tilt: 0 },
@@ -633,9 +640,14 @@ export type Character = {
   specialty: SpecialtyName;
   /** The dice he was rolled with: his quirk, catchphrase and the jitter in his sheet come from it. */
   seed: number;
-  hue: HueName;
+  hue: OrbHue;
+  /** Any colour (PLAN 2.20; owner, 10-08: "DNA should go with hex if possible. a lot more possibilities"): his own, as
+   * hex; `hue` is then the nearest of the 24, which his words, his traits and the floor wear. */
+  tint?: string | null;
   /** A second colour blended in from the top down (a gradient orb), or none. */
   hue2: HueName | null;
+  /** The gradient's second colour as any colour (its hue: the glass blends a second turn of his palette); `hue2` the nearest. */
+  tint2?: string | null;
   finish: FinishName;
   shape: ShapeName;
   eyes: EyesName;
@@ -646,6 +658,9 @@ export type Character = {
   hatHue?: AccessoryHue | null;
   /** The frames' colour (and a strap's), or none for their own. The lenses keep theirs. */
   glassesHue?: AccessoryHue | null;
+  /** The hat's and the frames' colour as any colour (hex), over `hatHue` and `glassesHue`. */
+  hatTint?: string | null;
+  glassesTint?: string | null;
   voice: string;
   goo: number;
 };
@@ -662,8 +677,9 @@ export function wearing(c: Pick<Character, "hat" | "glasses">, word: "in" | "wit
 /** Whether an orb speaks a reply: never when he is silent, never when the app is set to text or silence. */
 export const speaks = (c: Character, replies: Replies): boolean => replies === "speak" && c.voice !== "silent";
 
-function paint(p: Paint, hue: HueName): [number, number, number] {
-  const c = p === "accent" ? HUES.find((h) => h.name === hue)!.dark : MATERIALS[p];
+function paint(p: Paint, o: { hue: OrbHue; tint?: string | null }): [number, number, number] {
+  if (p === "accent" && o.tint) return rgb01(o.tint); // any colour: a trim in his colour is in that colour
+  const c = p !== "accent" ? MATERIALS[p] : o.hue === "dark" ? DARK_ORB.dark : HUES.find((h) => h.name === o.hue)!.dark;
   return [c[0] / 255, c[1] / 255, c[2] / 255];
 }
 
@@ -676,19 +692,34 @@ export function lookOf(c: Character): OrbLook {
   return {
     shapeA: [...s.a], shapeB: [...s.b], shapeC: [...s.c], shapeD: [...s.d], shapeE: [...s.e], shapeF: [...s.f],
     eyeA: [...e.a] as V4, eyeB: [...e.b] as V4,
-    acc: w.id, accFit: (({ seat, size, float }) => [c.hat === "halo" ? float : seat, size] as [number, number])(hatFit(c.shape)), accCol: c.hatHue ? tone(c.hatHue, c.hue) : paint(w.main, c.hue), accCol2: paint(w.second, c.hue), accTilt: w.tilt,
+    acc: w.id, accFit: (({ seat, size, float }) => [c.hat === "halo" ? float : seat, size] as [number, number])(hatFit(c.shape)), accCol: c.hatTint ? rgb01(c.hatTint) : c.hatHue ? tone(c.hatHue, c) : paint(w.main, c), accCol2: paint(w.second, c), accTilt: w.tilt,
     specs: g.id,
-    specsCol: c.glassesHue ? tone(c.glassesHue, c.hue) : paint(g.frame, c.hue),
-    specsCol2: c.glassesHue ? tone(c.glassesHue, c.hue) : paint(g.second, c.hue),
-    lensCol: paint(g.lens, c.hue), lensDark: g.dark,
+    specsCol: c.glassesTint ? rgb01(c.glassesTint) : c.glassesHue ? tone(c.glassesHue, c) : paint(g.frame, c),
+    specsCol2: c.glassesTint ? rgb01(c.glassesTint) : c.glassesHue ? tone(c.glassesHue, c) : paint(g.second, c),
+    lensCol: paint(g.lens, c), lensDark: g.dark,
   };
 }
 
 /** His finish as the shader takes it: palette turns, saturation, brightness, the gradient. */
 export function finishOf(c: Character): { turn: number; sat: number; val: number; turn2: number; grad: number; tint: number | null; glow: number } {
   const f: { sat: number; val: number; tint?: number; glow?: number } = FINISHES[c.finish];
-  return { turn: ORB_TURNS[c.hue], sat: f.sat, val: f.val, turn2: ORB_TURNS[c.hue2 ?? c.hue], grad: c.hue2 ? 1 : 0, tint: f.tint ?? null, glow: f.glow ?? 0 };
+  // any colour (PLAN 2.20): its own turn, and its strength and lightness as shares of azure's, which each of the 24 has,
+  // so they are drawn as they always were; Dark: black glass under any finish, dark enough that its eyes turn light
+  const own = c.tint ? glassOf(c.tint) : null;
+  const dark = !own && c.hue === "dark";
+  const turn = own ? own.turn : ORB_TURNS[c.hue === "dark" ? "azure" : c.hue];
+  return {
+    turn,
+    sat: f.sat * (own ? own.sat : dark ? DARK_GLASS.sat : 1),
+    val: dark ? Math.min(f.val, 1) * DARK_GLASS.val : f.val * (own ? own.val : 1),
+    turn2: c.tint2 ? glassOf(c.tint2).turn : c.hue2 ? ORB_TURNS[c.hue2] : turn,
+    grad: c.hue2 || c.tint2 ? 1 : 0,
+    tint: f.tint ?? null,
+    glow: f.glow ?? 0,
+  };
 }
+/** Dark's glass: hardly any colour, and dark (Ash's Black finish is 0.4; the shader's eyes turn light under 0.45). */
+export const DARK_GLASS = { sat: 0.12, val: 0.34 } as const;
 
 /** How he moves when left alone, from his personality. */
 export const motionOf = (c: Character): { kinds: Gesture[]; every: [number, number]; breath: number; sway: number } => {
@@ -725,8 +756,10 @@ export function sane(c: Partial<Character> & { name: string }, base: Character):
     personality: pick("personality", inside(PERSONALITIES)),
     specialty: pick("specialty", inside(SPECIALTIES)),
     seed: pick("seed", (v) => typeof v === "number" && Number.isFinite(v)),
-    hue: pick("hue", (v) => typeof v === "string" && hues.includes(v)),
+    hue: pick("hue", (v) => typeof v === "string" && (hues.includes(v) || v === "dark")),
+    ...(hexOf(c.tint) && { tint: hexOf(c.tint) }),
     hue2: c.hue2 === null || (typeof c.hue2 === "string" && hues.includes(c.hue2)) ? (c.hue2 as HueName | null) : base.hue2,
+    ...(hexOf(c.tint2) && { tint2: hexOf(c.tint2) }),
     finish: pick("finish", inside(FINISHES)),
     shape: pick("shape", inside(SHAPES)),
     eyes: pick("eyes", inside(EYES)),
@@ -734,6 +767,8 @@ export function sane(c: Partial<Character> & { name: string }, base: Character):
     glasses: pick("glasses", inside(GLASSES)),
     hatHue: typeof c.hatHue === "string" && (hues.includes(c.hatHue) || c.hatHue === "white" || c.hatHue === "black") ? (c.hatHue as AccessoryHue) : c.hatHue === null ? null : base.hatHue ?? null,
     glassesHue: typeof c.glassesHue === "string" && (hues.includes(c.glassesHue) || c.glassesHue === "white" || c.glassesHue === "black") ? (c.glassesHue as AccessoryHue) : c.glassesHue === null ? null : base.glassesHue ?? null,
+    ...(hexOf(c.hatTint) && { hatTint: hexOf(c.hatTint) }),
+    ...(hexOf(c.glassesTint) && { glassesTint: hexOf(c.glassesTint) }),
     voice: pick("voice", (v) => typeof v === "string" && VOICES.some((x) => x.id === v)),
     goo: pick("goo", (v) => typeof v === "number" && v >= 0 && v <= 1),
   };

@@ -11,8 +11,10 @@
 // makes him wobble.
 import { StrictMode, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
-import { HUES, MATERIALS, stylesheet, type HueName } from "./design/tokens.ts";
+import { HUES, MATERIALS, pickerTracks, stylesheet, type HueName } from "./design/tokens.ts";
 import { hex } from "./design/color.ts";
+import { nearestHue } from "./orb/colour.ts";
+import { ColourPicker } from "./ui/ColourPicker.tsx";
 import { Orb } from "./orb/Orb.tsx";
 import { DESIGN } from "./orb/renderer.ts";
 import { CEILING, dnaOf, grownOf, grownSays, type Growth, type Move, TOTAL } from "./orb/dna.ts";
@@ -55,8 +57,7 @@ applyTheme(savedTheme(), false); // before the first paint: the theme you chose,
 noFieldZoom(document, navigator); // an iPhone does not zoom into a text box (owner, 10-07)
 import {
   ASH, EYES, FAMILIES, FINISHES, GLASSES, HATS, offered, orbName, partnerOf, type Scheme, SCHEMES, type AccessoryHue, PERSONALITIES, REPLIES, SHAPES, sheetOf, speaks, SPECIALTIES, surprise, voice, VOICES, withPersonality,
-  type Character, type EyesName, type Family, type FinishName, type GlassesName, type HatName, type PersonalityName, type Replies, type ShapeName, type SpecialtyName,
-} from "./orb/spec.ts";
+  type Character, type EyesName, type Family, type FinishName, type GlassesName, type HatName, type PersonalityName, type Replies, type ShapeName, type SpecialtyName, wheelOf } from "./orb/spec.ts";
 
 
 
@@ -539,31 +540,43 @@ function Thumbs<T extends string>({ c, options, field, label, onPick, face = fal
 }
 
 /** An accessory's colour: its own, or any of his 24 (owner, 10-01: "just like the orb we should be
- * able to change the colors of our accessories"). One line, scrolling sideways on a phone. */
-function AccessoryColour({ what, value, onPick }: { what: string; value: AccessoryHue | null; onPick: (h: AccessoryHue | null) => void }) {
+ * able to change the colors of our accessories"), or any colour at all (PLAN 2.20, owner 10-08). One line, scrolling
+ * sideways on a phone; any colour's picker under it. */
+function AccessoryColour({ what, value, onPick, tint, onTint, from }: { what: string; value: AccessoryHue | null; onPick: (h: AccessoryHue | null) => void; tint: string | null; onTint: (hex: string) => void; from: HueName }) {
+  const [picking, setPicking] = useState(false);
   return (
     <div style={{ display: "grid", gap: 8 }}>
       <Head>{cap(what)} colour</Head>
       <OneLine style={{ justifyContent: "flex-start", alignItems: "center", padding: "4px 2px" }} gap={8}>
-        <button onClick={() => onPick(null)} aria-pressed={value === null} style={{ ...s.chip, ...chosen(value === null), flex: "0 0 auto" }}>
+        <button onClick={() => onPick(null)} aria-pressed={value === null && !tint} style={{ ...s.chip, ...chosen(value === null && !tint), flex: "0 0 auto" }}>
           Its own
+        </button>
+        <button data-colour-any={what} onClick={() => setPicking((p) => !p)} aria-pressed={Boolean(tint)} aria-expanded={picking} style={{ ...s.chip, ...chosen(Boolean(tint)), flex: "0 0 auto", display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <span aria-hidden style={{ width: 16, height: 16, borderRadius: "50%", background: tint ?? ANY_COLOUR, boxShadow: "inset 0 0 0 1px var(--hairline)" }} />
+          Any colour
         </button>
         {/* white and black (owner, 10-03), then his 24 colours */}
         {(["white", "black"] as const).map((m) => (
           <span key={m} style={{ flex: "0 0 auto", display: "grid" }}>
-            <button aria-label={`${what} in ${m}`} aria-pressed={value === m} title={cap(m)} onClick={() => onPick(m)} data-material={m}
-              style={{ width: 28, height: 28, borderRadius: "50%", border: 0, cursor: "pointer", background: hex(MATERIALS[m]), boxShadow: value === m ? "0 0 0 2px var(--card), 0 0 0 4px var(--text-1)" : "inset 0 0 0 1px var(--hairline)" }} />
+            <button aria-label={`${what} in ${m}`} aria-pressed={value === m && !tint} title={cap(m)} onClick={() => onPick(m)} data-material={m}
+              style={{ width: 28, height: 28, borderRadius: "50%", border: 0, cursor: "pointer", background: hex(MATERIALS[m]), boxShadow: value === m && !tint ? "0 0 0 2px var(--card), 0 0 0 4px var(--text-1)" : "inset 0 0 0 1px var(--hairline)" }} />
           </span>
         ))}
         {HUES.map((h) => (
           <span key={h.name} style={{ flex: "0 0 auto", display: "grid" }}>
-            <Swatch hue={h.name} size={28} on={value === h.name} label={`${what} in ${h.name}`} onPick={() => onPick(h.name)} />
+            <Swatch hue={h.name} size={28} on={value === h.name && !tint} label={`${what} in ${h.name}`} onPick={() => onPick(h.name)} />
           </span>
         ))}
       </OneLine>
+      {picking && <ColourPicker value={tint} from={from} label={`The ${what}'s colour`} onPick={onTint} />}
     </div>
   );
 }
+
+/** Dark's swatch: the black glass it is. */
+const DARK_SWATCH = hex(MATERIALS.black);
+/** What stands for any colour before one is chosen: the wheel's run of hues (the design system draws it). */
+const ANY_COLOUR = pickerTracks(0, 0.72, 0.13).hue;
 
 function Cards<K extends string>({ value, entries, onPick }: { value: K; entries: [K, string, string][]; onPick: (k: K) => void }) {
   return (
@@ -634,8 +647,10 @@ function Creator({ me, edit, replies, setReplies, kinds = [] }: { me: Character;
   const founding = nextFounding(kinds);
   const open = openDepartments(kinds);
   const [tab, setTab] = useState<Tab>("Personality");
+  // any colour's picker, open under the colours or under the gradient's (PLAN 2.20)
+  const [picking, setPicking] = useState<"body" | "gradient" | null>(null);
   // a colour that goes with his (spec.ts SCHEMES): what the colour dice roll, like Roll everything's
-  const partner = (): HueName => partnerOf(me.hue, pick(Object.keys(SCHEMES) as Scheme[]), Math.random());
+  const partner = (): HueName => partnerOf(wheelOf(me.hue), pick(Object.keys(SCHEMES) as Scheme[]), Math.random());
   useEffect(() => stopPreview, []); // a voice still talking when the creator closes stops with it
   const hues = HUES.map((h) => h.name);
   const dice: Record<Tab, () => void> = {
@@ -643,11 +658,11 @@ function Creator({ me, edit, replies, setReplies, kinds = [] }: { me: Character;
     Specialty: () => edit({ specialty: founding ?? pick((Object.keys(SPECIALTIES) as SpecialtyName[]).filter((k) => !whyNot(k, kinds))) }),
     Shape: () => edit({ shape: pick(Object.keys(SHAPES) as ShapeName[]) }),
     Eyes: () => edit({ eyes: pick(Object.keys(EYES) as EyesName[]) }),
-    Hat: () => edit({ hat: pick(Object.keys(HATS) as HatName[]), hatHue: Math.random() < 0.35 ? partner() : null }),
-    Glasses: () => edit({ glasses: pick(Object.keys(GLASSES) as GlassesName[]), glassesHue: Math.random() < 0.35 ? partner() : null }),
+    Hat: () => edit({ hat: pick(Object.keys(HATS) as HatName[]), hatHue: Math.random() < 0.35 ? partner() : null, hatTint: null }),
+    Glasses: () => edit({ glasses: pick(Object.keys(GLASSES) as GlassesName[]), glassesHue: Math.random() < 0.35 ? partner() : null, glassesTint: null }),
     Colour: () => {
       const hue = pick(hues);
-      edit({ hue, hue2: Math.random() < 0.25 ? partnerOf(hue, "analogous", Math.random()) : null, finish: Math.random() < 0.7 ? "glass" : pick(Object.keys(FINISHES) as FinishName[]) });
+      edit({ hue, tint: null, tint2: null, hue2: Math.random() < 0.25 ? partnerOf(hue, "analogous", Math.random()) : null, finish: Math.random() < 0.7 ? "glass" : pick(Object.keys(FINISHES) as FinishName[]) });
     },
     Voice: () => edit({ voice: pick(VOICES.filter((v) => v.english && offered(v) && v.id !== "ash" && v.id !== "silent").map((v) => v.id)) }),
   };
@@ -704,36 +719,55 @@ function Creator({ me, edit, replies, setReplies, kinds = [] }: { me: Character;
       {tab === "Hat" && (
         <div style={{ display: "grid", gap: "var(--s4)" }}>
           <Thumbs title="Hats" c={me} options={Object.keys(HATS) as HatName[]} field="hat" label={cap} onPick={(hat) => edit({ hat })} />
-          {me.hat !== "none" && <AccessoryColour what="hat" value={me.hatHue ?? null} onPick={(hatHue) => edit({ hatHue })} />}
+          {me.hat !== "none" && <AccessoryColour what="hat" value={me.hatHue ?? null} onPick={(hatHue) => edit({ hatHue, hatTint: null })} tint={me.hatTint ?? null} onTint={(hatTint) => edit({ hatTint, hatHue: null })} from={wheelOf(me.hue)} />}
         </div>
       )}
       {tab === "Glasses" && (
         <div style={{ display: "grid", gap: "var(--s4)" }}>
           <Thumbs title="Glasses" c={me} options={Object.keys(GLASSES) as GlassesName[]} field="glasses" label={cap} onPick={(glasses) => edit({ glasses })} face />
-          {me.glasses !== "none" && <AccessoryColour what="frame" value={me.glassesHue ?? null} onPick={(glassesHue) => edit({ glassesHue })} />}
+          {me.glasses !== "none" && <AccessoryColour what="frame" value={me.glassesHue ?? null} onPick={(glassesHue) => edit({ glassesHue, glassesTint: null })} tint={me.glassesTint ?? null} onTint={(glassesTint) => edit({ glassesTint, glassesHue: null })} from={wheelOf(me.hue)} />}
         </div>
       )}
       {tab === "Colour" && (
         <div style={{ display: "grid", gap: "var(--s4)" }}>
           <Balanced min={32} style={{ justifyItems: "center" }}>
             {hues.map((h) => (
-              <Swatch key={h} hue={h} size={32} on={me.hue === h} label={h} onPick={() => edit({ hue: h })} />
+              <Swatch key={h} hue={h} size={32} on={me.hue === h && !me.tint} label={h} onPick={() => edit({ hue: h, tint: null })} />
             ))}
           </Balanced>
+          {/* beyond the 24 (PLAN 2.20; owner, 10-08: "a lot more possibilities. and also a black version, but call it dark") */}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", minWidth: 0 }}>
+            <button data-colour-dark aria-pressed={me.hue === "dark" && !me.tint} onClick={() => edit({ hue: "dark", tint: null })} style={{ ...s.chip, ...chosen(me.hue === "dark" && !me.tint), display: "inline-flex", alignItems: "center", gap: 8 }}>
+              <span aria-hidden style={{ width: 18, height: 18, borderRadius: "50%", background: DARK_SWATCH, boxShadow: "inset 0 0 0 1px var(--hairline)" }} />
+              Dark
+            </button>
+            <button data-colour-any="orb" aria-pressed={Boolean(me.tint)} aria-expanded={picking === "body"} onClick={() => setPicking(picking === "body" ? null : "body")} style={{ ...s.chip, ...chosen(Boolean(me.tint)), display: "inline-flex", alignItems: "center", gap: 8 }}>
+              <span aria-hidden style={{ width: 18, height: 18, borderRadius: "50%", background: me.tint ?? ANY_COLOUR, boxShadow: "inset 0 0 0 1px var(--hairline)" }} />
+              {me.tint ? `Any colour · ${me.tint.toUpperCase()}` : "Any colour"}
+            </button>
+          </div>
+          {picking === "body" && <ColourPicker value={me.tint ?? null} from={wheelOf(me.hue)} label="The orb's colour" onPick={(tint) => edit({ tint, hue: nearestHue(tint) })} />}
           <div style={{ display: "grid", gap: 8 }}>
             <Head>Finish</Head>
             <Thumbs title="Finishes" c={me} options={Object.keys(FINISHES) as FinishName[]} field="finish" label={(f) => FINISHES[f].label} onPick={(finish) => edit({ finish })} face />
           </div>
           <div style={{ display: "grid", gap: 8 }}>
             <Head>Gradient: a second colour, top to bottom</Head>
-            <button onClick={() => edit({ hue2: null })} aria-pressed={me.hue2 === null} style={{ ...s.chip, ...chosen(me.hue2 === null), justifySelf: "start" }}>
-              No gradient
-            </button>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", minWidth: 0 }}>
+              <button onClick={() => edit({ hue2: null, tint2: null })} aria-pressed={me.hue2 === null && !me.tint2} style={{ ...s.chip, ...chosen(me.hue2 === null && !me.tint2) }}>
+                No gradient
+              </button>
+              <button data-colour-any="gradient" aria-pressed={Boolean(me.tint2)} aria-expanded={picking === "gradient"} onClick={() => setPicking(picking === "gradient" ? null : "gradient")} style={{ ...s.chip, ...chosen(Boolean(me.tint2)), display: "inline-flex", alignItems: "center", gap: 8 }}>
+                <span aria-hidden style={{ width: 16, height: 16, borderRadius: "50%", background: me.tint2 ?? ANY_COLOUR, boxShadow: "inset 0 0 0 1px var(--hairline)" }} />
+                Any colour
+              </button>
+            </div>
             <Balanced min={24} style={{ justifyItems: "center" }}>
               {hues.map((h) => (
-                <Swatch key={h} hue={h} size={24} on={me.hue2 === h} label={`then ${h}`} onPick={() => edit({ hue2: h })} />
+                <Swatch key={h} hue={h} size={24} on={me.hue2 === h && !me.tint2} label={`then ${h}`} onPick={() => edit({ hue2: h, tint2: null })} />
               ))}
             </Balanced>
+            {picking === "gradient" && <ColourPicker value={me.tint2 ?? null} from={me.hue2 ?? wheelOf(me.hue)} label="The gradient's colour" onPick={(tint2) => edit({ tint2, hue2: nearestHue(tint2) })} />}
           </div>
           <div style={{ display: "grid", gap: 8 }}>
             <Head>Goo: {Math.round(me.goo * 100)}%</Head>

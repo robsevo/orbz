@@ -2026,6 +2026,40 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("Send stretches with the box", "src/rooms/Talk.tsx", [
         ('<div style={{ display: "flex", alignItems: "flex-end", gap: 8, minWidth: 0 }}>', '<div style={{ display: "flex", gap: 8, minWidth: 0 }}>'),
     ], ["sessions.test.ts"]),
+    # any colour, Dark, the strand in hex (PLAN 2.20; owner, 10-08)
+    ("one of the 24 is drawn other than it was", "src/orb/spec.ts", [
+        ("sat: f.sat * (own ? own.sat : dark ? DARK_GLASS.sat : 1),", "sat: f.sat * (own ? own.sat : dark ? DARK_GLASS.sat : 1.05),"),
+    ], ["colours.test.ts"]),
+    ("Dark is not dark", "src/orb/spec.ts", [
+        ("export const DARK_GLASS = { sat: 0.12, val: 0.34 } as const;", "export const DARK_GLASS = { sat: 0.12, val: 0.8 } as const;"),
+    ], ["colours.test.ts", "creator.test.ts"]),
+    ("any colour is drawn at the wrong hue", "src/orb/colour.ts", [
+        ("return { turn: turnFor(c.h),", "return { turn: turnFor(0),"),
+    ], ["colours.test.ts"]),
+    ("the first strands' white and black change places", "src/orb/strand.ts", [
+        ('const accessory = (): (AccessoryHue | null)[] => [null, ...STRAND_HUES, "white", "black"];', 'const accessory = (): (AccessoryHue | null)[] => [null, ...STRAND_HUES, "black", "white"];'),
+    ], ["colours.test.ts"]),
+    ("a strand drops its colours", "src/orb/strand.ts", [
+        ("    for (const t of tints) if (t) n = n * RGB + BigInt(Number.parseInt(t.slice(1), 16));\n", ""),
+    ], ["colours.test.ts"]),
+    ("Dark's words are a colour", "src/design/tokens.ts", [
+        ('dark: oklch(0.8, 0.012, 255)', 'dark: oklch(0.8, 0.15, 255)'),
+    ], ["design.test.ts"]),
+    ("a hat in any colour counts as coral", "src/orb/dna.ts", [
+        ('["hat", c.hatTint ? nearestHue(c.hatTint) : c.hatHue,', '["hat", c.hatTint ? "coral" : c.hatHue,'),
+    ], ["colours.test.ts"]),
+    ("a picked colour never reaches the orb", "src/orbs.tsx", [
+        ("onPick={(tint) => edit({ tint, hue: nearestHue(tint) })}", "onPick={() => {}}"),
+    ], ["creator.test.ts"]),
+    ("the hat's any colour does nothing", "src/orbs.tsx", [
+        ("onTint={(hatTint) => edit({ hatTint, hatHue: null })}", "onTint={() => {}}"),
+    ], ["creator.test.ts"]),
+    ("one of the 24 leaves any colour on", "src/orbs.tsx", [
+        ("onPick={() => edit({ hue: h, tint: null })}", "onPick={() => edit({ hue: h })}"),
+    ], ["creator.test.ts"]),
+    ("a look read back drops Dark", "src/orb/spec.ts", [
+        ('hue: pick("hue", (v) => typeof v === "string" && (hues.includes(v) || v === "dark")),', 'hue: pick("hue", (v) => typeof v === "string" && hues.includes(v)),'),
+    ], ["colours.test.ts"]),
     # the charts (PLAN 2.19; owner, 10-08: "when we press on brain today it brings us to settings?")
     ("Brain today still opens Settings", "src/rooms/Home.tsx", [
         ('go={() => go({ room: "stats", tab: "brain" })}', 'go={() => go({ room: "settings" })}'),

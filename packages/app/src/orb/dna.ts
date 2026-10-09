@@ -12,7 +12,8 @@
 // nature (a calm orb in a hot red, in headphones) is a clash: it moves more, and says why. The dice
 // add a little of their own. Pure: the same choices and seed give the same DNA.
 import { HUES, type HueName } from "../design/tokens.ts";
-import type { Character, EyesName, FinishName, GlassesName, HatName, PersonalityName, ShapeName } from "./spec.ts";
+import type { Character, EyesName, FinishName, GlassesName, HatName, OrbHue, PersonalityName, ShapeName } from "./spec.ts";
+import { nearestHue } from "./colour.ts";
 
 export const TRAITS = ["Pace", "Care", "Curiosity", "Humour", "Focus", "Calm", "Nerve"] as const;
 export type Trait = (typeof TRAITS)[number];
@@ -93,7 +94,9 @@ const FINISH: Record<FinishName, Spec> = {
   pastel: "Nerve>Care 2 soft", deep: "Pace>Focus 2", neon: "Calm>Pace 3 loud", frost: "Care>Calm 2 cool",
 };
 /** A colour's own move; the reds and oranges run hot, the blues and greens cool. */
-const HUE: Record<HueName, Spec> = {
+const HUE: Record<OrbHue, Spec> = {
+  // Dark (PLAN 2.20; owner, 10-08): black glass runs cool, fewer jokes, more focus
+  dark: "Humour>Focus 2 cool",
   azure: "Nerve>Calm 1 cool", cornflower: "Pace>Care 1 cool", iris: "Pace>Curiosity 1 cool", lavender: "Nerve>Calm 2 soft", violet: "Focus>Curiosity 2",
   plum: "Humour>Focus 1", orchid: "Focus>Curiosity 1 loud", pink: "Nerve>Care 2 soft", rose: "Calm>Nerve 2 hot", blush: "Nerve>Care 1 soft",
   coral: "Calm>Pace 2 hot", apricot: "Calm>Humour 1 hot", amber: "Calm>Pace 2 hot", marigold: "Focus>Humour 2 hot", honey: "Nerve>Care 1",
@@ -125,7 +128,8 @@ const read = (spec: Spec): { from: Trait; to: Trait; n: number; vibe: Vibe | nul
   const [from, to] = pair!.split(">") as [Trait, Trait];
   return { from, to, n: Number(n), vibe: (vibe as Vibe | undefined) ?? null };
 };
-const hueIndex = (h: HueName): number => HUES.findIndex((x) => x.name === h);
+// Dark sits at Ash's azure on the wheel (spec.ts wheelOf, here by hand: spec.ts reads this file)
+const hueIndex = (h: OrbHue): number => HUES.findIndex((x) => x.name === (h === "dark" ? "azure" : h));
 
 /** Every choice the orb is made of, as moves with their reasons, in the order they are applied; the
  * clashes after the choices that cause them. */
@@ -155,7 +159,8 @@ export function movesOf(c: Character): Move[] {
   add(HAT[c.hat], c.hat === "none" ? "no hat" : `the ${c.hat}`);
   add(GLASSES[c.glasses], c.glasses === "none" ? "no glasses" : `the ${c.glasses} glasses`);
   // an accessory's colour: its own (nothing more), his own (a match), white, black, or another colour
-  for (const [part, hue, on] of [["hat", c.hatHue, c.hat !== "none"], ["glasses", c.glassesHue, c.glasses !== "none"]] as const) {
+  // any colour (PLAN 2.20) counts as the nearest of the 24
+  for (const [part, hue, on] of [["hat", c.hatTint ? nearestHue(c.hatTint) : c.hatHue, c.hat !== "none"], ["glasses", c.glassesTint ? nearestHue(c.glassesTint) : c.glassesHue, c.glasses !== "none"]] as const) {
     if (!on || !hue) continue;
     if (hue === c.hue) add("Nerve>Calm 1", `the ${part} matching`);
     else if (hue === "white") add("Nerve>Care 1 soft", `the ${part} in white`);

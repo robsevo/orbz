@@ -197,6 +197,22 @@ export const HUES: Hue[] = (() => {
 
 export const hue = (name: HueName): Hue => HUES.find((h) => h.name === name)!;
 
+/** The Dark orb (PLAN 2.20; owner, 10-08: "a black version, but call it dark lol"): black glass, and its words a quiet
+ * grey, held to the same AA as the 24 in every theme (dark: light grey; light: as deep as lightFor finds). */
+export const DARK_ORB: { name: "dark"; dark: RGB; light: RGB } = { name: "dark", dark: oklch(0.8, 0.012, 255), light: lightFor(255, 0.012) };
+
+/** Any colour's picker (PLAN 2.20): its three tracks as CSS, the hue round the wheel at the chosen lightness and
+ * strength, then that hue from dark to light, and from grey to strong. Drawn here: only the design system writes a
+ * colour. */
+export function pickerTracks(h: number, L: number, C: number): { hue: string; light: string; strength: string } {
+  const stops = (at: (t: number) => RGB, n = 12): string => Array.from({ length: n + 1 }, (_, i) => hex(at(i / n))).join(", ");
+  return {
+    hue: `linear-gradient(to right, ${stops((t) => oklch(L, C, t * 360), 24)})`,
+    light: `linear-gradient(to right, ${stops((t) => oklch(0.2 + t * 0.75, C, h))})`,
+    strength: `linear-gradient(to right, ${stops((t) => oklch(L, t * 0.3, h))})`,
+  };
+}
+
 /** The Orbz mark (brand/mark.ts; owner, 10-04: "a simpler logo ... something that fits with the crowd ... use the
  * O and the shape of an orb ... keep the app color"): the O as an orb, in Ash's azure, lit like the orbs' glass,
  * on the app's own charcoal. */
@@ -308,7 +324,7 @@ function staticVars(): string {
 export const orbAttr = (h: Hue): { "data-orb": HueName } => ({ "data-orb": h.name });
 
 function hueRules(t: Theme, scope: string): string {
-  return HUES.map((h) => `${scope}[data-orb="${h.name}"] { ${accentVars(h[t], t)} }`).join(" ");
+  return [...HUES, DARK_ORB].map((h) => `${scope}[data-orb="${h.name}"] { ${accentVars(h[t], t)} }`).join(" ");
 }
 
 /** The whole stylesheet: the font, every theme (the system's light or dark when none is chosen, or

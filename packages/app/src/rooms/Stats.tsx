@@ -4,7 +4,7 @@
 // by model, kind of turn and orb, with the share the cache served; XP by day (earned, and taken back) and by orb; the
 // last 7, 14 or 30 days. The sums are the home's (home/src/stats.ts); the bars are drawn here in the theme's colours.
 import { useEffect, useState, type CSSProperties } from "react";
-import type { Character } from "../orb/spec.ts";
+import type { Character, OrbHue } from "../orb/spec.ts";
 import type { HueName } from "../design/tokens.ts";
 import { idOf, type Office, type StatsState, type TokenCount } from "../home/link.ts";
 import type { Route } from "../ui/nav.ts";
@@ -60,7 +60,7 @@ export function StatsRoom({ home, office, tab, go }: { home: Office | null; offi
       </div>
     );
   }
-  const hueOf = (orb: string | null): HueName | undefined => office.find((c) => idOf(c.name) === orb)?.hue;
+  const hueOf = (orb: string | null): OrbHue | undefined => office.find((c) => idOf(c.name) === orb)?.hue;
   return (
     <div data-stats={tab} style={{ display: "grid", gap: "var(--s5)", padding: "var(--s5)", alignContent: "start", minWidth: 0 }}>
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12, minWidth: 0 }}>
@@ -86,7 +86,7 @@ export function StatsRoom({ home, office, tab, go }: { home: Office | null; offi
   );
 }
 
-function Brain({ s, hueOf }: { s: StatsState; hueOf: (orb: string | null) => HueName | undefined }) {
+function Brain({ s, hueOf }: { s: StatsState; hueOf: (orb: string | null) => OrbHue | undefined }) {
   const b = s.brain;
   const today = b.byDay.at(-1)!;
   const n = s.days.length;
@@ -144,7 +144,7 @@ function Brain({ s, hueOf }: { s: StatsState; hueOf: (orb: string | null) => Hue
   );
 }
 
-function Xp({ s, hueOf }: { s: StatsState; hueOf: (orb: string | null) => HueName | undefined }) {
+function Xp({ s, hueOf }: { s: StatsState; hueOf: (orb: string | null) => OrbHue | undefined }) {
   const x = s.xp;
   const n = s.days.length;
   const today = x.byDay.at(-1)!;
@@ -246,7 +246,7 @@ function Key({ hue, fill, words }: { hue: HueName; fill: string; words: string }
 }
 
 /** A bar a row, the longest the most; its name, its number and a line about it. */
-function Bars({ rows }: { rows: { key: string; name: string; value: number; sub: string; hue: HueName }[] }) {
+function Bars({ rows }: { rows: { key: string; name: string; value: number; sub: string; hue: OrbHue }[] }) {
   const most = Math.max(1, ...rows.map((r) => r.value));
   return (
     <div role="list" style={{ display: "grid", gap: 12, minWidth: 0 }}>

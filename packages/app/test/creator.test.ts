@@ -15,6 +15,7 @@ import { build } from "vite";
 import type { Browser, Page } from "playwright-core";
 import { choose, findChrome, launch, measure, plainNewOrb, serveDir, SIZES } from "./harness.ts";
 import { EYES, FINISHES, GLASSES, HATS, SHAPES } from "../src/orb/spec.ts";
+import { readStrand } from "../src/orb/strand.ts";
 import { PER_PAGE } from "../src/ui/pages.ts";
 
 const APP = fileURLToPath(new URL("..", import.meta.url));
@@ -300,4 +301,73 @@ test("before your CEO and your assistant, the Recruiter is greyed out and its ad
   } finally {
     await page.close();
   }
+});
+
+// any colour (PLAN 2.20; owner, 10-08: "a bit more colors for our orbs and accessories. DNA should go with hex if possible.
+// a lot more possibilities. and also a black version, but call it dark lol")
+test("any colour: Dark and a typed colour reach the orb and its DNA strand, a slider turns it, a hat takes one too; the picker fits at both sizes", { skip, timeout: 150_000 }, async () => {
+  const page = await open("desk");
+  await plainNewOrb(page);
+  await page.getByRole("tab", { name: "Colour" }).click();
+  const light = (c: number[]): number => (c[0]! + c[1]! + c[2]!) / 3;
+  const dna = async (): Promise<string> => (await page.locator("[data-dna]").first().innerText()).trim();
+  const body = (): Promise<[number, number, number]> => meanOf(page, "glass", 0.4, 0.85);
+  const azure = await body();
+  assert.match(await dna(), /^1/, "control: an orb of the 24 keeps the first-version strand");
+  // Dark: black glass, and the strand's second version
+  await page.locator("[data-colour-dark]").click();
+  await page.waitForTimeout(300);
+  const dark = await body();
+  assert.ok(light(dark) < light(azure) - 0.15, `Dark is dark glass (${light(dark).toFixed(2)} against ${light(azure).toFixed(2)})`);
+  assert.match(await dna(), /^2/);
+  // any colour, typed
+  await page.locator('[data-colour-any="orb"]').click();
+  const field = page.getByRole("textbox", { name: "The orb's colour, as hex" });
+  await field.fill("#e8304a");
+  await page.waitForTimeout(300);
+  const red = await body();
+  assert.ok(red[0] > red[2] + 0.08, `a red orb is red (${red.map((v) => v.toFixed(2)).join(", ")})`);
+  assert.equal(await page.locator('[data-colour-any="orb"]').getAttribute("aria-pressed"), "true");
+  assert.match(await page.locator('[data-colour-any="orb"]').innerText(), /E8304A/);
+  const typed = readStrand(await dna());
+  assert.ok(typed.ok && typed.orb.tint === "#e8304a", "its strand carries the colour");
+  // a slider turns it
+  await page.locator('[data-colour-slider="hue"]').fill("150");
+  await page.waitForTimeout(300);
+  const green = await body();
+  assert.ok(green[1] > green[0], `the hue slider turns it green (${green.map((v) => v.toFixed(2)).join(", ")})`);
+  const slid = await dna();
+  // control: what is not a colour is not taken
+  await field.fill("#zz1234");
+  await page.waitForTimeout(200);
+  assert.equal(await dna(), slid, "a broken hex changes nothing");
+  // one of the 24 again: the first version again
+  await page.getByRole("button", { name: "coral", exact: true }).click();
+  await page.waitForTimeout(200);
+  assert.match(await dna(), /^1/);
+  assert.equal(await page.locator('[data-colour-any="orb"]').getAttribute("aria-pressed"), "false");
+  // a hat in any colour
+  await page.getByRole("tab", { name: "Hat" }).click();
+  await choose(page, "beanie");
+  const own = await meanOf(page, "beanie", 0, 0.35);
+  await page.locator('[data-colour-any="hat"]').click();
+  await page.getByRole("textbox", { name: "The hat's colour, as hex" }).fill("#20e070");
+  await page.waitForTimeout(300);
+  const hat = await meanOf(page, "beanie", 0, 0.35);
+  assert.ok(apart(own, hat) > 0.08 && hat[1] > hat[0], `the beanie turns that green (${hat.map((v) => v.toFixed(2)).join(", ")})`);
+  assert.match(await dna(), /^2/);
+  await page.waitForTimeout(300);
+  assert.deepEqual(await measure(page), [], "the hat's picker open, at desk size");
+  await page.close();
+  // a phone: the picker open fits, its hex field big enough that an iPhone does not zoom into it
+  const phone = await open("phone");
+  await plainNewOrb(phone);
+  await phone.getByRole("tab", { name: "Colour" }).click();
+  await phone.locator('[data-colour-any="orb"]').click();
+  const hexField = phone.getByRole("textbox", { name: "The orb's colour, as hex" });
+  await hexField.fill("#3060ff");
+  await phone.waitForTimeout(300);
+  assert.ok(Number.parseFloat(await hexField.evaluate((el) => getComputedStyle(el).fontSize)) >= 16, "16 px or more");
+  assert.deepEqual(await measure(phone), [], "the picker open, at phone size");
+  await phone.close();
 });

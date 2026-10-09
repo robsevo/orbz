@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { contrast, hex, rgbToOklch, type RGB } from "../src/design/color.ts";
-import { AZURE, backgrounds, baseOf, HUE_STEP, HUES, MIN_FONT, RADIUS, SPACE, stylesheet, SURFACES, THEMES as ALL, TYPE, type Theme, type ThemeId } from "../src/design/tokens.ts";
+import { AZURE, backgrounds, baseOf, HUE_STEP, HUES, MIN_FONT, RADIUS, SPACE, stylesheet, SURFACES, THEMES as ALL, TYPE, type Theme, type ThemeId, DARK_ORB } from "../src/design/tokens.ts";
 import { lintSource, lintTree } from "./lint.ts";
 
 // every theme you can choose (owner, 10-02: "besides light or dark"), each held to the same checks
@@ -56,6 +56,16 @@ test("every orb hue reads as text in every theme; Ash keeps his azure", () => {
       assert.ok(w.ratio >= AA, `${h.name} in ${t} ${hex(c)} is ${w.ratio.toFixed(2)}:1 on ${w.on}`);
     }
   }
+});
+
+// the Dark orb (PLAN 2.20; owner, 10-08): its words a quiet grey, held to AA in every theme as the 24 are
+test("Dark's words read as text in every theme, a grey and not a colour", () => {
+  for (const t of THEMES) {
+    const c = DARK_ORB[baseOf(t)];
+    const w = worst(c, t);
+    assert.ok(w.ratio >= AA, `dark in ${t} ${hex(c)} is ${w.ratio.toFixed(2)}:1 on ${w.on}`);
+  }
+  for (const c of [DARK_ORB.dark, DARK_ORB.light]) assert.ok(rgbToOklch(c).C < 0.03, `${hex(c)}: a grey`);
 });
 
 test("the hues are one family: the same lightness in the dark, evenly round the wheel, and each tellable from the next", () => {

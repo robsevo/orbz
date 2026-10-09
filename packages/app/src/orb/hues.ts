@@ -25,35 +25,38 @@ export function hueRot(c: V3, turns: number): V3 {
 const REST: V3 = [(0.847 + 0.847 + 0.754) / 3, (0.473 + 0.691 + 0.847) / 3, (0.504 + 0.473 + 0.473) / 3];
 export const ASH_TURN = 200 / 360;
 
-const tintHue = (turns: number): number => {
+export const tintHue = (turns: number): number => {
   const c = hueRot(REST, turns).map((v) => Math.max(0, Math.min(255, Math.round(v * 255)))) as V3;
   return rgbToOklch(c).h;
 };
 const wrap = (d: number): number => ((d + 540) % 360) - 180;
 
-export const ORB_TURNS: Record<HueName, number> = (() => {
-  const base = tintHue(ASH_TURN);
-  const azure = HUES[0]!.angle;
-  const out = {} as Record<HueName, number>;
-  for (const h of HUES) {
-    if (h.name === "azure") {
-      out[h.name] = ASH_TURN;
-      continue;
+/** The turn for a colour at `angle` (its OKLCH hue): the one whose resting tint sits as far round from Ash's as the
+ * colour sits from azure, a quarter degree of turn at a time. */
+function searchTurn(angle: number): number {
+  const want = (tintHue(ASH_TURN) + (angle - HUES[0]!.angle) + 360) % 360;
+  let best = 0;
+  let err = Infinity;
+  for (let d = 0; d < 360; d += 0.25) {
+    const e = Math.abs(wrap(tintHue(d / 360) - want));
+    if (e < err) {
+      err = e;
+      best = d / 360;
     }
-    const want = (base + (h.angle - azure) + 360) % 360;
-    let best = 0;
-    let err = Infinity;
-    for (let d = 0; d < 360; d += 0.25) {
-      const e = Math.abs(wrap(tintHue(d / 360) - want));
-      if (e < err) {
-        err = e;
-        best = d / 360;
-      }
-    }
-    out[h.name] = best;
   }
-  return out;
-})();
+  return best;
+}
+/** Any colour's turn (PLAN 2.20), turned as the 24 are; its angle to a quarter degree, kept once found. */
+const turns = new Map<number, number>();
+export function turnFor(angle: number): number {
+  const key = Math.round((((angle % 360) + 360) % 360) * 4) / 4;
+  const kept = turns.get(key) ?? searchTurn(key);
+  turns.set(key, kept);
+  return kept;
+}
+
+// the 24 by their own angles, exactly as they always were
+export const ORB_TURNS: Record<HueName, number> = Object.fromEntries(HUES.map((h) => [h.name, h.name === "azure" ? ASH_TURN : searchTurn(h.angle)])) as Record<HueName, number>;
 
 /** How far round from Ash's an orb's resting tint sits, in degrees (for the tests). */
 export const tintOffset = (name: HueName): number => wrap(tintHue(ORB_TURNS[name]) - tintHue(ASH_TURN));

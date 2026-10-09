@@ -291,7 +291,8 @@ test("a roll's colours go together on the colour wheel, accessories too, and eve
   const seen = { hat: new Set<string>(), glasses: new Set<string>() };
   for (let seed = 0; seed < 600; seed++) {
     const c = surprise(seed);
-    assert.deepEqual(clashes(c), [], `seed ${seed}`);
+    assert.notEqual(c.hue, "dark", "the dice roll the 24, never Dark: a seed's orb stays the orb it was");
+    assert.deepEqual(clashes({ ...c, hue: c.hue as HueName }), [], `seed ${seed}`);
     if (c.hat === "none") assert.equal(c.hatHue, null, "no hat, no hat colour");
     seen.hat.add(c.hatHue === null ? "own" : c.hatHue === c.hue ? "his" : c.hatHue === "white" || c.hatHue === "black" ? "neutral" : "partner");
     seen.glasses.add(c.glassesHue === null ? "own" : c.glassesHue === c.hue ? "his" : c.glassesHue === "white" || c.glassesHue === "black" ? "neutral" : "partner");

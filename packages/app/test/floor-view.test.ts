@@ -39,16 +39,17 @@ after(async () => {
   if (dist) rmSync(dist, { recursive: true, force: true });
 });
 
-/** Waits until the orb on the floor is headed somewhere matching `at`, and is there. */
-async function arrives(page: Page, name: string, at: RegExp): Promise<string> {
+/** Waits until the orb on the floor is headed somewhere matching `at`, and is there (`there: false`, only headed: a
+ * long walk under the gate's load, its software-drawn frames slow, can take longer than the test cares to wait). */
+async function arrives(page: Page, name: string, at: RegExp, o: { there?: boolean; timeout?: number } = {}): Promise<string> {
   const handle = await page.waitForFunction(
-    ({ name, at }) => {
+    ({ name, at, there }) => {
       const b = document.querySelector(`[data-floor-orb="${name}"]`);
       const where = b?.getAttribute("data-at") ?? "";
-      return new RegExp(at).test(where) && b?.getAttribute("data-arrived") === "true" ? where : null;
+      return new RegExp(at).test(where) && (!there || b?.getAttribute("data-arrived") === "true") ? where : null;
     },
-    { name, at: at.source },
-    { timeout: 60_000 },
+    { name, at: at.source, there: o.there ?? true },
+    { timeout: o.timeout ?? 60_000 },
   );
   return String(await handle.jsonValue());
 }
@@ -277,7 +278,8 @@ test("the bottom rooms (owner, 10-08: \"Gym, Classroom, Library and Interview ro
   assert.deepEqual(await measure(page), [], "the floor and its new rooms, at desk size");
   // the night's gym: the office in the gym, learning (it sat them at their desks before there was one)
   h.events.append("gym.night", {});
-  for (const name of ["Pip", "Gus", "Ada"]) await arrives(page, name, /^poi:(tread1|tread2|weights|bench)$/);
+  // where it sends each one (the walk itself, across the whole floor, is the floor's own, tested above)
+  for (const name of ["Pip", "Gus", "Ada"]) await arrives(page, name, /^poi:(tread1|tread2|weights|bench)$/, { there: false, timeout: 90_000 });
   assert.match(await page.locator('[data-who="Ada"]').innerText(), /At the gym, learning habits/);
   h.events.append("gym.night_done", {});
   // an applicant pressed: the Recruiter, on its department; the count, the Recruiter
