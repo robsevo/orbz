@@ -181,7 +181,8 @@ export async function measure(page: Page): Promise<Finding[]> {
       let block: Element = n.parentElement;
       while (getComputedStyle(block).display === "inline" && block.parentElement) block = block.parentElement;
       const s = getComputedStyle(block);
-      if (s.whiteSpace === "nowrap" || s.textOverflow === "ellipsis" || block.closest("svg")) continue;
+      // a program's lines are its own (a command shown as code: its last line "PY" is no widow, nor a name it breaks)
+      if (s.whiteSpace === "nowrap" || s.textOverflow === "ellipsis" || block.closest("svg, code, pre")) continue;
       const text = n.textContent;
       const entry = words.get(block) ?? { tops: new Map<number, number>(), n: 0 };
       for (const m of text.matchAll(/\S+/g)) {

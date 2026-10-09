@@ -7,6 +7,7 @@ import { Orb } from "../orb/Orb.tsx";
 import type { Character } from "../orb/spec.ts";
 import { idOf, type YourDay, type MorningCard, type Notice, type Office, type Undo } from "../home/link.ts";
 import type { Route } from "../ui/nav.ts";
+import { Asked } from "../ui/Asked.tsx";
 
 const MARK: Record<Notice["kind"], string> = { bill: "¤", reminder: "◷", approval: "!", done: "✓", promotion: "↑", performance: "◔", reading: "≡", friends: "♥", learning: "✎", report: "❖" };
 const KIND_WORDS: Record<Notice["kind"], string> = { bill: "Bill", reminder: "Reminder", approval: "Waiting for your OK", done: "Finished", promotion: "Ready for promotion", performance: "Weekly card", reading: "Reading", friends: "Office life", learning: "A lesson from a friend", report: "From the board" };
@@ -131,6 +132,12 @@ export function NoticesRoom(o: { home: Office | null; office: Character[]; notic
     if (!n.lesson) return;
     (keep ? home.keepLesson(n.lesson) : home.dropLesson(n.lesson)).then(o.reload, (e: Error) => setSaid(e.message));
   };
+  // an approval is answered on its notice too (owner, 10-08: "should be able to approve this from notifications";
+  // a schedule's run has no room of its own, so its card could be answered nowhere): as its conversation would
+  const answer = (n: Notice, choice: "approve" | "deny"): void => {
+    if (n.card === null) return;
+    home.answer(n.card, choice).then(o.reload, (e: Error) => setSaid(e.message));
+  };
   return (
     <div data-stream={o.live ? "open" : "connecting"} style={{ display: "grid", gap: "var(--s5)", padding: "var(--s5)", alignContent: "start", minWidth: 0 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
@@ -165,7 +172,7 @@ export function NoticesRoom(o: { home: Office | null; office: Character[]; notic
                 <article key={n.id} data-notice={n.kind} style={{ display: "grid", gridTemplateColumns: "auto minmax(0, 1fr) auto", gap: "6px 10px", alignItems: "start", padding: "10px 12px", borderRadius: 14, background: "var(--card)", boxShadow: n.kind === "approval" || n.kind === "bill" ? "inset 0 0 0 1.5px var(--accent)" : "inset 0 0 0 1px var(--hairline)", minWidth: 0 }}>
                   <span aria-hidden style={{ width: 28, height: 28, borderRadius: "50%", display: "grid", placeItems: "center", background: "var(--accent-fill)", color: "var(--accent)", font: "800 14px/16px var(--font)" }}>{MARK[n.kind]}</span>
                   <span style={{ display: "grid", minWidth: 0 }}>
-                    <span style={{ font: "700 14px/19px var(--font)", color: "var(--text-1)", overflowWrap: "break-word", textWrap: "balance" }}>{n.title}</span>
+                    <Asked title={n.title} style={{ font: "700 14px/19px var(--font)", color: "var(--text-1)", overflowWrap: "break-word", textWrap: "balance" }} />
                     <span style={{ font: "400 12px/17px var(--font)", color: "var(--text-3)", overflowWrap: "break-word", textWrap: "pretty" }}>
                       {[KIND_WORDS[n.kind], n.detail, n.due && dueWords(n.due), ago(n.at, now)].filter(Boolean).join(" · ")}
                     </span>
@@ -175,8 +182,18 @@ export function NoticesRoom(o: { home: Office | null; office: Character[]; notic
                   <button onClick={() => away(n.id)} aria-label={`Put away: ${n.title}`} style={{ ...button, padding: "6px 10px" }}>
                     ✕
                   </button>
-                  {(n.kind === "promotion" || (n.kind === "performance" && c) || n.kind === "reading" || n.kind === "report" || (n.kind === "learning" && n.lesson) || where) && (
+                  {(n.kind === "promotion" || (n.kind === "approval" && n.card !== null) || (n.kind === "performance" && c) || n.kind === "reading" || n.kind === "report" || (n.kind === "learning" && n.lesson) || where) && (
                     <span style={{ gridColumn: "1 / -1", paddingLeft: 38, display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {n.kind === "approval" && n.card !== null && (
+                        <>
+                          <button data-sound="pick" onClick={() => answer(n, "approve")} style={{ ...button, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)" }}>
+                            Approve
+                          </button>
+                          <button onClick={() => answer(n, "deny")} style={button}>
+                            Deny
+                          </button>
+                        </>
+                      )}
                       {n.kind === "promotion" && (
                         <>
                           <button data-sound="pick" onClick={() => promotion(n, true)} style={{ ...button, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)" }}>

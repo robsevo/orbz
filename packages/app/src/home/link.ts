@@ -109,6 +109,13 @@ export type Report = {
   hiring: { positions: string[]; applicants: number[]; returning: { id: string; name: string; specialty: string }[] };
   money: { treasurer: string | null; yesterdayUsd: number; weekUsd: number; bills: { title: string; due: string; amount: string | null }[] };
 };
+/** The numbers behind the home page, as charts (PLAN 2.19; the home's stats.ts): by day, oldest first, and by what. */
+export type TokenCount = { calls: number; input: number; cached: number; output: number };
+export type StatsState = {
+  days: string[];
+  brain: { total: TokenCount; byDay: TokenCount[]; byModel: (TokenCount & { model: string })[]; byKind: (TokenCount & { kind: string })[]; byOrb: (TokenCount & { orb: string | null; name: string })[] };
+  xp: { total: { earned: number; lost: number }; byDay: { earned: number; lost: number }[]; byOrb: { orb: string; name: string; earned: number; lost: number }[] };
+};
 export type BoardState = {
   size: number;
   seats: { orb: string; name: string; post: BoardPost }[];
@@ -211,6 +218,8 @@ export const tabOf = (id: number, tab: Tab): string => `team:${id}:${tab}`;
 export interface Office {
   readonly kind: "home" | "preview";
   orbs(): Promise<Character[] | null>;
+  /** The orbs you let go (PLAN 5.5), as they look: the floor seats those at school in its classroom (owner, 10-08). */
+  away(): Promise<Character[]>;
   add(c: Character): Promise<void>;
   letGo(c: Character, handTo?: string): Promise<void>;
   /** Brings back an orb you let go (PLAN 5.5), with everything he had and what he learned away. */
@@ -233,6 +242,8 @@ export interface Office {
   thumb(sitting: number, n: number, up: boolean): Promise<void>;
   career(c: Character): Promise<CareerState>;
   dashboard(): Promise<DashboardState>;
+  /** The numbers behind the home page, as charts (PLAN 2.19): the last 7, 14 or 30 days. */
+  stats(days: number): Promise<StatsState>;
   /** The board (PLAN 5.16), a proposal put to it, an election now. */
   board(): Promise<BoardState>;
   /** The board's reports, newest first; one made now; your verdict on an idea (approved gives its orb XP). */
@@ -482,6 +493,10 @@ export function doorOffice(base: Character): Office {
       const { orbs } = await call<{ orbs: HomeOrb[] }>("../orbs");
       return orbs.map((o) => fromHome(o, base));
     },
+    async away() {
+      const { orbs } = await call<{ orbs: (HomeOrb & { letGoAt?: number | null })[] }>("../orbs?all=1");
+      return orbs.filter((o) => o.letGoAt != null).map((o) => fromHome(o, base));
+    },
     async add(c) {
       await call("../orbs", { method: "POST", body: JSON.stringify(toHome(c)) });
     },
@@ -531,6 +546,9 @@ export function doorOffice(base: Character): Office {
     },
     async career(c) {
       return call<CareerState>(`../orbs/${encodeURIComponent(idOf(c.name))}/career`);
+    },
+    async stats(days) {
+      return call<StatsState>(`../stats?days=${days}`);
     },
     async dashboard() {
       return call<DashboardState>("../dashboard");

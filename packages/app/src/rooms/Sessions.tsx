@@ -162,6 +162,7 @@ function SessionView(o: { home: Office; office: Character[]; session: Session; t
       orbs={crew}
       send={(text) => o.home.sayIn(o.session.id, o.tab, text)}
       placeholder={`Say something to the ${TAB_WORDS[o.tab].label}`}
+      shorter={[`Message the ${TAB_WORDS[o.tab].label}`, "Message"]}
       empty={crew.length ? TAB_WORDS[o.tab].empty : "No one is in this tab yet: bring someone in."}
       onBusy={setBusy}
       onMessages={setMessages}

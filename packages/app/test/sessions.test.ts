@@ -197,6 +197,8 @@ test("a conversation scrolls inside the screen, never the page: what you type st
   h.board.open(board.id, BOARD);
   // a long conversation already there (owner, 10-07: "or else i have to scroll ALLL THE WAY DOWN ... AND ALL THE WAY UP AGAIN")
   for (let i = 1; i <= 40; i++) h.conversations.add({ conversation: conv, orb: i % 2 ? "hazel" : "milo", role: "assistant", content: `Line ${i}: ${"a thought about the party, ".repeat(i % 5 + 1)}` });
+  // a long decision (owner, 10-08: its "✓" stood over its "AGREED")
+  h.conversations.add({ conversation: conv, orb: "hazel", role: "notice", content: "✓ Agreed", meta: { agreed: "Run the party's skill gym every night at nine, each free orb choosing and practising a skill the team can use." } });
   const d = await serve(h, { port: 0, appDir: dist });
   t.after(() => d.close());
   for (const size of [{ width: 390, height: 844 }, { width: 1280, height: 800 }]) {
@@ -237,6 +239,52 @@ test("a conversation scrolls inside the screen, never the page: what you type st
     await page.getByText(`And one more, at ${size.width}.`).waitFor();
     assert.equal(await jump.count(), 0, "and goes once you are there");
     assert.deepEqual(await measure(page), [], `${size.width}: nothing spills`);
+    // a decision's mark and its word on one line, however long the decision (owner, 10-08: "Agreed and checkmark
+    // should always be on same line")
+    const mark = await page.locator("[data-agreed-mark]").first().evaluate((el) => {
+      const words = el.firstChild as Text;
+      const top = (from: number, to: number): number => {
+        const r = document.createRange();
+        r.setStart(words, from);
+        r.setEnd(words, to);
+        return Math.round(r.getBoundingClientRect().top);
+      };
+      return { mark: top(0, 1), word: top(words.data.length - 1, words.data.length) };
+    });
+    assert.equal(mark.word, mark.mark, `${size.width}: ✓ and AGREED on one line`);
+    // the box you write in (owner, 10-08: "Say something to the brainstorm doesnt fit in the text box"): its words
+    // fit its one line, its name stays whole; written in, it grows to its cap, Send kept at its foot
+    const words = await box.evaluate((el: HTMLTextAreaElement) => {
+      const cs = getComputedStyle(el);
+      const probe = Object.assign(document.createElement("span"), { textContent: el.placeholder });
+      probe.style.cssText = `position:absolute;white-space:pre;font:${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+      document.body.append(probe);
+      const width = probe.getBoundingClientRect().width;
+      probe.remove();
+      return { placeholder: el.placeholder, fits: width <= el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) };
+    });
+    assert.ok(words.fits, `${size.width}: "${words.placeholder}" fits the box`);
+    if (size.width === 1280) assert.equal(words.placeholder, "Say something to the Brainstorm", "a desk has room for all of it");
+    await box.fill("A long message, to see the box grow with what is written in it. ".repeat(4));
+    const grown = await box.evaluate((el) => el.getBoundingClientRect().height);
+    assert.ok(grown > 60 && grown <= 160, `${size.width}: the box grows with what you write, up to its cap (${grown} px)`);
+    const send = await page.getByRole("button", { name: "Send" }).boundingBox();
+    assert.ok(send && send.height < 50, `${size.width}: Send keeps its height (${send?.height} px)`);
+    await box.fill("");
+    if (size.width === 390) {
+      // a phone's keyboard shrinks only the part of the page you see, as a pinch does, and the browser pans the page
+      // up to the box (owner, 10-08: "The chat in mobile navigates to a empty bottom"): the room keeps the page's
+      // height, so there is no nothing under it to pan onto
+      const room = page.locator("[data-session]");
+      const tall = await room.evaluate((el) => el.getBoundingClientRect().height);
+      const cdp = await ctx.newCDPSession(page);
+      await cdp.send("Emulation.setPageScaleFactor", { pageScaleFactor: 2 });
+      await page.waitForFunction(() => (window.visualViewport?.height ?? 900) < 500, undefined, { timeout: 10_000 });
+      await page.waitForTimeout(300);
+      assert.equal(await room.evaluate((el) => el.getBoundingClientRect().height), tall, "the room keeps its height when only what you see shrinks");
+      await cdp.send("Emulation.setPageScaleFactor", { pageScaleFactor: 1 });
+      await cdp.detach();
+    }
     // a private chat the same, his computer beside it scrolling on its own
     for (let i = 1; i <= 40; i++) if (size.width === 390) h.conversations.add({ conversation: "chat:hazel", orb: "hazel", role: "assistant", content: `Chat line ${i}: ${"a plan for Saturday, ".repeat(i % 4 + 1)}` });
     await page.evaluate(() => (location.hash = "#/chat/Hazel"));

@@ -12,12 +12,13 @@
 // While he speaks or works, Send is Stop: one press silences him and ends his run. Hands-free is a
 // real conversation (PLAN 4.7): his name once, talking over him, "didn't catch that" (ears.ts and
 // turns.ts); what you said is marked as said, so he answers for the ear.
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { Character } from "../orb/spec.ts";
 import { idOf, type Card, type Choice, type Message, type Office } from "../home/link.ts";
 import { saying, speak, speaking, stopSpeaking } from "../orb/speech.ts";
 import { type Ears, listenFor, pressToTalk } from "../orb/ears.ts";
 import { Rich } from "../ui/Rich.tsx";
+import { Asked } from "../ui/Asked.tsx";
 
 const bubble = (mine: boolean): CSSProperties => ({
   justifySelf: mine ? "end" : "start", maxWidth: "min(80%, 620px)", padding: "10px 14px", borderRadius: 18,
@@ -26,6 +27,8 @@ const bubble = (mine: boolean): CSSProperties => ({
   font: "400 15px/22px var(--font)", color: "var(--text-1)", whiteSpace: "pre-wrap", overflowWrap: "anywhere", minWidth: 0,
 });
 const button: CSSProperties = { font: "600 14px/20px var(--font)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 10, padding: "8px 14px", cursor: "pointer", boxShadow: "inset 0 0 0 .5px var(--hairline)", minHeight: 36 };
+/** How tall the box you write in grows before it scrolls. */
+const BOX_MAX = 160;
 
 export type Busy = Record<string, "thinking" | "speaking">;
 
@@ -41,6 +44,8 @@ export function Talk(o: {
   /** `said`: you spoke it, by the microphone or hands-free (PLAN 4.7). */
   send: (text: string, o?: { said?: boolean }) => Promise<void>;
   placeholder: string;
+  /** Shorter words for the empty box, longest first, for where `placeholder` does not fit its one line. */
+  shorter?: string[];
   empty: ReactNode;
   /** A private chat lets you give him files (PLAN 2.4): each kept on the home, its path in your message. */
   attach?: (file: File) => Promise<string>;
@@ -185,6 +190,48 @@ export function Talk(o: {
     setUnseen(false);
   };
 
+  // the box you write in fits what is in it (owner, 10-08, on a phone: "Say something to the brainstorm doesnt
+  // fit in the text box"): empty, the longest of its words that fits its one line; written in, it grows with
+  // your words up to BOX_MAX, then scrolls
+  const box = useRef<HTMLTextAreaElement>(null);
+  const [hint, setHint] = useState(o.placeholder);
+  const grow = (): void => {
+    const el = box.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, BOX_MAX)}px`;
+  };
+  useLayoutEffect(grow, [draft]);
+  const shorter = (o.shorter ?? []).join("\n");
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const words = [o.placeholder, ...(o.shorter ?? [])];
+    let width = -1;
+    const pick = (): void => {
+      if (el.clientWidth === width) return; // only a new width changes what fits
+      width = el.clientWidth;
+      const cs = getComputedStyle(el);
+      const room = el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+      const probe = document.createElement("span");
+      probe.style.cssText = `position:absolute;visibility:hidden;white-space:pre;font:${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily};letter-spacing:${cs.letterSpacing}`;
+      document.body.append(probe);
+      const fits = words.find((w) => ((probe.textContent = w), probe.getBoundingClientRect().width <= room)) ?? words.at(-1)!;
+      probe.remove();
+      setHint(fits);
+      grow();
+    };
+    pick();
+    // a frame later, so the box's height changing here is never the change its own observer is told of
+    const ro = typeof ResizeObserver === "function" ? new ResizeObserver(() => requestAnimationFrame(pick)) : null;
+    ro?.observe(el);
+    void document.fonts?.ready.then(() => {
+      width = -1;
+      pick();
+    });
+    return () => ro?.disconnect();
+  }, [o.placeholder, shorter]);
+
   const send = (): void => {
     const text = [draft.trim(), ...given.map((p) => `[Attached: ${p}]`)].filter(Boolean).join("\n");
     if (!text) return;
@@ -275,13 +322,15 @@ export function Talk(o: {
         {shown.map((m) =>
           m.role === "notice" ? (
             typeof m.meta.agreed === "string" ? (
-              <div key={m.id} data-agreed style={{ justifySelf: "center", display: "flex", gap: 8, alignItems: "center", padding: "8px 14px", borderRadius: 14, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)", font: "700 14px/20px var(--font)", color: "var(--text-1)", maxWidth: 560, animation: "orbs-arrive 520ms var(--m-spring)" }}>
-                <span aria-hidden style={{ letterSpacing: ".1em", fontSize: 11, color: "var(--accent)" }}>✓ AGREED</span>
-                {m.meta.agreed}
+              // the mark and its word on one line, at the first line of what was agreed (owner, 10-08: "Agreed and
+              // checkmark should always be on same line"; a long decision squeezed it to "✓" over "AGREED")
+              <div key={m.id} data-agreed style={{ justifySelf: "center", display: "flex", gap: 8, alignItems: "baseline", padding: "8px 14px", borderRadius: 14, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)", font: "700 14px/20px var(--font)", color: "var(--text-1)", maxWidth: 560, minWidth: 0, animation: "orbs-arrive 520ms var(--m-spring)" }}>
+                <span aria-hidden data-agreed-mark style={{ letterSpacing: ".1em", fontSize: 11, color: "var(--accent)", whiteSpace: "nowrap", flex: "0 0 auto" }}>✓ AGREED</span>
+                <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>{m.meta.agreed}</span>
               </div>
             ) : typeof m.meta.memory === "string" ? (
-              <div key={m.id} data-memory data-orb={byId.get(m.orb)?.hue} style={{ justifySelf: "center", display: "flex", gap: 8, alignItems: "center", padding: "6px 12px", borderRadius: 999, background: "var(--fill)", boxShadow: "inset 0 0 0 .5px var(--hairline)", font: "600 13px/18px var(--font)", color: "var(--text-1)", maxWidth: 560, animation: "orbs-arrive 520ms var(--m-spring)" }}>
-                <span aria-hidden style={{ letterSpacing: ".1em", fontSize: 10, fontWeight: 800, color: "var(--accent)", flex: "0 0 auto" }}>MEMORY UPDATED</span>
+              <div key={m.id} data-memory data-orb={byId.get(m.orb)?.hue} style={{ justifySelf: "center", display: "flex", gap: 8, alignItems: "baseline", padding: "6px 12px", borderRadius: 999, background: "var(--fill)", boxShadow: "inset 0 0 0 .5px var(--hairline)", font: "600 13px/18px var(--font)", color: "var(--text-1)", maxWidth: 560, animation: "orbs-arrive 520ms var(--m-spring)" }}>
+                <span aria-hidden style={{ letterSpacing: ".1em", fontSize: 10, fontWeight: 800, color: "var(--accent)", flex: "0 0 auto", whiteSpace: "nowrap" }}>MEMORY UPDATED</span>
                 <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>{m.meta.memory}</span>
               </div>
             ) : (
@@ -309,7 +358,7 @@ export function Talk(o: {
         ))}
         {card && (
           <div role="group" aria-label={card.title} data-card={card.id} style={{ display: "grid", gap: "var(--s2)", padding: "var(--s4)", borderRadius: 16, background: "var(--card)", boxShadow: "inset 0 0 0 1.5px var(--accent)", maxWidth: 620 }}>
-            <span style={{ font: "700 15px/20px var(--font)", color: "var(--text-1)" }}>{card.title}</span>
+            <Asked title={card.title} style={{ font: "700 15px/20px var(--font)", color: "var(--text-1)" }} />
             {card.detail && <span style={{ font: "400 13px/18px var(--font)", color: "var(--text-3)", whiteSpace: "pre-wrap" }}>{card.detail}</span>}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <button data-sound="pick" onClick={() => answer("approve")} style={{ ...button, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)" }}>
@@ -358,7 +407,8 @@ export function Talk(o: {
             ))}
           </div>
         )}
-        <div style={{ display: "flex", gap: 8, minWidth: 0 }}>
+        {/* the buttons keep their height at the foot of the box as it grows */}
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 8, minWidth: 0 }}>
         {o.attach && (
           <>
             <input ref={picker} type="file" multiple hidden aria-label={`Files to give ${o.orbs[0]?.name ?? "the orb"}`} onChange={(e) => give(e.target.files)} />
@@ -380,6 +430,7 @@ export function Talk(o: {
           </button>
         )}
         <textarea
+          ref={box}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
@@ -389,9 +440,9 @@ export function Talk(o: {
             }
           }}
           aria-label={o.placeholder}
-          placeholder={o.placeholder}
+          placeholder={hint}
           rows={1}
-          style={{ flex: "1 1 auto", minWidth: 0, resize: "none", font: "400 15px/22px var(--font)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 14, padding: "10px 14px", outline: 0, boxShadow: "inset 0 0 0 1px var(--hairline)", maxHeight: 160 }}
+          style={{ flex: "1 1 auto", minWidth: 0, resize: "none", font: "400 15px/22px var(--font)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 14, padding: "10px 14px", outline: 0, boxShadow: "inset 0 0 0 1px var(--hairline)", maxHeight: BOX_MAX }}
         />
         {o.voice && (talking || Object.keys(busy).length > 0) && !draft.trim() ? (
           <button type="button" onClick={stop} style={{ ...button, flexShrink: 0, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)" }}>

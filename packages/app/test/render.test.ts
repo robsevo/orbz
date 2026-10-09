@@ -147,6 +147,26 @@ test("a word wrapped at its hyphen counts on the line it ends on: 'a two- / colo
   }
 });
 
+// a request's command, shown as code on its notice (10-08): a program's lines are its own, so its last line "PY" is
+// no widow and a name it wraps is not a word cut in two
+test("a program's lines are not prose: a command shown as code, ending on 'PY' alone, is neither a widow nor broken", { skip }, async () => {
+  const page = await open("dark", "phone");
+  try {
+    await page.evaluate(() => {
+      const code = document.createElement("code");
+      code.textContent = "python3 - <<'PY'\nfor name in ('base', 'lean', 'stressed'): print(name, monthly_price)\nPY";
+      code.style.cssText = "display:block;white-space:pre-wrap;overflow-wrap:anywhere;width:150px;font:500 12px/17px monospace";
+      document.querySelector("section")!.append(code);
+    });
+    const lines = await page.locator("code").evaluate((el) => el.getClientRects().length && Math.round(el.getBoundingClientRect().height / 17));
+    assert.ok(lines >= 4, `control: the command wraps over its lines (${lines})`);
+    const found = (await measure(page)).filter((f) => f.what.includes("python3"));
+    assert.deepEqual(found, [], "nothing said of the command");
+  } finally {
+    await page.close();
+  }
+});
+
 // the themes besides light and dark (owner, 10-02): each on the design system's page, its own ground,
 // every orb name in its base's colour, and the checks clean (contrast read off what is really behind)
 for (const t of (Object.keys(THEMES) as ThemeId[]).filter((x) => x !== "dark" && x !== "light")) {

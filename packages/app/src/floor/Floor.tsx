@@ -7,12 +7,12 @@
 // glance: who is working, who needs you, what is on today, and what just happened.
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Orb } from "../orb/Orb.tsx";
-import { FAMILIES, SPECIALTIES, sheetOf, type Character, type Family } from "../orb/spec.ts";
+import { applicant, FAMILIES, SPECIALTIES, sheetOf, type Character, type Family, type SpecialtyName } from "../orb/spec.ts";
 import type { Gesture } from "../orb/life.ts";
 import type { Mood } from "../orb/mood.ts";
 import { WORN } from "../orb/useMood.ts";
 import { Balanced, OneLine } from "../ui/Balanced.tsx";
-import { idOf, type CalendarEntry, type Meeting, type MomentState, type Notice, type Office } from "../home/link.ts";
+import { idOf, type CalendarEntry, type Meeting, type MomentState, type Notice, type Office, type RecruiterState } from "../home/link.ts";
 
 /** A meeting under way, by the orbs' names (the home's ids turned to names). */
 type Meet = Meeting;
@@ -20,9 +20,9 @@ type Meet = Meeting;
 const MEET_WALK_MS = 12_000;
 import type { Route } from "../ui/nav.ts";
 import { CameraFeed } from "./camera.tsx";
-import { DeskPiece, FLOOR_CSS, MeetingTable, PingPong, Room, SideTables, skyAt, type Screen } from "./art.tsx";
-import { busiest, MARKS, VIEWS, viewRect, zoneOf, type ViewId } from "./plan.ts";
-import { DESKS, H, POIS, ROOMS, SEATS, W, WALL, ZONES, dice, dwell, meetPlan, meetSpot, momentPlan, next, route, seating, sentBy, speed, type Desk, type Plan, type PoiId, type Spot, type Traits } from "./plan.ts";
+import { DeskPiece, FLOOR_CSS, MeetingTable, PingPong, Room, RoomPieces, SideTables, skyAt, type Screen } from "./art.tsx";
+import { busiest, CLASS_DESKS, CORRIDOR, MARKS, PIECES, VIEWS, viewRect, WAITING, zoneOf, type ViewId } from "./plan.ts";
+import { DESKS, H, POIS, ROOMS, SEATS, W, WALL, ZONES, dice, dwell, meetPlan, meetPoi, meetSpot, momentPlan, next, route, seating, sentBy, speed, type Desk, type Plan, type PoiId, type Spot, type Traits } from "./plan.ts";
 
 /** An orb's size on the plan (its window's width). */
 const ORB = 84;
@@ -111,6 +111,10 @@ export function Floor({ home, office, moods, person, go }: { home: Office | null
   const [lines, setLines] = useState<Line[]>([]);
   const [day, setDay] = useState<CalendarEntry[]>([]);
   const [hiring, setHiring] = useState<string[]>([]);
+  // the bottom rooms' visitors (owner, 10-08): who applied today waits in the interview room; an orb you sent to school sits
+  // in the classroom
+  const [applicants, setApplicants] = useState<RecruiterState["applicants"]>([]);
+  const [school, setSchool] = useState<Character[]>([]);
   const [sessions, setSessions] = useState<Record<number, string>>({});
   // office life (PLAN 5.9): the meetings the home decided that are under way, by the orbs' names
   const [meets, setMeets] = useState<Meet[]>([]);
@@ -121,7 +125,11 @@ export function Floor({ home, office, moods, person, go }: { home: Office | null
   useEffect(() => {
     if (!home) return;
     const loadDay = (): void => void home.calendar(today(new Date()), today(new Date())).then(setDay, () => {});
-    const loadHiring = (): void => void home.recruiting().then((r) => setHiring(r.positions), () => {});
+    const loadHiring = (): void => void home.recruiting().then((r) => (setHiring(r.positions), setApplicants(r.applicants)), () => {});
+    const loadSchool = (): void => void Promise.all([home.org(), home.away()]).then(([org, away]) => {
+      const there = new Set(org.away.filter((o) => o.atSchool).map((o) => o.id));
+      setSchool(away.filter((c) => there.has(idOf(c.name))));
+    }, () => {});
     const loadSessions = (): void => void home.sessions().then((ss) => setSessions(Object.fromEntries(ss.map((x) => [x.id, x.title]))), () => {});
     const loadMeets = (): void => void home.socialOf().then(
       (x) => (
@@ -133,6 +141,7 @@ export function Floor({ home, office, moods, person, go }: { home: Office | null
     );
     loadDay();
     loadHiring();
+    loadSchool();
     loadSessions();
     loadMeets();
     void home.notices().then(
@@ -164,7 +173,8 @@ export function Floor({ home, office, moods, person, go }: { home: Office | null
         }
         if (e.type === "orb.activity" && e.orb && typeof d.text === "string") setDoing((m) => ({ ...m, [e.orb!]: String(d.text) }));
         if (/^reminder\.|^schedule\./.test(e.type)) loadDay();
-        if (/^position\./.test(e.type)) loadHiring();
+        if (/^(position|applicant)\./.test(e.type)) loadHiring();
+        if (/^(school\.(enrolled|ended|graduated)|orb\.(let_go|rehired))$/.test(e.type)) loadSchool();
         if (e.type === "session.created") loadSessions();
         if (/^social\./.test(e.type)) loadMeets();
         const text = eventLine(e.type, who, d, e.conversation ?? null);
@@ -230,7 +240,7 @@ export function Floor({ home, office, moods, person, go }: { home: Office | null
     s.plan = plan;
     s.hold = plan.kind === "poi" ? { poi: plan.poi }
       : plan.kind === "meeting" ? { seat: plan.seat }
-      : plan.kind === "meet" && plan.place !== "desk" ? { poi: plan.place === "pingpong" ? (plan.side ? "ping2" : "ping1") : plan.place }
+      : plan.kind === "meet" && plan.place !== "desk" ? { poi: meetPoi(plan.place, plan.side) }
       : {};
     const t = targetOf(s, plan);
     const free = sentBy(live.current.moods[s.id] ?? "idle", Boolean(live.current.meeting[s.id])) === null;
@@ -298,7 +308,8 @@ export function Floor({ home, office, moods, person, go }: { home: Office | null
     }
     const cur = s.plan;
     const resting = cur?.kind === "poi" && POIS.find((p) => p.id === cur.poi)?.rest;
-    const fits = cur && (sent === "desk" ? cur.kind === "desk" && cur.why !== "tidy" : sent === "meeting" ? cur.kind === "meeting" : sent === "rest" ? Boolean(resting) || (cur.kind === "desk" && cur.mark === "💤") : cur.kind !== "meeting" && !(cur.kind === "desk" && cur.why !== "tidy") && !resting && cur.mark !== "💤");
+    const gym = cur?.kind === "poi" && cur.by === "gym";
+    const fits = cur && (sent === "desk" ? cur.kind === "desk" && cur.why !== "tidy" : sent === "meeting" ? cur.kind === "meeting" : sent === "gym" ? gym || (cur.kind === "desk" && cur.why === "gym") : sent === "rest" ? Boolean(resting) || (cur.kind === "desk" && cur.mark === "💤") : cur.kind !== "meeting" && !(cur.kind === "desk" && cur.why !== "tidy") && !gym && !resting && cur.mark !== "💤");
     const due = sent === null && s.arrived && performance.now() > s.until;
     const relabel = sent === "desk" && s.mood !== mood; // thinking, working, waiting: the same desk, new words
     s.mood = mood;
@@ -505,6 +516,7 @@ export function Floor({ home, office, moods, person, go }: { home: Office | null
             <MeetingTable />
             <PingPong rally={rally} />
             <SideTables />
+            <RoomPieces />
 
             {/* the signs */}
             {ZONES.map((z) => (
@@ -513,8 +525,16 @@ export function Floor({ home, office, moods, person, go }: { home: Office | null
               </span>
             ))}
             {ROOMS.map((r) => (
-              <span key={r.id} data-orb={r.hue} style={{ ...sign, left: px(r.door.x + r.door.w / 2), top: px(262), translate: "-50% 0" }}>{r.name}</span>
+              <span key={r.id} data-orb={r.hue} data-room={r.id} style={{ ...sign, left: px(r.door.x + r.door.w / 2), top: px(r.wall < CORRIDOR.y ? r.wall - 30 : r.wall + 14), translate: "-50% 0" }}>{r.name}</span>
             ))}
+            {/* more applied today than the interview room has chairs: how many more, on its table, a press from the Recruiter
+                (a count on its sign ran past the floor's edge on a small phone) */}
+            {applicants.length > WAITING.length && (
+              <button type="button" className="orbs-tag" data-applied-more={applicants.length - WAITING.length} onClick={() => go({ room: "recruiter" })} aria-label={`${applicants.length} applied today: the Recruiter`} data-orb="teal"
+                style={{ position: "absolute", left: px(PIECES.interviewTable.x + PIECES.interviewTable.w / 2), top: px(PIECES.interviewTable.y + 4), translate: "-50% 0", zIndex: 1, ...tag, cursor: "pointer", border: 0, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1px var(--accent)", color: "var(--text-1)" }}>
+                {`+${applicants.length - WAITING.length} more`}
+              </button>
+            )}
             {/* the Board room's screen: the vote going on, or where to put a proposal (the org chart's board) */}
             <button type="button" className="orbs-tag" data-meeting-screen onClick={() => go({ room: "org" })} data-orb="honey"
               style={{ position: "absolute", left: px(ROOMS[1]!.rect.x + 111), top: px(15), width: px(170), height: px(52), border: 0, borderRadius: 4, background: "transparent", cursor: "pointer", display: "grid", placeItems: "center", padding: "0 6px", zIndex: 1 }}>
@@ -582,6 +602,32 @@ export function Floor({ home, office, moods, person, go }: { home: Office | null
                       </span>
                     )}
                   </div>
+                </div>
+              );
+            })}
+            {/* the visitors: who applied today, waiting to be seen, a press from the Recruiter; an orb at school, at a desk
+                of the classroom from the back (the front one is a lesson's), a press from its report card on the org chart */}
+            {[
+              ...applicants.slice(0, WAITING.length).map((a, i) => {
+                const c = applicant(a.seed, a.specialty as SpecialtyName, (n) => office.some((o) => o.name === n));
+                const family = SPECIALTIES[a.specialty as SpecialtyName]?.family;
+                return { kind: "applicant", c, at: WAITING[i]!, mark: "📋", label: `Applied to be your ${SPECIALTIES[a.specialty as SpecialtyName]?.title ?? a.specialty}, waiting to be seen`, press: () => go(family ? { room: "recruiter", family } : { room: "recruiter" }) };
+              }),
+              ...school.slice(0, CLASS_DESKS.length - 1).map((c, i) => ({ kind: "school", c, at: CLASS_DESKS[CLASS_DESKS.length - 1 - i]!.seat, mark: "🎓", label: "At school", press: () => go({ room: "org" }) })),
+            ].map((v) => {
+              const above = v.c.hat !== "none" ? -size * 1.17 : -size * 0.62;
+              // its name stays on the floor: by an edge, the tag runs inward (an office orb's is kept in by the walking loop)
+              const shift = v.at.x > W - 110 ? "calc(-100% + 24px)" : v.at.x < 110 ? "-24px" : "-50%";
+              return (
+                <div key={`${v.kind}:${v.c.name}`} style={{ position: "absolute", left: 0, top: 0, width: 0, height: 0, transform: `translate(${px(v.at.x)}px, ${px(v.at.y)}px)`, zIndex: Math.round(v.at.y) }}>
+                  <button className="orbs-tag" type="button" data-visitor={v.kind} data-floor-visitor={v.c.name} data-orb={v.c.hue} onClick={v.press} aria-label={`${v.c.name}: ${v.label}`} title={`${v.c.name} · ${v.label}`}
+                    style={{ position: "absolute", left: -size / 2, top: -size * 1.17, width: size, height: size * 1.25, padding: 0, border: 0, background: "transparent", cursor: "pointer" }}>
+                    <Orb character={v.c} size={size} state="idle" poke={false} every={3} />
+                  </button>
+                  <span data-orb={v.c.hue} aria-hidden style={{ position: "absolute", left: 0, top: above - 4, transform: `translate(${shift}, -100%)`, display: "flex", alignItems: "center", gap: 4, pointerEvents: "none", whiteSpace: "nowrap" }}>
+                    <span style={{ ...tag, color: "var(--ground)", background: "var(--accent)" }}>{v.c.name}</span>
+                    <span data-mark style={{ ...tag, padding: "0 5px", background: "var(--card)", color: "var(--text-1)", boxShadow: "inset 0 0 0 1px var(--hairline)" }}>{v.mark}</span>
+                  </span>
                 </div>
               );
             })}

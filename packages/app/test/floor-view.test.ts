@@ -5,7 +5,10 @@
 //   - an orb whose run is going walks to its own desk, in its department, and sits there; what it says
 //     shows over it as it says it, and the dashboard says it is working;
 //   - an orb in a Brainstorm walks to the meeting table, and the meeting room's screen names the session;
-//   - pressing an orb opens its profile.
+//   - pressing an orb opens its profile;
+//   - the bottom rooms (owner, 10-08: "Gym, Classroom, Library and Interview room, plus the hallway fix"): the night's
+//     gym in the gym, today's applicants waiting in the interview room (its sign counts them, a press opens the
+//     Recruiter), an orb at school in the classroom; the hallways rugs, not roads; desk and phone.
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -235,4 +238,65 @@ test("on a phone the office goes room by room: it opens on the busiest departmen
   assert.equal(await desk.locator("[data-view-choice]").count(), 0);
   assert.equal(await desk.locator("[data-camera]").getAttribute("data-camera"), "CAM 01 · WHOLE OFFICE", "a desk: the one camera on all of it");
   await desk.context().close();
+});
+
+test("the bottom rooms (owner, 10-08: \"Gym, Classroom, Library and Interview room, plus the hallway fix\"): the night's gym in the gym, today's applicants in the interview room, an orb at school in the classroom, the hallways rugs; desk and phone", { skip, timeout: 240_000 }, async (t) => {
+  const data = mkdtempSync(join(tmpdir(), "orbs-floor-low-"));
+  t.after(() => rmSync(data, { recursive: true, force: true }));
+  const h = Home.open({ dataDir: data, protect: [], spendCapUsd: null });
+  t.after(() => h.close());
+  h.start();
+  h.about.setName("Robin");
+  for (const [id, name, sp, hue] of [["pip", "Pip", "assistant", "mint"], ["gus", "Gus", "devops", "cornflower"], ["ada", "Ada", "accountant", "amber"], ["bo", "Bo", "research", "coral"]] as const) h.inbox.addOrb(id, name, sp, { shape: "bean", eyes: "classic", hue });
+  h.recruiter.setPosition("frontend", true);
+  h.recruiter.setPosition("backend", true);
+  h.letGo("bo");
+  h.sendToSchool("bo", [{ kind: "maths" }], 0.7);
+  const applied = h.recruiting().applicants.length;
+  assert.ok(applied > 3, `control: more applied today than there are chairs (${applied})`);
+  const d = await serve(h, { port: 0, appDir: dist });
+  t.after(() => d.close());
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 1000 }, colorScheme: "dark" });
+  t.after(() => ctx.close());
+  const page = await ctx.newPage();
+  await page.goto(d.pairLink());
+  await page.locator(".orbs-window").waitFor({ timeout: 30_000 });
+  await page.evaluate(() => (location.hash = "#/office"));
+  await page.locator("[data-floor-plan]").waitFor({ timeout: 30_000 });
+  // the hallways are rugs (10-08: "why is the space betwene top and bottom rooms is a street?"): no lane line down them
+  assert.equal(await page.locator("[data-hallway]").count(), 2, "two hallways");
+  assert.equal(await page.locator("[data-hallway] *").evaluateAll((els) => els.filter((el) => getComputedStyle(el).strokeDasharray !== "none").length), 0, "no dashed line");
+  // today's applicants wait in the interview room, its sign counting them
+  await page.locator('[data-visitor="applicant"]').first().waitFor({ timeout: 20_000 });
+  assert.equal(await page.locator('[data-visitor="applicant"]').count(), 3, "the first three on the chairs");
+  assert.equal(await page.locator("[data-applied-more]").innerText(), `+${applied - 3} more`, "the rest counted on the table");
+  // an orb you sent to school, at a desk in the classroom; let go, it is not one of the office's
+  await page.locator('[data-visitor="school"][data-floor-visitor="Bo"]').waitFor({ timeout: 20_000 });
+  assert.equal(await page.locator('[data-floor-orb="Bo"]').count(), 0, "control: Bo is away");
+  await page.waitForTimeout(600);
+  assert.deepEqual(await measure(page), [], "the floor and its new rooms, at desk size");
+  // the night's gym: the office in the gym, learning (it sat them at their desks before there was one)
+  h.events.append("gym.night", {});
+  for (const name of ["Pip", "Gus", "Ada"]) await arrives(page, name, /^poi:(tread1|tread2|weights|bench)$/);
+  assert.match(await page.locator('[data-who="Ada"]').innerText(), /At the gym, learning habits/);
+  h.events.append("gym.night_done", {});
+  // an applicant pressed: the Recruiter, on its department; the count, the Recruiter
+  await page.locator('[data-visitor="applicant"]').first().click();
+  await page.waitForFunction(() => location.hash === "#/recruiter/build", undefined, { timeout: 10_000 });
+  await page.evaluate(() => (location.hash = "#/office"));
+  await page.locator("[data-applied-more]").click();
+  await page.waitForFunction(() => location.hash === "#/recruiter", undefined, { timeout: 10_000 });
+  // on a phone each new room has its chip, and none spills
+  const phone = await ctx.browser()!.newContext({ viewport: { width: 390, height: 844 }, colorScheme: "dark", hasTouch: true, isMobile: true });
+  t.after(() => phone.close());
+  const p = await phone.newPage();
+  await p.goto(d.pairLink());
+  await p.locator(".orbs-window").waitFor({ timeout: 30_000 });
+  await p.evaluate(() => (location.hash = "#/office"));
+  await p.locator("[data-floor-plan]").waitFor({ timeout: 30_000 });
+  for (const room of ["gym", "classroom", "library", "interview"]) {
+    await p.locator(`[data-view-choice="${room}"]`).click();
+    await p.waitForTimeout(500);
+    assert.deepEqual(await measure(p), [], `${room}, on a phone`);
+  }
 });

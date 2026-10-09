@@ -5,20 +5,23 @@
 //
 // The floor is seen from the front and above, as a game's office is: the back wall at the top, the rooms
 // along it (the lounge, the meeting room, the kitchen), a corridor, then the departments, each a pod of
-// desks behind a low partition in its own colour, and a games corner among them. Units are the plan's own;
-// Floor.tsx scales them to the screen. y grows down; an orb's spot is where it stands (its feet).
+// desks behind a low partition in its own colour, and a games corner among them; then a second hallway and
+// a row of rooms where the orbs do what the home really has them do (owner, 10-08: "should we also add a few
+// more rooms? like the gym?"): the gym (the night's habits and exams), the classroom (school, and a lesson
+// between friends), the library (reading) and the interview room (who applied today). Units are the plan's
+// own; Floor.tsx scales them to the screen. y grows down; an orb's spot is where it stands (its feet).
 //
-// What an orb does is its real state first (orb/mood.ts): working, thinking, waiting for you or at the gym,
-// at its desk; in a Brainstorm, at the meeting table; dozing or asleep, on the sofa. Free, it goes where its
-// traits take it (orb/dna.ts): Curiosity to the bookshelf, Calm to the sofa and the window, Care to the
-// plants, Humour to the ping-pong table and to a colleague's desk, Pace to the coffee, Focus back to its
-// own desk. Its Pace is how fast it walks.
+// What an orb does is its real state first (orb/mood.ts): working, thinking or waiting for you, at its desk;
+// at the gym, in the gym; in a board vote, at the Board room's table; dozing or asleep, on the sofa. Free, it
+// goes where its traits take it (orb/dna.ts): Curiosity to the library, Calm to the sofa and the window, Care
+// to the plants, Humour to the ping-pong table and to a colleague's desk, Pace to the coffee and the gym,
+// Focus back to its own desk. Its Pace is how fast it walks.
 import type { Mood } from "../orb/mood.ts";
 import type { HueName } from "../design/tokens.ts";
 import { FAMILIES, type Family } from "../orb/spec.ts";
 
 export const W = 1200;
-export const H = 780;
+export const H = 1056;
 /** The back wall's height. */
 export const WALL = 84;
 /** How far an orb keeps from a wall or a desk as it walks. */
@@ -52,25 +55,44 @@ export const ZONES: Zone[] = [
 /** Each department's mark, on its sign on the floor and its branch of the org chart. */
 export const MARKS: Record<Family | "play", string> = { exec: "👑", build: "🛠", think: "💡", make: "🎨", finance: "💰", business: "📈", life: "🌿", play: "🎮" };
 
-export type Room = { id: "lounge" | "meeting" | "kitchen"; name: string; hue: HueName; rect: Rect; door: { x: number; w: number } };
+/** A room: `wall` is the y of its wall on the hallway, the door in it (the top rooms' front wall, the bottom rooms' back). */
+export type Room = { id: "lounge" | "meeting" | "kitchen" | "gym" | "classroom" | "library" | "interview"; name: string; hue: HueName; rect: Rect; door: { x: number; w: number }; wall: number };
 const TOP_H = 300 - WALL;
+/** The second hallway's top, under the departments, and the bottom rooms' wall on it. */
+const HALL_Y = ROW_B + ZONE_H;
+export const LOW = HALL_Y + 52;
+/** The bottom rooms' width: four across, a wall between each two. */
+const LOW_W = (W - 3 * 12) / 4;
+const low = (id: Room["id"], name: string, hue: HueName, i: number, door = 100): Room => {
+  const x = i * (LOW_W + 12);
+  return { id, name, hue, rect: { x, y: LOW, w: LOW_W, h: H - LOW }, door: { x: x + door, w: 90 }, wall: LOW };
+};
 export const ROOMS: Room[] = [
-  { id: "lounge", name: "Lounge", hue: "iris", rect: { x: 0, y: WALL, w: 392, h: TOP_H }, door: { x: 150, w: 90 } },
+  { id: "lounge", name: "Lounge", hue: "iris", rect: { x: 0, y: WALL, w: 392, h: TOP_H }, door: { x: 150, w: 90 }, wall: 292 },
   // the Board room (owner, 10-07: "Add a Board room as well for those important meetings in the office, replace the meeting
   // room because we already have sessions we can create in sessions"): its table is the board's, met when a proposal is voted
-  { id: "meeting", name: "Board room", hue: "honey", rect: { x: 404, y: WALL, w: 392, h: TOP_H }, door: { x: 555, w: 90 } },
-  { id: "kitchen", name: "Kitchen", hue: "apricot", rect: { x: 808, y: WALL, w: 392, h: TOP_H }, door: { x: 955, w: 90 } },
+  { id: "meeting", name: "Board room", hue: "honey", rect: { x: 404, y: WALL, w: 392, h: TOP_H }, door: { x: 555, w: 90 }, wall: 292 },
+  { id: "kitchen", name: "Kitchen", hue: "apricot", rect: { x: 808, y: WALL, w: 392, h: TOP_H }, door: { x: 955, w: 90 }, wall: 292 },
+  // the bottom row (owner, 10-08: "My pick is Gym, Classroom, Library and Interview room ... do it")
+  low("gym", "Gym", "coral", 0, 160),
+  low("classroom", "Classroom", "violet", 1),
+  low("library", "Library", "amber", 2),
+  low("interview", "Interview room", "teal", 3),
 ];
 /** The corridor under the rooms. */
 export const CORRIDOR: Rect = { x: 0, y: 300, w: W, h: ROW_A - 300 };
+/** The second hallway, between the departments and the bottom rooms. */
+export const HALL: Rect = { x: 0, y: HALL_Y, w: W, h: LOW - HALL_Y };
+const room = (id: Room["id"]): Rect => ROOMS.find((r) => r.id === id)!.rect;
 
 // ── a phone's views (owner, 10-07: "for mobile ... can we make it by room on mobile and the user can switch?") ──
 export type ViewId = "all" | Room["id"] | Zone["id"];
-/** What a phone shows, one at a time: the whole office, each room, each department, the games corner. */
+/** What a phone shows, one at a time: the whole office, each room, each department, the games corner, top to bottom. */
 export const VIEWS: { id: ViewId; name: string; hue: HueName }[] = [
   { id: "all", name: "Whole office", hue: "azure" },
-  ...ROOMS.map((r) => ({ id: r.id, name: r.name, hue: r.hue })),
+  ...ROOMS.filter((r) => r.wall < ROW_A).map((r) => ({ id: r.id, name: r.name, hue: r.hue })),
   ...ZONES.map((z) => ({ id: z.id, name: z.name, hue: z.hue })),
+  ...ROOMS.filter((r) => r.wall > ROW_A).map((r) => ({ id: r.id, name: r.name, hue: r.hue })),
 ];
 /** How much floor a phone shows round a room (owner, 10-07: "a little too zoomed in on the rooms in mobile"): 50
  * to each side and 30 above and below, so a room sits among its neighbours' edges at about four fifths of the size
@@ -133,13 +155,42 @@ export const PIECES = {
   pingpong: { x: play.x + 105, y: play.y + 82, w: 160, h: 64 },
   arcade: { x: play.x + 14, y: play.y + 30, w: 46, h: 60 },
   rack: { x: zr("build").x + ZONE_W - 40, y: zr("build").y + 24, w: 30, h: 40 },
+  // the gym: two treadmills down the left wall, a bench, the weights by the right wall (its mat is only drawn); far enough
+  // apart that the names over four orbs at work never cover each other
+  tread1: { x: 24, y: LOW + 26, w: 42, h: 60 },
+  tread2: { x: 24, y: LOW + 128, w: 42, h: 60 },
+  bench: { x: 120, y: LOW + 108, w: 72, h: 24 },
+  weights: { x: room("gym").x + room("gym").w - 65, y: LOW + 128, w: 50, h: 36 },
+  // the classroom: the lectern by the board (the desks are CLASS_DESKS)
+  lectern: { x: room("classroom").x + room("classroom").w - 64, y: LOW + 50, w: 34, h: 26 },
+  // the library: a shelf either side of the door, the reading table, an armchair
+  shelfL: { x: room("library").x + 8, y: LOW + 14, w: 84, h: 30 },
+  shelfR: { x: room("library").x + room("library").w - 92, y: LOW + 14, w: 84, h: 30 },
+  readingTable: { x: room("library").x + 88, y: LOW + 112, w: 116, h: 40 },
+  armchair: { x: room("library").x + room("library").w - 61, y: LOW + 124, w: 46, h: 40 },
+  // the interview room: its table (who applied waits on the chairs along its far side, WAITING)
+  interviewTable: { x: room("interview").x + 90, y: LOW + 44, w: 120, h: 36 },
 } satisfies Record<string, Rect>;
+
+/** The classroom's four desks: two across, two deep, an orb behind each, facing you; an aisle between the two and
+ * room on the lectern's side, so the back row is reached (three across closed it off). */
+export const CLASS_DESKS: { rect: Rect; seat: Spot; approach: Spot }[] = [0, 1].flatMap((row) =>
+  [0, 1].map((col) => {
+    const x = room("classroom").x + 20 + col * 90;
+    const y = LOW + 96 + row * 64;
+    return { rect: { x, y, w: 56, h: 24 }, seat: { x: x + 28, y: y + 10 }, approach: { x: x + 28, y: y - 16 } };
+  }),
+);
+/** The interview room's three chairs along its far side, where today's first applicants wait to be seen; the board by
+ * its door counts them all. */
+export const WAITING: Spot[] = [0, 1, 2].map((i) => ({ x: room("interview").x + 40 + i * 95, y: LOW + 186 }));
 
 // ── where an orb can go when it is free ───────────────────────────────────────────────────────────
 export type PoiId =
   | "coffee" | "fridge" | "cooler" | "vending" | "bistro1" | "bistro2"
   | "sofa1" | "sofa2" | "sofa3" | "beanbag" | "books" | "window"
-  | "ping1" | "ping2" | "arcade" | "plant1" | "plant2" | "plant3";
+  | "ping1" | "ping2" | "arcade" | "plant1" | "plant2" | "plant3"
+  | "tread1" | "tread2" | "bench" | "weights" | "teach" | "learn1" | "shelf2" | "read1" | "read2" | "armchair";
 export type Poi = { id: PoiId; approach: Spot; at: Spot; sit: boolean; label: string; mark: string; rest?: boolean };
 const p = (id: PoiId, x: number, y: number, label: string, mark: string, o: { sit?: boolean; at?: Spot; rest?: boolean } = {}): Poi => ({ id, approach: { x, y }, at: o.at ?? { x, y }, sit: o.sit ?? false, label, mark, ...(o.rest && { rest: true }) });
 const sofa = PIECES.sofa;
@@ -155,7 +206,6 @@ export const POIS: Poi[] = [
   p("sofa2", sofa.x + 100, 162, "On the sofa", "🛋", { sit: true, at: { x: sofa.x + 100, y: 132 }, rest: true }),
   p("sofa3", sofa.x + 160, 162, "On the sofa", "🛋", { sit: true, at: { x: sofa.x + 160, y: 132 }, rest: true }),
   p("beanbag", 309, 262, "Taking five", "💭", { sit: true, at: { x: 309, y: 236 }, rest: true }),
-  p("books", 316, 150, "Reading", "📖"),
   p("window", 150, 262, "Looking out of the window", "🌤"),
   p("ping1", pp.x - 18, pp.y + pp.h / 2 + 10, "Playing ping-pong", "🏓"),
   p("ping2", pp.x + pp.w + 18, pp.y + pp.h / 2 + 10, "Playing ping-pong", "🏓"),
@@ -164,7 +214,24 @@ export const POIS: Poi[] = [
   p("plant1", zr("make").x - 24, zr("make").y + 124, "Watering the plants", "🪴"),
   p("plant2", zr("think").x - 24, zr("think").y + 124, "Watering the plants", "🪴"),
   p("plant3", zr("life").x - 24, zr("life").y + 124, "Watering the plants", "🪴"),
+  // the gym
+  // the treadmills are stepped onto from beside them: below the second is the floor's edge
+  p("tread1", PIECES.tread1.x + PIECES.tread1.w + 18, PIECES.tread1.y + 30, "On the treadmill", "🏃", { at: { x: PIECES.tread1.x + 21, y: PIECES.tread1.y + 30 } }),
+  p("tread2", PIECES.tread2.x + PIECES.tread2.w + 18, PIECES.tread2.y + 30, "On the treadmill", "🏃", { at: { x: PIECES.tread2.x + 21, y: PIECES.tread2.y + 30 } }),
+  p("bench", PIECES.bench.x + 36, PIECES.bench.y + PIECES.bench.h + 16, "On the bench", "🏋", { sit: true, at: { x: PIECES.bench.x + 36, y: PIECES.bench.y + 8 } }),
+  p("weights", PIECES.weights.x + 25, PIECES.weights.y - 12, "Lifting weights", "🏋"),
+  // the classroom: the teacher at the lectern, the learner at the front desk (a lesson between friends)
+  p("teach", PIECES.lectern.x + 17, PIECES.lectern.y - 24, "Teaching", "📚", { at: { x: PIECES.lectern.x + 17, y: PIECES.lectern.y - 6 } }),
+  p("learn1", CLASS_DESKS[0]!.approach.x, CLASS_DESKS[0]!.approach.y, "Learning", "📚", { sit: true, at: CLASS_DESKS[0]!.seat }),
+  // the library: a book from a shelf, the reading table, the armchair
+  p("books", PIECES.shelfL.x + 42, PIECES.shelfL.y + PIECES.shelfL.h + 20, "Reading", "📖"),
+  p("shelf2", PIECES.shelfR.x + 42, PIECES.shelfR.y + PIECES.shelfR.h + 20, "Looking for a book", "📚"),
+  p("read1", PIECES.readingTable.x + 30, PIECES.readingTable.y - 18, "Reading at the table", "📖", { sit: true, at: { x: PIECES.readingTable.x + 30, y: PIECES.readingTable.y + 10 } }),
+  p("read2", PIECES.readingTable.x + 86, PIECES.readingTable.y - 18, "Reading at the table", "📖", { sit: true, at: { x: PIECES.readingTable.x + 86, y: PIECES.readingTable.y + 10 } }),
+  p("armchair", PIECES.armchair.x + 23, PIECES.armchair.y + PIECES.armchair.h + 16, "Reading in the armchair", "📖", { sit: true, at: { x: PIECES.armchair.x + 23, y: PIECES.armchair.y + 12 } }),
 ];
+/** The gym's spots: where the night's gym sends every orb it is teaching (orb/mood.ts "gym"), and where Pace takes one free. */
+export const GYM: readonly PoiId[] = ["tread1", "tread2", "weights", "bench"];
 
 /** The meeting table's seats: four behind it (facing you), four in front. */
 export const SEATS: { approach: Spot; at: Spot }[] = [0, 1, 2, 3].flatMap((i) => {
@@ -185,7 +252,9 @@ export const BLOCKS: Rect[] = [
   { x: 0, y: 0, w: W, h: WALL + 4 }, // the back wall
   { x: 392, y: WALL, w: 12, h: TOP_H }, // the lounge's wall with the meeting room
   { x: 796, y: WALL, w: 12, h: TOP_H }, // the meeting room's with the kitchen
-  ...ROOMS.flatMap((r) => withDoor(r.rect.x, 292, r.rect.w, 8, r.door)), // the rooms' front walls
+  ...[1, 2, 3].map((i) => ({ x: i * (LOW_W + 12) - 12, y: LOW, w: 12, h: H - LOW })), // the walls between the bottom rooms
+  ...ROOMS.flatMap((r) => withDoor(r.rect.x, r.wall, r.rect.w, 8, r.door)), // each room's wall on its hallway
+  ...CLASS_DESKS.map((d) => d.rect),
   ...ZONES.flatMap((z) => withDoor(z.rect.x, z.rect.y, z.rect.w, 12, z.door)), // the partitions
   ...DESKS.map((d) => d.rect),
   ...Object.values(PIECES),
@@ -325,21 +394,21 @@ export type Traits = { Pace: number; Care: number; Curiosity: number; Humour: nu
 export type Plan =
   | { kind: "desk"; why: "work" | "think" | "wait" | "gym" | "tidy"; label: string; mark: string }
   | { kind: "meeting"; seat: number; label: string; mark: string }
-  | { kind: "poi"; poi: PoiId; label: string; mark: string; with?: string }
+  | { kind: "poi"; poi: PoiId; label: string; mark: string; with?: string; by?: "gym" }
   | { kind: "visit"; who: string; label: string; mark: string }
   /** A meeting the home decided (PLAN 5.9): the two go to its place together, side 0 and side 1; a moment's (owner, 10-07)
    * also says a line and makes a gesture there, `after` ms once it has arrived. */
   | { kind: "meet"; with: string; place: MeetPlace; side: 0 | 1; until: number; label: string; mark: string; say?: { line: string; gesture: string; after: number } };
 
 /** Where the home's meetings happen (home/src/social/rules.ts Place). */
-export type MeetPlace = "coffee" | "cooler" | "bistro1" | "bistro2" | "pingpong" | "arcade" | "desk" | "fridge" | "plant1" | "plant2" | "plant3";
+export type MeetPlace = "coffee" | "cooler" | "bistro1" | "bistro2" | "pingpong" | "arcade" | "desk" | "fridge" | "plant1" | "plant2" | "plant3" | "classroom";
 export type MeetKind = "coffee" | "ideas" | "game" | "lesson";
 
 /** Where one side of a meeting stands at a spot (not a desk: that is the teacher's own): the two ends of
  * the ping-pong table, or side by side, kept inside the floor (a spot by a wall puts both on its inner side). */
 export function meetSpot(place: Exclude<MeetPlace, "desk">, side: 0 | 1): { approach: Spot; at: Spot } {
-  if (place === "pingpong") {
-    const end = POIS.find((q) => q.id === (side ? "ping2" : "ping1"))!;
+  if (place === "pingpong" || place === "classroom") {
+    const end = POIS.find((q) => q.id === meetPoi(place, side))!;
     return { approach: end.approach, at: end.at };
   }
   const spot = POIS.find((q) => q.id === place)!;
@@ -349,13 +418,19 @@ export function meetSpot(place: Exclude<MeetPlace, "desk">, side: 0 | 1): { appr
   return { approach: { x: inside(spot.approach.x + dx), y: spot.approach.y }, at: { x: inside(spot.at.x + dx), y: spot.at.y } };
 }
 
+/** The spot one side of a meeting holds: the ping-pong table's two ends, the classroom's lectern and front desk, else the place itself. */
+export function meetPoi(place: Exclude<MeetPlace, "desk">, side: 0 | 1): PoiId {
+  return place === "pingpong" ? (side ? "ping2" : "ping1") : place === "classroom" ? (side ? "learn1" : "teach") : place;
+}
+
 /** One orb's part in a meeting the home decided: where it stands and what its tag says. `a` started it
  * (for a lesson, the one who teaches); `until` is when it ends, by the wall clock. */
 export function meetPlan(m: { a: string; b: string; kind: MeetKind; place: MeetPlace; winner: string | null; until: number }, me: string): Extract<Plan, { kind: "meet" }> {
   const side: 0 | 1 = me === m.a ? 0 : 1;
   const other = side === 0 ? m.b : m.a;
   const base = { kind: "meet" as const, with: other, place: m.place, side, until: m.until };
-  if (m.kind === "lesson") return { ...base, label: side === 0 ? `Showing ${other} something` : `Learning from ${other}`, mark: "📚" };
+  // a lesson between friends is taught in the classroom (owner, 10-08), wherever the home said
+  if (m.kind === "lesson") return { ...base, place: "classroom", label: side === 0 ? `Teaching ${other}` : `Learning from ${other}`, mark: "📚" };
   if (m.kind === "ideas") return { ...base, label: `Swapping ideas with ${other}`, mark: "💡" };
   if (m.kind === "game") return { ...base, label: m.place === "arcade" ? `At the arcade with ${other}` : `Playing ping-pong with ${other}`, mark: m.place === "arcade" ? "🕹" : "🏓" };
   return { ...base, label: m.place === "cooler" ? `At the cooler with ${other}` : `Having a coffee with ${other}`, mark: "☕" };
@@ -390,13 +465,15 @@ const AT_DESK: Partial<Record<Mood, Extract<Plan, { kind: "desk" }>>> = {
   working: { kind: "desk", why: "work", label: "Working", mark: "⌨" },
   thinking: { kind: "desk", why: "think", label: "Thinking", mark: "…" },
   waiting: { kind: "desk", why: "wait", label: "Needs your OK", mark: "!" },
+  // the gym full: learning at its desk, as it did before there was a gym
   gym: { kind: "desk", why: "gym", label: "At the gym, learning habits", mark: "🏋" },
 };
 
-/** Where its state sends it, whatever its traits say: its desk, the meeting, the sofa; null when it is free. */
-export function sentBy(mood: Mood, meeting: boolean): "desk" | "meeting" | "rest" | null {
+/** Where its state sends it, whatever its traits say: its desk, the meeting, the gym, the sofa; null when it is free. */
+export function sentBy(mood: Mood, meeting: boolean): "desk" | "meeting" | "gym" | "rest" | null {
   if (mood === "waiting") return "desk"; // it waits for you where you will find it
   if (meeting) return "meeting";
+  if (mood === "gym") return "gym"; // the night's gym (owner, 10-08: "the gym"): in the gym, not at its desk
   if (AT_DESK[mood]) return "desk";
   if (mood === "dozing" || mood === "asleep") return "rest";
   return null;
@@ -413,6 +490,10 @@ export const FOOD: ReadonlySet<PoiId> = new Set<PoiId>(["coffee", "fridge", "coo
 export function next(o: { name: string; mood: Mood; meeting: boolean; traits: Traits }, busy: { pois: Set<PoiId>; seats: Set<number>; waitingAt: PoiId | null }, others: string[], r: () => number, prev: Plan | null = null): Plan {
   const sent = sentBy(o.mood, o.meeting);
   if (sent === "desk") return AT_DESK[o.mood] ?? AT_DESK.working!;
+  if (sent === "gym") {
+    const spot = GYM.find((id) => !busy.pois.has(id));
+    return spot ? { kind: "poi", poi: spot, label: AT_DESK.gym!.label, mark: AT_DESK.gym!.mark, by: "gym" } : AT_DESK.gym!;
+  }
   if (sent === "meeting") {
     const seat = SEATS.findIndex((_, i) => !busy.seats.has(i));
     return seat >= 0 ? { kind: "meeting", seat, label: "In a meeting", mark: "💬" } : { kind: "desk", why: "work", label: "In a meeting", mark: "💬" };
@@ -435,7 +516,12 @@ export function next(o: { name: string; mood: Mood; meeting: boolean; traits: Tr
   poi("fridge", 0.15 + t.Humour * 0.01);
   poi("vending", 0.1 + t.Pace * 0.01);
   poi(r() < 0.5 ? "bistro1" : "bistro2", 0.2 + t.Calm * 0.01);
+  // the library (owner, 10-08): a book off a shelf, the reading table, the armchair
   poi("books", 0.4 + t.Curiosity * 0.16);
+  poi(r() < 0.5 ? "read1" : "read2", 0.15 + t.Curiosity * 0.06);
+  poi("armchair", 0.1 + t.Calm * 0.03 + t.Curiosity * 0.03);
+  // the gym: a workout, more for an orb with Pace
+  poi(GYM[Math.floor(r() * GYM.length)]!, 0.12 + t.Pace * 0.05);
   poi("window", 0.3 + t.Calm * 0.08);
   poi(["sofa1", "sofa2", "sofa3"][Math.floor(r() * 3)] as PoiId, 0.3 + t.Calm * 0.1);
   poi("beanbag", 0.2 + t.Calm * 0.06);

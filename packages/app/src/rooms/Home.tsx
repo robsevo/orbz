@@ -284,8 +284,8 @@ export function HomeRoom({ home, office, person, moods, go }: { home: Office | n
           <Balanced min={phone ? 140 : 170} gap={10}>
             <Tile id="working" label="Working now" value={`${working}`} sub={`of ${plural(office.length, "orb")} · ${free} free`} go={() => go({ room: "office", orb: null })} />
             <Tile id="waiting" label="Need you" value={`${waiting}`} sub={d ? plural(d.notices, "notification") : "cards to answer"} alert={waiting > 0} go={() => go({ room: "notices" })} />
-            <Tile id="xp" label="XP this week" value={d ? `${d.xp.week < 0 ? "−" : "+"}${short(Math.abs(d.xp.week))}` : "·"} sub={d ? `${d.xp.today >= 0 ? "+" : ""}${d.xp.today} today` : "from work you approve"} go={() => go({ room: "org" })} />
-            <Tile id="brain" label="Brain today" value={d ? short(d.brain.today.tokens) : "·"} sub={d ? `tokens · ${plural(d.brain.today.requests, "request")}, ${short(d.brain.week.tokens)} this week` : "tokens spent"} go={() => go({ room: "settings" })} />
+            <Tile id="xp" label="XP this week" value={d ? `${d.xp.week < 0 ? "−" : "+"}${short(Math.abs(d.xp.week))}` : "·"} sub={d ? `${d.xp.today >= 0 ? "+" : ""}${d.xp.today} today` : "from work you approve"} go={() => go({ room: "stats", tab: "xp" })} />
+            <Tile id="brain" label="Brain today" value={d ? short(d.brain.today.tokens) : "·"} sub={d ? `tokens · ${plural(d.brain.today.requests, "request")}, ${short(d.brain.week.tokens)} this week` : "tokens spent"} go={() => go({ room: "stats", tab: "brain" })} />
           </Balanced>
 
           {!home ? (

@@ -5,7 +5,7 @@
 // here names a colour (design/tokens.ts is the only place one is written).
 import type { CSSProperties, ReactNode } from "react";
 import type { HueName } from "../design/tokens.ts";
-import { CORRIDOR, DESK, DESKS, H, PIECES, POIS, ROOMS, W, WALL, ZONES, type Desk, type Rect } from "./plan.ts";
+import { CLASS_DESKS, CORRIDOR, DESK, DESKS, H, HALL, LOW, PIECES, POIS, ROOMS, W, WAITING, WALL, ZONES, type Desk, type Rect, type Room as Place } from "./plan.ts";
 
 const f = (v: string): CSSProperties => ({ fill: `var(--${v})` });
 const st = (v: string, w = 1): CSSProperties => ({ stroke: `var(--${v})`, strokeWidth: w, fill: "none" });
@@ -212,9 +212,14 @@ export function Room({ now, sky }: { now: Date; sky: Sky }) {
         <rect x={64} y={160} width={236} height={110} rx={22} style={f("accent-wash")} />
         <rect x={74} y={168} width={216} height={94} rx={18} style={st("accent-fill", 2)} />
       </Hue>
-      {/* the corridor's runner */}
-      <rect x={40} y={CORRIDOR.y + 12} width={W - 80} height={CORRIDOR.h - 24} rx={14} style={f("fill")} />
-      <path d={`M60 ${CORRIDOR.y + CORRIDOR.h / 2} H${W - 60}`} style={{ ...st("hairline", 1.5), strokeDasharray: "10 14" }} />
+      {/* the hallways: a runner rug down each (owner, 10-08: "why is the space betwene top and bottom rooms is a street? lol.
+          its an office"; a dashed line down the middle made it a road) */}
+      {[CORRIDOR, HALL].map((c) => (
+        <g key={c.y} data-hallway>
+          <rect x={40} y={c.y + 12} width={W - 80} height={c.h - 24} rx={8} style={f("fill")} />
+          <rect x={48} y={c.y + 16} width={W - 96} height={c.h - 32} rx={5} style={st("hairline", 1.5)} />
+        </g>
+      ))}
 
       {/* the departments' floors */}
       {ZONES.map((z) => (
@@ -370,6 +375,7 @@ export function Room({ now, sky }: { now: Date; sky: Sky }) {
           <Fixture id={z.id} r={z.rect} />
         </g>
       ))}
+      <LowRooms />
       {/* the server rack in Build, its lights blinking */}
       <g>
         <rect x={rack.x} y={rack.y - 16} width={rack.w} height={rack.h + 16} rx={3} style={f("ground")} />
@@ -518,6 +524,193 @@ export function PingPong({ rally }: { rally: boolean }) {
       <rect x={r.x} y={r.y + r.h - 12} width={r.w} height={6} rx={2} style={f("card")} />
       {rally && <circle cx={r.x + 18} cy={r.y + 14} r={3.4} style={f("text-1")} className="orbs-floor-ball" />}
     </Piece>
+  );
+}
+
+/** The classroom's desks, the lectern by its board and the library's reading table: what an orb sits or stands behind. */
+export function RoomPieces() {
+  const l = PIECES.lectern;
+  const t = PIECES.readingTable;
+  return (
+    <>
+      {CLASS_DESKS.map((d, i) => (
+        <Piece key={i} r={d.rect} up={4} z={d.rect.y + d.rect.h}>
+          <rect x={d.rect.x} y={d.rect.y} width={d.rect.w} height={d.rect.h - 8} rx={3} style={f("wood")} />
+          <rect x={d.rect.x} y={d.rect.y + d.rect.h - 10} width={d.rect.w} height={10} rx={3} style={f("wood")} opacity={0.82} />
+          <rect x={d.rect.x + 10} y={d.rect.y + 3} width={16} height={11} rx={1.5} style={f("text-2")} opacity={0.8} transform={`rotate(${i % 2 ? 5 : -4} ${d.rect.x + 18} ${d.rect.y + 8})`} />
+          <g data-orb={(["violet", "coral", "mint"] as HueName[])[i % 3]}>
+            <rect x={d.rect.x + 34} y={d.rect.y + 5} width={12} height={3} rx={1.5} style={f("accent")} />
+          </g>
+        </Piece>
+      ))}
+      <Piece r={l} up={12} z={l.y + l.h}>
+        <path d={`M${l.x + 2} ${l.y} L${l.x + l.w - 2} ${l.y} L${l.x + l.w - 6} ${l.y + l.h} L${l.x + 6} ${l.y + l.h} Z`} style={f("wood")} />
+        <rect x={l.x - 2} y={l.y - 6} width={l.w + 4} height={8} rx={2} style={f("wood")} opacity={0.9} />
+        <rect x={l.x + 8} y={l.y - 9} width={18} height={5} rx={1} style={f("text-2")} />
+      </Piece>
+      <Piece r={t} up={16} z={t.y + t.h}>
+        <rect x={t.x} y={t.y} width={t.w} height={t.h - 10} rx={6} style={f("wood")} />
+        <rect x={t.x} y={t.y + t.h - 12} width={t.w} height={12} rx={4} style={f("wood")} opacity={0.82} />
+        <rect x={t.x + 14} y={t.y + 6} width={22} height={14} rx={1.5} style={f("text-2")} opacity={0.85} transform={`rotate(-6 ${t.x + 25} ${t.y + 13})`} />
+        <rect x={t.x + 70} y={t.y + 6} width={22} height={14} rx={1.5} style={f("text-2")} opacity={0.85} transform={`rotate(5 ${t.x + 81} ${t.y + 13})`} />
+        {/* a reading lamp */}
+        <rect x={t.x + t.w / 2 - 1.5} y={t.y - 12} width={3} height={18} style={f("raised")} />
+        <g data-orb="honey">
+          <path d={`M${t.x + t.w / 2 - 10} ${t.y - 12} L${t.x + t.w / 2 + 10} ${t.y - 12} L${t.x + t.w / 2 + 6} ${t.y - 22} L${t.x + t.w / 2 - 6} ${t.y - 22} Z`} style={f("accent")} />
+          <ellipse cx={t.x + t.w / 2} cy={t.y + 4} rx={16} ry={5} style={f("accent-wash")} />
+        </g>
+      </Piece>
+    </>
+  );
+}
+
+/** The bottom row (owner, 10-08): the gym, the classroom, the library and the interview room, each walled, its door on
+ * the second hallway; what an orb sits or stands behind is drawn on its own (RoomPieces). */
+function LowRooms() {
+  const room = (id: Place["id"]): Place => ROOMS.find((r) => r.id === id)!;
+  const gym = room("gym").rect;
+  const cls = room("classroom").rect;
+  const lib = room("library").rect;
+  const iv = room("interview").rect;
+  const { tread1, tread2, bench, weights, shelfL, shelfR, armchair, interviewTable: table } = PIECES;
+  return (
+    <g data-low-rooms>
+      {/* their floors */}
+      <Hue hue="coral">
+        <rect x={gym.x} y={LOW} width={gym.w} height={gym.h} style={f("accent-wash")} opacity={0.6} />
+      </Hue>
+      <Hue hue="amber">
+        <rect x={lib.x + 70} y={LOW + 96} width={154} height={104} rx={14} style={f("accent-wash")} />
+        <rect x={lib.x + 76} y={LOW + 102} width={142} height={92} rx={11} style={st("accent-fill", 2)} />
+      </Hue>
+      <Hue hue="teal">
+        <rect x={iv.x} y={LOW} width={iv.w} height={iv.h} style={f("accent-wash")} opacity={0.5} />
+      </Hue>
+      {/* the walls between them, and the floor's near edge */}
+      {[gym, cls, lib].map((r) => (
+        <g key={r.x}>
+          <rect x={r.x + r.w} y={LOW} width={12} height={H - LOW} style={f("wall")} />
+          <rect x={r.x + r.w + 4} y={LOW} width={4} height={H - LOW} style={f("fill-2")} opacity={0.6} />
+        </g>
+      ))}
+      <rect y={H - 8} width={W} height={8} style={f("wall")} />
+      {/* each room's wall on the hallway, a door in it */}
+      {ROOMS.filter((r) => r.wall === LOW).map((r) =>
+        [
+          { x: r.rect.x, w: r.door.x - r.rect.x },
+          { x: r.door.x + r.door.w, w: r.rect.x + r.rect.w - r.door.x - r.door.w },
+        ].map((p, i) => (
+          <g key={`${r.id}${i}`}>
+            <rect x={p.x} y={LOW - 4} width={p.w} height={14} rx={3} style={f("wall")} />
+            <rect x={p.x} y={LOW - 4} width={p.w} height={4} rx={2} style={f("fill-2")} />
+          </g>
+        )),
+      )}
+
+      {/* the gym: two treadmills, the mat, a bench, the weights and a mirror */}
+      {[tread1, tread2].map((t) => (
+        <g key={t.x}>
+          <rect x={t.x} y={t.y} width={t.w} height={t.h} rx={6} style={f("raised")} />
+          <rect x={t.x + 5} y={t.y + 16} width={t.w - 10} height={t.h - 22} rx={3} style={f("ground")} opacity={0.75} />
+          <rect x={t.x + 3} y={t.y - 14} width={4} height={18} style={f("text-3")} />
+          <rect x={t.x + t.w - 7} y={t.y - 14} width={4} height={18} style={f("text-3")} />
+          <rect x={t.x + 2} y={t.y - 20} width={t.w - 4} height={10} rx={3} style={f("card")} />
+          <Hue hue="coral">
+            <rect x={t.x + t.w / 2 - 7} y={t.y - 18} width={14} height={6} rx={1.5} style={f("accent")} className="orbs-floor-blink" />
+          </Hue>
+        </g>
+      ))}
+      <Hue hue="mint">
+        <rect x={104} y={LOW + 150} width={104} height={38} rx={8} style={f("accent-fill")} />
+        <rect x={110} y={LOW + 154} width={92} height={30} rx={6} style={st("accent", 1.5)} opacity={0.6} />
+      </Hue>
+      <rect x={bench.x + 6} y={bench.y + bench.h - 6} width={5} height={10} style={f("text-3")} />
+      <rect x={bench.x + bench.w - 11} y={bench.y + bench.h - 6} width={5} height={10} style={f("text-3")} />
+      <Hue hue="coral">
+        <rect x={bench.x} y={bench.y} width={bench.w} height={bench.h - 6} rx={8} style={f("accent")} />
+        <rect x={bench.x + 4} y={bench.y + 3} width={bench.w - 8} height={5} rx={2.5} style={f("accent-fill")} />
+      </Hue>
+      <rect x={weights.x} y={weights.y} width={weights.w} height={weights.h} rx={4} style={f("raised")} />
+      {[0, 1, 2].map((i) => (
+        <g key={i}>
+          <rect x={weights.x + 8} y={weights.y + 6 + i * 11} width={weights.w - 16} height={3} rx={1.5} style={f("text-3")} />
+          <circle cx={weights.x + 9} cy={weights.y + 7.5 + i * 11} r={4.5 - i * 0.6} style={f("ground")} />
+          <circle cx={weights.x + weights.w - 9} cy={weights.y + 7.5 + i * 11} r={4.5 - i * 0.6} style={f("ground")} />
+        </g>
+      ))}
+      <Plant x={gym.x + gym.w - 22} y={LOW + 206} s={0.85} hue="jade" />
+
+      {/* the classroom: the board by its door, the desks' chairs, a globe */}
+      <rect x={cls.x + 200} y={LOW + 8} width={84} height={44} rx={4} style={f("raised")} />
+      <rect x={cls.x + 204} y={LOW + 12} width={76} height={36} rx={2} style={f("text-2")} />
+      <Hue hue="violet">
+        <path d={`M${cls.x + 212} ${LOW + 22} h26 M${cls.x + 212} ${LOW + 30} h40 M${cls.x + 212} ${LOW + 38} h18`} style={st("accent", 2)} />
+        <circle cx={cls.x + 262} cy={LOW + 26} r={7} style={st("accent", 1.8)} />
+      </Hue>
+      {CLASS_DESKS.map((d, i) => (
+        <g key={i}>
+          <rect x={d.seat.x - 13} y={d.rect.y - 20} width={26} height={22} rx={7} style={f("raised")} />
+          <rect x={d.seat.x - 10} y={d.rect.y - 17} width={20} height={5} rx={2.5} style={f("fill-2")} />
+        </g>
+      ))}
+      <g transform={`translate(${cls.x + 34} ${LOW + 40})`}>
+        <rect x={-2} y={10} width={4} height={12} style={f("raised")} />
+        <ellipse cx={0} cy={23} rx={9} ry={3} style={f("raised")} />
+        <Hue hue="cornflower">
+          <circle r={11} style={f("accent")} />
+        </Hue>
+        <Hue hue="leaf">
+          <path d="M-7 -4 q4 -4 8 0 q2 4 -2 6 q-5 1 -6 -6 Z M3 3 q4 -1 5 3 q-3 3 -5 -3 Z" style={f("accent")} />
+        </Hue>
+      </g>
+
+      {/* the library: two shelves, the reading table's chairs, the armchair, a plant */}
+      {[shelfL, shelfR].map((sh, k) => (
+        <g key={sh.x}>
+          <rect x={sh.x} y={LOW + 2} width={sh.w} height={sh.y + sh.h - LOW - 2} rx={4} style={f("wood")} />
+          {[0, 1].map((row) => (
+            <g key={row}>
+              <rect x={sh.x + 5} y={LOW + 6 + row * 19} width={sh.w - 10} height={15} style={f("ground")} opacity={0.6} />
+              {Array.from({ length: 8 }, (_, i) => {
+                const hues: HueName[] = ["amber", "coral", "cornflower", "violet", "mint", "rose", "teal", "citron"];
+                return (
+                  <Hue key={i} hue={hues[(i + row * 3 + k * 5) % hues.length]!}>
+                    <rect x={sh.x + 8 + i * 9.4} y={LOW + 7 + row * 19 + ((i * 5 + row + k) % 3)} width={7} height={13 - ((i * 5 + row + k) % 3)} rx={1} style={f(i % 3 ? "accent-fill" : "accent")} />
+                  </Hue>
+                );
+              })}
+            </g>
+          ))}
+        </g>
+      ))}
+      {[PIECES.readingTable.x + 30, PIECES.readingTable.x + 86].map((x) => (
+        <rect key={x} x={x - 14} y={PIECES.readingTable.y - 20} width={28} height={24} rx={8} style={f("raised")} />
+      ))}
+      <Hue hue="amber">
+        <rect x={armchair.x} y={armchair.y - 12} width={armchair.w} height={28} rx={10} style={f("accent")} opacity={0.8} />
+        <rect x={armchair.x - 6} y={armchair.y} width={14} height={armchair.h - 4} rx={6} style={f("accent")} />
+        <rect x={armchair.x + armchair.w - 8} y={armchair.y} width={14} height={armchair.h - 4} rx={6} style={f("accent")} />
+        <rect x={armchair.x + 6} y={armchair.y + 12} width={armchair.w - 12} height={armchair.h - 18} rx={6} style={f("accent-fill")} />
+      </Hue>
+      <Plant x={lib.x + 26} y={LOW + 200} s={0.95} hue="clover" />
+
+      {/* the interview room: the table and the interviewer's chair, a jug of water, the chairs where applicants wait (its
+          sign on the floor counts who applied) */}
+      <rect x={table.x + 46} y={table.y - 22} width={28} height={24} rx={8} style={f("raised")} />
+      <rect x={table.x} y={table.y} width={table.w} height={table.h - 10} rx={8} style={f("wood")} />
+      <rect x={table.x} y={table.y + table.h - 12} width={table.w} height={12} rx={4} style={f("wood")} opacity={0.82} />
+      <rect x={table.x + 20} y={table.y + 6} width={24} height={14} rx={1.5} style={f("text-2")} opacity={0.8} />
+      <Hue hue="cyan">
+        <rect x={table.x + 86} y={table.y - 2} width={12} height={18} rx={4} style={f("accent")} opacity={0.75} />
+      </Hue>
+      {WAITING.map((w, i) => (
+        <g key={i}>
+          <rect x={w.x - 16} y={w.y - 30} width={32} height={30} rx={8} style={f("raised")} />
+          <rect x={w.x - 13} y={w.y - 27} width={26} height={6} rx={3} style={f("fill-2")} />
+        </g>
+      ))}
+      <Plant x={iv.x + iv.w - 26} y={LOW + 120} s={0.95} />
+    </g>
   );
 }
 

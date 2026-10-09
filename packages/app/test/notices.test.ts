@@ -108,3 +108,46 @@ test("the notification centre: counted on the side menu, grouped by orb, opening
   assert.deepEqual(h.notices.list().map((n) => [n.kind, n.title, n.detail]), [["done", "Hazel finished", "Okay, I left it alone."]]);
   await desk.getByRole("button", { name: "Notifications, 1 waiting" }).waitFor({ timeout: 20_000 });
 });
+
+// a schedule's run has no room of its own, so its card could be answered nowhere (owner, 10-08: "cant approve it
+// anywhere", "should be able to approve this from notifications"): its notice answers it, the command on its lines
+test("an approval with no room of its own is answered on its notice: the command on its own lines, Approve, and the run goes on", { skip }, async (t) => {
+  const command = "cat <<'EOF'\npractised at night\nEOF";
+  const model = await fakeModel(t, [{ calls: [{ name: "shell", args: { command } }] }, { chunks: ["Practised."] }]);
+  const data = mkdtempSync(join(tmpdir(), "orbs-notices-home-"));
+  t.after(() => rmSync(data, { recursive: true, force: true }));
+  const h = Home.open({
+    dataDir: data, protect: [], spendCapUsd: null,
+    brain: { preset: { id: "t", title: "t", own: null, big: { name: "big", baseUrl: model.url, model: "m", retries: 0 }, teacher: null } },
+    agent: { decide: (def) => (def.name === "shell" ? "ask" : "allow"), passWaitMs: 20 },
+  });
+  t.after(() => h.close());
+  h.start();
+  h.about.setName("Robin");
+  h.inbox.addOrb("hazel", "Hazel", "devops", { shape: "bean", eyes: "classic", hue: "amber" });
+  h.inbox.send("hazel", "schedule:nightly", "practise a skill");
+  for (let i = 0; i < 40 && !h.conversations.openCard("schedule:nightly"); i++) await new Promise((r) => setTimeout(r, 50));
+  const card = h.conversations.openCard("schedule:nightly");
+  assert.ok(card, "control: Hazel's night waits on a card");
+
+  const d = await serve(h, { port: 0, appDir: dist });
+  t.after(() => d.close());
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: "dark", hasTouch: true });
+  t.after(() => ctx.close());
+  const page = await ctx.newPage();
+  await page.goto(d.pairLink());
+  await page.locator(".orbs-window").waitFor({ timeout: 30_000 }); // paired: the code is in the link's #
+  await page.evaluate(() => (location.hash = "#/notices"));
+  const notice = page.locator('[data-notices="hazel"] [data-notice="approval"]');
+  await notice.waitFor({ timeout: 30_000 });
+  assert.equal(await notice.getByRole("button", { name: "Open" }).count(), 0, "control: no room to open it in");
+  assert.equal(await notice.locator("[data-command]").innerText(), command, "the command it asks for, on its own lines");
+  assert.deepEqual(await measure(page), [], "nothing spills on a phone");
+  await notice.getByRole("button", { name: "Approve" }).click();
+  for (let i = 0; i < 80 && h.conversations.card(card.id)?.status === "pending"; i++) await new Promise((r) => setTimeout(r, 50));
+  assert.equal(h.conversations.card(card.id)?.status, "approved", "answered on the home");
+  for (let i = 0; i < 80 && !h.conversations.history("schedule:nightly").some((m) => m.role === "assistant" && m.content === "Practised."); i++) await new Promise((r) => setTimeout(r, 50));
+  assert.ok(h.conversations.history("schedule:nightly").some((m) => m.role === "tool" && (m.content ?? "").includes("practised at night")), "the command ran, for real");
+  await notice.waitFor({ state: "detached", timeout: 20_000 });
+  assert.equal(h.notices.list().filter((n) => n.kind === "approval").length, 0, "and its notice is put away");
+});

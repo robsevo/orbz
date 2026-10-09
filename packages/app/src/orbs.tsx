@@ -42,6 +42,7 @@ import { preview, stopPreview } from "./orb/preview.ts";
 import { span } from "./orb/age.ts";
 import { Radar } from "./ui/Radar.tsx";
 import { ReportRoom } from "./rooms/Report.tsx";
+import { StatsRoom } from "./rooms/Stats.tsx";
 import { useCramped } from "./ui/fill.ts";
 import { OrgRoom } from "./rooms/Org.tsx";
 import { CareerRoom } from "./rooms/Career.tsx";
@@ -966,9 +967,14 @@ function App() {
     if (home) home.setName(p).catch((e: Error) => setSaid(e.message));
     else savePerson(p);
   };
-  const [room, setRoom] = useState<"home" | "office" | "settings" | "chat" | "sessions" | "notices" | "calendar" | "lab" | "org" | "career" | "recruiter" | "report">(() => {
+  const [room, setRoom] = useState<"home" | "office" | "settings" | "chat" | "sessions" | "notices" | "calendar" | "lab" | "org" | "career" | "recruiter" | "report" | "stats">(() => {
     const r = parseRoute(location.hash).room;
-    return r === "home" || r === "settings" || r === "chat" || r === "sessions" || r === "notices" || r === "calendar" || r === "lab" || r === "org" || r === "career" || r === "recruiter" || r === "report" ? r : "office";
+    return r === "home" || r === "settings" || r === "chat" || r === "sessions" || r === "notices" || r === "calendar" || r === "lab" || r === "org" || r === "career" || r === "recruiter" || r === "report" || r === "stats" ? r : "office";
+  });
+  // which chart the stats show (PLAN 2.19): the brains' tokens or the XP
+  const [statsTab, setStatsTab] = useState<"brain" | "xp">(() => {
+    const r = parseRoute(location.hash);
+    return r.room === "stats" ? r.tab : "brain";
   });
   // which department's applicants the Recruiter shows (owner, 10-06: the floor's Hiring tags), or all
   // whose school sheet the org chart opens with (#/org/school/<id>; owner, 10-06)
@@ -1120,7 +1126,7 @@ function App() {
   // where you are is an address (ui/nav.ts): going somewhere adds it to the history, so the side
   // menu's Back and the browser's Back are the same Back
   const routeOf = (): Route =>
-    room === "home" ? { room: "home" } : room === "settings" ? { room: "settings" } : room === "notices" ? { room: "notices" } : room === "calendar" ? { room: "calendar" } : room === "lab" ? { room: "lab" } : room === "report" ? { room: "report" } : room === "org" ? { room: "org", school: schoolFor } : room === "recruiter" ? { room: "recruiter", family: hiringFor } : room === "career" && careerOf ? { room: "career", orb: careerOf } : room === "sessions" ? { room: "sessions", ...inSession } : room === "chat" && talking ? { room: "chat", orb: talking } : view.kind === "new" ? { room: "new" } : { room: "office", orb: view.kind === "orb" ? view.name : null };
+    room === "home" ? { room: "home" } : room === "stats" ? { room: "stats", tab: statsTab } : room === "settings" ? { room: "settings" } : room === "notices" ? { room: "notices" } : room === "calendar" ? { room: "calendar" } : room === "lab" ? { room: "lab" } : room === "report" ? { room: "report" } : room === "org" ? { room: "org", school: schoolFor } : room === "recruiter" ? { room: "recruiter", family: hiringFor } : room === "career" && careerOf ? { room: "career", orb: careerOf } : room === "sessions" ? { room: "sessions", ...inSession } : room === "chat" && talking ? { room: "chat", orb: talking } : view.kind === "new" ? { room: "new" } : { room: "office", orb: view.kind === "orb" ? view.name : null };
   const show = (r: Route): void => {
     if (r.room === "home") setRoom("home"); // the home page (owner, 10-07): what the app opens on
     else if (r.room === "settings") setRoom("settings");
@@ -1128,6 +1134,10 @@ function App() {
     else if (r.room === "calendar") setRoom("calendar");
     else if (r.room === "lab") setRoom("lab");
     else if (r.room === "report") setRoom("report"); // the board's daily report (PLAN 5.18)
+    else if (r.room === "stats") {
+      setRoom("stats"); // the numbers behind the home page, as charts (PLAN 2.19)
+      setStatsTab(r.tab);
+    }
     else if (r.room === "org") {
       setRoom("org");
       setSchoolFor(r.school ?? null);
@@ -1282,7 +1292,7 @@ function App() {
           )}
           <nav aria-label="Rooms" style={{ display: "grid", gap: 4, marginTop: "var(--s2)" }}>
             {backButton({ justifySelf: "start", marginBottom: "var(--s1)" })}
-            {navItem("Home", room === "home", { room: "home" }, "⌂")}
+            {navItem("Home", room === "home" || room === "stats", { room: "home" }, "⌂") /* the charts are the home page's numbers */}
             {navItem("The office", room === "office" && view.kind === "floor", { room: "office", orb: null }, "◉")}
             {navItem("New orb", room === "office" && making, { room: "new" }, "+", 0, true) /* asks to be pressed (owner, 10-03) */}
             {navItem("Sessions", room === "sessions", { room: "sessions", id: null, tab: "brainstorm" }, "▦")}
@@ -1334,6 +1344,8 @@ function App() {
           <CareerRoom home={home} orb={office.find((c) => c.name === careerOf) ?? office[0] ?? ASH} />
         ) : room === "lab" ? (
           <LabRoom home={home} office={office} go={go} />
+        ) : room === "stats" ? (
+          <StatsRoom home={home} office={office} tab={statsTab} go={go} />
         ) : room === "report" ? (
           <ReportRoom home={home} office={office} go={go} person={person} keep={keep} />
         ) : room === "calendar" ? (

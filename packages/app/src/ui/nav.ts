@@ -12,6 +12,7 @@
 //   #/org          the org chart (PLAN 5.6)   #/career/Ash   an orb's career page (PLAN 5.6)
 //   #/org/school/kenji  the org chart, Kenji's school sheet open (PLAN 5.7; owner, 10-06: "we dont see the send to school option")
 //   #/recruiter    the recruiter (PLAN 5.8)   #/recruiter/build   who applied to one department
+//   #/stats/brain  the brains' tokens, as charts (PLAN 2.19)   #/stats/xp   the XP
 // Rooms join this list as they are built (the lab 2.13, the calendar 2.12...).
 
 export type Room = "office" | "settings";
@@ -26,6 +27,7 @@ export type Route =
   | { room: "calendar" }
   | { room: "lab" }
   | { room: "report" }
+  | { room: "stats"; tab: "brain" | "xp" }
   | { room: "org"; school?: string | null }
   | { room: "recruiter"; family?: string | null }
   | { room: "career"; orb: string };
@@ -44,6 +46,7 @@ export function parseRoute(hash: string): Route {
   if (parts[0] === "calendar") return { room: "calendar" };
   if (parts[0] === "lab") return { room: "lab" };
   if (parts[0] === "report") return { room: "report" };
+  if (parts[0] === "stats") return { room: "stats", tab: parts[1] === "xp" ? "xp" : "brain" };
   if (parts[0] === "org") return parts[1] === "school" && parts[2] ? { room: "org", school: parts[2] } : { room: "org" };
   if (parts[0] === "recruiter") return { room: "recruiter", family: parts[1] ?? null };
   if (parts[0] === "career" && parts[1]) return { room: "career", orb: parts[1] };
@@ -62,6 +65,7 @@ export function routeHash(r: Route): string {
   if (r.room === "calendar") return "#/calendar";
   if (r.room === "lab") return "#/lab";
   if (r.room === "report") return "#/report";
+  if (r.room === "stats") return `#/stats/${r.tab}`;
   if (r.room === "org") return r.school ? `#/org/school/${encodeURIComponent(r.school)}` : "#/org";
   if (r.room === "recruiter") return r.family ? `#/recruiter/${encodeURIComponent(r.family)}` : "#/recruiter";
   if (r.room === "career") return `#/career/${encodeURIComponent(r.orb)}`;

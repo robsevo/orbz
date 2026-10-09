@@ -22,8 +22,8 @@ export function costTable(rows: SpendRow[]): { lines: CostLine[]; total: CostLin
   const by = new Map<string, CostLine>();
   const total: CostLine = { model: "all", kind: "all", calls: 0, input: 0, cached: 0, output: 0 };
   for (const r of rows) {
-    const model = typeof r.data.model === "string" ? r.data.model : "?";
-    const kind = typeof r.data.turn === "string" ? r.data.turn : r.conversation ? "chat" : "other";
+    const model = modelOf(r);
+    const kind = kindOf(r);
     const line = by.get(`${model}\u0000${kind}`) ?? { model, kind, calls: 0, input: 0, cached: 0, output: 0 };
     for (const l of [line, total]) {
       l.calls++;
@@ -35,6 +35,11 @@ export function costTable(rows: SpendRow[]): { lines: CostLine[]; total: CostLin
   }
   return { lines: [...by.values()].sort((a, b) => b.input - a.input || a.model.localeCompare(b.model) || a.kind.localeCompare(b.kind)), total };
 }
+
+/** A call's model, as it said it. */
+export const modelOf = (r: SpendRow): string => (typeof r.data.model === "string" ? r.data.model : "?");
+/** A call's kind of turn, as `costTable` and the charts (stats.ts) both count it. */
+export const kindOf = (r: SpendRow): string => (typeof r.data.turn === "string" ? r.data.turn : r.conversation ? "chat" : "other");
 
 /** Of what was read, the share the cache served, in whole percent. */
 export const cachedShare = (l: Pick<CostLine, "input" | "cached">): number => (l.input ? Math.round((100 * l.cached) / l.input) : 0);

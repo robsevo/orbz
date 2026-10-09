@@ -48,6 +48,7 @@ import { LEVELS, levelOf, nextFor, tenureOf } from "./gym/levels.ts";
 import type { Kind } from "./school/subjects.ts";
 import { headsOf, leadsOf } from "./org.ts";
 import { dashboardOf } from "./dashboard.ts";
+import { statsOf } from "./stats.ts";
 import { whyNot } from "./company.ts";
 import { habitsOf } from "./gym/share.ts";
 import { findHotPaths } from "./gym/finder.ts";
@@ -667,6 +668,8 @@ async function handle(
   // the home page's look at the office (owner, 10-07: "a nice home page the app can default to ... with a nice dashboard
   // and stats"): by code, no brain asked
   if (method === "GET" && url.pathname === "/dashboard") return dashboardOf(home);
+  // the numbers behind the home page, as charts (PLAN 2.19): the last 7, 14 or 30 days
+  if (method === "GET" && url.pathname === "/stats") return statsOf(home, Number(url.searchParams.get("days") ?? 7));
   // the org chart (PLAN 5.6): who is in the office, at what level, how long, and who leads each kind of work
   if (method === "GET" && url.pathname === "/org") {
     const now = home.clock.now();

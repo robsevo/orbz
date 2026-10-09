@@ -1308,6 +1308,19 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ("export const MOMENT_GAP_MIN_MS = 6 * MIN;", "export const MOMENT_GAP_MIN_MS = 1 * MIN;"),
     ], ["social.test.ts"]),
     # the board's daily report (PLAN 5.18; owner, 10-07): from 08:00, each idea an orb's, its XP yours to give
+    # the numbers behind the home page, as charts (PLAN 2.19; owner, 10-08)
+    ("the charts' days end yesterday", "src/stats.ts", [
+        ("now.getDate() - (n - 1 - i)", "now.getDate() - (n - i)"),
+    ], ["stats.test.ts"]),
+    ("a call no orb made goes without a name", "src/stats.ts", [
+        ('(id === null ? "No orb" :', '(id === null ? "" :'),
+    ], ["stats.test.ts"]),
+    ("XP taken back counts as earned", "src/stats.ts", [
+        ("      if (amount >= 0) l.earned += amount;\n      else l.lost += -amount;", "      l.earned += Math.abs(amount);"),
+    ], ["stats.test.ts"]),
+    ("the charts never count the cache", "src/stats.ts", [
+        ("      l.cached += num(e.data.cached_tokens);\n", ""),
+    ], ["stats.test.ts"]),
     ("the report goes out before 08:00", "src/report.ts", [
         ("    if (this.#making || now < reportTimeOn(now)) return null;", "    if (this.#making) return null;"),
     ], ["report.test.ts"]),
@@ -1987,6 +2000,74 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ("        const rect = [...r.getClientRects()].filter((x) => x.width > 0).at(-1);",
          "        const rect = [...r.getClientRects()].filter((x) => x.width > 0)[0];"),
     ], ["render.test.ts"]),
+    ("the harness reads a program's lines as prose", "test/harness.ts", [
+        ('block.closest("svg, code, pre")', 'block.closest("svg")'),
+    ], ["render.test.ts"]),
+    # the chats on a phone, and approving from a notice (owner, 10-08)
+    ("an approval's notice cannot be answered", "src/rooms/Notices.tsx", [
+        ('{n.kind === "approval" && n.card !== null && (', "{false && ("),
+    ], ["notices.test.ts"]),
+    ("Approve on a notice denies", "src/rooms/Notices.tsx", [
+        ('onClick={() => answer(n, "approve")}', 'onClick={() => answer(n, "deny")}'),
+    ], ["notices.test.ts"]),
+    ("a request's command runs together in one paragraph", "src/ui/Asked.tsx", [
+        ('whiteSpace: "pre-wrap"', 'whiteSpace: "normal"'),
+    ], ["notices.test.ts"]),
+    ("a long decision squeezes its AGREED under its mark", "src/rooms/Talk.tsx", [
+        ('style={{ letterSpacing: ".1em", fontSize: 11, color: "var(--accent)", whiteSpace: "nowrap", flex: "0 0 auto" }}',
+         'style={{ letterSpacing: ".1em", fontSize: 11, color: "var(--accent)" }}'),
+    ], ["sessions.test.ts"]),
+    ("the box keeps words too long for it", "src/rooms/Talk.tsx", [
+        ("placeholder={hint}", "placeholder={o.placeholder}"),
+    ], ["sessions.test.ts"]),
+    ("the box does not grow with what is written", "src/rooms/Talk.tsx", [
+        ("useLayoutEffect(grow, [draft]);", "useLayoutEffect(() => {}, [draft]);"),
+    ], ["sessions.test.ts"]),
+    ("Send stretches with the box", "src/rooms/Talk.tsx", [
+        ('<div style={{ display: "flex", alignItems: "flex-end", gap: 8, minWidth: 0 }}>', '<div style={{ display: "flex", gap: 8, minWidth: 0 }}>'),
+    ], ["sessions.test.ts"]),
+    # the charts (PLAN 2.19; owner, 10-08: "when we press on brain today it brings us to settings?")
+    ("Brain today still opens Settings", "src/rooms/Home.tsx", [
+        ('go={() => go({ room: "stats", tab: "brain" })}', 'go={() => go({ room: "settings" })}'),
+    ], ["stats-view.test.ts"]),
+    ("XP this week opens the org chart", "src/rooms/Home.tsx", [
+        ('go={() => go({ room: "stats", tab: "xp" })}', 'go={() => go({ room: "org" })}'),
+    ], ["stats-view.test.ts"]),
+    ("the charts show a week whatever you pick", "src/rooms/Stats.tsx", [
+        ("onClick={() => setDays(n)}", "onClick={() => setDays(7)}"),
+    ], ["stats-view.test.ts"]),
+    ("a new call never shows on the charts", "src/rooms/Stats.tsx", [
+        ("wait = window.setTimeout(() => ((wait = 0), load()), 4_000);", "wait = window.setTimeout(() => (wait = 0), 4_000);"),
+    ], ["stats-view.test.ts"]),
+    # the bottom rooms and the hallways (owner, 10-08: "Gym, Classroom, Library and Interview room, plus the hallway fix")
+    ("the night's gym sits them at their desks again", "src/floor/plan.ts", [
+        ('  if (mood === "gym") return "gym";', ""),
+    ], ["floor.test.ts"]),
+    ("a lesson between friends stays at a desk", "src/floor/plan.ts", [
+        ('return { ...base, place: "classroom", label:', "return { ...base, label:"),
+    ], ["floor.test.ts"]),
+    ("the bottom rooms have no doors", "src/floor/plan.ts", [
+        ("door: { x: x + door, w: 90 }, wall: LOW };", "door: { x: x + door, w: 0 }, wall: LOW };"),
+    ], ["floor.test.ts"]),
+    ("the hallway is a road again", "src/floor/art.tsx", [
+        ('          <rect x={48} y={c.y + 16} width={W - 96} height={c.h - 32} rx={5} style={st("hairline", 1.5)} />',
+         '          <rect x={48} y={c.y + 16} width={W - 96} height={c.h - 32} rx={5} style={st("hairline", 1.5)} />\n          <path d={`M60 ${c.y + c.h / 2} H${W - 60}`} style={{ ...st("hairline", 1.5), strokeDasharray: "10 14" }} />'),
+    ], ["floor-view.test.ts"]),
+    ("no one waits in the interview room", "src/floor/Floor.tsx", [
+        ("...applicants.slice(0, WAITING.length).map((a, i) => {", "...applicants.slice(0, 0).map((a, i) => {"),
+    ], ["floor-view.test.ts"]),
+    ("an orb at school is not in the classroom", "src/floor/Floor.tsx", [
+        ("      setSchool(away.filter((c) => there.has(idOf(c.name))));", "      setSchool([]);"),
+    ], ["floor-view.test.ts"]),
+    ("the interview room miscounts who else applied", "src/floor/Floor.tsx", [
+        ("{`+${applicants.length - WAITING.length} more`}", "{`+${applicants.length} more`}"),
+    ], ["floor-view.test.ts"]),
+    ("a phone's keyboard shrinks the room again", "src/ui/fill.ts", [
+        ("      el.style.height = DVH ? `max(${min}px, calc(100dvh - ${above}px))` : `${Math.max(min, Math.floor(window.innerHeight - above))}px`;",
+         "      el.style.height = `${Math.max(min, Math.floor((window.visualViewport?.height ?? window.innerHeight) - above))}px`;"),
+        ('    window.addEventListener("resize", fit); // a turned phone',
+         '    window.visualViewport?.addEventListener("resize", fit);\n    window.addEventListener("resize", fit); // a turned phone'),
+    ], ["sessions.test.ts"]),
     ("a mouth is drawn below his eyes", "src/orb/glsl.ts", [
         ("      body = mix(body, eyeC, eyeA*0.92*faceA);",
          "      body = mix(body, eyeC, eyeA*0.92*faceA);\n      body = mix(body, eyeC, smoothstep(0.03, 0.012, abs(length(f - vec2(0.0, 0.30)) - 0.12)) * step(0.34, f.y) * step(abs(f.x), 0.12) * faceA);"),
