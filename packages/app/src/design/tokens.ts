@@ -240,6 +240,8 @@ export const MATERIALS = {
   rose: parseHex("#E8708A"), // heart glasses are pink whatever colour he is
   white: parseHex("#F4F4F6"), // a hat or frames in white or black (owner, 10-03), lit like the rest
   black: parseHex("#17181B"),
+  wood: parseHex("#6B4A30"), // a stem, a quill's shaft (the hats as models, 10-09)
+  fur: parseHex("#F7F3EB"), // a Santa hat's trim, a pompom left white
 } as const;
 export type Material = keyof typeof MATERIALS;
 

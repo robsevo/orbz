@@ -8,6 +8,8 @@
 // the helpers only they used; the window geometry his page baked in (where his centre sits, how far
 // the glow fades before the window's edge) is now two uniforms, so any canvas can hold him. Every
 // comment in the body is his, with its date: they say why each term is there.
+import { PITCH } from "./hats/geo.ts";
+
 export const ORB_VS = `#version 300 es
 void main(){ vec2 p = vec2((gl_VertexID<<1)&2, gl_VertexID&2); gl_Position = vec4(p*2.0-1.0,0,1); }`;
 
@@ -44,10 +46,13 @@ uniform float uGoo;     // how soft he is: 0 is Ash's glass, 1 is jelly (owner, 
 uniform float uSquash;  // squash (+) and stretch (-) for hops and pokes; volume is roughly kept
 uniform vec4 uEyeA;     // radius, aspect (1 round, >1 tall ovals), gap, height
 uniform vec4 uEyeB;     // sparkle (0..1), lids at rest (0 open .. 1 shut), happy at rest, a wink (his left eye an arc)
-uniform float uAcc;     // his hat (spec.ts HATS): 0 none
-uniform vec3 uAccCol, uAccCol2;   // its colour, and its second colour (a band, a pompom, a bead)
-uniform float uAccTilt; // worn at a slant, radians
+uniform float uAccTilt; // his hat (spec.ts HATS, drawn by HAT_VS and HAT_FS) is worn at a slant, radians
 uniform vec2 uAccFit;   // how it fits his shape (spec.ts hatFit): the outline his head's top is taken at, and the hat's size
+uniform vec4 uAccGlow;  // what on it gives off light (hats/models.ts glowOf): its centre, and a bead's radius or a ring's two
+uniform float uAccGlowK;// 0 nothing, 1 a bead, 2 a ring
+uniform vec3 uAccGlowCol;
+uniform float uAccEdge[32]; // its lowest edge across it (x from -0.9 to 0.9, in the hat's units, +y down; -9 none there)
+uniform float uAccShade;    // how dark the shadow it casts on him (0: no hat, or one that is only light)
 uniform float uSpecs;   // his glasses (spec.ts GLASSES): 0 none
 uniform vec3 uSpecsCol, uSpecsCol2, uLensCol;   // the frame, a strap (goggles), the lens's tint
 uniform float uLensDark;                        // how much of his eyes the lens hides: 0 clear, ~0.9 sunglasses
@@ -167,297 +172,6 @@ float sdTri(vec2 p, vec2 a, vec2 b, vec2 c){
 }
 vec2 pick(vec2 a, vec2 b){ return a.x < b.x ? a : b; }   // the nearer of two parts
 vec2 rot(vec2 p, float a){ float c = cos(a), s = sin(a); return vec2(c*p.x - s*p.y, s*p.x + c*p.y); }
-
-vec2 accSDF(vec2 q){
-  int id = int(uAcc + 0.5);
-  if (id == 1) {        // a top hat, its band in the second colour
-    vec2 h = pick(vec2(sdBox(q - vec2(0.0, -0.03), vec2(0.50, 0.05), 0.05), 0.0), vec2(sdBox(q - vec2(0.0, -0.33), vec2(0.30, 0.28), 0.07), 0.0));
-    float band = max(sdBox(q - vec2(0.0, -0.33), vec2(0.30, 0.28), 0.07), abs(q.y + 0.13) - 0.045);
-    return band < 0.0 ? vec2(band, 1.0) : h;
-  }
-  if (id == 2) {        // a beanie: the dome, the turned-up cuff, a pompom
-    float dome = max(sdEll(q - vec2(0.0, 0.10), vec2(0.56, 0.52)), q.y - 0.06);
-    vec2 h = pick(vec2(dome, 0.0), vec2(sdBox(q - vec2(0.0, 0.05), vec2(0.58, 0.075), 0.07), 1.0));
-    return pick(h, vec2(length(q - vec2(0.0, -0.44)) - 0.13 - 0.012*sin(atan(q.y + 0.44, q.x)*9.0), 1.0));
-  }
-  if (id == 3) {        // a party hat, striped, a pompom on its tip
-    vec2 a = vec2(-0.32, 0.06), b = vec2(0.34, 0.06), c = vec2(0.05, -0.92);
-    float cone = sdTri(q, a, b, c) - 0.02;
-    float stripe = step(0.5, fract((q.y - q.x*0.35)*5.0));
-    return pick(vec2(cone, stripe), vec2(length(q - c) - 0.09, 1.0));
-  }
-  if (id == 4) {        // an antenna: a steel stalk and a bead of his own light
-    float stalk = sdCap(vec2(q.x - 0.12*q.y*q.y, q.y), vec2(0.0, 0.08), vec2(0.0, -0.52), 0.028);
-    return pick(vec2(stalk, 0.0), vec2(length(q - vec2(0.03, -0.60)) - 0.11, 2.0));
-  }
-  if (id == 5) {        // a sprout: a stem and two leaves
-    // the leaves grow from the top of the stem (they floated free of it until 10-01: three pieces)
-    float stem = sdCap(q, vec2(0.0, 0.08), vec2(0.0, -0.44), 0.026);
-    float l1 = sdEll(rot(q - vec2(-0.15, -0.38), 0.55), vec2(0.17, 0.08));
-    float l2 = sdEll(rot(q - vec2(0.16, -0.42), -0.6), vec2(0.19, 0.085));
-    return pick(vec2(stem, 1.0), vec2(min(l1, l2), 0.0));
-  }
-  if (id == 6) {        // a bow, worn to one side
-    vec2 b = q - vec2(0.30, 0.06);
-    float loops = min(sdEll(rot(b - vec2(-0.17, 0.0), 0.30), vec2(0.17, 0.11)), sdEll(rot(b - vec2(0.17, 0.0), -0.30), vec2(0.17, 0.11)));
-    return pick(vec2(loops, 0.0), vec2(length(b) - 0.065, 1.0));
-  }
-  if (id == 7) {        // a crown: a band, five points, a gem in the middle
-    float base = sdBox(q - vec2(0.0, -0.05), vec2(0.38, 0.07), 0.03);
-    float pts = 1e5;
-    for (int i = 0; i < 5; i++) {
-      float x = -0.32 + 0.16*float(i);
-      pts = min(pts, sdTri(q, vec2(x - 0.09, -0.08), vec2(x + 0.09, -0.08), vec2(x, -0.34 - 0.06*float(i == 2))));
-    }
-    vec2 h = vec2(min(base, pts - 0.015), 0.0);
-    return pick(h, vec2(length(q - vec2(0.0, -0.05)) - 0.05, 1.0));
-  }
-  if (id == 9) {        // a cap: the crown, its peak out to one side
-    float crown = max(sdEll(q - vec2(-0.04, 0.10), vec2(0.50, 0.42)), q.y - 0.06);
-    float peak = max(sdEll(q - vec2(0.42, 0.04), vec2(0.36, 0.08)), -(q.x - 0.10));
-    return pick(vec2(crown, 0.0), vec2(peak, 1.0));
-  }
-  if (id == 10) {       // a wizard's hat: a tall bent cone, a wide brim, a star on it
-    vec2 b = vec2(q.x + 0.18*q.y*q.y, q.y);
-    float cone = sdTri(b, vec2(-0.30, 0.02), vec2(0.30, 0.02), vec2(0.0, -1.05)) - 0.02;
-    float brim = sdEll(q - vec2(0.0, 0.02), vec2(0.62, 0.075));
-    vec2 sq = q - vec2(0.02, -0.42);
-    float ang = atan(sq.y, sq.x) + 1.5707963, rr = length(sq);
-    float star = rr - 0.10*(0.62 + 0.38*cos(5.0*ang));
-    return pick(pick(vec2(cone, 0.0), vec2(brim, 0.0)), vec2(star, 1.0));
-  }
-  if (id == 11) {       // a halo: a ring of his own light, floating
-    float ring = abs(sdEll(q - vec2(0.0, -0.22), vec2(0.42, 0.11))) - 0.035;
-    return vec2(ring, 2.0);
-  }
-  if (id == 12) {       // a flower, tucked to one side
-    vec2 b = q - vec2(0.30, 0.04);
-    float ang = atan(b.y, b.x), rr = length(b);
-    float petals = rr - 0.21*(0.70 + 0.30*cos(5.0*ang));
-    return pick(vec2(petals, 0.0), vec2(rr - 0.075, 1.0));
-  }
-  if (id == 13) {       // horns, small and round-tipped
-    float h1 = sdTri(vec2(q.x + 0.26 + 0.20*q.y, q.y), vec2(-0.10, 0.06), vec2(0.10, 0.06), vec2(-0.02, -0.30)) - 0.03;
-    float h2 = sdTri(vec2(q.x - 0.26 - 0.20*q.y, q.y), vec2(-0.10, 0.06), vec2(0.10, 0.06), vec2(0.02, -0.30)) - 0.03;
-    return vec2(min(h1, h2), 0.0);
-  }
-  if (id == 14) {       // bunny ears on a band: each ear's foot set into the band (their points only touched it, so they hovered)
-    float e1 = sdEll(rot(q - vec2(-0.20, -0.38), -0.20), vec2(0.11, 0.42));
-    float e2 = sdEll(rot(q - vec2(0.20, -0.38), 0.20), vec2(0.11, 0.42));
-    float i1 = sdEll(rot(q - vec2(-0.20, -0.36), -0.20), vec2(0.05, 0.30));
-    float i2 = sdEll(rot(q - vec2(0.20, -0.36), 0.20), vec2(0.05, 0.30));
-    float band = max(abs(length(q - vec2(0.0, 0.70)) - 0.72) - 0.03, q.y - 0.05);
-    vec2 h = pick(vec2(min(e1, e2), 0.0), vec2(band, 0.0));
-    return min(i1, i2) < 0.0 ? vec2(min(i1, i2), 1.0) : h;
-  }
-  if (id == 15) {       // a chef's hat: three puffs over a band
-    float puff = min(min(length(q - vec2(-0.20, -0.30)) - 0.22, length(q - vec2(0.20, -0.30)) - 0.22), length(q - vec2(0.0, -0.44)) - 0.25);
-    float band = sdBox(q - vec2(0.0, -0.04), vec2(0.30, 0.10), 0.04);
-    return pick(vec2(min(puff, sdBox(q - vec2(0.0, -0.20), vec2(0.30, 0.16), 0.04)), 0.0), vec2(band, 0.0));
-  }
-  if (id == 16) {       // a graduation cap: the board, the cap, the tassel
-    vec2 b = q - vec2(0.0, -0.20);
-    float board = max(abs(b.x*0.70) + abs(b.y*2.6) - 0.42, -1e5);
-    float cap = max(sdEll(q - vec2(0.0, 0.06), vec2(0.34, 0.22)), q.y - 0.06);
-    float tassel = min(sdCap(q, vec2(0.0, -0.21), vec2(0.42, -0.10), 0.018), sdCap(q, vec2(0.42, -0.10), vec2(0.44, 0.16), 0.03));
-    return pick(pick(vec2(board, 0.0), vec2(cap, 0.0)), vec2(tassel, 1.0));
-  }
-  if (id == 17) {       // a cowboy hat: the brim turned up at the sides, the creased crown, a band
-    float brim = sdEll(vec2(q.x, q.y + 0.18*q.x*q.x) - vec2(0.0, 0.0), vec2(0.70, 0.07));
-    float crown = sdBox(q - vec2(0.0, -0.22), vec2(0.30, 0.20), 0.12) + 0.04*exp(-sq(q.x/0.07))*step(q.y, -0.30);
-    float band = max(crown, abs(q.y + 0.08) - 0.04);
-    vec2 h = pick(vec2(brim, 0.0), vec2(crown, 0.0));
-    return band < 0.0 ? vec2(band, 1.0) : h;
-  }
-  if (id == 18) {       // a propeller cap: a little dome, a stalk, two blades
-    float dome = max(sdEll(q - vec2(0.0, 0.08), vec2(0.42, 0.34)), q.y - 0.06);
-    float stalk = sdCap(q, vec2(0.0, -0.24), vec2(0.0, -0.38), 0.025);
-    float blades = min(sdEll(q - vec2(-0.20, -0.40), vec2(0.20, 0.045)), sdEll(q - vec2(0.20, -0.40), vec2(0.20, 0.045)));
-    return pick(pick(vec2(dome, 0.0), vec2(stalk, 1.0)), vec2(blades, 1.0));
-  }
-  if (id == 19) {       // a star clip, worn to one side
-    vec2 b = q - vec2(0.30, 0.02);
-    float ang = atan(b.y, b.x) + 1.5707963, rr = length(b);
-    return vec2(rr - 0.21*(0.58 + 0.42*cos(5.0*ang)), 0.0);
-  }
-  if (id == 20) {       // a beret: a soft flat disc worn to one side, its little stalk on top
-    float disc = sdEll(q - vec2(0.10, -0.08), vec2(0.56, 0.16));
-    float band = sdBox(q - vec2(0.0, 0.04), vec2(0.40, 0.05), 0.045);
-    return pick(vec2(min(disc, band), 0.0), vec2(sdCap(q, vec2(0.12, -0.22), vec2(0.16, -0.32), 0.026), 1.0));
-  }
-  if (id == 21) {       // a hard hat: the dome, a brim all round, a ridge down the middle
-    float dome = max(sdEll(q - vec2(0.0, 0.06), vec2(0.52, 0.50)), q.y - 0.04);
-    float brim = sdBox(q - vec2(0.0, 0.04), vec2(0.64, 0.045), 0.04);
-    float ridge = max(dome + 0.03, abs(q.x) - 0.07);
-    return ridge < 0.0 ? vec2(ridge, 1.0) : vec2(min(dome, brim), 0.0);
-  }
-  if (id == 22) {       // a bucket hat: a soft round crown, a band, and a brim that slopes down and out
-    float crown = sdBox(q - vec2(0.0, -0.14), vec2(0.30, 0.17), 0.16);
-    float wide = 0.32 + 0.30*clamp((q.y + 0.02)/0.16, 0.0, 1.0);   // the brim widens as it falls
-    float brim = sdBox(vec2(q.x*0.32/wide, q.y - 0.06), vec2(0.32, 0.08), 0.03);
-    float band = max(crown, abs(q.y + 0.03) - 0.045);
-    return band < 0.0 ? vec2(band, 1.0) : vec2(min(crown, brim), 0.0);
-  }
-  if (id == 23) {       // an accountant's eyeshade: a green visor over his brow, on a dark band
-    float w = 0.50 + 0.12*clamp((q.y - 0.06)/0.26, 0.0, 1.0);    // it widens as it comes down
-    float shade = sdBox(vec2(q.x*0.50/w, q.y - 0.20), vec2(0.50, 0.13), 0.05);
-    float band = sdBox(q - vec2(0.0, 0.07), vec2(0.52, 0.035), 0.03);
-    return band < 0.0 ? vec2(band, 1.0) : vec2(min(shade, band), 0.0);
-  }
-  if (id == 24) {       // a headset: the band, one cup, and a little mic on its arm
-    float band = max(abs(length(q - vec2(0.0, 0.70)) - 0.73) - 0.03, q.y - 0.62);
-    float cup = sdBox(q - vec2(-0.66, 0.66), vec2(0.09, 0.16), 0.08);
-    float arm = sdCap(q, vec2(-0.63, 0.80), vec2(-0.34, 1.00), 0.022);
-    float mic = length(q - vec2(-0.30, 1.01)) - 0.05;
-    return pick(pick(vec2(band, 1.0), vec2(min(cup, arm), 0.0)), vec2(mic, 1.0));
-  }
-  if (id == 25) {       // a sweatband round his forehead, a stripe through it
-    float band = max(abs(q.y - 0.17) - 0.065, length(q - vec2(0.0, 0.70)) - 0.72);
-    float stripe = max(band, abs(q.y - 0.17) - 0.018);
-    return stripe < 0.0 ? vec2(stripe, 1.0) : vec2(band, 0.0);
-  }
-  if (id == 26) {       // an apple on his head: two round halves, a stem, a leaf
-    float apple = min(length(q - vec2(-0.08, -0.15)) - 0.17, length(q - vec2(0.08, -0.15)) - 0.17);
-    apple = max(apple, -(length(q - vec2(0.0, -0.36)) - 0.05));   // the dimple at the top
-    float stem = sdCap(q, vec2(0.0, -0.28), vec2(0.04, -0.42), 0.022);
-    float leaf = sdEll(rot(q - vec2(0.13, -0.38), -0.5), vec2(0.10, 0.045));
-    return pick(vec2(apple, 0.0), vec2(min(stem, leaf), 1.0));
-  }
-  if (id == 27) {       // a straw hat: a wide brim, a low crown, a band
-    float brim = sdEll(q - vec2(0.0, 0.03), vec2(0.80, 0.085));
-    float crown = sdBox(q - vec2(0.0, -0.13), vec2(0.34, 0.15), 0.11);
-    float band = max(crown, abs(q.y + 0.02) - 0.045);
-    return band < 0.0 ? vec2(band, 1.0) : vec2(min(brim, crown), 0.0);
-  }
-  if (id == 28) {       // a fedora: a brim turned down a touch, a pinched crown, a band
-    float brim = sdEll(vec2(q.x, q.y - 0.10*q.x*q.x) - vec2(0.0, 0.03), vec2(0.62, 0.06));
-    float crown = sdBox(q - vec2(0.0, -0.19), vec2(0.31, 0.18), 0.11) + 0.05*exp(-sq(q.x/0.08))*step(q.y, -0.28);
-    float band = max(crown, abs(q.y + 0.04) - 0.045);
-    return band < 0.0 ? vec2(band, 1.0) : vec2(min(brim, crown), 0.0);
-  }
-  if (id == 29) {       // a deerstalker: a checked cap, its flaps down at the sides, a bow on top
-    float cap = max(sdEll(q - vec2(0.0, 0.08), vec2(0.54, 0.46)), q.y - 0.10);
-    float flaps = min(sdEll(q - vec2(-0.53, 0.16), vec2(0.10, 0.17)), sdEll(q - vec2(0.53, 0.16), vec2(0.10, 0.17)));
-    float bow = min(sdEll(q - vec2(-0.07, -0.40), vec2(0.07, 0.04)), sdEll(q - vec2(0.07, -0.40), vec2(0.07, 0.04)));
-    float body = min(cap, flaps);
-    float check = min(abs(fract(q.x*5.0) - 0.5), abs(fract(q.y*5.0) - 0.5));   // the check's lines
-    return bow < 0.0 ? vec2(bow, 1.0) : body < 0.0 && check < 0.07 ? vec2(body, 1.0) : vec2(min(body, bow), 0.0);
-  }
-  if (id == 30) {       // a sun visor: a band round his head and a wide brim, no crown
-    float band = max(abs(q.y - 0.12) - 0.05, length(q - vec2(0.0, 0.70)) - 0.72);
-    float brim = sdEll(q - vec2(0.12, 0.03), vec2(0.70, 0.11));
-    return band < 0.0 ? vec2(band, 1.0) : vec2(min(band, brim), 0.0);
-  }
-  if (id == 31) {       // a crown of flowers along the top of his head
-    float petals = 1e5, middles = 1e5;
-    for (int i = 0; i < 5; i++) {
-      float a = -2.45 + 0.4*float(i);                             // round the top of his head
-      vec2 c = vec2(0.0, 0.70) + 0.71*vec2(cos(a), sin(a));   // sat on him, every flower touching his head
-      vec2 b = q - c;
-      float ang = atan(b.y, b.x) + 0.6*float(i), rr = length(b);
-      petals = min(petals, rr - 0.135*(0.70 + 0.30*cos(5.0*ang)));
-      middles = min(middles, rr - 0.05);
-    }
-    return middles < 0.0 ? vec2(middles, 1.0) : vec2(petals, 0.0);
-  }
-  if (id == 32) {       // a viking's helmet: a steel dome, a band, two horns
-    float dome = max(sdEll(q - vec2(0.0, 0.08), vec2(0.52, 0.48)), q.y - 0.10);
-    float band = max(dome, abs(q.y - 0.04) - 0.05);
-    float h1 = sdTri(q, vec2(-0.50, 0.02), vec2(-0.36, -0.14), vec2(-0.80, -0.46)) - 0.025;
-    float h2 = sdTri(q, vec2(0.50, 0.02), vec2(0.36, -0.14), vec2(0.80, -0.46)) - 0.025;
-    float horns = min(h1, h2);
-    return horns < 0.0 || band < 0.0 ? vec2(min(horns, band), 1.0) : vec2(min(dome, horns), 0.0);
-  }
-  // more (owner, 10-03: "Can we add more accessories in every section?")
-  if (id == 33) {       // a bowler: a round crown on a short curled brim, a band
-    float crown = max(sdEll(q - vec2(0.0, -0.12), vec2(0.36, 0.34)), q.y + 0.02);
-    float brim = sdEll(q - vec2(0.0, 0.0), vec2(0.54, 0.065));
-    float band = max(crown, abs(q.y + 0.08) - 0.04);
-    return band < 0.0 ? vec2(band, 1.0) : vec2(min(crown, brim), 0.0);
-  }
-  if (id == 34) {       // a fez: a short tapered crown, flat on top, and a tassel hanging off it
-    float tt = clamp((0.04 - q.y)/0.48, 0.0, 1.0);
-    float crown = max(abs(q.x) - mix(0.31, 0.22, tt), max(q.y - 0.04, -0.44 - q.y)) - 0.01;
-    float cord = sdCap(q, vec2(0.0, -0.44), vec2(0.26, -0.30), 0.018);
-    float tassel = sdEll(q - vec2(0.28, -0.20), vec2(0.045, 0.10));
-    return pick(vec2(crown, 0.0), vec2(min(cord, tassel), 1.0));
-  }
-  if (id == 35) {       // a tricorn, a pirate's: seen from the front a boat, low where it sits on him, its brim
-                        // turned up into a point at each side, gold along that edge, the crown inside
-    float cut = sdEll(q - vec2(0.0, -0.46), vec2(0.48, 0.30));
-    float boat = max(sdEll(q - vec2(0.0, -0.12), vec2(0.72, 0.30)), -cut);
-    float crown = max(sdEll(q - vec2(0.0, -0.16), vec2(0.30, 0.28)), q.y + 0.02);
-    float trim = max(boat, abs(cut) - 0.035);
-    return trim < 0.0 ? vec2(trim, 1.0) : vec2(min(boat, crown), 0.0);
-  }
-  if (id == 36) {       // a Santa hat: a soft cone flopping to one side, a fur trim, a pompom
-    float cone = sdTri(q, vec2(-0.40, 0.02), vec2(0.40, 0.02), vec2(0.34, -0.72)) - 0.04;
-    float trim = sdBox(q - vec2(0.0, 0.04), vec2(0.47, 0.085), 0.08);
-    float pom = length(q - vec2(0.38, -0.76)) - 0.11;
-    return pick(vec2(cone, 0.0), vec2(min(trim, pom), 1.0));
-  }
-  if (id == 37) {       // a sombrero: a tall round crown, a very wide brim, a band
-    float crown = max(sdEll(q - vec2(0.0, -0.16), vec2(0.30, 0.36)), q.y + 0.0);
-    float brim = sdEll(q - vec2(0.0, 0.02), vec2(0.82, 0.08));   // as wide as its picture's frame allows
-    float band = max(crown, abs(q.y + 0.06) - 0.045);
-    return band < 0.0 ? vec2(band, 1.0) : vec2(min(crown, brim), 0.0);
-  }
-  if (id == 38) {       // a tiara: a fine band over his head, three points, a stone in the middle
-    float band = max(max(abs(length(q - vec2(0.0, 0.70)) - 0.72) - 0.028, q.y - 0.16), abs(q.x) - 0.46);
-    float pts = min(sdTri(q, vec2(-0.09, 0.0), vec2(0.09, 0.0), vec2(0.0, -0.26)),
-                    min(sdTri(q, vec2(-0.30, 0.04), vec2(-0.16, 0.0), vec2(-0.25, -0.16)), sdTri(q, vec2(0.16, 0.0), vec2(0.30, 0.04), vec2(0.25, -0.16)))) - 0.012;
-    float stone = length(q - vec2(0.0, -0.08)) - 0.055;
-    return stone < 0.0 ? vec2(stone, 1.0) : vec2(min(band, pts), 0.0);
-  }
-  if (id == 39) {       // antlers on a band that rests on his head: a beam on each side and the tines off it
-    // the top of the ring only: a ring crosses that strip twice, and its far side hung under him
-    float band = max(max(abs(length(q - vec2(0.0, 0.76)) - 0.72) - 0.03, abs(q.x) - 0.20), q.y - 0.2);
-    float a = band;
-    for (int i = 0; i < 2; i++) {
-      float sd = i == 0 ? -1.0 : 1.0;
-      vec2 m = vec2(sd*q.x, q.y);
-      a = min(a, sdCap(m, vec2(0.15, 0.06), vec2(0.36, -0.42), 0.032));
-      a = min(a, sdCap(m, vec2(0.25, -0.17), vec2(0.46, -0.22), 0.026));
-      a = min(a, sdCap(m, vec2(0.31, -0.33), vec2(0.25, -0.54), 0.024));
-    }
-    return vec2(a, 0.0);
-  }
-  if (id == 40) {       // a unicorn's horn: a slim cone with a spiral stripe
-    float horn = sdTri(q, vec2(-0.11, 0.04), vec2(0.11, 0.04), vec2(0.0, -0.66)) - 0.016;
-    float stripe = step(0.55, fract((q.y + 0.55*q.x)*7.0));
-    return vec2(horn, stripe);
-  }
-  // rank you can see (owner, 10-07: "when it comes to CEO orbs or CFO orbs, we need new Accessories")
-  if (id == 41) {       // a laurel wreath, the CEO's: gold leaves round the top of his head, a gem at its front
-    // the branch the leaves grow on, through each leaf and the gem, so the wreath is one piece (10-07: its leaves
-    // alone were three, characters.test.ts)
-    vec2 c = q - vec2(0.0, 0.52);
-    float leaves = max(abs(length(c) - 0.62) - 0.02, (abs(atan(c.x, -c.y)) - 1.16)*0.62);
-    for (int i = 0; i < 5; i++) {
-      for (int s = -1; s <= 1; s += 2) {
-        float a = float(s)*(0.18 + 0.24*float(i));
-        vec2 p = vec2(0.0, 0.52) + 0.62*vec2(sin(a), -cos(a));
-        leaves = min(leaves, sdEll(rot(q - p, a + float(s)*0.9), vec2(0.115, 0.05)));
-      }
-    }
-    return pick(vec2(leaves, 0.0), vec2(length(q - vec2(0.0, -0.10)) - 0.055, 1.0));
-  }
-  if (id == 42) {       // a quill, the CFO's: a feather tucked at one side, its nib in gold; the books are kept
-    vec2 f = rot(q - vec2(0.30, -0.22), -0.45);
-    float vane = sdEll(f, vec2(0.10, 0.36));
-    float shaft = sdCap(f, vec2(0.0, 0.42), vec2(0.0, -0.34), 0.016);
-    float nib = sdTri(f, vec2(-0.035, 0.38), vec2(0.035, 0.38), vec2(0.0, 0.52));
-    vec2 h = pick(vec2(vane, 0.0), vec2(shaft, 1.0));
-    return pick(h, vec2(nib, 1.0));
-  }
-  if (id == 8) {        // headphones: the band over his head, a cup on each side
-    // the band rests on his head and the cups on his sides (both hovered a hair off him until 10-01)
-    float band = max(abs(length(q - vec2(0.0, 0.70)) - 0.73) - 0.035, q.y - 0.62);
-    float cups = min(sdBox(q - vec2(-0.66, 0.66), vec2(0.09, 0.17), 0.08), sdBox(q - vec2(0.66, 0.66), vec2(0.09, 0.17), 0.08));
-    return pick(vec2(band, 1.0), vec2(cups, 0.0));
-  }
-  return vec2(1e5, 0.0);
-}
 
 // ---- his glasses (PLAN 2.2; owner, 2026-10-01: "different glasses ... can also be sunglasses") ----
 // In his face's own space (the face block's f: y down, his eyes at (+-gap, height)), so they turn
@@ -961,6 +675,19 @@ void main(){
     body += LITE * mensc * crest * 0.16;
 
     float edge = smoothstep(1.0, 1.0 - 2.6/Rg, nd);
+    // HIS HAT SITS ON HIM (owner, 10-09: hats "to industry standards"). A model on his head, drawn over him by the
+    // second pass, casts a soft shadow on his glass just under its lowest edge, so it rests on him rather than being
+    // laid over him. uAccEdge is that edge, across the hat (hats/models.ts), in the hat's own units.
+    if (uAccShade > 0.0) {
+      float Rtop = uShapeD.y*Rg*(1.0 - 0.045*uMorph - 0.030*speak + uAccFit.x)*(1.0 - 0.5*uSquash) - 0.03*Rg;
+      float Rhat = Rg*1.35*uAccFit.y;
+      vec2 qf = rot((p - vec2(0.0, -Rtop))/Rhat, uAccTilt);
+      float fx = clamp((qf.x + 0.9)/1.8*31.0, 0.0, 31.0);
+      int i0 = int(floor(fx));
+      float lowest = mix(uAccEdge[i0], uAccEdge[min(i0 + 1, 31)], fx - float(i0));
+      float below = qf.y - lowest;
+      body *= 1.0 - uAccShade*(below > 0.0 ? exp(-below/0.05) : 0.0)*step(-5.0, lowest);
+    }
     col += body * edge;
     // thin glass lets what is behind it through; the edge and the fluid do not
     A = max(A, edge * clamp(0.80 + 0.20*max(fres*1.6, core*0.75) + hot, 0.0, 1.0));
@@ -1036,37 +763,19 @@ void main(){
     A = max(A, max(fa, max(sa, lensA*uLensDark)));
   }
 
-  // ---- his hat, over him ------------------------------------------------------------------------
-  // The same light as his glass: lit from up-left, a rim where it turns away, one hard highlight.
-  if (uAcc > 0.5) {
-    // the top of his head, as his outline has it now (his shape, his drift, a squash), the hat sunk onto it
-    // (where on his head it sits and how big it is are measured per shape: uAccFit)
+  // ---- his hat's own light -------------------------------------------------------------------------
+  // A hat is a model now, drawn over all of him (his ears too, owner 10-03) by the renderer's second pass (HAT_VS,
+  // HAT_FS; owner, 10-09: "make them nice, to industry standards"). What on it gives off light, an antenna's bead or a
+  // halo, glows past it here, where it sits: the top of his head as his outline has it now (his shape, his drift, a
+  // squash), the hat sunk onto it (where it sits and how big it is, per shape: uAccFit).
+  if (uAccGlowK > 0.5) {
     float Rtop = uShapeD.y*Rg*(1.0 - 0.045*uMorph - 0.030*speak + uAccFit.x)*(1.0 - 0.5*uSquash) - 0.03*Rg;
     float Rhat = Rg*1.35*uAccFit.y;
     vec2 q = rot((p - vec2(0.0, -Rtop))/Rhat, uAccTilt);         // hats sized to his head, not to his glow
-    vec2 h = accSDF(q);
-    float e = 1.4/Rhat;                                          // a pixel and a half, in the hat's units
-    float aa = smoothstep(e, -e, h.x);
-    if (aa > 0.001) {
-      float bevel = 0.07;
-      float hgt = sqrt(clamp(-h.x/bevel, 0.0, 1.0));
-      vec2 gq = vec2(accSDF(q + vec2(e, 0.0)).x - accSDF(q - vec2(e, 0.0)).x, accSDF(q + vec2(0.0, e)).x - accSDF(q - vec2(0.0, e)).x) / (2.0*e);
-      vec3 N = normalize(vec3(gq*(1.0 - hgt)*1.6, 0.55 + hgt));
-      vec3 Ld = normalize(vec3(-0.34, -0.62, 0.71));
-      vec3 base = h.y > 1.5 ? uAccCol2 : h.y > 0.5 ? uAccCol2 : uAccCol;
-      float lit = 0.50 + 0.55*max(0.0, dot(N, Ld));
-      vec3 c = base*lit;
-      c += PALE*pow(max(0.0, 1.0 - N.z), 2.2)*0.35;                          // the rim
-      c += vec3(1.0)*pow(max(0.0, dot(N, normalize(Ld + vec3(0.0, 0.0, 1.0)))), 60.0)*0.75;   // the highlight
-      if (h.y > 1.5) c += uAccCol2*(0.55 + 0.25*sin(t*2.2));        // a light of his own: it glows, gently
-      col = aa >= 1.0 ? c : mix(col, c, aa);                        // in front of all of him, his ears too (owner, 10-03); solid,
-                                                                    // it replaces what is under it (NaN x 0 is NaN: owner, 10-04)
-      A = max(A, aa);
-    }
-    if (h.y > 1.5) {                                               // and the bead's glow reaches past it
-      float gl = exp(-max(0.0, h.x)/0.10)*0.55;
-      col += uAccCol2*gl*0.6; A = max(A, gl*0.5*room);
-    }
+    vec2 g = q - uAccGlow.xy;
+    float gd = uAccGlowK < 1.5 ? length(g) - uAccGlow.z : abs(length(g/uAccGlow.zw) - 1.0)*min(uAccGlow.z, uAccGlow.w) - 0.024;
+    float gl = exp(-max(0.0, gd)/0.10)*0.55;
+    col += uAccGlowCol*gl*0.6; A = max(A, gl*0.5*room);
   }
 
   col = col/(1.0+col*0.13);
@@ -1076,4 +785,343 @@ void main(){
   vec2 edg = min(gl_FragCoord.xy, uRes - gl_FragCoord.xy);
   A *= smoothstep(0.0, R*uEdge, min(edg.x, edg.y));
   O = vec4(pow(max(col,0.0), vec3(0.95)), clamp(A,0.0,1.0));
+}`;
+
+// ---- the hats, as models (owner, 10-09: "dont cheap out on them. make them nice, to industry standards") ----------
+// A hat is a real 3D model now (hats/models.ts), drawn over him after his glass by the renderer's second pass: his head
+// first into depth alone (a ball, so what goes round behind him hides), then the hat. It sits where his flat hat sat:
+// the vertex shader does the orb shader's own sums for the top of his head (its "his hat, over him"), seen a little
+// from above (PITCH), at the hat's slant.
+export const HAT_VS = `#version 300 es
+precision highp float;
+layout(location = 0) in vec3 aPos;
+layout(location = 1) in vec3 aNrm;
+layout(location = 2) in vec2 aUV;
+layout(location = 3) in vec4 aMat;
+uniform vec2 uRes, uSway, uAccFit;
+uniform float uTime, uLevel, uState, uWake, uR, uCy, uBreath, uMorph, uSquash, uAccTilt;
+uniform vec4 uShapeD;
+out vec3 vN, vS, vP;
+out vec2 vUV;
+out vec4 vMat;
+const float AWAKE_GROW = 0.13, WAKE_POP = 0.06, PITCH = ${PITCH};
+void main(){
+  float think = clamp(1.0 - abs(uState - 2.0), 0.0, 1.0);
+  float speak = clamp(1.0 - abs(uState - 3.0), 0.0, 1.0);
+  float depth = 0.055 - 0.020*think + 0.030*uLevel*speak;
+  float breath = 1.0 + uBreath * depth;
+  float wakeEase = clamp(uState, 0.0, 1.0); wakeEase = wakeEase*wakeEase*(3.0 - 2.0*wakeEase);
+  float R = uR;
+  float Rg = R * breath * (1.0 + AWAKE_GROW*wakeEase + WAKE_POP*uWake);
+  float Rtop = uShapeD.y*Rg*(1.0 - 0.045*uMorph - 0.030*speak + uAccFit.x)*(1.0 - 0.5*uSquash) - 0.03*Rg;
+  float Rhat = Rg*1.35*uAccFit.y;
+  vec3 P = aPos, N = aNrm;
+  if (aMat.w > 99.5) {   // it spins about the hat's axis (a propeller): lazily at rest, fast while he thinks
+    float a = uTime*(2.2 + 14.0*clamp(1.0 - abs(uState - 2.0), 0.0, 1.0));
+    mat2 S = mat2(cos(a), -sin(a), sin(a), cos(a));
+    P.xz = S*P.xz; N.xz = S*N.xz;
+  }
+  float cp = cos(PITCH), sp = sin(PITCH);
+  vec3 C = vec3(P.x, P.y*cp - P.z*sp, P.y*sp + P.z*cp);
+  vec3 Cn = vec3(N.x, N.y*cp - N.z*sp, N.y*sp + N.z*cp);
+  mat2 roll = mat2(cos(uAccTilt), sin(uAccTilt), -sin(uAccTilt), cos(uAccTilt));
+  vec2 Sxy = roll*C.xy;
+  vS = vec3(Sxy, C.z);
+  vN = vec3(roll*Cn.xy, Cn.z);
+  vP = aPos; vUV = aUV; vMat = aMat;
+  vec2 pp = vec2(0.0, -Rtop) + Rhat*vec2(Sxy.x, -Sxy.y);              // his space: +y down, from his centre
+  vec2 fc = vec2(pp.x + uSway.x + uRes.x*0.5, uRes.y*(1.0 - uCy) - uSway.y - pp.y);
+  gl_Position = vec4(fc/uRes*2.0 - 1.0, -C.z*0.25, 1.0);
+}`;
+
+// What a hat is made of, lit in one small studio: a soft sky, one big softbox up to his left where his glass's own
+// highlight comes from, a strip behind to his right for a rim, the floor dark but for his own light coming up from
+// under the brim. Physically based (GGX, Fresnel, a clear coat, a fabric's sheen), in linear light, filmic at the end.
+// Each material's weave (knit, straw, twill, grosgrain, a party hat's print) is drawn here, from the model's own
+// coordinates, and fades before it is finer than a pixel.
+export const HAT_FS = `#version 300 es
+precision highp float;
+in vec3 vN, vS, vP;
+in vec2 vUV;
+in vec4 vMat;
+out vec4 O;
+uniform vec3 uCol, uCol2, uOrb;   // the hat's colour, its second, his own light
+uniform vec3 uPal[10];             // the fixed ones (geo.ts SLOT): gold, steel, cream, ink, leaf, wood, white, fur
+uniform float uTime, uState;
+const float PI = 3.14159265;
+const int FELT = 0, KNIT = 1, FUR = 2, COTTON = 3, STRAW = 4, PLASTIC = 5, METAL = 6, GEM = 7, LEAF = 8, PETAL = 9, SATIN = 10,
+  LEATHER = 11, GLOW = 12, HORN = 13, PEARL = 14, FEATHER = 15, TWEED = 16, PAPER = 17, RUBBER = 18, FRUIT = 19, WOOD = 20, GLASS = 21;
+float sq(float x){ return x*x; }
+vec3 lin(vec3 c){ return pow(max(c, 0.0), vec3(2.2)); }
+float h31(vec3 p){ return fract(sin(dot(p, vec3(127.1, 311.7, 74.7)))*43758.5453); }
+float vn3(vec3 p){
+  vec3 i = floor(p), f = fract(p), u = f*f*(3.0 - 2.0*f);
+  return mix(mix(mix(h31(i), h31(i + vec3(1,0,0)), u.x), mix(h31(i + vec3(0,1,0)), h31(i + vec3(1,1,0)), u.x), u.y),
+             mix(mix(h31(i + vec3(0,0,1)), h31(i + vec3(1,0,1)), u.x), mix(h31(i + vec3(0,1,1)), h31(i + vec3(1,1,1)), u.x), u.y), u.z);
+}
+vec2 gFW;      // how much of the model's coordinates one pixel spans
+float gUS;     // the hat's units across one unit of u (round the hat), here
+
+// how much of a pattern of this period (in u, or in the hat's units along v) can be drawn without shimmering
+float keepU(float n){ return 1.0 - smoothstep(0.22, 0.5, gFW.x*n); }
+float keepV(float period){ return 1.0 - smoothstep(0.22, 0.5, gFW.y/period); }
+
+// ---- the weaves: a height (0 low, 1 high) at a point of the model's coordinates --------------------------------------
+float knitH(vec2 uv, float cols){        // stocking stitch: a V of two legs in every column, row on row
+  vec2 f = fract(vec2(uv.x*cols, uv.y/0.026)) - 0.5;
+  vec2 d = vec2(abs(f.x) - 0.2, f.y + 0.04);
+  vec2 a = vec2(0.92*d.x - 0.38*d.y, 0.38*d.x + 0.92*d.y);   // each leg leans out at its top
+  return 1.0 - smoothstep(0.5, 1.0, length(a/vec2(0.21, 0.5)));
+}
+float ribH(vec2 uv, float ribs){         // a ribbed cuff: knit columns standing out of purl ones
+  float x = fract(uv.x*ribs), y = fract(uv.y/0.022);
+  return smoothstep(0.0, 0.42, x)*smoothstep(1.0, 0.58, x)*(0.8 + 0.2*smoothstep(0.0, 0.5, y)*smoothstep(1.0, 0.5, y));
+}
+float strawH(vec2 uv, float n){          // plaited straw: rows of chevrons, a groove between rows
+  float row = uv.y/0.024, fr = fract(row);
+  float c = fract(uv.x*n + 0.5*floor(row) + abs(fr - 0.5)*1.3);
+  return smoothstep(0.0, 0.22, c)*smoothstep(1.0, 0.78, c)*smoothstep(0.0, 0.14, fr)*smoothstep(1.0, 0.86, fr);
+}
+float stitches(float across, float along, float at){   // a row of stitches at a distance from a seam, its dashes along it
+  float line = 1.0 - smoothstep(0.0011, 0.0024, abs(abs(across) - at));
+  return line*smoothstep(0.08, 0.2, fract(along/0.011))*smoothstep(0.72, 0.6, fract(along/0.011));
+}
+float heightOf(int kind, vec2 uv, float extra){
+  if (kind == KNIT) return extra > 0.0 ? knitH(uv, extra)*keepU(extra) : ribH(uv, -extra)*keepU(-extra);
+  if (kind == STRAW) return strawH(uv, extra)*keepU(extra)*keepV(0.024);
+  if (kind == SATIN) return (0.5 + 0.5*sin(uv.x*6.2832*360.0))*keepU(360.0)*0.6;   // grosgrain's ribs
+  if (kind == COTTON) {
+    if (extra > 6.5) return (0.5 + 0.5*cos(uv.x*6.2832*44.0))*keepU(44.0);       // a tassel's threads
+    if (abs(extra - 3.0) < 0.5) return vn3(vP*240.0)*0.8 + vn3(vP*90.0)*0.4;      // terry's loops
+    float h = 0.5 + 0.5*sin((uv.x*gUS + uv.y)*6.2832/0.0045)*keepV(0.0045)*0.4;   // twill, on the diagonal
+    float panels = abs(extra);
+    if (abs(extra - 5.0) < 0.5) {   // a brim's rows of stitching, round and round it
+      float r = fract(uv.y/0.026) - 0.5;
+      h += (1.0 - smoothstep(0.03, 0.09, abs(r)))*smoothstep(0.1, 0.25, fract(uv.x*240.0))*smoothstep(0.75, 0.6, fract(uv.x*240.0))*keepU(240.0)*1.2;
+    } else if (panels > 2.5) {      // a cap's panels: a seam between each, a row of stitching either side
+      float k = fract(uv.x*panels + 0.5) - 0.5;
+      float across = k/panels*gUS;
+      h -= (1.0 - smoothstep(0.0, 0.0055, abs(across)))*1.4*keepU(panels*8.0);
+      h += stitches(across, uv.y, 0.013)*keepU(panels*30.0)*1.2;
+    } else if (extra > 1.5) {       // a peak's rows of stitching, round its edge
+      float r = fract(uv.y*8.0 + 0.5) - 0.5;
+      float rows = (1.0 - smoothstep(0.012, 0.03, abs(r)))*step(uv.y, 0.6);
+      h += rows*smoothstep(0.1, 0.25, fract(uv.x*190.0))*smoothstep(0.75, 0.6, fract(uv.x*190.0))*keepU(190.0)*1.2;
+    }
+    return h;
+  }
+  if (kind == FUR) return extra > 0.5 ? vn3(vP*260.0)*0.7 : vn3(vP*170.0)*0.7 + vn3(vP*60.0)*0.3;
+  if (kind == FELT) return vn3(vP*230.0)*0.5;
+  if (kind == METAL) return vn3(vP*28.0)*0.25;      // hand-beaten, a little
+  if (kind == LEAF && extra > 0.5) {                // a leaf's veins: its midrib, and the veins off it
+    float mid = 1.0 - smoothstep(0.0, 0.07, abs(uv.x));
+    float vein = 1.0 - smoothstep(0.0, 0.06, abs(fract(uv.y*7.0 - abs(uv.x)*1.4) - 0.5) - 0.44);
+    return mid*0.9 - vein*0.5*smoothstep(0.08, 0.2, abs(uv.x))*keepV(0.14);
+  }
+  if (kind == FEATHER) {                            // its barbs, combed out from the shaft
+    return (0.5 + 0.5*sin((uv.y*90.0 - abs(uv.x)*7.0)*6.2832))*keepV(0.011)*0.8 + (1.0 - smoothstep(0.0, 0.05, abs(uv.x)))*0.6;
+  }
+  if (kind == HORN && extra < 0.5) {                // a horn's rings, close at its foot
+    return (0.5 + 0.5*cos(uv.y*6.2832/0.022))*(1.0 - smoothstep(0.08, 0.15, uv.y))*keepV(0.022);
+  }
+  if (kind == TWEED) return vn3(vP*220.0)*0.6 + 0.4*(0.5 + 0.5*sin((uv.x*gUS - uv.y)*6.2832/0.006))*keepV(0.006);
+  if (kind == LEATHER || kind == RUBBER) return vn3(vP*300.0)*0.6;
+  if (kind == WOOD) return 0.5 + 0.5*sin(uv.y*260.0 + vn3(vP*40.0)*6.0);
+  if (kind == FRUIT) return vn3(vP*120.0)*0.3;
+  return 0.0;
+}
+float bumpOf(int kind, float extra){         // how deep each weave is, in the hat's units
+  if (kind == KNIT) return 0.0045;
+  if (kind == STRAW) return 0.0028;
+  if (kind == COTTON) return abs(extra - 3.0) < 0.5 ? 0.0022 : extra > 6.5 ? 0.0015 : 0.0016;
+  if (kind == SATIN) return 0.0005;
+  if (kind == FUR) return extra > 0.5 ? 0.0018 : 0.004;
+  if (kind == FELT) return extra > 0.5 ? 0.0002 : 0.0006;
+  if (kind == METAL) return 0.002;
+  if (kind == LEAF) return 0.0018;
+  if (kind == FEATHER) return 0.0012;
+  if (kind == HORN) return 0.0035;
+  if (kind == TWEED) return 0.0014;
+  if (kind == LEATHER || kind == RUBBER) return 0.0005;
+  if (kind == WOOD) return 0.0008;
+  if (kind == FRUIT) return 0.0004;
+  return 0.0;
+}
+
+// ---- the studio ---------------------------------------------------------------------------------------------------
+vec3 env(vec3 R, float rough){
+  float s = clamp(rough, 0.02, 1.0);
+  vec3 sky = mix(vec3(0.46, 0.47, 0.5), vec3(1.0, 1.01, 1.05), smoothstep(-0.05, 0.9, R.y));
+  vec3 ground = mix(vec3(0.15, 0.15, 0.16), vec3(0.07, 0.07, 0.08) + lin(uOrb)*0.3, smoothstep(-0.05, -0.85, R.y));
+  vec3 c = mix(ground, sky, smoothstep(-0.1 - 0.3*s, 0.06 + 0.3*s, R.y));
+  vec3 kb = normalize(vec3(-0.52, 0.62, 0.58));
+  c += vec3(5.2)*(1.0 - 0.78*s)*smoothstep(0.93 - 0.55*s, 0.985 - 0.33*s, dot(R, kb));   // the softbox
+  vec3 fb = normalize(vec3(0.7, 0.15, 0.7));
+  c += vec3(1.3)*(1.0 - 0.6*s)*smoothstep(0.86 - 0.5*s, 0.96 - 0.3*s, dot(R, fb));      // a fill, to his right
+  vec3 rb = normalize(vec3(0.82, 0.28, -0.5));
+  c += vec3(1.7)*(1.0 - 0.6*s)*smoothstep(0.9 - 0.5*s, 0.97 - 0.3*s, dot(R, rb));       // the rim strip
+  return c;
+}
+
+void main(){
+  int kind = int(vMat.x + 0.5);
+  int slot = int(vMat.y + 0.5);
+  float ao = vMat.z;
+  float extra = vMat.w > 99.5 ? vMat.w - 100.0 : vMat.w;
+  vec3 N = normalize(vN);
+  if (!gl_FrontFacing) N = -N;
+  gFW = fwidth(vUV);
+  // the surface's own directions (its u and v across the screen), for the weaves' bumps
+  vec3 dp1 = dFdx(vS), dp2 = dFdy(vS);
+  vec2 du1 = dFdx(vUV), du2 = dFdy(vUV);
+  vec3 r1 = cross(dp2, N), r2 = cross(N, dp1);
+  float det = dot(dp1, r1);
+  bool framed = abs(det) > 1e-14 && max(abs(du1.x), abs(du2.x)) < 0.2;
+  vec3 gu = framed ? (r1*du1.x + r2*du2.x)/det : vec3(0.0);
+  vec3 gv = framed ? (r1*du1.y + r2*du2.y)/det : vec3(0.0);
+  gUS = 1.0/max(length(gu), 1e-4);
+  vec3 base = slot == 0 ? uCol : slot == 1 ? uCol2 : uPal[slot];
+  vec3 alb = lin(base);
+  float h0 = heightOf(kind, vUV, extra);
+  float amp = bumpOf(kind, extra);
+  if (framed && amp > 0.0) {
+    float e1 = 0.0004, e2 = 0.0006;
+    vec3 g = (heightOf(kind, vUV + vec2(e1, 0.0), extra) - h0)/e1*gu + (heightOf(kind, vUV + vec2(0.0, e2), extra) - h0)/e2*gv;
+    N = normalize(N - amp*g);
+  }
+  // what it is made of
+  float rough = 0.6, metal = 0.0, coat = 0.0, sheen = 0.0, wrap = 0.0;
+  vec3 emit = vec3(0.0);
+  float alpha = 1.0;
+  if (kind == FELT) {
+    rough = abs(extra - 1.0) < 0.5 ? 0.36 : abs(extra - 2.0) < 0.5 ? 0.62 : 0.78;      // felt, silk plush, velvet
+    sheen = abs(extra - 2.0) < 0.5 ? 0.95 : abs(extra - 1.0) < 0.5 ? 0.45 : 0.55;
+    wrap = 0.2;
+    if (extra > 9.5) {        // a wizard's: printed with gold stars, big and small
+      vec2 g = vec2(vUV.x*11.0, vUV.y/0.085);
+      vec2 cell = floor(g), f = fract(g) - 0.5;
+      float on = step(0.45, h31(vec3(cell, 5.0)));
+      vec2 j = (vec2(h31(vec3(cell, 1.0)), h31(vec3(cell, 2.0))) - 0.5)*0.4;
+      vec2 sp = (f - j)*vec2(1.0, 0.85);
+      float ang = atan(sp.y, sp.x + 1e-6) + 1.5708, rr = length(sp);
+      float sz = mix(0.16, 0.3, h31(vec3(cell, 3.0)));
+      float st = rr - sz*(0.55 + 0.45*cos(5.0*ang));
+      float aa = max(fwidth(st), 1e-4);
+      float print = on*(1.0 - smoothstep(-aa, aa, st))*keepU(11.0*3.0);
+      alb = mix(alb, lin(uCol2), print);
+      rough = mix(rough, 0.3, print);
+      metal = 0.8*print;
+    }
+  }
+  else if (kind == KNIT) { rough = 0.92; sheen = 0.55; wrap = 0.45; alb *= mix(0.62, 1.0, h0); }
+  else if (kind == FUR) { rough = 0.95; sheen = 0.85; wrap = 0.6; alb *= mix(0.72, 1.0, h0); }
+  else if (kind == COTTON) {
+    rough = 0.82; sheen = 0.3; wrap = 0.25;
+    if (extra < -0.5 && mod(floor(vUV.x*(-extra) + 0.5), 2.0) > 0.5) alb = lin(uPal[4]);   // panels in two colours
+    alb *= mix(0.8, 1.0, clamp(h0, 0.0, 1.0));
+  }
+  else if (kind == STRAW) {
+    rough = 0.5; sheen = 0.18; wrap = 0.3;
+    float row = floor(vUV.y/0.024), strand = floor(vUV.x*extra + 0.5*row + 0.5);
+    alb *= mix(0.55, 1.0, h0)*(0.86 + 0.28*h31(vec3(row, strand, 3.0)));
+  }
+  else if (kind == PLASTIC) { rough = 0.3; coat = 1.0; }
+  else if (kind == METAL) { rough = 0.2; metal = 1.0; }
+  else if (kind == SATIN) {
+    rough = 0.32; sheen = 0.6;
+    if (extra > 1.5) {        // embroidered: a zigzag in his colour round the band
+      float z = abs(fract(vUV.x*48.0) - 0.5)*4.0 - 1.0;
+      float d = abs(vUV.y - (0.038 + 0.016*z));
+      alb = mix(alb, lin(uCol), (1.0 - smoothstep(0.003, 0.006, d))*keepU(48.0*4.0));
+    }
+  }
+  else if (kind == PAPER) {
+    rough = 0.42; coat = 0.75;
+    float s = vUV.x*extra + vUV.y*2.6;
+    float aa = max(fwidth(s), 1e-4);
+    float stripe = smoothstep(0.25 - aa, 0.25 + aa, abs(fract(s) - 0.5));
+    alb = mix(alb, lin(uCol2), stripe);
+  }
+  else if (kind == GLOW) { emit = lin(base)*(1.7 + 0.35*sin(uTime*2.2)); rough = 0.1; coat = 1.0; alb *= 0.4; }
+  else if (kind == GEM) { rough = 0.04; }
+  else if (kind == RUBBER) { rough = 0.62; }
+  else if (kind == LEATHER) { rough = 0.5; coat = 0.2; }
+  else if (kind == HORN) { rough = extra > 0.5 ? 0.55 : 0.3; coat = extra > 0.5 ? 0.15 : 0.7; wrap = 0.2; alb *= mix(1.0, 0.82, smoothstep(0.0, 0.3, vUV.y)); }
+  else if (kind == PEARL) {
+    rough = 0.26; coat = 0.9; wrap = 0.2;
+    if (extra > 0.5) {        // a unicorn's: its groove winding up it in his second colour
+      float s = vUV.x + 0.5 - vUV.y*(3.2/0.36);
+      alb = mix(alb, lin(uCol2), smoothstep(0.55, 0.85, cos(s*6.2832))*0.85);
+    }
+  }
+  else if (kind == LEAF) { rough = 0.38; coat = 0.5; wrap = 0.5; alb *= extra > 0.5 ? mix(0.82, 1.08, abs(vUV.x))*mix(1.0, 1.1, vUV.y) : 1.0; }
+  else if (kind == FRUIT) {
+    rough = 0.32; coat = 0.75; wrap = 0.35;
+    float streak = vn3(vec3(vUV.x*34.0, vUV.y*4.0, 1.0));
+    alb *= 0.8 + 0.32*streak;
+    alb = mix(alb, alb*vec3(1.25, 1.15, 0.6), smoothstep(0.18, 0.3, vUV.y)*0.35);       // a blush toward its shoulder
+    alb = mix(alb, vec3(0.9, 0.82, 0.55), step(0.86, vn3(vP*110.0))*0.5*keepV(0.01));   // its pale specks
+  }
+  else if (kind == PETAL) { rough = 0.62; sheen = 0.6; wrap = 0.65; alb *= mix(0.7, 1.12, smoothstep(0.0, 0.8, vUV.y)); }
+  else if (kind == FEATHER) { rough = 0.66; sheen = 0.6; wrap = 0.55; alb *= mix(0.86, 1.04, h0); }
+  else if (kind == TWEED) {
+    rough = 0.9; sheen = 0.3; wrap = 0.3;
+    // its check: broad bands both ways in his second colour, darker where they cross, a fine line through each
+    float bu = 1.0 - smoothstep(0.17, 0.21, abs(fract(vUV.x*20.0) - 0.5));
+    float bv = 1.0 - smoothstep(0.17, 0.21, abs(fract(vUV.y/0.085) - 0.5));
+    float fu = 1.0 - smoothstep(0.02, 0.05, abs(fract(vUV.x*20.0 + 0.5) - 0.5));
+    float fv = 1.0 - smoothstep(0.02, 0.05, abs(fract(vUV.y/0.085 + 0.5) - 0.5));
+    float k = keepU(20.0*4.0);
+    alb = mix(alb, mix(alb, lin(uCol2), 0.5), (bu + bv)*0.5*k);
+    alb = mix(alb, lin(uCol2)*0.8, max(fu, fv)*0.7*k);
+    alb *= mix(0.85, 1.0, h0);
+  }
+  else if (kind == WOOD) { rough = 0.7; alb *= mix(0.8, 1.05, h0); }
+  else if (kind == GLASS) { rough = 0.06; coat = 1.0; alpha = 0.55; }
+
+  vec3 V = vec3(0.0, 0.0, 1.0);
+  vec3 L = normalize(vec3(-0.50, 0.66, 0.56));
+  vec3 H = normalize(L + V);
+  float NoV = clamp(dot(N, V), 1e-3, 1.0);
+  float NoL = dot(N, L);
+  float nl = clamp(NoL, 0.0, 1.0);
+  float NoH = clamp(dot(N, H), 0.0, 1.0);
+  float VoH = clamp(dot(V, H), 0.0, 1.0);
+  vec3 R = reflect(-V, N);
+  vec3 col;
+  if (kind == GEM) {
+    // a cut stone: the light it bends back out of its facets, coloured, and the sparkle off them
+    vec3 inner = env(vec3(-R.x, abs(R.y), R.z), 0.03);
+    float lum = dot(inner, vec3(0.3, 0.5, 0.2));
+    vec3 fire = 0.5 + 0.5*cos(6.2832*(dot(N, vec3(1.7, 2.3, 0.9)) + vec3(0.0, 0.33, 0.67)));
+    col = alb*(0.12 + 0.9*lum) + env(R, 0.03)*0.12 + fire*0.06*smoothstep(1.5, 4.0, lum);
+  } else {
+    vec3 F0 = mix(vec3(0.04), alb, metal);
+    float a2 = sq(max(rough*rough, 0.003));
+    float D = a2/(PI*sq(NoH*NoH*(a2 - 1.0) + 1.0));
+    float k = sq(rough + 1.0)/8.0;
+    float G = (NoV/(NoV*(1.0 - k) + k))*(nl/(nl*(1.0 - k) + k));
+    vec3 F = F0 + (1.0 - F0)*pow(clamp(1.0 - VoH, 0.0, 1.0), 5.0);
+    vec3 spec = D*G*F/max(4.0*NoV*nl, 1e-3)*nl;
+    float wl = clamp((NoL + wrap)/(1.0 + wrap), 0.0, 1.0);
+    vec3 KEY = vec3(3.0);
+    col = ((1.0 - metal)*(vec3(1.0) - F)*alb/PI*wl + spec)*KEY*mix(1.0, ao, 0.5);
+    vec3 irr = mix(vec3(0.05, 0.05, 0.06) + lin(uOrb)*0.28, vec3(0.56, 0.57, 0.61), 0.5 + 0.5*N.y);
+    vec3 Fr = F0 + (max(vec3(1.0 - rough), F0) - F0)*pow(clamp(1.0 - NoV, 0.0, 1.0), 5.0);
+    col += (1.0 - metal)*alb*irr*ao;
+    col += env(R, rough)*Fr*ao*mix(0.6, 1.0, ao);
+    if (coat > 0.0) {
+      float Fc = 0.04 + 0.96*pow(clamp(1.0 - NoV, 0.0, 1.0), 5.0);
+      float ac = sq(0.07*0.07);
+      float Dc = ac/(PI*sq(NoH*NoH*(ac - 1.0) + 1.0));
+      col = col*(1.0 - coat*Fc) + coat*(env(R, 0.06)*Fc*ao + Dc*0.04*nl*KEY*0.25);
+    }
+    col += sheen*mix(alb, vec3(1.0), 0.35)*pow(clamp(1.0 - NoV, 0.0, 1.0), 2.0)*(0.3 + 0.7*wl)*0.7*ao;
+    col += lin(uOrb)*0.16*pow(clamp(1.0 - NoV, 0.0, 1.0), 3.0)*(1.0 - 0.6*rough)*ao;   // his light, at its edges
+    col += emit;
+  }
+  col = clamp((col*(2.51*col + 0.03))/(col*(2.43*col + 0.59) + 0.14), 0.0, 1.0);
+  // celluloid is see-through: less so where it turns away and mirrors more
+  if (alpha < 1.0) alpha = clamp(alpha + 0.4*pow(clamp(1.0 - NoV, 0.0, 1.0), 3.0), 0.0, 1.0);
+  O = vec4(pow(clamp(col, 0.0, 1.0), vec3(1.0/2.2)), alpha);
 }`;

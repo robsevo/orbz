@@ -1,0 +1,38 @@
+// The hat sheet's page (tools/shoot_hats.ts): every hat close up on one orb, so how each one is made
+// (its shape, its proportions on his head, what it seems made of) can be judged side by side
+// (owner, 10-09: "dont cheap out on them. make them nice, to industry standards").
+import { createRoot } from "react-dom/client";
+import { stylesheet } from "../src/design/tokens.ts";
+import { Orb } from "../src/orb/Orb.tsx";
+import { ASH, HATS, type Character, type HatName, type OrbHue, type ShapeName } from "../src/orb/spec.ts";
+
+export function mount(): void {
+  const q = new URLSearchParams(location.search);
+  const size = Number(q.get("size") ?? 200);
+  const theme = q.get("theme") === "light" ? "light" : "dark";
+  document.documentElement.dataset.theme = theme;
+  const style = document.createElement("style");
+  style.textContent = stylesheet();
+  document.head.append(style);
+  const hats = (Object.keys(HATS) as HatName[]).filter((h) => h !== "none" && (!q.get("wears") || q.get("wears")!.split(",").includes(h)));
+  const hues = (q.get("hues")?.split(",") ?? ["azure"]) as OrbHue[];
+  const shape = (q.get("shape") ?? "bean") as ShapeName;
+  const cols = Number(q.get("cols") ?? 7);
+  const root = document.createElement("div");
+  document.body.append(root);
+  createRoot(root).render(
+    <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, ${size}px)`, gap: 6, padding: 12, background: "var(--ground)", color: "var(--text-2)", font: "600 13px/16px var(--font)", width: "max-content" }}>
+      {hats.flatMap((h, i) => {
+        const hue = hues[i % hues.length]!;
+        const c: Character = { ...ASH, name: "Sheet", finish: "glass", shape, hue, hat: h, glasses: "none" };
+        return [
+          <div key={h} style={{ display: "grid", justifyItems: "center" }}>
+            <Orb character={c} size={size} still poke={false} />
+            <span>{h}</span>
+          </div>,
+        ];
+      })}
+    </div>,
+  );
+  (window as unknown as { ready: boolean }).ready = true;
+}

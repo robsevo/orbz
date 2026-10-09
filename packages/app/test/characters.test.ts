@@ -123,6 +123,94 @@ for (const tab of ["Shape", "Eyes", "Hat", "Glasses"]) {
   });
 }
 
+// owner, 10-09: "some just look like stupid 3d playdoh ... dont cheap out on them. make them nice, to industry
+// standards". A hat is lit as the form it is: across a plain one (one material, one colour), inside its edge, the light
+// runs from where it faces the light to where it turns away. Measured 10-09 on the Hat tab: 28 to 67 between the tenth
+// and ninetieth brightest of its pixels; drawn flat (one normal for all of it, as the old cut-outs were inside their
+// bevel) 0 to 2. The line is halfway.
+const PLAIN = ["hard hat", "beret", "fez", "chef hat", "viking helmet", "bow"];
+test("every plain hat is lit as a form, not flat: light to shade across it (owner, 10-09: \"stupid 3d playdoh\")", { skip }, async () => {
+  await page.getByRole("tab", { name: "Hat" }).click();
+  await page.waitForTimeout(300);
+  const rows = await page.evaluate((plain) => {
+    const px = (pick: string) => {
+      const c = document.querySelector<HTMLButtonElement>(`button[data-pick="${pick}"]`)!.querySelector("canvas")!;
+      return { W: c.width, H: c.height, d: c.getContext("2d")!.getImageData(0, 0, c.width, c.height).data };
+    };
+    const none = px("none");
+    return plain.map((pick) => {
+      const { W, H, d } = px(pick);
+      // the hat: solid, and not his glass (it repaints him); inside its edge, two pixels in from every side
+      const m = new Uint8Array(W * H);
+      for (let i = 0; i < W * H; i++) m[i] = d[i * 4 + 3]! >= 250 && Math.abs(d[i * 4]! - none.d[i * 4]!) + Math.abs(d[i * 4 + 1]! - none.d[i * 4 + 1]!) + Math.abs(d[i * 4 + 2]! - none.d[i * 4 + 2]!) > 60 ? 1 : 0;
+      const L: number[] = [];
+      for (let y = 2; y < H - 2; y++)
+        for (let x = 2; x < W - 2; x++) {
+          let inside = true;
+          for (let dy = -2; dy <= 2 && inside; dy++) for (let dx = -2; dx <= 2; dx++) if (!m[(y + dy) * W + x + dx]) { inside = false; break; }
+          const i = y * W + x;
+          if (inside) L.push(0.299 * d[i * 4]! + 0.587 * d[i * 4 + 1]! + 0.114 * d[i * 4 + 2]!);
+        }
+      L.sort((a, b) => a - b);
+      const at = (f: number): number => L[Math.min(L.length - 1, Math.floor(f * L.length))] ?? 0;
+      return { pick, n: L.length, spread: at(0.9) - at(0.1) };
+    });
+  }, PLAIN);
+  if (process.env.ORBS_PRINT) console.log(rows.map((r) => `${r.pick} ${r.n} ${r.spread.toFixed(1)}`).join("\n"));
+  for (const r of rows) {
+    assert.ok(r.n > 150, `control: ${r.pick} is found inside its edge (${r.n} pixels)`);
+    assert.ok(r.spread > 14, `${r.pick}: lit flat, ${r.spread.toFixed(1)} from light to shade across it`);
+  }
+});
+
+// A hat is a model round his head now: what goes round behind him hides behind him (his head is drawn into depth
+// first), so a sweatband shows only its front half across his forehead; and a hat casts a soft shadow on his glass just
+// under its edge, so it sits on him rather than over him. Measured 10-09 on the Hat tab: the sweatband 16 px tall down
+// his middle (25 with nothing hiding its back half), his glass under the straw hat's brim 15% darker than bare (none
+// with no shadow). The lines are halfway.
+const BAND_TALL = 21;
+const SHADE_SEEN = 0.075;
+test("what goes round behind his head hides behind him, and his hat shades him just under it", { skip }, async () => {
+  await page.getByRole("tab", { name: "Hat" }).click();
+  await page.waitForTimeout(300);
+  const r = await page.evaluate((cy) => {
+    const px = (pick: string) => {
+      const c = document.querySelector<HTMLButtonElement>(`button[data-pick="${pick}"]`)!.querySelector("canvas")!;
+      return { W: c.width, H: c.height, d: c.getContext("2d")!.getImageData(0, 0, c.width, c.height).data };
+    };
+    const none = px("none");
+    const { W, H } = none;
+    const off = (a: { d: Uint8ClampedArray }, i: number): number => Math.abs(a.d[i * 4]! - none.d[i * 4]!) + Math.abs(a.d[i * 4 + 1]! - none.d[i * 4 + 1]!) + Math.abs(a.d[i * 4 + 2]! - none.d[i * 4 + 2]!);
+    const lum = (a: { d: Uint8ClampedArray }, i: number): number => 0.299 * a.d[i * 4]! + 0.587 * a.d[i * 4 + 1]! + 0.114 * a.d[i * 4 + 2]!;
+    const x = Math.floor(W / 2);
+    // down his middle: how tall the sweatband is, from its top to its foot
+    const band = px("sweatband");
+    let top = -1;
+    let foot = -1;
+    for (let y = 0; y < H * cy; y++) {
+      if (band.d[(y * W + x) * 4 + 3]! >= 128 && off(band, y * W + x) > 40) {
+        if (top < 0) top = y;
+        foot = y;
+      }
+    }
+    // his glass just under the straw hat's brim, in his middle, against the same place bare
+    const straw = px("straw hat");
+    let lowest = -1;
+    for (let y = 0; y < H * cy; y++) if (straw.d[(y * W + x) * 4 + 3]! >= 250 && off(straw, y * W + x) > 60) lowest = y;
+    let a = 0;
+    let b = 0;
+    for (let y = lowest + 2; y < lowest + 6; y++) for (let xx = x - 6; xx <= x + 6; xx++) {
+      a += lum(straw, y * W + xx);
+      b += lum(none, y * W + xx);
+    }
+    return { tall: foot - top + 1, shade: 1 - a / b, lowest, H };
+  }, DESIGN.cy);
+  if (process.env.ORBS_PRINT) console.log("sweatband tall", r.tall, "shade under the straw hat", r.shade.toFixed(3), "at", r.lowest, "of", r.H);
+  assert.ok(r.lowest > 0 && r.tall > 3, "control: the straw hat's brim and the sweatband are found");
+  assert.ok(r.tall < BAND_TALL, `a sweatband ${r.tall} px tall down his middle: its back half shows over his head`);
+  assert.ok(r.shade > SHADE_SEEN, `under its brim his glass is ${(r.shade * 100).toFixed(1)}% darker than bare (a hat that casts no shadow)`);
+});
+
 test("no mouth, by pixels: below his eyes nothing is as dark as an eye (and the eyes are)", { skip }, async () => {
   await page.getByRole("tab", { name: "Eyes" }).click();
   await page.waitForTimeout(300);

@@ -6,6 +6,7 @@
 // The starter shapes are our own; the owner names and redraws them. No mouth on any of them, no
 // cheeks (owner, 2026-09-24): the eyes carry every mood.
 import { DARK_ORB, HUES, MATERIALS, type HueName, type Material } from "../design/tokens.ts";
+import { glowOf } from "./hats/models.ts";
 import { glassOf, hexOf, rgb01 } from "./colour.ts";
 import { type Dna, dnaOf, dnaSays, leansOf } from "./dna.ts";
 import { ORB_TURNS } from "./hues.ts";
@@ -692,7 +693,12 @@ export function lookOf(c: Character): OrbLook {
   return {
     shapeA: [...s.a], shapeB: [...s.b], shapeC: [...s.c], shapeD: [...s.d], shapeE: [...s.e], shapeF: [...s.f],
     eyeA: [...e.a] as V4, eyeB: [...e.b] as V4,
-    acc: w.id, accFit: (({ seat, size, float }) => [c.hat === "halo" ? float : seat, size] as [number, number])(hatFit(c.shape)), accCol: c.hatTint ? rgb01(c.hatTint) : c.hatHue ? tone(c.hatHue, c) : paint(w.main, c), accCol2: paint(w.second, c), accTilt: w.tilt,
+    acc: w.id, accFit: (({ seat, size, float }) => [c.hat === "halo" ? float : seat, size] as [number, number])(hatFit(c.shape)), accCol: c.hatTint ? rgb01(c.hatTint) : c.hatHue ? tone(c.hatHue, c) : paint(w.main, c), accCol2: paint(w.second, c), accTilt: w.tilt, orbCol: paint("accent", c),
+    ...(() => {
+      const g = glowOf(w.id);
+      const col = c.hatTint ? rgb01(c.hatTint) : c.hatHue ? tone(c.hatHue, c) : paint(w.main, c);
+      return { accGlow: g ? ([...g.at, g.a, g.b] as [number, number, number, number]) : [0, 0, 0, 0], accGlowKind: g?.kind ?? 0, accGlowCol: g?.slot === "second" ? paint(w.second, c) : col };
+    })(),
     specs: g.id,
     specsCol: c.glassesTint ? rgb01(c.glassesTint) : c.glassesHue ? tone(c.glassesHue, c) : paint(g.frame, c),
     specsCol2: c.glassesTint ? rgb01(c.glassesTint) : c.glassesHue ? tone(c.glassesHue, c) : paint(g.second, c),

@@ -125,7 +125,7 @@ test("a roll of the dice that lands on another page turns to it", { skip }, asyn
   sized.clear();
 });
 
-/** The mean colour of the top `share` of a thumbnail's body (where a hat sits), or of a band (glasses). */
+/** The mean colour of a band of a thumbnail's body, from y0 to y1 of its height: where a hat sits, or his glasses. */
 function meanOf(page: Page, pick: string, y0: number, y1: number): Promise<[number, number, number]> {
   return page.evaluate(({ pick, y0, y1 }) => {
     const c = document.querySelector<HTMLButtonElement>(`button[data-pick="${pick}"]`)!.querySelector("canvas")!;
@@ -138,6 +138,9 @@ function meanOf(page: Page, pick: string, y0: number, y1: number): Promise<[numb
     return [r / n / 255, g / n / 255, b / n / 255] as [number, number, number];
   }, { pick, y0, y1 });
 }
+/** Where a beanie is in its thumbnail: since 10-09 a hat is a model sized for his head (owner: "even the party hat is
+ * huge"), so it sits lower and smaller than the flat ones did in the frame's top third. Its knit, its cuff, its pompom. */
+const HAT_BAND = [0.3, 0.45] as const;
 const apart = (a: number[], b: number[]): number => a.reduce((s, x, i) => s + Math.abs(x - b[i]!), 0);
 
 // in two steps on one page (each colour pressed redraws every thumbnail on the tab, slow in software
@@ -154,22 +157,22 @@ test("a hat in any colour, like his own: it paints the hat, and Its own puts its
   }));
   await page.getByRole("tab", { name: "Hat" }).click();
   await choose(page, "beanie");
-  const hatBefore = await meanOf(page, "beanie", 0, 0.35);
+  const hatBefore = await meanOf(page, "beanie", ...HAT_BAND);
   await page.getByRole("button", { name: "hat in coral" }).click();
   await page.waitForTimeout(250);
-  const hatCoral = await meanOf(page, "beanie", 0, 0.35);
+  const hatCoral = await meanOf(page, "beanie", ...HAT_BAND);
   assert.ok(apart(hatBefore, hatCoral) > 0.08, `the beanie turns coral (${apart(hatBefore, hatCoral).toFixed(3)})`);
   await page.getByRole("button", { name: "Its own" }).click();
   await page.waitForTimeout(250);
-  assert.ok(apart(hatBefore, await meanOf(page, "beanie", 0, 0.35)) < 0.01, "Its own puts its colour back");
+  assert.ok(apart(hatBefore, await meanOf(page, "beanie", ...HAT_BAND)) < 0.01, "Its own puts its colour back");
   // white and black too (owner, 10-03: "option to put accesories white or black also")
   const light = (c: number[]): number => (c[0]! + c[1]! + c[2]!) / 3;
   await page.getByRole("button", { name: "hat in white" }).click();
   await page.waitForTimeout(250);
-  const white = await meanOf(page, "beanie", 0, 0.35);
+  const white = await meanOf(page, "beanie", ...HAT_BAND);
   await page.getByRole("button", { name: "hat in black" }).click();
   await page.waitForTimeout(250);
-  const black = await meanOf(page, "beanie", 0, 0.35);
+  const black = await meanOf(page, "beanie", ...HAT_BAND);
   assert.ok(light(white) - light(black) > 0.15, `a white beanie is light and a black one dark (${light(white).toFixed(2)} against ${light(black).toFixed(2)})`);
   await page.getByRole("button", { name: "Its own" }).click();
   await page.waitForTimeout(250);
@@ -349,11 +352,11 @@ test("any colour: Dark and a typed colour reach the orb and its DNA strand, a sl
   // a hat in any colour
   await page.getByRole("tab", { name: "Hat" }).click();
   await choose(page, "beanie");
-  const own = await meanOf(page, "beanie", 0, 0.35);
+  const own = await meanOf(page, "beanie", ...HAT_BAND);
   await page.locator('[data-colour-any="hat"]').click();
   await page.getByRole("textbox", { name: "The hat's colour, as hex" }).fill("#20e070");
   await page.waitForTimeout(300);
-  const hat = await meanOf(page, "beanie", 0, 0.35);
+  const hat = await meanOf(page, "beanie", ...HAT_BAND);
   assert.ok(apart(own, hat) > 0.08 && hat[1] > hat[0], `the beanie turns that green (${hat.map((v) => v.toFixed(2)).join(", ")})`);
   assert.match(await dna(), /^2/);
   await page.waitForTimeout(300);

@@ -2956,6 +2956,34 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ('System is forgotten, and Midnight comes back', 'src/ui/theme.ts', [
         ('globalThis.localStorage?.setItem(KEY, t ?? SYSTEM);', 'if (t) globalThis.localStorage?.setItem(KEY, t); else globalThis.localStorage?.removeItem(KEY);'),
     ], ['render.test.ts']),
+    # the hats as models (owner, 10-09: "dont cheap out on them. make them nice, to industry standards")
+    ('a hat is lit flat, as the cut-outs were', 'src/orb/glsl.ts', [
+        ('  vec3 N = normalize(vN);\n  if (!gl_FrontFacing) N = -N;\n  gFW = fwidth(vUV);', '  vec3 N = vec3(0.0, 0.0, 1.0);\n  if (!gl_FrontFacing) N = -N;\n  gFW = fwidth(vUV);'),
+    ], ['characters.test.ts']),
+    ('the party hat is huge again', 'src/orb/hats/models.ts', [
+        ('  const r0 = 0.2;\n  const H = 0.5;\n  const y0 = seatAt(r0) - 0.014;', '  const r0 = 0.2;\n  const H = 0.98;\n  const y0 = seatAt(r0) - 0.014;'),
+    ], ['hats.test.ts']),
+    ('the crown floats off his head', 'src/orb/hats/models.ts', [
+        ('  const th = 0.016;\n  const y0 = seatAt(r0) - 0.012;', '  const th = 0.016;\n  const y0 = seatAt(r0) + 0.1;'),
+    ], ['hats.test.ts']),
+    ("the antenna's glow is drawn off its bead", 'src/orb/hats/models.ts', [
+        ('  if (id === 4) return { kind: 1, at: seen(BEAD.at), a: BEAD.r, b: BEAD.r, slot: "second" };', '  if (id === 4) return { kind: 1, at: seen(ANTENNA_TOP), a: BEAD.r, b: BEAD.r, slot: "second" };'),
+    ], ['hats.test.ts']),
+    ("the hats' shader numbers its materials its own way", 'src/orb/glsl.ts', [
+        ('const int FELT = 0, KNIT = 1, FUR = 2,', 'const int FELT = 0, KNIT = 2, FUR = 1,'),
+    ], ['hats.test.ts']),
+    ('his hat sits lower than his glow is drawn', 'src/orb/glsl.ts', [
+        ('  float R = uR;\n  float Rg = R * breath * (1.0 + AWAKE_GROW*wakeEase + WAKE_POP*uWake);\n  float Rtop = uShapeD.y*Rg*(1.0 - 0.045*uMorph - 0.030*speak + uAccFit.x)*(1.0 - 0.5*uSquash) - 0.03*Rg;', '  float R = uR;\n  float Rg = R * breath * (1.0 + AWAKE_GROW*wakeEase + WAKE_POP*uWake);\n  float Rtop = uShapeD.y*Rg*(1.0 - 0.045*uMorph - 0.030*speak + uAccFit.x)*(1.0 - 0.5*uSquash) - 0.13*Rg;'),
+    ], ['hats.test.ts']),
+    ('nothing hides what goes round behind his head', 'src/orb/renderer.ts', [
+        ('    gl.drawElements(gl.TRIANGLES, this.#head.count, gl.UNSIGNED_INT, 0);\n', ''),
+    ], ['characters.test.ts']),
+    ('his hat casts no shadow on him', 'src/orb/renderer.ts', [
+        ('const SHADE = 0.4;', 'const SHADE = 0;'),
+    ], ['characters.test.ts']),
+    ('a hat with no model is worn as nothing', 'src/orb/hats/models.ts', [
+        ('  37: sombrero, 38: tiara,', '  38: tiara,'),
+    ], ['spec.test.ts']),
 ]
 
 # the `orbs` terminal (PLAN 1.9): paths are inside packages/terminal
