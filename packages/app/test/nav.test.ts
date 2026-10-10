@@ -125,7 +125,11 @@ test("on a phone the menu slides in from the top bar, and closes once you have c
   }
 });
 
-test("the menu open on a phone, then the window made wide: the desk's own layout; narrow again, the menu is closed", { skip }, async () => {
+// A window resized redraws every orb on the floor at its new size, in software here, and the page's frames stall till
+// then: with the desk's page still drawing beside it, the menu slid away 13 to 21 s after the window was made narrow
+// (frames held up to 15 s), on the code before 10-10's batch as on it (measured 10-10). So the desk's page closes once
+// it has given its boxes, and the waits below are long: what they wait for still never comes when it is broken.
+test("the menu open on a phone, then the window made wide: the desk's own layout; narrow again, the menu is closed", { skip, timeout: 180_000 }, async () => {
   const boxes = (p: Page) => p.evaluate(() => Object.fromEntries([".orbs-side", "[data-floor]"].map((sel) => {
     const r = document.querySelector(sel)!.getBoundingClientRect();
     return [sel, [r.x, r.y, r.width, r.height].map(Math.round)];
@@ -136,13 +140,14 @@ test("the menu open on a phone, then the window made wide: the desk's own layout
     await desk.locator("[data-floor]").waitFor();
     await desk.waitForTimeout(600);
     const want = await boxes(desk);
+    await desk.context().close();
     await page.getByRole("button", { name: "Menu" }).click();
     await menu(page).waitFor();
     await page.waitForTimeout(500);
     await page.setViewportSize(SIZES.desk);
     // no scrim on a desk: gone once the window is wide (a count after a fixed 800 ms lost the race under
     // the gate's load, 10-07, as the menu's did below); one that stays still fails, at the wait's end
-    await page.locator(".orbs-scrim").waitFor({ state: "detached", timeout: 10_000 });
+    await page.locator(".orbs-scrim").waitFor({ state: "detached", timeout: 30_000 });
     await page.waitForTimeout(800);
     assert.deepEqual(await boxes(page), want, "the side menu and the office where a desk has them");
     assert.deepEqual(await measure(page), [], "the layout rule, made wide");
@@ -150,11 +155,11 @@ test("the menu open on a phone, then the window made wide: the desk's own layout
     await page.waitForTimeout(800);
     assert.equal(await page.getByRole("button", { name: "Menu" }).getAttribute("aria-expanded"), "false", "narrow again: the menu is closed, not open by itself");
     // out of reach once it has slid away (a count after a fixed wait lost the race under the gate's load)
-    await menu(page).waitFor({ state: "hidden", timeout: 10_000 });
+    await menu(page).waitFor({ state: "hidden", timeout: 30_000 });
     assert.deepEqual(await measure(page), [], "the layout rule, narrow again");
   } finally {
     await page.context().close();
-    await desk.context().close();
+    await desk.context().close(); // (closed already once it gave its boxes: closing again does nothing)
   }
 });
 

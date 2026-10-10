@@ -2294,7 +2294,7 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ], ["zoom.test.ts", "phones.test.ts"]),
     # The personal page opens like Career: the orb and its identity share one hero (owner, 10-10).
     ("the profile hero stacks like a phone on a desk", "src/orbs.tsx", [
-        ('flexDirection: phone ? "column" : "row", gap: phone ? "var(--s3)" : "var(--s5)"', 'flexDirection: "column", gap: phone ? "var(--s3)" : "var(--s5)"'),
+        ('flexDirection: phone ? "column" : "row", gap: phone ? "var(--s3)" : "var(--s7)"', 'flexDirection: "column", gap: phone ? "var(--s3)" : "var(--s7)"'),
     ], ["profile-layout.test.ts"]),
     ("the career page's orb sits at the left on a phone", "src/rooms/Career.tsx", [
         ('flexDirection: phone ? "column" : "row"', 'flexDirection: "row"'),
@@ -3058,6 +3058,14 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("Who's in shrinks its orbs again", 'src/rooms/Sessions.tsx', [
         ('<Orb character={c} size={64} poke={false} still />', '<Orb character={c} size={44} poke={false} still />'),
     ], ['sessions.test.ts']),
+    # the orb's page, 10-10 later: its stats in two, the orb apart from its words
+    ("the orb page's skills stay under its traits on a desk", 'src/orbs.tsx', [
+        ('{!making && wide && <Sheet part="skills"', '{false && <Sheet part="skills"'),
+        ('{!wide && <Sheet part="skills"', '{<Sheet part="skills"'),
+    ], ['profile-layout.test.ts']),
+    ("the orb page's hero crowds its words again", 'src/orbs.tsx', [
+        ('gap: phone ? "var(--s3)" : "var(--s7)", alignItems: phone ? "center" : "flex-start"', 'gap: phone ? "var(--s3)" : "var(--s5)", alignItems: "center"'),
+    ], ['profile-layout.test.ts']),
     ("Who's in cuts a long name again", 'src/rooms/Sessions.tsx', [
         ('flex: "0 0 auto", minWidth: 148, maxWidth: 240,', 'width: 148,'),
     ], ['sessions.test.ts']),

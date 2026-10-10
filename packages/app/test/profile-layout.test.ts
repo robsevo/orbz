@@ -1,4 +1,5 @@
-// PLAN 2.28_t and 5.6: the personal page follows Career's hero structure, and Career's social history
+// PLAN 2.28_t and 5.6: the personal page follows Career's hero structure (its stats in two, the skills under its DNA on a
+// desk), and Career's social history
 // stays in one bounded scroll. This focused suite is also the control for their planted layout defects;
 // phones.test.ts still checks the same rooms as part of the app-wide responsive pass.
 import assert from "node:assert/strict";
@@ -56,17 +57,31 @@ test("the profile uses one Career-like hero, then compact controls and DNA", { s
       await page.evaluate(() => (location.hash = "#/office/Ada"));
       await page.locator("[data-moves]").waitFor({ timeout: 20_000 });
       await page.waitForTimeout(400);
-      const [hero, portrait, head, controls, dna, canvas, actions] = await Promise.all([
+      const [hero, portrait, head, controls, dna, canvas, actions, traits, skills] = await Promise.all([
         "[data-profile-hero]", "[data-profile-portrait]", "[data-sheet-head]", "[data-moves]", "[data-strand-card]",
-        "[data-profile-portrait] canvas", "[data-profile-actions]",
+        "[data-profile-portrait] canvas", "[data-profile-actions]", "[data-sheet-body]", "[data-sheet-skills]",
       ].map((sel) => page.locator(sel).boundingBox()));
-      assert.ok(hero && portrait && head && controls && dna && canvas && actions);
+      assert.ok(hero && portrait && head && controls && dna && canvas && actions && traits && skills);
+      const gap = head.x - (portrait.x + portrait.width);
+      if (process.env.ORBS_PRINT) console.log(`${width}: gap ${gap.toFixed(1)}, portrait ${(portrait.y - head.y).toFixed(1)} below the name; skills x ${skills.x} y ${skills.y}, dna x ${dna.x} bottom ${dna.y + dna.height}, traits x ${traits.x} bottom ${traits.y + traits.height}`);
       assert.ok(hero.x <= portrait.x && hero.x <= head.x && portrait.x + portrait.width <= hero.x + hero.width + 1 && head.x + head.width <= hero.x + hero.width + 1, "the orb and identity share the hero");
       if (width > 760) assert.ok(portrait.x + portrait.width <= head.x + 1, "on a desk the orb sits beside its identity, like Career");
       else assert.ok(head.y >= portrait.y + portrait.height - 1, "on a phone the identity follows the portrait in the same hero");
       assert.ok(actions.y >= canvas.y + canvas.height - 1, "Chat and Career sit directly under the orb");
       assert.ok(hero.y + hero.height <= controls.y + 1 && controls.y + controls.height <= dna.y + 1, "the compact controls follow the hero immediately above DNA");
       assert.ok(controls.height < 140, `the state card is compact (${Math.round(controls.height)} px)`);
+      if (width > 760) {
+        // the orb and its buttons apart from its words and level with its name (owner, 10-10: "move ash and chat + careers
+        // buttons a little to the left lol. too close to description and a bit higher"): 48 px apart where they stood 24
+        // (the line halfway), the row held to its top where it was centred (a long description left the orb halfway down
+        // its words; this office's are short, so the rule itself is read)
+        assert.ok(gap >= 36, `the orb ${gap.toFixed(0)} px from its words`);
+        assert.equal(await page.locator("[data-profile-head]").evaluate((el) => getComputedStyle(el).alignItems), "flex-start", "level with its name");
+        // its skills and the office under its DNA, beside its traits (owner, 10-10: "theres a big open space there with
+        // nothing in it, can we split the stats container in two")
+        assert.ok(Math.abs(skills.x - dna.x) <= 2 && skills.y >= dna.y + dna.height - 1, "its skills and the office under its DNA, in that column");
+        assert.ok(traits.x >= skills.x + skills.width - 1, "its traits in the other column, beside them");
+      } else assert.ok(skills.y >= traits.y + traits.height - 1, "on a phone its skills follow its traits, one column");
       assert.deepEqual(await measure(page), [], `the profile fits at ${width} px`);
     } finally {
       await ctx.close();

@@ -413,8 +413,9 @@ function LevelUp({ c, g }: { c: Character; g: Growth }) {
 // own beside what changes it (owner, 10-10: "DNA strand close and next to horizontally but not in same container")
 // `part`: the whole card (an applicant's), or its head (who it is: name, title, level, what it does) or its body (the
 // stats), each a card of its own where the studio sets them apart (owner, 10-10: "put that part with the dna strand to
-// the left")
-function Sheet({ c, onRename, replies, standing, startsAs, career, applying, friends, strand = true, part = "all", bare = false, centered = false }: { c: Character; onRename?: (name: string) => void; replies: Replies; standing?: Standing | null; startsAs?: "Junior" | "Senior"; career?: CareerState | null; applying?: boolean; friends?: Friend[] | null; strand?: boolean; part?: "all" | "head" | "body"; bare?: boolean; centered?: boolean }) {
+// the left"); on an orb's page its body in two, its traits and its skills with the office (owner, 10-10: "theres a big
+// open space there with nothing in it, can we split the stats container in two"): the skills under its DNA on a desk
+function Sheet({ c, onRename, replies, standing, startsAs, career, applying, friends, strand = true, part = "all", bare = false, centered = false }: { c: Character; onRename?: (name: string) => void; replies: Replies; standing?: Standing | null; startsAs?: "Junior" | "Senior"; career?: CareerState | null; applying?: boolean; friends?: Friend[] | null; strand?: boolean; part?: "all" | "head" | "body" | "traits" | "skills"; bare?: boolean; centered?: boolean }) {
   const sh = sheetOf(c);
   // what his graded work has grown him into (PLAN 3.11), once a home has some to show
   const grown = career ? grownOf(c, sh.leans, career.radar, career.niches, sh.dna, standing?.xp ?? career.xp) : null;
@@ -469,7 +470,7 @@ function Sheet({ c, onRename, replies, standing, startsAs, career, applying, fri
       )}
     </>
   );
-  const stats = (
+  const traits = (
     <>
       {/* the small facts side by side, and his traits beside what shaped them, where the card is wide enough (owner,
           10-10: "organize the sections much better and make them more compact"); one above the other on a phone */}
@@ -499,6 +500,10 @@ function Sheet({ c, onRename, replies, standing, startsAs, career, applying, fri
         <Shaped c={c} moves={grew ? [...grew.moves, ...sh.dna.moves] : sh.dna.moves} />
       </div>
       {strand && <Strand key={c.name + c.seed} c={c} />}
+    </>
+  );
+  const skills = (
+    <>
       {grew && (
         <div style={{ display: "grid", gap: "var(--s2)" }}>
           <Head>Grown from work · each skill since it started</Head>
@@ -513,10 +518,16 @@ function Sheet({ c, onRename, replies, standing, startsAs, career, applying, fri
       {friends && friends.length > 0 && <Colleagues me={c.name} friends={friends} />}
     </>
   );
+  const stats = (
+    <>
+      {traits}
+      {skills}
+    </>
+  );
   // on a phone what is long scrolls inside its card (owner, 10-04); an applicant's CV is a dialog that scrolls as one, so
   // there it does not scroll again inside it (owner, 10-10: "fix CV page in recruiting")
-  const scroll = (all: ReactNode): ReactNode =>
-    applying ? <div style={{ display: "grid", gap: "var(--s4)" }}>{all}</div> : <Tall label={`${c.name || "Your orb"}'s card`} style={{ display: "grid", gap: "var(--s4)" }}>{all}</Tall>;
+  const scroll = (all: ReactNode, label = `${c.name || "Your orb"}'s card`): ReactNode =>
+    applying ? <div style={{ display: "grid", gap: "var(--s4)" }}>{all}</div> : <Tall label={label} style={{ display: "grid", gap: "var(--s4)" }}>{all}</Tall>;
   if (part === "head") {
     if (bare)
       return (
@@ -532,10 +543,16 @@ function Sheet({ c, onRename, replies, standing, startsAs, career, applying, fri
       </div>
     );
   }
-  if (part === "body")
+  if (part === "body" || part === "traits")
     return (
       <div data-orb={c.hue} className="orbs-sheet-body" data-sheet-body style={{ ...s.panel, display: "grid", gap: "var(--s4)" }}>
-        {scroll(stats)}
+        {scroll(part === "body" ? stats : traits)}
+      </div>
+    );
+  if (part === "skills")
+    return (
+      <div data-orb={c.hue} className="orbs-sheet-skills" data-sheet-skills style={{ ...s.panel, display: "grid", gap: "var(--s4)" }}>
+        {scroll(skills, `${c.name || "Your orb"}'s skills and colleagues`)}
       </div>
     );
   return (
@@ -1550,7 +1567,10 @@ function App() {
                   <SoundIcon on={sounds} />
                 </button>
               </div>
-              <div data-profile-head style={{ display: "flex", flexDirection: phone ? "column" : "row", gap: phone ? "var(--s3)" : "var(--s5)", alignItems: "center", justifyContent: "center", minWidth: 0 }}>
+              {/* on a desk the orb and its buttons stand apart from who it is and level with its name, not halfway down
+                  its words (owner, 10-10: "move ash and chat + careers buttons a little to the left lol. too close to
+                  description and a bit higher") */}
+              <div data-profile-head style={{ display: "flex", flexDirection: phone ? "column" : "row", gap: phone ? "var(--s3)" : "var(--s7)", alignItems: phone ? "center" : "flex-start", justifyContent: "center", minWidth: 0 }}>
                 <div data-profile-portrait style={{ display: "grid", justifyItems: "center", gap: "var(--s2)", flex: "0 0 auto" }}>
                   <Evolving me={me} from={evolve} size={phone ? 120 : 136} state={worn} gesture={gesture} onDone={setShown} />
                   <div data-profile-actions style={{ display: "flex", justifyContent: "center", gap: 8, flexWrap: "wrap" }}>
@@ -1568,7 +1588,7 @@ function App() {
               <p style={{ margin: 0, font: "400 13px/18px var(--font)", color: "var(--text-3)", textAlign: "center" }}>Give a click, or move your pointer: the eyes follow.</p>
             </div>
           )}
-          <div className="orbs-stage" style={{ display: "grid", gap: "var(--s4)", alignContent: "start", minWidth: 0 }}>
+          <div className="orbs-stage" data-flow={making ? undefined : ""} style={{ display: "grid", gap: "var(--s4)", alignContent: "start", minWidth: 0 }}>
           {making && (
           <div data-orb={me.hue} data-cradle data-gesture={gesture?.name} style={{ ...s.panel, position: "relative", display: "grid", justifyItems: "center", gap: "var(--s2)", padding: "var(--s4) var(--s3)", background: "radial-gradient(60% 70% at 50% 28%, var(--accent-wash), transparent 70%), var(--fill)" }}>
             {/* its head: what it is, centred, and the sounds at its end (one row of the card, not an item beside it) */}
@@ -1646,6 +1666,9 @@ function App() {
               </form>
             )}
           </div>
+          {/* its skills and the office under its DNA on a desk, beside its traits (owner, 10-10: "theres a big open space
+              there with nothing in it, can we split the stats container in two") */}
+          {!making && wide && <Sheet part="skills" c={before ?? me} key={before ? "was-skills" : "now-skills"} replies={replies} standing={standing} startsAs={startsAs} career={career} friends={friends} strand={false} />}
           {/* While making one, who it is follows the changing DNA. A fixed orb's name and description are above it. */}
           {making && (
             <Sheet part="head" c={before ?? me} key={before ? "was-head" : "now-head"} onRename={(n) => edit({ name: n })} replies={replies} standing={null} startsAs={startsAs} career={null} friends={null} />
@@ -1662,7 +1685,15 @@ function App() {
               </div>
             )}
             {!making && <Card c={me} replies={replies} setReplies={setReplies} onDelete={(handTo, school) => remove(me.name, handTo, school)} others={office.filter((o) => o.name !== me.name)} />}
-            <Sheet part="body" c={before ?? me} key={before ? "was" : "now"} replies={replies} standing={making ? null : standing} startsAs={startsAs} career={making ? null : career} friends={making ? null : friends} strand={false} />
+            {making ? (
+              <Sheet part="body" c={before ?? me} key={before ? "was" : "now"} replies={replies} standing={null} startsAs={startsAs} career={null} friends={null} strand={false} />
+            ) : (
+              // its traits; on a narrower screen its skills and the office under them, one column
+              <>
+                <Sheet part="traits" c={before ?? me} key={before ? "was" : "now"} replies={replies} standing={standing} startsAs={startsAs} career={career} friends={friends} strand={false} />
+                {!wide && <Sheet part="skills" c={before ?? me} key={before ? "was-skills" : "now-skills"} replies={replies} standing={standing} startsAs={startsAs} career={career} friends={friends} strand={false} />}
+              </>
+            )}
           </div>
           </div>
 
@@ -1778,6 +1809,8 @@ main.orbs-main { padding: max(var(--s5), env(safe-area-inset-top)) max(var(--mar
 @media (min-width: 1100px) {
   .orbs-studio { grid-template-columns: minmax(300px, 360px) minmax(0, 1fr) !important; }
   .orbs-stage { position: sticky; top: var(--s4); max-height: calc(100dvh - 2 * var(--s4)); overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; padding: 2px; margin: -2px; }
+  /* an orb's page: its column (moods, DNA, its skills) is part of the page, beside its traits, not held in view */
+  .orbs-stage[data-flow] { position: static; max-height: none; overflow: visible; }
 }
 /* an orb's card, wide enough: its small facts three across, its traits beside what shaped them (a container query: the
    card's own width, wherever it is) */
