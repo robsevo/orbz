@@ -69,6 +69,7 @@ const EYES: Record<EyesName, Spec> = {
   classic: "Nerve>Calm 1", big: "Focus>Curiosity 2", huge: "Calm>Curiosity 2", ovals: "Pace>Care 1", beans: "Care>Humour 1",
   dots: "Humour>Focus 2", tiny: "Curiosity>Focus 1", droopy: "Pace>Calm 2", wide: "Calm>Pace 1", close: "Curiosity>Focus 2",
   low: "Pace>Care 1", button: "Nerve>Humour 1", tall: "Calm>Nerve 1", high: "Care>Curiosity 1", almond: "Humour>Nerve 1",
+  x: "Calm>Humour 2 loud",
 };
 const HAT: Record<HatName, Spec> = {
   none: "Pace>Calm 1", "top hat": "Humour>Focus 2 bold", beanie: "Nerve>Calm 2 soft", "party hat": "Focus>Humour 3 loud", antenna: "Calm>Curiosity 2",
@@ -155,7 +156,7 @@ export function movesOf(c: Character): Move[] {
     else add("Calm>Curiosity 2 loud", `${c.hue} into ${c.hue2}, opposites`);
   }
   add(FINISH[c.finish], `the ${c.finish} finish`);
-  add(EYES[c.eyes], `the ${c.eyes} eyes`);
+  add(EYES[c.eyes], c.eyes === "x" ? "the X eyes" : `the ${c.eyes} eyes`);
   add(HAT[c.hat], c.hat === "none" ? "no hat" : `the ${c.hat}`);
   add(GLASSES[c.glasses], c.glasses === "none" ? "no glasses" : `the ${c.glasses} glasses`);
   // an accessory's colour: its own (nothing more), his own (a match), white, black, or another colour

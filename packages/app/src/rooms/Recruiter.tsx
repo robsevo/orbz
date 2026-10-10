@@ -268,26 +268,29 @@ function Profile({ c, title, fit, rank, of, sheet, onClose, onInterview, onHire,
   return createPortal(
     <div role="dialog" aria-modal="true" aria-label={`${c.name}'s profile`} data-profile={c.name} style={{ position: "fixed", inset: 0, zIndex: 35, display: "grid", placeItems: "center", padding: "var(--s5) var(--margin)" }}>
       <div aria-hidden onClick={onClose} style={{ position: "absolute", inset: 0, background: "var(--ground)", opacity: 0.78 }} />
-      <div data-orb={c.hue} style={{ position: "relative", width: "min(980px, 100%)", maxHeight: "100%", overflowY: "auto", overscrollBehavior: "contain", borderRadius: 20, background: "var(--card)", boxShadow: "0 0 0 1px var(--hairline), 0 24px 64px var(--shadow)", padding: "var(--s5)", display: "grid", gap: "var(--s4)", alignContent: "start", minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, minWidth: 0 }}>
+      {/* its CV (owner, 10-10: "fix CV page in recruiting"): one scroll, never a box scrolling in a box; what it applies for
+          and Close held at its top, Interview, Hire and Pass at its foot; the orb and how it fits your team beside its
+          card where there is room (held in view as the card scrolls), over it on a phone */}
+      <div data-orb={c.hue} className="orbs-cv" style={{ position: "relative", width: "min(980px, 100%)", maxHeight: "100%", overflowY: "auto", overscrollBehavior: "contain", borderRadius: 20, background: "var(--card)", boxShadow: "0 0 0 1px var(--hairline), 0 24px 64px var(--shadow)", display: "grid", alignContent: "start", minWidth: 0 }}>
+        <div style={{ position: "sticky", top: 0, zIndex: 2, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, minWidth: 0, padding: "var(--s3) var(--s5)", background: "var(--card)", boxShadow: "0 1px 0 var(--sep)" }}>
           <span style={head}>{`Applying: ${title}`}</span>
           <button ref={close} type="button" onClick={onClose} style={button}>Close</button>
         </div>
-        <div style={{ display: "grid", gap: "var(--s4)", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))", alignItems: "start", minWidth: 0 }}>
-          <div style={{ display: "grid", gap: "var(--s3)", justifyItems: "center", alignContent: "start", minWidth: 0 }}>
-            <Orb character={c} size={168} />
+        <div className="orbs-cv-body" style={{ display: "grid", gap: "var(--s4)", gridTemplateColumns: "minmax(0, 1fr)", alignItems: "start", padding: "var(--s4) var(--s5)", minWidth: 0 }}>
+          <div className="orbs-cv-side" style={{ display: "grid", gap: "var(--s3)", justifyItems: "center", alignContent: "start", minWidth: 0 }}>
+            <Orb character={c} size={148} />
             <div style={{ justifySelf: "stretch" }}>
               <FitLine fit={fit} rank={rank} of={of} />
             </div>
-            <div style={{ justifySelf: "stretch" }}>
-              <Balanced min={150} gap={6}>
-                <button type="button" onClick={onInterview} style={{ ...button, ...fits }}>{`Interview ${c.name}`}</button>
-                <button type="button" data-sound="pick" onClick={onHire} style={{ ...strong, ...fits }}>{`Hire ${c.name}`}</button>
-                <button type="button" onClick={onPass} style={{ ...button, ...fits }}>Pass</button>
-              </Balanced>
-            </div>
           </div>
           {sheet}
+        </div>
+        <div data-cv-answer style={{ position: "sticky", bottom: 0, zIndex: 2, padding: "var(--s3) var(--s5)", background: "var(--card)", boxShadow: "0 -1px 0 var(--sep)" }}>
+          <Balanced min={150} gap={6}>
+            <button type="button" onClick={onInterview} style={{ ...button, ...fits }}>{`Interview ${c.name}`}</button>
+            <button type="button" data-sound="pick" onClick={onHire} style={{ ...strong, ...fits }}>{`Hire ${c.name}`}</button>
+            <button type="button" onClick={onPass} style={{ ...button, ...fits }}>Pass</button>
+          </Balanced>
         </div>
       </div>
     </div>,

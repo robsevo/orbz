@@ -40,7 +40,7 @@ test("every option of every part moves something, and says what it was", () => {
     for (const o of options) {
       const c = { ...ASH, [part]: o } as Character;
       const all = movesOf(c);
-      const word = o === "none" ? (part === "hat" ? "no hat" : "no glasses") : o === "bean" ? "the bean" : o;
+      const word = o === "none" ? (part === "hat" ? "no hat" : "no glasses") : o === "bean" ? "the bean" : o === "x" ? "the X eyes" : o;
       assert.ok(all.some((m) => m.n >= 1 && m.why.includes(word)), `${part} ${o} moves nothing it names`);
     }
   }

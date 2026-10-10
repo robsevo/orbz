@@ -3008,6 +3008,17 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ('his eyes are flat discs again', 'src/orb/glsl.ts', [
         ('      vec3 eyeC = eyeDeep + mix(domeLit, strokeLit, asStroke);', '      vec3 eyeC = eyeDeep;'),
     ], ['characters.test.ts']),
+    # X X eyes (owner, 10-10: "can we add X X 's as eyes as well?")
+    ('X eyes are drawn round', 'src/orb/spec.ts', [
+        ('eyeX: "cross" in e && e.cross ? 1 : 0,', 'eyeX: 0,'),
+    ], ['characters.test.ts']),
+    ('the X eyes move no traits', 'src/orb/dna.ts', [
+        ('  x: "Calm>Humour 2 loud",\n', ''),
+    ], ['dna.test.ts']),
+    # a close-up keeps his hat in (owner, 10-10: "Org chart ceo orb hat crown is cut off on top")
+    ('a close-up cuts his hat again', 'src/orb/spec.ts', [
+        ('  const over = hatReach(c) * f.radius * 1.06 + 3 - f.cy * f.h;', '  const over = 0;'),
+    ], ['hats.test.ts']),
 ]
 
 # the `orbs` terminal (PLAN 1.9): paths are inside packages/terminal

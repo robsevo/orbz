@@ -6,14 +6,15 @@
 // The starter shapes are our own; the owner names and redraws them. No mouth on any of them, no
 // cheeks (owner, 2026-09-24): the eyes carry every mood.
 import { DARK_ORB, HUES, MATERIALS, type HueName, type Material } from "../design/tokens.ts";
-import { earsUnder, hasEars, headOf } from "./hats/heads.ts";
+import { PITCH } from "./hats/geo.ts";
+import { earsUnder, frameOf, hasEars, headOf } from "./hats/heads.ts";
 import { glowOf, hatMesh } from "./hats/models.ts";
 import { glassOf, hexOf, rgb01 } from "./colour.ts";
 import { type Dna, dnaOf, dnaSays, leansOf } from "./dna.ts";
 import { ORB_TURNS } from "./hues.ts";
 import type { Gesture } from "./life.ts";
 import type { OrbLook } from "./renderer.ts";
-import { hatFit, SHAPES, type ShapeName } from "./shapes.ts";
+import { halfWidth, hatFit, SHAPES, type ShapeName } from "./shapes.ts";
 
 type V4 = [number, number, number, number];
 
@@ -26,7 +27,7 @@ export { halfWidth, hatFit, outline, SHAPES, type HatFit, type ShapeName, type S
 // an orb DOES (life.ts gestures: wink, hop, doze), so they were taken out of the styles. And the
 // styles have plain names (owner: "instead of ash for eye colors and stuff, just put the normal
 // names"): Ash's own are "classic".
-/** [radius, aspect, gap, height], [sparkle, lids at rest, happy at rest, wink]. */
+/** [radius, aspect, gap, height], [sparkle, lids at rest, happy at rest, wink]; `cross`: drawn as an X. */
 export const EYES = {
   classic: { a: [0.138, 1, 0.26, 0.1], b: [1, 0, 0, 0] }, // Ash's own
   big: { a: [0.172, 1.06, 0.28, 0.12], b: [1, 0, 0, 0] },
@@ -43,7 +44,10 @@ export const EYES = {
   tall: { a: [0.1, 1.9, 0.24, 0.08], b: [1, 0, 0, 0] },
   high: { a: [0.13, 1, 0.26, 0.0], b: [1, 0, 0, 0] },
   almond: { a: [0.15, 0.62, 0.27, 0.11], b: [1, 0, 0, 0] },
-} satisfies Record<string, { a: V4; b: V4 }>;
+  // X X (owner, 10-10: "can we add X X 's as eyes as well?"): two rounded strokes crossed where each eye is, no sparkle;
+  // lids, moods and a wink as any eyes (glsl.ts)
+  x: { a: [0.13, 1, 0.26, 0.1], b: [0, 0, 0, 0], cross: true },
+} satisfies Record<string, { a: V4; b: V4; cross?: boolean }>;
 export type EyesName = keyof typeof EYES;
 
 // ── what he wears: a hat, and glasses ──────────────────────────────────────────────────────────
@@ -554,6 +558,36 @@ function paint(p: Paint, o: { hue: OrbHue; tint?: string | null }): [number, num
   return [c[0] / 255, c[1] / 255, c[2] / 255];
 }
 
+/** How far above his centre his hat reaches as it is drawn, in his radius (0 with none): seen from a little above and at
+ * its slant, as the renderer draws it (heads.ts hatCells turns it the same way). A close-up of his face keeps it in
+ * (Orb.tsx; owner, 10-10: "Org chart ceo orb hat crown is cut off on top"). */
+const reaches = new Map<string, number>();
+export function hatReach(c: Pick<Character, "hat" | "shape">): number {
+  if (c.hat === "none") return 0;
+  const key = `${c.hat}|${c.shape}`;
+  let r = reaches.get(key);
+  if (r === undefined) {
+    const halo = c.hat === "halo";
+    const b = hatMesh(HATS[c.hat].id, headOf(c.shape, halo));
+    const { top, unit } = frameOf(c.shape, halo);
+    const cp = Math.cos(PITCH), sp = Math.sin(PITCH), ct = Math.cos(HATS[c.hat].tilt), st = Math.sin(HATS[c.hat].tilt);
+    let up = 0;
+    for (let v = 0; b && v < b.pos.length / 3; v++) up = Math.max(up, st * b.pos[v * 3]! + ct * (b.pos[v * 3 + 1]! * cp - b.pos[v * 3 + 2]! * sp));
+    r = top + up * unit;
+    reaches.set(key, r);
+  }
+  return r;
+}
+
+/** A close-up's frame (renderer.ts PORTRAIT as `base`): cut to his width (half the frame, less the edge's fade and a
+ * little room), and grown above his head by as much as his hat stands out of it, his face as big as ever (owner, 10-10:
+ * "Org chart ceo orb hat crown is cut off on top"; awake and breathing he is up to 6% bigger). */
+export function closeUp<F extends { w: number; h: number; cy: number; radius: number; edge: number }>(base: F, c: Pick<Character, "hat" | "shape">): F {
+  const f = { ...base, radius: Math.min(base.radius, base.w / 2 / (halfWidth(c.shape) + base.edge + 0.04)) };
+  const over = hatReach(c) * f.radius * 1.06 + 3 - f.cy * f.h;
+  return over > 0 ? { ...f, h: f.h + over, cy: (f.cy * f.h + over) / (f.h + over) } : f;
+}
+
 /** What the shader needs to draw this character. */
 export function lookOf(c: Character): OrbLook {
   const s = SHAPES[c.shape];
@@ -562,7 +596,7 @@ export function lookOf(c: Character): OrbLook {
   const g = GLASSES[c.glasses];
   return {
     shapeA: [...s.a], shapeB: [...s.b], shapeC: earsInside(c.hat, c.shape) ? [s.c[0], s.c[1], 0, s.c[3]] : [...s.c], shapeD: [...s.d], shapeE: [...s.e], shapeF: [...s.f],
-    eyeA: [...e.a] as V4, eyeB: [...e.b] as V4,
+    eyeA: [...e.a] as V4, eyeB: [...e.b] as V4, eyeX: "cross" in e && e.cross ? 1 : 0,
     acc: w.id, head: headOf(c.shape, c.hat === "halo"), accFit: (({ seat, size, float }) => [c.hat === "halo" ? float : seat, size] as [number, number])(hatFit(c.shape)), accCol: c.hatTint ? rgb01(c.hatTint) : c.hatHue ? tone(c.hatHue, c) : paint(w.main, c), accCol2: paint(w.second, c), accTilt: w.tilt, orbCol: paint("accent", c),
     ...(() => {
       const g = glowOf(w.id, headOf(c.shape, c.hat === "halo"));

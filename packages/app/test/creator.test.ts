@@ -49,7 +49,6 @@ const TABS: [tab: string, paged: string, n: number][] = [
   ["Eyes", "Eyes", Object.keys(EYES).length],
   ["Hat", "Hats", Object.keys(HATS).length],
   ["Glasses", "Glasses", Object.keys(GLASSES).length],
-  ["Colour", "Finishes", Object.keys(FINISHES).length],
 ];
 
 test("control: some picture tab has more than one page", () => {
@@ -104,6 +103,30 @@ for (const size of ["desk", "phone"] as const) {
       }
     });
   }
+}
+
+// the finishes are small and all in view under the colours (owner, 10-10: "organize the sections much better and make them
+// more compact and viewable"), where they were a page of nine big tiles
+for (const size of ["desk", "phone"] as const) {
+  // two rows at most on a desk; a phone's are three across, still small, a finger's size each
+  test(`the finishes, at ${size} size: all ${Object.keys(FINISHES).length} at once in ${size === "desk" ? "two" : "three"} rows at most, no page numbers, the layout rule`, { skip }, async () => {
+    const page = await plainAt(size);
+    await page.getByRole("tab", { name: "Colour" }).click();
+    const box = page.locator("[data-finishes]");
+    await box.waitFor();
+    const picks = box.locator("button[data-pick]");
+    assert.equal(await picks.count(), Object.keys(FINISHES).length, "every finish");
+    assert.equal(await box.getByRole("button", { name: /^Page \d+$/ }).count(), 0, "no pages");
+    const findings = await measure(page); // which waits for the chosen one's bounce to settle, too
+    // rows by where each starts, a row a new top more than half a choice below the last (not a pixel's rounding)
+    const rows = await picks.evaluateAll((bs) => {
+      const tops = bs.map((b) => b.getBoundingClientRect()).sort((a, b) => a.top - b.top);
+      return tops.filter((r, i) => i === 0 || r.top - tops[i - 1]!.top > r.height / 2).length;
+    });
+    assert.ok(rows <= (size === "desk" ? 2 : 3), `${rows} rows of finishes`);
+    assert.ok((await box.boundingBox())!.height < 300, `the finishes stand ${(await box.boundingBox())!.height} px tall (a page of nine big tiles stood over 400)`);
+    assert.deepEqual(findings, [], "the layout rule");
+  });
 }
 
 test("a roll of the dice that lands on another page turns to it", { skip }, async () => {

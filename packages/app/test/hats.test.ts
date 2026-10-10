@@ -13,7 +13,8 @@ import { BEAN_CY, MAT, onThe, outOfHead, PITCH, SLOT } from "../src/orb/hats/geo
 import { FACE, glassesMesh } from "../src/orb/hats/glasses.ts";
 import { hasEars, hatCells, headCells, headOf, NX, NY } from "../src/orb/hats/heads.ts";
 import { glowOf, hatMesh, MODELS } from "../src/orb/hats/models.ts";
-import { ASH, COVERS, earsInside, EYES, GLASSES, HATS, isShades, lookOf, SHAPES, type GlassesName, type HatName, type ShapeName } from "../src/orb/spec.ts";
+import { ASH, closeUp, COVERS, earsInside, EYES, GLASSES, halfWidth, HATS, hatReach, isShades, lookOf, SHAPES, type GlassesName, type HatName, type ShapeName } from "../src/orb/spec.ts";
+import { PORTRAIT } from "../src/orb/renderer.ts";
 
 const hats = (Object.keys(HATS) as HatName[]).filter((h) => h !== "none");
 const bean = headOf("bean");
@@ -234,4 +235,20 @@ test("his ears go inside a hat over his head that would be drawn over them; one 
   for (const shape of Object.keys(SHAPES) as ShapeName[]) if (!eared.includes(shape)) assert.ok(!earsInside("beanie", shape), `${shape}: no ears to put away`);
   // measured 10-10: a top hat's brim is over 6% of a kitty's ears (between them), 25% of a teddy's (over them)
   assert.ok(!earsInside("top hat", "kitty") && earsInside("top hat", "teddy"), "a top hat: between a kitty's ears, over a teddy's");
+});
+
+// owner, 10-10: "Org chart ceo orb hat crown is cut off on top". A close-up of his face (the org chart, the board, the
+// editor's head, a computer's avatar) keeps his hat in: its frame grows above his head by as much as the hat stands out.
+test("a close-up keeps his hat in: every hat on every shape stands inside its frame, and with none the frame is as it was", () => {
+  const cut: string[] = [];
+  for (const shape of Object.keys(SHAPES) as ShapeName[])
+    for (const hat of Object.keys(HATS) as HatName[]) {
+      const f = closeUp(PORTRAIT, { shape, hat });
+      if (f.cy * f.h - hatReach({ shape, hat }) * f.radius * 1.06 < 0) cut.push(`${hat} on a ${shape}`);
+    }
+  assert.deepEqual(cut, [], "every hat inside its close-up");
+  // the control: the close-up as it was, cut to his width with no room above, cuts the CEO's crown on Ash's bean
+  const was = { ...PORTRAIT, radius: Math.min(PORTRAIT.radius, PORTRAIT.w / 2 / (halfWidth("bean") + PORTRAIT.edge + 0.04)) };
+  assert.ok(was.cy * was.h - hatReach({ shape: "bean", hat: "crown" }) * was.radius < 0, "control: the old close-up cuts the crown");
+  assert.equal(closeUp(PORTRAIT, { shape: "bean", hat: "none" }).h, PORTRAIT.h, "no hat: the frame the eye checks measured");
 });

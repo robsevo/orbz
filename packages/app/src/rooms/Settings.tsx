@@ -15,6 +15,7 @@ import { Devices } from "./Devices.tsx";
 import { Brains } from "./Brains.tsx";
 import { Connections } from "./Connections.tsx";
 import { Passwords } from "./Passwords.tsx";
+import { useCramped } from "../ui/fill.ts";
 
 const panel: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "var(--s3)", padding: "var(--s4)", borderRadius: 18, background: "var(--fill)", boxShadow: "inset 0 0 0 1px var(--hairline)", minWidth: 0 };
 const head: CSSProperties = { font: "700 11px/16px var(--font)", letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)", margin: 0 };
@@ -23,6 +24,38 @@ const chip = (on: boolean): CSSProperties => ({
   background: on ? "var(--accent-fill)" : "var(--fill)", color: on ? "var(--text-1)" : "var(--text-2)", boxShadow: on ? "inset 0 0 0 1.5px var(--accent)" : "inset 0 0 0 .5px var(--hairline)",
 });
 const button: CSSProperties = { font: "600 14px/20px var(--font)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 10, padding: "8px 14px", cursor: "pointer", boxShadow: "inset 0 0 0 .5px var(--hairline)", minHeight: 36 };
+
+/** Settings in sections, each with its place in the index (owner, 10-10: "organize it professionally ... just organize the
+ * containers better"): beside them on a wide screen, the one you are in lit as you scroll; a row along the top on a
+ * narrow one. Links, not buttons: an index is a way round the page. */
+const SECTIONS = [["you", "You"], ["budget", "Budget"], ["theme", "Theme"], ["sound", "Sounds and replies"], ["preview", "A preview"], ["folder", "Projects folder"], ["brains", "Brains"], ["connections", "Connections"], ["passwords", "Passwords"], ["devices", "Devices"]] as const;
+type SectionId = (typeof SECTIONS)[number][0];
+const sectionStyle: CSSProperties = { display: "grid", gap: "var(--s4)", minWidth: 0, scrollMarginTop: "var(--s4)" };
+
+function Index({ ids, active, wide }: { ids: SectionId[]; active: SectionId | null; wide: boolean }) {
+  const jump = (id: SectionId): void => {
+    document.getElementById(`settings-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+  const items = SECTIONS.filter(([id]) => ids.includes(id)).map(([id, label]) => (
+    <a key={id} href="#/settings" data-jump={id} aria-current={active === id ? "location" : undefined}
+      onClick={(e) => {
+        e.preventDefault();
+        jump(id);
+      }}
+      style={{ font: "600 13px/18px var(--font)", textDecoration: "none", whiteSpace: "nowrap", borderRadius: wide ? 10 : 999, padding: wide ? "7px 12px" : "6px 12px", color: active === id ? "var(--text-1)" : "var(--text-3)", background: active === id ? "var(--fill-2)" : wide ? "transparent" : "var(--fill)", boxShadow: !wide && active !== id ? "inset 0 0 0 .5px var(--hairline)" : undefined }}>
+      {label}
+    </a>
+  ));
+  return wide ? (
+    <nav aria-label="Settings sections" className="orbs-settings-index" style={{ position: "sticky", top: "var(--s4)", display: "grid", gap: 2, alignContent: "start" }}>
+      {items}
+    </nav>
+  ) : (
+    <nav aria-label="Settings sections">
+      <OneLine style={{ justifyContent: "flex-start" }}>{items}</OneLine>
+    </nav>
+  );
+}
 
 function Panel({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -87,6 +120,24 @@ export function Settings(o: {
   }, [o.person?.name]);
   const [said, setSaid] = useState<{ ok: boolean; text: string } | null>(null);
   const [theme, setTheme] = useState<ThemeId | null>(savedTheme);
+  const wide = useCramped("(min-width: 1100px)");
+  const ids: SectionId[] = ["you", ...(o.person ? ["budget" as const] : []), "theme", "sound", ...(o.fillDemo ? ["preview" as const] : []), ...(o.home ? ["folder" as const] : []), "brains", ...(o.home ? ["connections" as const, "passwords" as const, "devices" as const] : [])];
+  // the section you are in: the last whose top has passed a fifth of the way down the screen
+  const [active, setActive] = useState<SectionId | null>("you");
+  useEffect(() => {
+    const at = (): void => {
+      const line = innerHeight * 0.2;
+      let on: SectionId | null = null;
+      for (const id of ids) {
+        const el = document.getElementById(`settings-${id}`);
+        if (el && el.getBoundingClientRect().top <= line) on = id;
+      }
+      setActive(on ?? ids[0] ?? null);
+    };
+    at();
+    addEventListener("scroll", at, { passive: true });
+    return () => removeEventListener("scroll", at);
+  }, [ids.join(",")]);
   const wear = (t: ThemeId | null): void => {
     applyTheme(t);
     setTheme(t);
@@ -98,8 +149,11 @@ export function Settings(o: {
     setSaid({ ok: true, text: `The office calls you ${r.name} now.` });
   };
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "var(--s4)", padding: "var(--s5)", alignContent: "start", maxWidth: 720, width: "100%", justifySelf: "center" }}>
-      <h2 style={{ margin: 0, font: "800 28px/34px var(--font)", color: "var(--text-1)" }}>Settings</h2>
+    <div className="orbs-settings" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "var(--s4) var(--s5)", padding: "var(--s5)", alignContent: "start", alignItems: "start", width: "100%" }}>
+      <h2 style={{ gridColumn: "1 / -1", margin: 0, font: "800 28px/34px var(--font)", color: "var(--text-1)" }}>Settings</h2>
+      <Index ids={ids} active={active} wide={wide} />
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "var(--s4)", minWidth: 0, maxWidth: 760 }}>
+      <div id="settings-you" style={sectionStyle}>
       <Panel title="You">
         <form
           onSubmit={(e) => {
@@ -118,15 +172,19 @@ export function Settings(o: {
           Play the opening story again
         </button>
       </Panel>
+      </div>
       {o.person && (
         // what the company can spend (PLAN 5.20; owner, 10-08: "Lets be able to change the budget as well")
+        <div id="settings-budget" style={sectionStyle}>
         <Panel title="Budget">
           <span style={{ font: "400 14px/20px var(--font)", color: "var(--text-2)", textWrap: "pretty" }}>
             {`What ${o.person.company ?? "your company"} can spend, to start and each month, on hosting, tools and ads. The board's ideas to make money fit it, and every orb keeps to it.${o.person.budget ? "" : " Not said yet, so it is taken as nothing."}`}
           </span>
           <BudgetChoice value={o.person.budget ?? null} onPick={(b) => o.rename({ ...o.person!, budget: b })} />
         </Panel>
+        </div>
       )}
+      <div id="settings-theme" style={sectionStyle}>
       <Panel title="Theme">
         <Balanced min={118} gap={8}>
           {([null, ...(Object.keys(THEMES) as ThemeId[])] as (ThemeId | null)[]).map((t) => (
@@ -143,6 +201,9 @@ export function Settings(o: {
         </Balanced>
         <span style={{ font: "400 12px/17px var(--font)", color: "var(--text-3)" }}>System follows this device's light or dark. Your choice is kept on this device.</span>
       </Panel>
+      </div>
+      {/* two small ones side by side where there is room */}
+      <div id="settings-sound" className="orbs-settings-pair" style={{ ...sectionStyle, gridTemplateColumns: "minmax(0, 1fr)", alignItems: "stretch" }}>
       <Panel title="Sounds">
         <OneLine style={{ justifyContent: "flex-start" }}>
           <button aria-pressed={o.sounds} onClick={() => o.setSounds(true)} style={chip(o.sounds)}>
@@ -162,15 +223,19 @@ export function Settings(o: {
           ))}
         </OneLine>
       </Panel>
+      </div>
       {o.fillDemo && (
+        <div id="settings-preview" style={sectionStyle}>
         <Panel title="A preview">
           <span style={{ font: "400 14px/20px var(--font)", color: "var(--text-2)" }}>This page has no home behind it, so it keeps your office in this browser. Want company to look round with?</span>
           <button onClick={o.fillDemo} style={{ ...button, justifySelf: "start" }}>
             Fill the office with a demo crew
           </button>
         </Panel>
+        </div>
       )}
-      {o.home && <ProjectsFolder home={o.home} />}
+      {o.home && <div id="settings-folder" style={sectionStyle}><ProjectsFolder home={o.home} /></div>}
+      <div id="settings-brains" style={sectionStyle}>
       {o.home ? (
         <Brains home={o.home} />
       ) : (
@@ -180,9 +245,11 @@ export function Settings(o: {
           </span>
         </Panel>
       )}
-      {o.home && <Connections home={o.home} />}
-      {o.home && <Passwords home={o.home} />}
-      {o.home && <Devices home={o.home} />}
+      </div>
+      {o.home && <div id="settings-connections" style={sectionStyle}><Connections home={o.home} /></div>}
+      {o.home && <div id="settings-passwords" style={sectionStyle}><Passwords home={o.home} /></div>}
+      {o.home && <div id="settings-devices" style={sectionStyle}><Devices home={o.home} /></div>}
+      </div>
     </div>
   );
 }

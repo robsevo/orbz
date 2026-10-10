@@ -409,7 +409,9 @@ function LevelUp({ c, g }: { c: Character; g: Growth }) {
 
 // `applying`: an applicant's profile, from the Recruiter (owner, 10-05: "recruiter should also be able to show
 // the orbs profile when we click on it")
-function Sheet({ c, onRename, replies, standing, startsAs, career, applying, friends, onChat, onCareer }: { c: Character; onRename?: (name: string) => void; replies: Replies; standing?: Standing | null; startsAs?: "Junior" | "Senior"; career?: CareerState | null; applying?: boolean; friends?: Friend[] | null; onChat?: () => void; onCareer?: () => void }) {
+// `strand`: its DNA strand at the end of the card (an applicant's); the creator and an orb's page show it in a card of its
+// own beside what changes it (owner, 10-10: "DNA strand close and next to horizontally but not in same container")
+function Sheet({ c, onRename, replies, standing, startsAs, career, applying, friends, onChat, onCareer, strand = true }: { c: Character; onRename?: (name: string) => void; replies: Replies; standing?: Standing | null; startsAs?: "Junior" | "Senior"; career?: CareerState | null; applying?: boolean; friends?: Friend[] | null; onChat?: () => void; onCareer?: () => void; strand?: boolean }) {
   const sh = sheetOf(c);
   // what his graded work has grown him into (PLAN 3.11), once a home has some to show
   const grown = career ? grownOf(c, sh.leans, career.radar, career.niches, sh.dna, standing?.xp ?? career.xp) : null;
@@ -470,36 +472,45 @@ function Sheet({ c, onRename, replies, standing, startsAs, career, applying, fri
           </span>
         )}
       </div>
-      {/* on a phone the rest scrolls under his name (owner, 10-04) */}
-      <Tall label={`${c.name || "Your orb"}'s card`} style={{ display: "grid", gap: "var(--s4)" }}>
+      {/* on a phone the rest scrolls under his name (owner, 10-04); an applicant's CV is a dialog that scrolls as one, so
+          there it does not scroll again inside it (owner, 10-10: "fix CV page in recruiting") */}
+      {(applying
+        ? (all: ReactNode) => <div style={{ display: "grid", gap: "var(--s4)" }}>{all}</div>
+        : (all: ReactNode) => <Tall label={`${c.name || "Your orb"}'s card`} style={{ display: "grid", gap: "var(--s4)" }}>{all}</Tall>)(<>
       {grown && <LevelUp c={c} g={grown} />}
       <p style={{ margin: 0, font: "400 15px/21px var(--font)", color: "var(--text-2)", textWrap: "pretty" }}>{grew && grownSays(grew) ? `${sh.bio} ${grownSays(grew)}` : sh.bio}</p>
       {/* a role a licence stands behind says so: he is a persona that helps, never the professional */}
       {"limits" in SPECIALTIES[c.specialty] && (
         <p style={{ margin: 0, font: "400 13px/18px var(--font)", color: "var(--text-3)" }}>{(SPECIALTIES[c.specialty] as { limits: string }).limits}</p>
       )}
-      <div style={{ display: "grid", gap: 4 }}>
-        <Head>Quirk</Head>
-        <span style={{ font: "400 14px/20px var(--font)", color: "var(--text-2)" }}>{cap(sh.quirk)}.</span>
+      {/* the small facts side by side, and his traits beside what shaped them, where the card is wide enough (owner,
+          10-10: "organize the sections much better and make them more compact"); one above the other on a phone */}
+      <div className="orbs-facts" style={{ display: "grid", gap: "var(--s3)", gridTemplateColumns: "minmax(0, 1fr)" }}>
+        <div style={{ display: "grid", gap: 4, alignContent: "start" }}>
+          <Head>Quirk</Head>
+          <span style={{ font: "400 14px/20px var(--font)", color: "var(--text-2)" }}>{cap(sh.quirk)}.</span>
+        </div>
+        <div style={{ display: "grid", gap: 4, alignContent: "start" }}>
+          <Head>Says</Head>
+          <span style={{ font: "italic 400 15px/20px var(--font)", color: "var(--text-1)" }}>“{sh.catchphrase}”</span>
+        </div>
+        <div style={{ display: "grid", gap: 4, alignContent: "start" }}>
+          <Head>Voice</Head>
+          <span style={{ font: "400 14px/20px var(--font)", color: "var(--text-2)" }}>
+            {c.voice === "silent" ? "Silent: writes, never speaks" : `${v.label} · ${v.accent}`}
+            {c.voice !== "silent" && !speaks(c, replies) ? ` (${REPLIES[replies].toLowerCase()} for now)` : ""}
+          </span>
+        </div>
       </div>
-      <div style={{ display: "grid", gap: 4 }}>
-        <Head>Says</Head>
-        <span style={{ font: "italic 400 15px/20px var(--font)", color: "var(--text-1)" }}>“{sh.catchphrase}”</span>
+      <div className="orbs-two" style={{ display: "grid", gap: "var(--s4)", gridTemplateColumns: "minmax(0, 1fr)", alignItems: "start" }}>
+        <div style={{ display: "grid", gap: "var(--s2)" }}>
+          <Head>Traits</Head>
+          <Bars items={grew ? grew.traits : sh.traits} max={Math.max(CEILING, ...(grew ? grew.traits : sh.traits).map((t) => t.value))} />
+          <span style={{ font: "400 12px/16px var(--font)", color: "var(--text-3)" }}>{TOTAL} points across them, like every orb</span>
+        </div>
+        <Shaped c={c} moves={grew ? [...grew.moves, ...sh.dna.moves] : sh.dna.moves} />
       </div>
-      <div style={{ display: "grid", gap: 4 }}>
-        <Head>Voice</Head>
-        <span style={{ font: "400 14px/20px var(--font)", color: "var(--text-2)" }}>
-          {c.voice === "silent" ? "Silent: writes, never speaks" : `${v.label} · ${v.accent}`}
-          {c.voice !== "silent" && !speaks(c, replies) ? ` (${REPLIES[replies].toLowerCase()} for now)` : ""}
-        </span>
-      </div>
-      <div style={{ display: "grid", gap: "var(--s2)" }}>
-        <Head>Traits</Head>
-        <Bars items={grew ? grew.traits : sh.traits} max={Math.max(CEILING, ...(grew ? grew.traits : sh.traits).map((t) => t.value))} />
-        <span style={{ font: "400 12px/16px var(--font)", color: "var(--text-3)" }}>{TOTAL} points across them, like every orb</span>
-      </div>
-      <Shaped c={c} moves={grew ? [...grew.moves, ...sh.dna.moves] : sh.dna.moves} />
-      <Strand key={c.name + c.seed} c={c} />
+      {strand && <Strand key={c.name + c.seed} c={c} />}
       {grew && (
         <div style={{ display: "grid", gap: "var(--s2)" }}>
           <Head>Grown from work · each skill since it started</Head>
@@ -512,7 +523,7 @@ function Sheet({ c, onRename, replies, standing, startsAs, career, applying, fri
         <span style={{ font: "400 12px/16px var(--font)", color: "var(--text-3)" }}>24 points across them, like every orb: its specialty sets the shape, its traits pull it</span>
       </div>
       {friends && friends.length > 0 && <Colleagues me={c.name} friends={friends} />}
-      </Tall>
+      </>)}
     </div>
   );
 }
@@ -642,7 +653,33 @@ function Tabs({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
   );
 }
 
-function Creator({ me, edit, replies, setReplies, kinds = [] }: { me: Character; edit: (p: Partial<Character>) => void; replies: Replies; setReplies: (r: Replies) => void; /** the office's orbs' specialties: who may join next (orb/company.ts) */ kinds?: string[] }) {
+/** The orb as it is being made, small, with its DNA (owner, 10-10: "we also dont see our orb as were changing colors.
+ * which is weird for the user"): the editor's own header where the studio is one column, so the orb's card above is out
+ * of view; it stays at the top of the screen while the choices under it scroll. */
+function Peek({ c }: { c: Character }) {
+  let strand: string | null = null;
+  try {
+    strand = strandOf(c);
+  } catch {
+    strand = null; // dice too big for a strand: the orb alone
+  }
+  return (
+    <div data-peek data-orb={c.hue} className="orbs-peek" style={{ display: "flex", alignItems: "center", gap: "var(--s3)", minWidth: 0 }}>
+      <Orb character={c} size={60} poke={false} framing="portrait" style={{ flex: "0 0 auto" }} />
+      <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
+        <span style={{ font: "700 15px/20px var(--font)", color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name || "Your orb"}</span>
+        {strand && (
+          <span data-peek-dna style={{ font: "700 12px/16px var(--font)", letterSpacing: ".04em", color: "var(--text-2)", fontVariantNumeric: "tabular-nums", overflowWrap: "anywhere" }}>
+            <span style={{ ...s.head, marginRight: 6 }}>DNA</span>
+            {strand}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Creator({ me, edit, replies, setReplies, kinds = [], peek = false }: { me: Character; edit: (p: Partial<Character>) => void; replies: Replies; setReplies: (r: Replies) => void; /** the office's orbs' specialties: who may join next (orb/company.ts) */ kinds?: string[]; /** the orb and its DNA, small, at its top (Peek) */ peek?: boolean }) {
   // the CEO, then your assistant, before anyone; then each department with its head (owner, 10-07)
   const founding = nextFounding(kinds);
   const open = openDepartments(kinds);
@@ -675,7 +712,8 @@ function Creator({ me, edit, replies, setReplies, kinds = [] }: { me: Character;
     ["Classic, or none", VOICES.filter((v) => v.id === "silent" || v.id === "ash")],
   ];
   return (
-    <div style={{ ...s.panel, display: "grid", gap: "var(--s4)", alignContent: "start" }}>
+    <div data-editor style={{ ...s.panel, display: "grid", gap: "var(--s4)", alignContent: "start" }}>
+      {peek && <Peek c={me} />}
       <Tabs tab={tab} setTab={setTab} />
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
         <span style={{ font: "700 17px/22px var(--font)", color: "var(--text-1)" }}>{tab}</span>
@@ -747,9 +785,21 @@ function Creator({ me, edit, replies, setReplies, kinds = [] }: { me: Character;
             </button>
           </div>
           {picking === "body" && <ColourPicker value={me.tint ?? null} from={wheelOf(me.hue)} label="The orb's colour" onPick={(tint) => edit({ tint, hue: nearestHue(tint) })} />}
-          <div style={{ display: "grid", gap: 8 }}>
+          {/* the finishes all at once, small, his face in each (owner, 10-10: "organize the sections much better and make
+              them more compact and viewable"): not a page of nine big tiles under the colours */}
+          <div data-finishes style={{ display: "grid", gap: 8 }}>
             <Head>Finish</Head>
-            <Thumbs title="Finishes" c={me} options={Object.keys(FINISHES) as FinishName[]} field="finish" label={(f) => FINISHES[f].label} onPick={(finish) => edit({ finish })} face />
+            <Balanced min={76} gap={6}>
+              {(Object.keys(FINISHES) as FinishName[]).map((f) => {
+                const on = me.finish === f;
+                return (
+                  <button key={f} data-pick={f} onClick={() => edit({ finish: f })} aria-pressed={on} style={{ ...chosen(on), border: 0, borderRadius: 12, padding: "4px 2px 6px", cursor: "pointer", display: "grid", justifyItems: "center", minWidth: 0 }}>
+                    <Orb character={{ ...me, finish: f }} size={56} still poke={false} framing="portrait" style={{ maxWidth: "100%", height: "auto" }} />
+                    <span style={{ font: "600 12px/16px var(--font)", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{FINISHES[f].label}</span>
+                  </button>
+                );
+              })}
+            </Balanced>
           </div>
           <div style={{ display: "grid", gap: 8 }}>
             <Head>Gradient: a second colour, top to bottom</Head>
@@ -904,6 +954,18 @@ function FlaskIcon() {
   );
 }
 
+/** Notifications in the menu: a bell (owner, 10-10: "Change notification Icon to a bell in menu"), drawn as the lab's
+ * flask is: its body lightly filled, its outline in the menu's colour, the clapper under it. */
+function BellIcon() {
+  return (
+    <svg data-icon="bell" width="16" height="16" viewBox="0 0 16 16" aria-hidden style={{ display: "block", overflow: "visible" }}>
+      <path d="M8 1.9 C5.7 1.9 4.2 3.7 4.2 6.1 V8.7 L2.9 10.9 Q2.5 11.7 3.4 11.7 H12.6 Q13.5 11.7 13.1 10.9 L11.8 8.7 V6.1 C11.8 3.7 10.3 1.9 8 1.9 Z" fill="currentColor" opacity=".38" />
+      <path d="M8 1.9 C5.7 1.9 4.2 3.7 4.2 6.1 V8.7 L2.9 10.9 Q2.5 11.7 3.4 11.7 H12.6 Q13.5 11.7 13.1 10.9 L11.8 8.7 V6.1 C11.8 3.7 10.3 1.9 8 1.9 Z M8 0.8 V1.9" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M6.4 13.4 Q8 15.2 9.6 13.4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function SoundIcon({ on }: { on: boolean }) {
   return (
     <svg aria-hidden width={16} height={16} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" style={{ display: "block" }}>
@@ -955,6 +1017,7 @@ function App() {
   const [evolve, setEvolve] = useState<{ c: Character; n: number } | null>(null); // Roll everything: who he was
   const phone = usePhone(); // the hero's orb smaller on a phone (owner, 10-04: "make hero a bit smaller")
   const smallPhone = useCramped("(max-width: 360px)"); // its gestures three to a row, never one left alone
+  const wide = useCramped("(min-width: 1100px)"); // the studio side by side: the orb and its DNA in a column of their own
   // his card says who he is only once he has been shown whole (owner, 10-04: "only show the orbs info when the
   // orb has been shown completely"): until the change is over it still says who he was
   const [shown, setShown] = useState(0);
@@ -1330,7 +1393,7 @@ function App() {
             {navItem("The office", room === "office" && view.kind === "floor", { room: "office", orb: null }, "◉")}
             {navItem("New orb", room === "office" && making, { room: "new" }, "+", 0, true) /* asks to be pressed (owner, 10-03) */}
             {navItem("Sessions", room === "sessions", { room: "sessions", id: null, tab: "brainstorm" }, "▦")}
-            {navItem("Notifications", room === "notices", { room: "notices" }, "◔", notices.notices.length)}
+            {navItem("Notifications", room === "notices", { room: "notices" }, <BellIcon />, notices.notices.length)}
             {navItem("Calendar", room === "calendar", { room: "calendar" }, "▤")}
             {navItem("The lab", room === "lab", { room: "lab" }, <FlaskIcon />)}
             {navItem("Org chart", room === "org", { room: "org" }, "◇")}
@@ -1424,11 +1487,21 @@ function App() {
               <button onClick={() => setSaid(null)} style={{ ...s.chip, padding: "4px 10px" }}>OK</button>
             </div>
           )}
-          <div data-orb={me.hue} data-cradle data-gesture={gesture?.name} style={{ position: "relative", display: "grid", justifyItems: "center", gap: "var(--s2)", padding: "var(--s5) var(--s4) 0", background: "radial-gradient(50% 80% at 50% 30%, var(--accent-wash), transparent 70%)" }}>
-            <button aria-label={sounds ? "Sounds on" : "Sounds off"} aria-pressed={sounds} title={sounds ? "Sounds on" : "Sounds off"} data-sound="none" onClick={flipSounds} style={{ ...s.chip, position: "absolute", top: "var(--s4)", right: "var(--s4)", padding: 8, display: "grid", placeItems: "center", color: sounds ? "var(--text-1)" : "var(--text-3)" }}>
-              <SoundIcon on={sounds} />
-            </button>
-            <span style={{ ...s.head }}>{making ? "A new orb" : "In the office"}</span>
+          {/* the studio (owner, 10-10: "we also dont see our orb as were changing colors ... make sure DNA strand is close
+              and next to horizontally but not in same container, so we see the switch in dna as we change the colors"): the
+              orb's card and its DNA's, each its own, in a column that stays in view on a wide screen while the editor and
+              the card beside it scroll; on a narrower one they come first, and the editor carries a small one of each */}
+          <div className="orbs-studio" style={{ display: "grid", gap: "var(--s4)", padding: "var(--s4) var(--s5) 0", gridTemplateColumns: "minmax(0, 1fr)", alignItems: "start" }}>
+          <div className="orbs-stage" style={{ display: "grid", gap: "var(--s4)", alignContent: "start", minWidth: 0 }}>
+          <div data-orb={me.hue} data-cradle data-gesture={gesture?.name} style={{ ...s.panel, position: "relative", display: "grid", justifyItems: "center", gap: "var(--s2)", padding: "var(--s4) var(--s3)", background: "radial-gradient(60% 70% at 50% 28%, var(--accent-wash), transparent 70%), var(--fill)" }}>
+            {/* its head: what it is, centred, and the sounds at its end (one row of the card, not an item beside it) */}
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto minmax(0, 1fr)", alignItems: "center", width: "100%" }}>
+              <span aria-hidden />
+              <span style={{ ...s.head }}>{making ? "A new orb" : "In the office"}</span>
+              <button aria-label={sounds ? "Sounds on" : "Sounds off"} aria-pressed={sounds} title={sounds ? "Sounds on" : "Sounds off"} data-sound="none" onClick={flipSounds} style={{ ...s.chip, justifySelf: "end", padding: 8, display: "grid", placeItems: "center", color: sounds ? "var(--text-1)" : "var(--text-3)" }}>
+                <SoundIcon on={sounds} />
+              </button>
+            </div>
             <Evolving me={me} from={evolve} size={phone ? 128 : 176} state={worn} gesture={gesture} onDone={setShown} />
             {live && !picked && WORN[live.mood].words && (
               <span data-mood={live.mood} style={{ font: "600 13px/18px var(--font)", color: "var(--text-2)" }}>
@@ -1446,7 +1519,7 @@ function App() {
               ))}
             </OneLine>
             <div role="group" aria-label={`What ${me.name || "your orb"} can do`} data-gestures style={{ display: "grid", gap: 8, justifyItems: "center", maxWidth: "100%" }}>
-              {(smallPhone ? [GESTURES.slice(0, 3), GESTURES.slice(3, 6), GESTURES.slice(6)] : [GESTURES.slice(0, 5), GESTURES.slice(5)]).map((row, r) => (
+              {(smallPhone || wide ? [GESTURES.slice(0, 3), GESTURES.slice(3, 6), GESTURES.slice(6)] : [GESTURES.slice(0, 5), GESTURES.slice(5)]).map((row, r) => (
                 <div key={r} style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 6 }}>
                   {row.map(([g, label]) => (
                     <button key={g} className="orbs-small" data-gesture-pick={g} data-flash={flash?.g === g ? flash.n : undefined}
@@ -1479,6 +1552,15 @@ function App() {
                 </button>
               </OneLine>
             )}
+            <p style={{ margin: 0, font: "400 13px/18px var(--font)", color: blocked ? "var(--alert)" : "var(--text-3)", textAlign: "center" }}>
+              {before ? `${before.name || "Your orb"}, ${sheetOf(before).title}. Give a click, or move your pointer: the eyes follow.` : blocked ?? `${name || "Your orb"}, ${sheetOf(me).title}. Give a click, or move your pointer: the eyes follow.`}
+            </p>
+          </div>
+
+          {/* its DNA, its own card under the orb (owner, 10-10): everything it is made of, changing as it is made; copy
+              it, or paste someone's to make theirs */}
+          <div data-strand-card data-orb={me.hue} style={{ ...s.panel, display: "grid", gap: "var(--s3)" }}>
+            <Strand key={(before ?? me).name + (before ?? me).seed} c={before ?? me} />
             {making && (
               // an orb from its DNA: someone's strand, pasted, and the creator changes into that orb
               <form
@@ -1493,36 +1575,40 @@ function App() {
                   edit(read.orb);
                   window.setTimeout(() => play("hop"), calm() ? 0 : REVEAL);
                 }}
-                style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 8, width: "min(100%, 460px)" }}
+                style={{ display: "flex", flexWrap: "wrap", gap: 8, minWidth: 0 }}
               >
                 <input value={strandText} onChange={(e) => (setStrandText(e.target.value), setStrandSaid(null))} aria-label="DNA strand" placeholder="Paste a DNA strand" size={1}
                   style={{ flex: "1 1 220px", minWidth: 0, font: "600 13px/18px var(--font)", letterSpacing: ".03em", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 10, padding: "8px 12px", boxShadow: "inset 0 0 0 .5px var(--hairline)" }} />
                 <button type="submit" disabled={!strandText.trim()} style={{ ...s.chip, opacity: strandText.trim() ? 1 : 0.5 }}>Make it</button>
-                {strandSaid && <span role="alert" style={{ flex: "1 1 100%", textAlign: "center", font: "500 13px/18px var(--font)", color: "var(--alert)" }}>{strandSaid}</span>}
+                {strandSaid && <span role="alert" style={{ flex: "1 1 100%", font: "500 13px/18px var(--font)", color: "var(--alert)" }}>{strandSaid}</span>}
               </form>
             )}
-            <p style={{ margin: 0, font: "400 13px/18px var(--font)", color: blocked ? "var(--alert)" : "var(--text-3)", textAlign: "center" }}>
-              {before ? `${before.name || "Your orb"}, ${sheetOf(before).title}. Give a click, or move your pointer: the eyes follow.` : blocked ?? `${name || "Your orb"}, ${sheetOf(me).title}. Give a click, or move your pointer: the eyes follow.`}
-            </p>
           </div>
-
-          <div className="orbs-pair" style={{ display: "grid", gap: "var(--s4)", padding: "0 var(--s5)", gridTemplateColumns: "minmax(0, 1fr)", alignItems: "start" }}>
+          </div>
+          <div className="orbs-work" style={{ display: "grid", gap: "var(--s4)", alignContent: "start", minWidth: 0 }}>
             {making ? (
-              <Sheet c={before ?? me} key={before ? "was" : "now"} onRename={(n) => edit({ name: n })} replies={replies} standing={null} startsAs={startsAs} career={null} friends={null} />
+              <>
+                <Creator me={me} edit={edit} replies={replies} setReplies={setReplies} kinds={kinds} peek={!wide} />
+                <Sheet c={before ?? me} key={before ? "was" : "now"} onRename={(n) => edit({ name: n })} replies={replies} standing={null} startsAs={startsAs} career={null} friends={null} strand={false} />
+              </>
             ) : (
-              // Chat and its career beside its name (owner, 10-07)
-              <Sheet c={before ?? me} key={before ? "was" : "now"} replies={replies} standing={standing} startsAs={startsAs} career={career} friends={friends}
-                onChat={() => go({ room: "chat", orb: me.name })} onCareer={() => go({ room: "career", orb: me.name })} />
+              <>
+                {/* Chat and its career beside its name (owner, 10-07) */}
+                <Sheet c={before ?? me} key={before ? "was" : "now"} replies={replies} standing={standing} startsAs={startsAs} career={career} friends={friends} strand={false}
+                  onChat={() => go({ room: "chat", orb: me.name })} onCareer={() => go({ room: "career", orb: me.name })} />
+                <Card c={me} replies={replies} setReplies={setReplies} onDelete={(handTo, school) => remove(me.name, handTo, school)} others={office.filter((o) => o.name !== me.name)} />
+              </>
             )}
-            {making ? <Creator me={me} edit={edit} replies={replies} setReplies={setReplies} kinds={kinds} /> : <Card c={me} replies={replies} setReplies={setReplies} onDelete={(handTo, school) => remove(me.name, handTo, school)} others={office.filter((o) => o.name !== me.name)} />}
+          </div>
           </div>
 
           <div style={{ padding: "0 var(--s5)" }}>
             <div style={{ ...s.head, margin: "0 0 var(--s3)" }}>The office</div>
             <Tall max="34dvh" label="The office">
+            {/* compact (owner, 10-10: "make them more compact and viewable"): more of the office to a row */}
             <Balanced
-              min={144}
-              gap={12}
+              min={124}
+              gap={10}
               lead={
                 // the empty seat (owner, 10-03: "+ new orb button has to be more inviting than that"): an
                 // orb not made yet sits in it (the first open's newborn), its eyes on you, a + on it; it hops
@@ -1538,9 +1624,9 @@ function App() {
                   onPointerEnter={() => setSeatHop((n) => n + 1)}
                   style={{ display: "grid", justifyItems: "center", alignContent: "center", gap: 2, minHeight: 72, padding: "var(--s3) var(--s2)", border: 0, cursor: "pointer", borderRadius: 18, minWidth: 0, background: "radial-gradient(80% 70% at 50% 30%, var(--accent-fill), var(--accent-wash) 75%)", boxShadow: `inset 0 0 0 ${making ? 2 : 1.5}px var(--accent)` }}
                 >
-                  <span style={{ position: "relative", display: "grid", marginBottom: -14 }}>
-                    <Orb character={making ? me : NEWBORN} size={100} poke={false} gesture={seatHop ? { name: "hop", n: seatHop } : null} />
-                    <span aria-hidden data-plus style={{ position: "absolute", right: 10, bottom: 20, width: 30, height: 30, borderRadius: 15, display: "grid", placeItems: "center", background: "var(--accent)", color: "var(--ground)", font: "800 22px/22px var(--font)", boxShadow: "0 2px 10px var(--accent-glow)" }}>+</span>
+                  <span style={{ position: "relative", display: "grid", marginBottom: -11 }}>
+                    <Orb character={making ? me : NEWBORN} size={80} poke={false} gesture={seatHop ? { name: "hop", n: seatHop } : null} />
+                    <span aria-hidden data-plus style={{ position: "absolute", right: 6, bottom: 16, width: 26, height: 26, borderRadius: 13, display: "grid", placeItems: "center", background: "var(--accent)", color: "var(--ground)", font: "800 20px/20px var(--font)", boxShadow: "0 2px 10px var(--accent-glow)" }}>+</span>
                   </span>
                   <span style={{ font: "700 15px/20px var(--font)", color: "var(--accent)" }}>New orb</span>
                   <span style={{ font: "600 12px/16px var(--font)", color: "var(--text-2)" }}>Make one your way</span>
@@ -1553,11 +1639,11 @@ function App() {
                   data-orb={c.hue}
                   onClick={() => go({ room: "office", orb: c.name })}
                   style={{
-                    display: "grid", justifyItems: "center", alignContent: "start", gap: 2, padding: "var(--s3) var(--s2)", border: 0, cursor: "pointer", borderRadius: 18, background: !making && c.name === me.name ? "var(--accent-wash)" : "var(--fill)", boxShadow: "inset 0 0 0 1px var(--hairline)", minWidth: 0,
+                    display: "grid", justifyItems: "center", alignContent: "start", gap: 2, padding: "var(--s2) var(--s2) var(--s3)", border: 0, cursor: "pointer", borderRadius: 16, background: !making && c.name === me.name ? "var(--accent-wash)" : "var(--fill)", boxShadow: "inset 0 0 0 1px var(--hairline)", minWidth: 0,
                     animation: leaving === c.name ? "orbs-leave 260ms var(--m-physical) forwards" : arrived === c.name ? "orbs-arrive 520ms var(--m-spring)" : undefined,
                   }}
                 >
-                  <Orb character={c} size={100} poke={false} style={{ marginBottom: -14 }} />
+                  <Orb character={c} size={80} poke={false} style={{ marginBottom: -11 }} />
                   <span style={{ font: "700 15px/20px var(--font)", color: "var(--accent)", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
                   {/* his class, then his manner and his voice: each a line of its own, never wrapped */}
                   <span style={{ font: "600 12px/16px var(--font)", color: "var(--text-2)", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{SPECIALTIES[c.specialty].title}</span>
@@ -1622,6 +1708,31 @@ main.orbs-main { padding: max(var(--s5), env(safe-area-inset-top)) max(var(--mar
   .orbs-scrim { display: block; position: fixed; inset: 0; z-index: 29; background: var(--ground); opacity: .72; }
 }
 @media (min-width: 1100px) { .orbs-pair { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) !important; } }
+/* the studio (owner, 10-10): on a wide screen the orb's card and its DNA's in a column of their own that stays in view
+   while the editor and the card beside them scroll (taller than the screen, it scrolls inside itself); narrower, one
+   column, and the editor's header (Peek) holds the orb and its DNA small, at the top of the screen as its choices scroll */
+@media (min-width: 1100px) {
+  .orbs-studio { grid-template-columns: minmax(300px, 360px) minmax(0, 1fr) !important; }
+  .orbs-stage { position: sticky; top: var(--s4); max-height: calc(100dvh - 2 * var(--s4)); overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; padding: 2px; margin: -2px; }
+}
+/* an orb's card, wide enough: its small facts three across, its traits beside what shaped them (a container query: the
+   card's own width, wherever it is) */
+.orbs-sheet { container-type: inline-size; }
+@container (min-width: 520px) {
+  .orbs-facts { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+  .orbs-two { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important; }
+}
+/* an applicant's CV (owner, 10-10): the orb and its fit beside its card where there is room, held in view as it scrolls */
+@media (min-width: 761px) {
+  .orbs-cv-body { grid-template-columns: 236px minmax(0, 1fr) !important; }
+  .orbs-cv-side { position: sticky; top: 76px; }
+}
+/* Settings (owner, 10-10): its index beside its sections on a wide screen; Sounds and Replies side by side */
+@media (min-width: 1100px) {
+  .orbs-settings { grid-template-columns: 176px minmax(0, 1fr) !important; }
+  .orbs-settings-pair { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important; }
+}
+.orbs-peek { position: sticky; top: 0; z-index: 3; margin: calc(-1 * var(--s4)) calc(-1 * var(--s4)) 0; padding: var(--s3) var(--s4); border-radius: 18px 18px 0 0; background: linear-gradient(var(--fill), var(--fill)), var(--card); box-shadow: 0 1px 0 var(--sep); }
 /* side by side, no hole under the shorter one (owner, 10-04: "no dead space please. to industry standards"):
    the row is as tall as the panel beside the card (never under 560px), and the card fills it, its body
    scrolling under his name with a fade where there is more */

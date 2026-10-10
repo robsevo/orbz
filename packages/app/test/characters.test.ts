@@ -298,6 +298,56 @@ test("his eyes are glossy domes, not flat discs: across the low part of each, it
   }
 });
 
+// owner, 10-10: "can we add X X 's as eyes as well?". An X is dark half way out along each of its arms, with his glass
+// between them; a round eye is dark at both (the control: Ash's classic eyes are no X). Read in the Eyes tab (5 px patches,
+// the median of each eye's four), as `between - arms`: measured 10-10, X 0.168 (arms 0.330, between 0.498), classic 0.000.
+// The line is halfway.
+const X_OPEN = 0.084;
+test("X eyes are crosses: dark along both diagonals, his glass between the arms (owner, 10-10)", { skip }, async () => {
+  await page.getByRole("tab", { name: "Eyes" }).click();
+  await page.waitForTimeout(300);
+  const geometry = { w: PORTRAIT.w, h: PORTRAIT.h, cy: PORTRAIT.cy, radius: PORTRAIT.radius, scale: lookOf(ASH).shapeD[1] };
+  const read = async (pick: "x" | "classic"): Promise<{ arms: number; between: number }> => {
+    // to its page, without choosing it
+    const button = page.locator(`button[data-pick="${pick}"]`);
+    const n = await button.evaluate((b) => b.closest("[data-page]")?.getAttribute("data-page") ?? null);
+    if (n && (await button.isHidden())) await page.getByRole("button", { name: `Page ${n}`, exact: true }).click();
+    await page.waitForTimeout(400);
+    return page.evaluate(({ pick, geometry, eye }) => {
+      const c = document.querySelector<HTMLButtonElement>(`button[data-pick="${pick}"]`)!.querySelector("canvas")!;
+      const W = c.width, H = c.height;
+      const d = c.getContext("2d")!.getImageData(0, 0, W, H).data;
+      const k = Math.min(W / geometry.w, H / geometry.h);
+      const Rs = geometry.radius * k * geometry.scale * 0.94; // one face unit, in pixels
+      const cx = W / 2, cy = H * geometry.cy;
+      const [er, , gap, ey] = eye;
+      const patch = (fx: number, fy: number): number => {
+        let t = 0, n = 0;
+        for (let y = Math.round(cy + fy * Rs) - 2; y <= Math.round(cy + fy * Rs) + 2; y++)
+          for (let x = Math.round(cx + fx * Rs) - 2; x <= Math.round(cx + fx * Rs) + 2; x++) {
+            const i = (y * W + x) * 4;
+            t += (0.2126 * d[i]! + 0.7152 * d[i + 1]! + 0.0722 * d[i + 2]!) / 255;
+            n++;
+          }
+        return t / n;
+      };
+      const mid = (a: number[]): number => [...a].sort((p, q) => p - q)[Math.floor(a.length / 2)]!;
+      let arms = 0, between = 0;
+      for (const sx of [-1, 1]) {
+        const ex = sx * gap!;
+        arms += mid([[1, 1], [1, -1], [-1, 1], [-1, -1]].map(([dx, dy]) => patch(ex + dx! * er! * 0.5 * 0.7071, ey! + dy! * er! * 0.5 * 0.7071))) / 2;
+        between += mid([[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => patch(ex + dx! * er! * 0.72, ey! + dy! * er! * 0.72))) / 2;
+      }
+      return { arms, between };
+    }, { pick, geometry, eye: EYES[pick].a });
+  };
+  const x = await read("x");
+  const round = await read("classic");
+  if (process.env.ORBS_PRINT) console.log(`x: arms ${x.arms.toFixed(3)} between ${x.between.toFixed(3)}; classic: arms ${round.arms.toFixed(3)} between ${round.between.toFixed(3)}`);
+  assert.ok(round.between - round.arms < X_OPEN, `control: a round eye reads as an X (${(round.between - round.arms).toFixed(3)} between its arms)`);
+  assert.ok(x.between - x.arms > X_OPEN, `X eyes drawn round: only ${(x.between - x.arms).toFixed(3)} lighter between the arms than along them`);
+});
+
 /** Each glasses thumbnail against the one with none, over his eyes: how much differs, and how much
  * darker it is there. */
 function glassesOverEyes(p: Page, picks: string[]): Promise<{ pick: string; diff: number; darker: number }[]> {

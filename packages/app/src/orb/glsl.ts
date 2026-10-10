@@ -46,6 +46,7 @@ uniform float uGoo;     // how soft he is: 0 is Ash's glass, 1 is jelly (owner, 
 uniform float uSquash;  // squash (+) and stretch (-) for hops and pokes; volume is roughly kept
 uniform vec4 uEyeA;     // radius, aspect (1 round, >1 tall ovals), gap, height
 uniform vec4 uEyeB;     // sparkle (0..1), lids at rest (0 open .. 1 shut), happy at rest, a wink (his left eye an arc)
+uniform float uEyeX;    // 1: each eye an X (spec.ts EYES cross; owner, 10-10: "X X 's as eyes")
 uniform float uAccTilt; // his hat (spec.ts HATS, drawn by HAT_VS and HAT_FS) is worn at a slant, radians
 uniform vec2 uAccFit;   // how it fits his shape (spec.ts hatFit): the outline his head's top is taken at, and the hat's size
 uniform vec4 uAccGlow;  // what on it gives off light (hats/models.ts glowOf): its centre, and a bead's radius or a ring's two
@@ -539,11 +540,23 @@ void main(){
         open *= mix(1.0, smoothstep(cut - 0.012, cut + 0.012, v.y), uMad);
         float browD = v.y - (-er*1.30 + 0.55*inner);
         float brow = smoothstep(0.024, 0.011, abs(browD)) * step(abs(v.x), er*0.95);
+        // X X: where the eye would be open, two rounded strokes crossed (the lids, a blink and mad cut them as they cut
+        // an eye), drawn as a stroke is, lit along its upper side; no dome, no sparkle
+        if (uEyeX > 0.5) {
+          float L = er*0.86;
+          vec2 u1 = vec2(0.7071, 0.7071), u2 = vec2(0.7071, -0.7071);
+          vec2 p1 = v - clamp(dot(v, u1), -L, L)*u1, p2 = v - clamp(dot(v, u2), -L, L)*u2;
+          float d1 = length(p1), d2 = length(p2);
+          float cross = smoothstep(0.050, 0.030, min(d1, d2));
+          open = cross * smoothstep(lidY - 0.012, lidY + 0.012, v.y) * mix(1.0, smoothstep(cut - 0.012, cut + 0.012, v.y), uMad);
+          float xs = d1 < d2 ? dot(p1, vec2(0.7071, -0.7071)) : dot(p2, vec2(-0.7071, -0.7071));
+          if (open > strokeW) { strokeW = open; strokeS = clamp(xs/0.022, -1.0, 1.0); }
+        }
         eyes  = max(eyes, brow*uMad);
         eyes  = max(eyes, open);
         // the dome: the eye as a unit disc, a cap of a ball lit from his highlight's side
         vec2 e = v*vec2(1.0, 1.0/uEyeA.y)/er;
-        float rr = length(e);
+        float rr = length(e) + 2.0*uEyeX;   // an X has no dome and is not set in
         if (rr < 1.0) {
           vec3 n = normalize(vec3(e*0.9, sqrt(max(0.0, 1.0 - rr*rr*0.81))));
           float low = smoothstep(-0.15, 0.85, dot(e, vec2(0.32, 0.95)))*smoothstep(1.0, 0.4, rr);    // low in it, away from the light
@@ -578,7 +591,7 @@ void main(){
         vec2 v0 = f - vec2(-uEyeA.z, uEyeA.w), v1 = f - vec2(uEyeA.z, uEyeA.w);
         float wd = length(v0 - vec2(0.0, er*0.60)) - er*0.82;
         winkArc = smoothstep(0.036, 0.020, abs(wd)) * step(v0.y, er*0.25);
-        winkOpen = smoothstep(er, er - 0.016, length(v1*vec2(1.0, 1.0/uEyeA.y)));
+        winkOpen = smoothstep(er, er - 0.016, length(v1*vec2(1.0, 1.0/uEyeA.y))) * (1.0 - uEyeX);   // an X stays an X
         eyes = max(winkOpen, max(winkArc, eyes*step(0.0, f.x)));
         shine *= step(0.0, f.x);
         if (f.x < 0.0) { strokeW = max(strokeW, winkArc); strokeS = clamp(wd/0.026, -1.0, 1.0); }

@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, type CSSProperties } from "react";
 import { addOrb, drawOne, now } from "./loop.ts";
 import { DESIGN, PORTRAIT, type Framing } from "./renderer.ts";
 import { fidgets, type Gesture, type OrbState, type Play } from "./life.ts";
-import { describe, finishOf, halfWidth, lookOf, motionOf, type Character } from "./spec.ts";
+import { closeUp, describe, finishOf, lookOf, motionOf, type Character } from "./spec.ts";
 
 export type OrbProps = {
   character: Character;
@@ -36,11 +36,8 @@ export type OrbProps = {
 const seedOf = (s: string): number => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 9973, 7) / 97;
 
 export function Orb({ character, size = 120, state = "idle", gesture = null, fidget = true, poke = true, tint = 0.8, every = 1, still = false, framing = "window", pose, pop = true, style }: OrbProps) {
-  // the close-up is cut to fit his width: half the frame, less the edge's fade and a little room
-  const frame: Framing = useMemo(
-    () => (framing === "portrait" ? { ...PORTRAIT, radius: Math.min(PORTRAIT.radius, PORTRAIT.w / 2 / (halfWidth(character.shape) + PORTRAIT.edge + 0.04)) } : DESIGN),
-    [framing, character.shape],
-  );
+  // the close-up: cut to his width, his hat kept in (spec.ts closeUp)
+  const frame: Framing = useMemo(() => (framing === "portrait" ? closeUp(PORTRAIT, character) : DESIGN), [framing, character.shape, character.hat]);
   const ref = useRef<HTMLCanvasElement>(null);
   const plays = useRef<Play[]>([]);
   const pointer = useRef<[number, number] | null>(null);

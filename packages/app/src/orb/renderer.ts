@@ -51,6 +51,8 @@ export type OrbLook = {
   shapeF: [number, number, number, number];
   eyeA: [number, number, number, number];
   eyeB: [number, number, number, number];
+  /** 1: his eyes are drawn as an X each (spec.ts EYES `cross`). */
+  eyeX: number;
   acc: number;
   /** The head his hat is made on, his shape's (hats/heads.ts). */
   head: Head;
@@ -91,7 +93,7 @@ const SUPERSAMPLE = 1.5;
 const UNIFORMS = [
   "uRes", "uTime", "uLevel", "uState", "uWake", "uR", "uCy", "uEdge", "uBreath", "uBlink", "uMorph", "uGaze", "uSway",
   "uHappy", "uSleepy", "uYawn", "uSurprise", "uTilt", "uMad", "uJiggle", "uHue", "uSat", "uVal", "uHue2", "uGrad", "uTint",
-  "uShapeA", "uShapeB", "uShapeC", "uShapeD", "uShapeE", "uShapeF", "uGoo", "uSquash", "uEyeA", "uEyeB", "uAccFit", "uAccTilt", "uAccGlow", "uAccGlowK", "uAccGlowCol", "uAccEdge", "uAccShade",
+  "uShapeA", "uShapeB", "uShapeC", "uShapeD", "uShapeE", "uShapeF", "uGoo", "uSquash", "uEyeA", "uEyeB", "uEyeX", "uAccFit", "uAccTilt", "uAccGlow", "uAccGlowK", "uAccGlowCol", "uAccEdge", "uAccShade",
 ] as const;
 const HAT_UNIFORMS = ["uRes", "uSway", "uAccFit", "uGaze", "uTime", "uLevel", "uState", "uWake", "uR", "uCy", "uBreath", "uMorph", "uSquash", "uAccTilt", "uTilt", "uFace", "uShapeD", "uCol", "uCol2", "uCol3", "uOrb", "uPal"] as const;
 
@@ -241,6 +243,7 @@ export class OrbRenderer {
     gl.uniform4f(u.uEyeA, ...look.eyeA);
     // a wink is something he does (a gesture), so the frame can shut one eye on any eyes
     gl.uniform4f(u.uEyeB, look.eyeB[0], look.eyeB[1], look.eyeB[2], Math.max(look.eyeB[3], f.wink > 0.5 ? 1 : 0));
+    gl.uniform1f(u.uEyeX, look.eyeX);
     gl.uniform2f(u.uAccFit, ...look.accFit);
     gl.uniform1f(u.uAccTilt, look.accTilt);
     gl.uniform4f(u.uAccGlow, ...look.accGlow);
