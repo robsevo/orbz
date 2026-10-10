@@ -1,6 +1,6 @@
 // Every hat close up on one orb, on one sheet (tools/hat_sheet.tsx): `node tools/shoot_hats.ts <out.png>
 // [--size 200] [--cols 7] [--hues azure,coral] [--shape bean] [--wears "top hat,crown"] [--theme light] [--kind glasses|eyes]
-// [--framing portrait]` (glasses and eyes are drawn close up).
+// [--framing portrait] [--ears out]` (glasses and eyes are drawn close up; `--ears out`: an eared orb's ears out of its hat).
 import { mkdtempSync } from "node:fs";
 import { writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -20,7 +20,7 @@ const browser = await launch();
 const file = process.argv[2]!;
 const arg = (k: string): string | undefined => (process.argv.includes(k) ? process.argv[process.argv.indexOf(k) + 1] : undefined);
 const query = new URLSearchParams(
-  Object.entries({ size: arg("--size"), cols: arg("--cols"), hues: arg("--hues"), shape: arg("--shape"), wears: arg("--wears"), theme: arg("--theme"), kind: arg("--kind"), framing: arg("--framing"), pose: arg("--pose"), into: arg("--into") }).filter(([, v]) => v) as [string, string][],
+  Object.entries({ size: arg("--size"), cols: arg("--cols"), hues: arg("--hues"), shape: arg("--shape"), wears: arg("--wears"), theme: arg("--theme"), kind: arg("--kind"), framing: arg("--framing"), pose: arg("--pose"), into: arg("--into"), ears: arg("--ears") }).filter(([, v]) => v) as [string, string][],
 ).toString();
 writeFileSync(join(out, "hats.html"), `<!doctype html><meta charset="utf-8"><body style="margin:0"><script type="module">import { mount } from "./sheet.js"; mount();</script>`);
 const page = await browser.newPage({ viewport: { width: 1600, height: 1000 }, deviceScaleFactor: Number(arg("--dpr") ?? 1), colorScheme: arg("--theme") === "light" ? "light" : "dark" });

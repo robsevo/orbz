@@ -536,6 +536,10 @@ export type Character = {
   /** The hat's and the frames' colour as any colour (hex), over `hatHue` and `glassesHue`. */
   hatTint?: string | null;
   glassesTint?: string | null;
+  /** His ears under a hat that covers them: inside it (the default, owner 10-09: "ears, they should be inside hat when
+   * on") or out of it, through it (owner, 10-10: "why dont we make the ears come out of the hat ... give the user the
+   * choice"). Only where the hat would take them in (earsInside); the strand carries "out" alone (strand.ts "3"). */
+  ears?: "in" | "out" | null;
   voice: string;
   goo: number;
 };
@@ -588,6 +592,10 @@ export function closeUp<F extends { w: number; h: number; cy: number; radius: nu
   return over > 0 ? { ...f, h: f.h + over, cy: (f.cy * f.h + over) / (f.h + over) } : f;
 }
 
+/** Whether his ears come out of his hat: chosen so, and a hat that would take them in (with any other hat they are out
+ * already). */
+export const earsOut = (c: Pick<Character, "ears" | "hat" | "shape">): boolean => c.ears === "out" && earsInside(c.hat, c.shape);
+
 /** What the shader needs to draw this character. */
 export function lookOf(c: Character): OrbLook {
   const s = SHAPES[c.shape];
@@ -595,7 +603,8 @@ export function lookOf(c: Character): OrbLook {
   const w = HATS[c.hat];
   const g = GLASSES[c.glasses];
   return {
-    shapeA: [...s.a], shapeB: [...s.b], shapeC: earsInside(c.hat, c.shape) ? [s.c[0], s.c[1], 0, s.c[3]] : [...s.c], shapeD: [...s.d], shapeE: [...s.e], shapeF: [...s.f],
+    shapeA: [...s.a], shapeB: [...s.b], shapeC: earsInside(c.hat, c.shape) && !earsOut(c) ? [s.c[0], s.c[1], 0, s.c[3]] : [...s.c], shapeD: [...s.d], shapeE: [...s.e], shapeF: [...s.f],
+    earsOut: earsOut(c),
     eyeA: [...e.a] as V4, eyeB: [...e.b] as V4, eyeX: "cross" in e && e.cross ? 1 : 0,
     acc: w.id, head: headOf(c.shape, c.hat === "halo"), accFit: (({ seat, size, float }) => [c.hat === "halo" ? float : seat, size] as [number, number])(hatFit(c.shape)), accCol: c.hatTint ? rgb01(c.hatTint) : c.hatHue ? tone(c.hatHue, c) : paint(w.main, c), accCol2: paint(w.second, c), accTilt: w.tilt, orbCol: paint("accent", c),
     ...(() => {

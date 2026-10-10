@@ -47,6 +47,7 @@ uniform float uSquash;  // squash (+) and stretch (-) for hops and pokes; volume
 uniform vec4 uEyeA;     // radius, aspect (1 round, >1 tall ovals), gap, height
 uniform vec4 uEyeB;     // sparkle (0..1), lids at rest (0 open .. 1 shut), happy at rest, a wink (his left eye an arc)
 uniform float uEyeX;    // 1: each eye an X (spec.ts EYES cross; owner, 10-10: "X X 's as eyes")
+uniform float uEarsOnly; // 1: his ears alone, drawn over his hat (spec.ts earsOut; owner, 10-10: "make the ears come out of the hat")
 uniform float uAccTilt; // his hat (spec.ts HATS, drawn by HAT_VS and HAT_FS) is worn at a slant, radians
 uniform vec2 uAccFit;   // how it fits his shape (spec.ts hatFit): the outline his head's top is taken at, and the hat's size
 uniform vec4 uAccGlow;  // what on it gives off light (hats/models.ts glowOf): its centre, and a bead's radius or a ring's two
@@ -150,6 +151,11 @@ float shapeR(float a){
   r += uShapeC.y*(abs(sin(0.5*uShapeC.x*a + 0.3)) - 0.64);      // a cloud's puffs: round tops, a dip between each
   r += uShapeC.z*(exp(-sq((a - top - uShapeC.w)/uShapeD.x)) + exp(-sq((a - top + uShapeC.w)/uShapeD.x)));
   return r;
+}
+// his ears alone: what of shapeR is ears
+float earR(float a){
+  float top = -1.5707963;
+  return uShapeC.z*(exp(-sq((a - top - uShapeC.w)/uShapeD.x)) + exp(-sq((a - top + uShapeC.w)/uShapeD.x)));
 }
 
 // ---- what he wears (PLAN 2.2) -----------------------------------------------------------------
@@ -735,6 +741,11 @@ void main(){
   // instead of letting the window clip them square.
   vec2 edg = min(gl_FragCoord.xy, uRes - gl_FragCoord.xy);
   A *= smoothstep(0.0, R*uEdge, min(edg.x, edg.y));
+  // his ears alone (over his hat): where he is, past where he would end without them; nothing round him
+  if (uEarsOnly > 0.5) {
+    float RsNo = Rs - uShapeD.y*Rg*earR(ang0)*(1.0 + 0.5*uSquash*cos(2.0*ang0));
+    A *= smoothstep(1.0, 1.0 - 2.6/Rg, nd) * smoothstep(-1.0, 2.0, length(p) - RsNo);
+  }
   O = vec4(pow(max(col,0.0), vec3(0.95)), clamp(A,0.0,1.0));
 }`;
 

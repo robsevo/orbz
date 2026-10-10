@@ -3042,6 +3042,19 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("every shape's glasses made on the bean's face again", 'src/orb/hats/heads.ts', [
         ('  if (name === "bean") return BEAN_FACE;', '  return BEAN_FACE;'),
     ], ['hats.test.ts']),
+    # ears out of the hat, the owner's choice (10-10)
+    ('ears out of the hat are drawn under it', 'src/orb/renderer.ts', [
+        ('    if (hat && look.earsOut) {', '    if (false && hat && look.earsOut) {'),
+    ], ['characters.test.ts']),
+    ('the strand forgets the ears out of the hat', 'src/orb/strand.ts', [
+        ('  const v3 = c.ears === "out";', '  const v3 = false;'),
+    ], ['colours.test.ts']),
+    ('the creator never asks about the ears', 'src/orbs.tsx', [
+        ('          {earsInside(me.hat, me.shape) && (', '          {false && earsInside(me.hat, me.shape) && ('),
+    ], ['creator.test.ts']),
+    ('ears out of the hat move no traits', 'src/orb/dna.ts', [
+        ('  if (c.ears === "out" && c.hat !== "none") add(', '  if (false) add('),
+    ], ['dna.test.ts']),
 ]
 
 # the `orbs` terminal (PLAN 1.9): paths are inside packages/terminal

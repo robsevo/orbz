@@ -16,6 +16,10 @@
 // at the end of the colours, and each colour chosen as any colour (his own, the gradient's, the hat's, the frames') as
 // its hex, 24 bits each, with which of the four there are; it is a letter longer and five more for each. An orb of the
 // 24 alone keeps the first version's strand, so every strand made so far reads, and is made, the same.
+//
+// "3" (owner, 10-10: "make the ears come out of the hat ... give the user the choice? which affects dna"): the second
+// version and one more bit, last: his ears out of his hat. Only an orb with its ears out has it; every other orb's strand
+// is as it was.
 import type { HueName } from "../design/tokens.ts";
 import { hexOf } from "./colour.ts";
 import { type AccessoryHue, type Character, EYES, FINISHES, GLASSES, HATS, PERSONALITIES, SHAPES, SPECIALTIES, VOICES } from "./spec.ts";
@@ -23,6 +27,7 @@ import { type AccessoryHue, type Character, EYES, FINISHES, GLASSES, HATS, PERSO
 const ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 const VERSION = "1";
 const VERSION2 = "2";
+const VERSION3 = "3";
 
 /** The 24 as the first version lists them, written out on 10-08 and kept so: built from HUES, a colour added would
  * have moved white and black (and every colour after it) in every strand made before. */
@@ -59,12 +64,15 @@ const FIELDS2: Field[] = FIELDS.map((f) => (f.key === "hue" ? { ...f, list: () =
 const TINTS = ["tint", "tint2", "hatTint", "glassesTint"] as const;
 const RGB = 2n ** 24n;
 const BODY2 = (k: number): number => Math.ceil((Math.log2(FIELDS2.reduce((p, f) => p * f.cap, 1) * GOO * SEED) + 4 + 24 * k) / 5);
+/** The third version's: the second's and one bit (his ears out of his hat). */
+const BODY3 = (k: number): number => Math.ceil((Math.log2(FIELDS2.reduce((p, f) => p * f.cap, 1) * GOO * SEED) + 5 + 24 * k) / 5);
 
 /** The code alone (no name), for an orb. */
 export function strandOf(c: Character): string {
   if (!Number.isInteger(c.seed) || c.seed < 0 || c.seed >= SEED) throw new Error(`${c.name}'s dice (${c.seed}) do not fit a strand`);
   const tints = TINTS.map((k) => hexOf(c[k]));
-  const v2 = c.hue === "dark" || tints.some(Boolean);
+  const v3 = c.ears === "out";
+  const v2 = c.hue === "dark" || tints.some(Boolean) || v3;
   let n = 0n;
   for (const f of v2 ? FIELDS2 : FIELDS) {
     const at = f.list().indexOf(c[f.key] ?? null);
@@ -77,13 +85,15 @@ export function strandOf(c: Character): string {
     // each colour there, then which they are, last: a reader finds out first how many to take back
     for (const t of tints) if (t) n = n * RGB + BigInt(Number.parseInt(t.slice(1), 16));
     n = n * 16n + BigInt(tints.reduce((flags, t, i) => flags | (t ? 1 << i : 0), 0));
+    if (v3) n = n * 2n + 1n; // his ears out, the very last
   }
   let body = "";
   while (n > 0n) {
     body = ALPHABET[Number(n % 32n)] + body;
     n /= 32n;
   }
-  const code = (v2 ? VERSION2 : VERSION) + body.padStart(v2 ? BODY2(tints.filter(Boolean).length) : BODY, "0");
+  const k = tints.filter(Boolean).length;
+  const code = (v3 ? VERSION3 : v2 ? VERSION2 : VERSION) + body.padStart(v3 ? BODY3(k) : v2 ? BODY2(k) : BODY, "0");
   return group(code + check(code));
 }
 
@@ -98,14 +108,20 @@ export function readStrand(text: string, fallbackName = "Orb"): { ok: true; orb:
   const raw = (dot > 0 ? t.slice(dot + 1) : t).toUpperCase().replace(/[\s-]/g, "").replace(/O/g, "0").replace(/[IL]/g, "1");
   if (!raw) return { ok: false, why: "There is no DNA there to read." };
   if (/[^0-9A-Z]/.test(raw) || /U/.test(raw)) return { ok: false, why: "That is not a DNA strand: it has letters a strand never uses." };
-  if (raw[0] !== VERSION && raw[0] !== VERSION2) return { ok: false, why: "That strand is from a newer Orbz than this one." };
-  const v2 = raw[0] === VERSION2;
+  if (raw[0] !== VERSION && raw[0] !== VERSION2 && raw[0] !== VERSION3) return { ok: false, why: "That strand is from a newer Orbz than this one." };
+  const v3 = raw[0] === VERSION3;
+  const v2 = raw[0] === VERSION2 || v3;
   const code = raw.slice(0, -1);
   const mistyped = { ok: false as const, why: "That DNA does not check out: a letter is missing or mistyped." };
   if (check(code) !== raw.at(-1) || (!v2 && raw.length !== BODY + 2)) return mistyped;
   let n = 0n;
   for (const ch of code.slice(1)) n = n * 32n + BigInt(ALPHABET.indexOf(ch));
   const tints: Partial<Record<(typeof TINTS)[number], string>> = {};
+  let ears: "out" | null = null;
+  if (v3) {
+    ears = n % 2n === 1n ? "out" : null;
+    n /= 2n;
+  }
   if (v2) {
     const flags = Number(n % 16n);
     n /= 16n;
@@ -114,13 +130,13 @@ export function readStrand(text: string, fallbackName = "Orb"): { ok: true; orb:
       tints[TINTS[i]!] = `#${(n % RGB).toString(16).padStart(6, "0")}`;
       n /= RGB;
     }
-    if (raw.length !== BODY2(Object.keys(tints).length) + 2) return mistyped;
+    if (raw.length !== (v3 ? BODY3 : BODY2)(Object.keys(tints).length) + 2) return mistyped;
   }
   const seed = Number(n % BigInt(SEED));
   n /= BigInt(SEED);
   const goo = Number(n % BigInt(GOO)) / 100;
   n /= BigInt(GOO);
-  const orb: Record<string, unknown> = { name: name || fallbackName, seed, goo, ...tints };
+  const orb: Record<string, unknown> = { name: name || fallbackName, seed, goo, ...tints, ...(ears && { ears }) };
   for (const f of [...(v2 ? FIELDS2 : FIELDS)].reverse()) {
     const at = Number(n % BigInt(f.cap));
     n /= BigInt(f.cap);

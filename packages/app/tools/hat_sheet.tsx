@@ -31,7 +31,7 @@ export function mount(): void {
       {hats.flatMap((h, i) => {
         const hue = hues[i % hues.length]!;
         const wear = kind === "glasses" ? { hat: "none" as HatName, glasses: h as GlassesName } : kind === "eyes" ? { hat: "none" as HatName, glasses: "none" as GlassesName, eyes: h as EyesName } : { hat: h as HatName, glasses: "none" as GlassesName };
-        const c: Character = { ...ASH, name: "Sheet", finish: "glass", shape, hue, ...wear };
+        const c: Character = { ...ASH, name: "Sheet", finish: "glass", shape, hue, ...wear, ears: q.get("ears") === "out" ? "out" : null };
         return [
           <div key={h} style={{ display: "grid", justifyItems: "center" }}>
             <Orb character={c} size={size} still poke={false} framing={close ? "portrait" : "window"} {...(pose && { pose: { gesture: pose, into: Number(q.get("into") ?? 0.5) } })} />

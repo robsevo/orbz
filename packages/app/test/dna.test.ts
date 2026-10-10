@@ -51,6 +51,16 @@ test("every option of every part moves something, and says what it was", () => {
   assert.ok(movesOf({ ...ASH, hat: "beanie", hatHue: "black" }).some((m) => m.why === "the hat in black"));
 });
 
+// owner, 10-10: "give the user the choice? which affects dna": its ears out of its hat move its traits, and say so
+test("its ears out of its hat move a point from Calm to Humour and say so; in, nothing", () => {
+  const kit: Character = { ...ASH, shape: "kitty", hat: "beanie" };
+  const ears = (c: Character) => movesOf(c).filter((m) => /^ears out of/.test(m.why));
+  // (on a calm orb, as Ash's steady one is, a loud touch also clashes with its nature: said as such)
+  assert.ok(ears({ ...kit, ears: "out" }).some((m) => m.from === "Calm" && m.to === "Humour" && m.n === 1 && m.why === "ears out of the beanie"), "a point from Calm to Humour");
+  assert.deepEqual(ears({ ...kit, ears: "in" }), [], "control: in the hat, nothing");
+  assert.deepEqual(ears(kit), [], "and nothing said, nothing");
+});
+
 test("calm and red clash, calm and blue do not; headphones on a calm orb take from its care", () => {
   const calm: Character = { ...ASH, personality: "steady" };
   const clashes = (c: Character): string[] => movesOf(c).filter((m) => m.clash).map((m) => m.why);

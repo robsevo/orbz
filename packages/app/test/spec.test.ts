@@ -9,7 +9,7 @@ import { glassesMesh, GLASSES_MODELS } from "../src/orb/hats/glasses.ts";
 import { headOf } from "../src/orb/hats/heads.ts";
 import { hatMesh, MODELS } from "../src/orb/hats/models.ts";
 import {
-  ASH, EYES, FAMILIES, FINISHES, GLASSES, GRADES, hatFit, HATS, inHarmony, isShades, lookOf, NOT_OURS, offered, outline, PEOPLE_NAMES, PERSONALITIES, sane, SHAPES, sheetOf, SPECIALTIES, surprise, voice, VOICES, wearing, wheelSteps, withPersonality,
+  ASH, type Character, earsOut, EYES, FAMILIES, FINISHES, GLASSES, GRADES, hatFit, HATS, inHarmony, isShades, lookOf, NOT_OURS, offered, outline, PEOPLE_NAMES, PERSONALITIES, sane, SHAPES, sheetOf, SPECIALTIES, surprise, voice, VOICES, wearing, wheelSteps, withPersonality,
   type Family, type GlassesName, type HatName, type PersonalityName, type ShapeName, type SpecialtyName,
 } from "../src/orb/spec.ts";
 
@@ -319,4 +319,16 @@ test("a roll for the first orb is always an assistant; the dice decide the rest 
     assert.equal(first.name, any.name, "and name");
   }
   assert.ok(new Set(Array.from({ length: 300 }, (_, s) => surprise(s).specialty)).size > 20, "control: without it, the dice pick from all of them");
+});
+
+// owner, 10-10: "make the ears come out of the hat". Out only under a hat that would take them in: there the shader keeps
+// his ears and draws them again over the hat; in, it is given him without them, as before.
+test("ears out of the hat: only under a hat that would take them in, his ears kept for the shader; in, taken away", () => {
+  const kit: Character = { ...ASH, shape: "kitty", hat: "beanie" };
+  assert.equal(lookOf({ ...kit, ears: "out" }).earsOut, true);
+  assert.notEqual(lookOf({ ...kit, ears: "out" }).shapeC[2], 0, "his ears kept");
+  assert.equal(lookOf(kit).earsOut, false);
+  assert.equal(lookOf(kit).shapeC[2], 0, "control: in the hat, the shader is given him without them");
+  assert.equal(earsOut({ ...kit, hat: "party hat", ears: "out" }), false, "beside a party hat they are out already: nothing to choose");
+  assert.equal(earsOut({ ...kit, shape: "bean", ears: "out" }), false, "and a bean has no ears");
 });

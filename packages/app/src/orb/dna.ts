@@ -158,6 +158,9 @@ export function movesOf(c: Character): Move[] {
   add(FINISH[c.finish], `the ${c.finish} finish`);
   add(EYES[c.eyes], c.eyes === "x" ? "the X eyes" : `the ${c.eyes} eyes`);
   add(HAT[c.hat], c.hat === "none" ? "no hat" : `the ${c.hat}`);
+  // his ears out of his hat (owner, 10-10: "give the user the choice? which affects dna"): a playful touch (the creator
+  // keeps it only under a hat that would take them in)
+  if (c.ears === "out" && c.hat !== "none") add("Calm>Humour 1 loud", `ears out of the ${c.hat}`);
   add(GLASSES[c.glasses], c.glasses === "none" ? "no glasses" : `the ${c.glasses} glasses`);
   // an accessory's colour: its own (nothing more), his own (a match), white, black, or another colour
   // any colour (PLAN 2.20) counts as the nearest of the 24

@@ -164,6 +164,36 @@ for (const size of ["desk", "phone"] as const) {
   });
 }
 
+// owner, 10-10: "why dont we make the ears come out of the hat ... or give the user the choice?". Under a hat that would
+// take its ears in, the choice: in the hat (as before) or out of it. A bean has no ears and a party hat sits between them:
+// nothing to choose there. (What it draws: characters.test.ts.)
+test("an eared orb under a hat that takes its ears in is asked: In the hat or Out of the hat; nowhere else", { skip }, async () => {
+  const page = await plainAt("desk");
+  try {
+    await page.getByRole("tab", { name: "Hat" }).click();
+    await choose(page, "beanie");
+    assert.equal(await page.locator("[data-ears]").count(), 0, "a bean has no ears: nothing to choose");
+    await page.getByRole("tab", { name: "Shape" }).click();
+    await choose(page, "kitty");
+    await page.getByRole("tab", { name: "Hat" }).click();
+    await page.locator("[data-ears]").waitFor({ timeout: 20_000 });
+    assert.equal(await page.locator('[data-ears-pick="in"]').getAttribute("aria-pressed"), "true", "in the hat, unless chosen");
+    await page.locator('[data-ears-pick="out"]').click();
+    assert.equal(await page.locator('[data-ears-pick="out"]').getAttribute("aria-pressed"), "true", "out, once chosen");
+    assert.deepEqual(await measure(page), [], "the layout rule");
+    await choose(page, "party hat");
+    assert.equal(await page.locator("[data-ears]").count(), 0, "a party hat sits between them: nothing to choose");
+    await choose(page, "beanie");
+    assert.equal(await page.locator('[data-ears-pick="in"]').getAttribute("aria-pressed"), "true", "and back under a beanie, in again: out was the party hat's to drop");
+  } finally {
+    // as plain as it was, for the tests after: the bean, no hat
+    await page.getByRole("tab", { name: "Hat" }).click();
+    await choose(page, "none");
+    await page.getByRole("tab", { name: "Shape" }).click();
+    await choose(page, "bean");
+  }
+});
+
 test("a roll of the dice that lands on another page turns to it", { skip }, async () => {
   // shapes: a roll changes no thumbnail (each shows its own shape), so nothing is redrawn and the
   // test stays quick in the gate (a hat's roll can change its colour, and every thumbnail with it)

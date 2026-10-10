@@ -458,6 +458,81 @@ after(async () => {
   if (sharp) await (await sharp).close().catch(() => {}); // the browser may be gone first
 });
 
+// owner, 10-10: "why dont we make the ears come out of the hat ... give the user the choice". Out of the hat, his ears are
+// drawn again over it: where his outline has ears, a covering hat's thumbnail is nearer to him with no hat than to that
+// hat with his ears in. In, the control: his ears are in the hat, as the test below holds.
+test("ears out of the hat: over a beanie, a cap and a top hat, an eared orb's ears are drawn over the hat", { skip }, async () => {
+  const p = await sharpPage();
+  const bad: string[] = [];
+  try {
+    for (const shape of ["kitty", "bunny", "teddy"] as ShapeName[]) {
+      await p.getByRole("tab", { name: "Shape" }).click();
+      await choose(p, shape);
+      await p.getByRole("tab", { name: "Hat" }).click();
+      await choose(p, "beanie"); // a hat that takes them in, so the choice shows
+      await p.locator("[data-ears]").waitFor({ timeout: 20_000 });
+      await p.locator('[data-ears-pick="in"]').click();
+      await p.waitForTimeout(300);
+      const S = SHAPES[shape];
+      const skull = Array.from({ length: 360 }, (_, i) => S.d[1] * (1 + outline({ ...S, c: [S.c[0], S.c[1], 0, S.c[3]] }, ((i - 180) * Math.PI) / 180)));
+      const whole = Array.from({ length: 360 }, (_, i) => S.d[1] * (1 + outline(S, ((i - 180) * Math.PI) / 180)));
+      const hats = ["beanie", "cap", "top hat"];
+      // his ear pixels (as the test below finds them), and each hat's colour there
+      const read = (find: number[] | null) =>
+        p.evaluate(({ hats, Rfrac, cy, skull, whole, find }) => {
+          const px = (pick: string) => {
+            const c = document.querySelector<HTMLButtonElement>(`button[data-pick="${pick}"]`)!.querySelector("canvas")!;
+            return { W: c.width, H: c.height, d: c.getContext("2d")!.getImageData(0, 0, c.width, c.height).data };
+          };
+          const none = px("none");
+          const { W, H } = none;
+          let ears = find;
+          if (!ears) {
+            ears = [];
+            const R = W * Rfrac;
+            let topC = 0;
+            while (topC < H && none.d[(topC * W + Math.floor(W / 2)) * 4 + 3]! < 128) topC++;
+            const k = (H * cy - topC) / (skull[90]! * R);
+            for (let i = 0; i < W * H; i++) {
+              const dx = (i % W) - W / 2, dy = Math.floor(i / W) - H * cy;
+              const a = Math.round((Math.atan2(dy, dx) * 180) / Math.PI) + 180;
+              const d = Math.hypot(dx, dy);
+              if (d > skull[a % 360]! * R * k + 3 && d < whole[a % 360]! * R * k - 1 && none.d[i * 4 + 3]! >= 128) ears.push(i);
+            }
+          }
+          const rgb = (d: Uint8ClampedArray) => ears!.map((i) => [d[i * 4]!, d[i * 4 + 1]!, d[i * 4 + 2]!]);
+          return { ears, none: rgb(none.d), hats: Object.fromEntries(hats.map((h) => [h, rgb(px(h).d)])) };
+        }, { hats, Rfrac: DESIGN.radius / DESIGN.w, cy: DESIGN.cy, skull, whole, find });
+      const inside = await read(null);
+      await p.locator('[data-ears-pick="out"]').click();
+      await p.waitForTimeout(500);
+      const out = await read(inside.ears);
+      const dist = (a: number[], b: number[]): number => Math.abs(a[0]! - b[0]!) + Math.abs(a[1]! - b[1]!) + Math.abs(a[2]! - b[2]!);
+      for (const h of hats) {
+        if (!earsInside(h as HatName, shape)) continue; // a kitty's top hat sits between its ears: nothing to choose
+        const n = inside.ears.length;
+        const shown = out.hats[h]!.filter((c, j) => dist(c, out.none[j]!) < dist(c, inside.hats[h]![j]!)).length / n;
+        const wasShown = inside.hats[h]!.filter((c, j) => dist(c, inside.none[j]!) <= 12).length / n;
+        if (process.env.ORBS_PRINT) console.log(`${shape} ${h}: ears out ${(shown * 100).toFixed(0)}% (in, ${(wasShown * 100).toFixed(0)}% shown) of ${n}`);
+        if (n < 5) bad.push(`control: ${shape}'s ears not found (${n} pixels)`);
+        if (wasShown > 0.05) bad.push(`control: ${shape} in a ${h}, ears in: ${Math.round(wasShown * 100)}% of them show`);
+        if (shown < EARS_OUT) bad.push(`${shape} in a ${h}, ears out: only ${Math.round(shown * 100)}% of them over the hat`);
+      }
+    }
+  } finally {
+    // as plain as it was for the tests after: ears in, no hat, the bean
+    await p.getByRole("tab", { name: "Hat" }).click();
+    if (await p.locator('[data-ears-pick="in"]').count()) await p.locator('[data-ears-pick="in"]').click();
+    await choose(p, "none");
+    await p.getByRole("tab", { name: "Shape" }).click();
+    await choose(p, "bean");
+  }
+  assert.deepEqual(bad, []);
+});
+// measured 10-10, the share of his ear pixels nearer him with no hat than the hat with his ears in: out 44 to 94% (a
+// kitty's in a beanie the least: its glass is thin at its edges, the hat seen through it), in 0%. The line is halfway.
+const EARS_OUT = 0.22;
+
 for (const shape of Object.keys(SHAPES) as ShapeName[]) {
   test(`every hat sits on a ${shape}'s head (over a point, on a heart's lobes, between ears), and his close-up holds all of him`, { skip }, async () => {
     const p = await sharpPage();

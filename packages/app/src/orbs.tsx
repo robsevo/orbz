@@ -56,7 +56,7 @@ import { applyTheme, savedTheme } from "./ui/theme.ts";
 applyTheme(savedTheme(), false); // before the first paint: the theme you chose, never a flash of another
 noFieldZoom(document, navigator); // an iPhone does not zoom into a text box (owner, 10-07)
 import {
-  ASH, EYES, FAMILIES, FINISHES, GLASSES, HATS, offered, orbName, partnerOf, type Scheme, SCHEMES, type AccessoryHue, PERSONALITIES, REPLIES, SHAPES, sheetOf, speaks, SPECIALTIES, surprise, voice, VOICES, withPersonality,
+  ASH, earsInside, EYES, FAMILIES, FINISHES, GLASSES, HATS, offered, orbName, partnerOf, type Scheme, SCHEMES, type AccessoryHue, PERSONALITIES, REPLIES, SHAPES, sheetOf, speaks, SPECIALTIES, surprise, voice, VOICES, withPersonality,
   type Character, type EyesName, type Family, type FinishName, type GlassesName, type HatName, type PersonalityName, type Replies, type ShapeName, type SpecialtyName, wheelOf } from "./orb/spec.ts";
 
 
@@ -783,6 +783,21 @@ function Creator({ me, edit, replies, setReplies, kinds = [], peek = false }: { 
       {tab === "Hat" && (
         <div style={{ display: "grid", gap: "var(--s4)" }}>
           <Thumbs title="Hats" c={me} options={Object.keys(HATS) as HatName[]} field="hat" label={cap} onPick={(hat) => edit({ hat })} />
+          {/* his ears under a hat that covers them: in it, or out of it (owner, 10-10: "why dont we make the ears come out of
+              the hat ... or give the user the choice? which affects dna"); only where the hat would take them in */}
+          {earsInside(me.hat, me.shape) && (
+            <div data-ears style={{ display: "grid", gap: 8 }}>
+              <Head>Ears</Head>
+              <div role="group" aria-label="Ears" style={{ display: "flex", gap: 8, flexWrap: "wrap", minWidth: 0 }}>
+                <button data-ears-pick="in" aria-pressed={me.ears !== "out"} onClick={() => edit({ ears: null })} style={{ ...s.chip, ...chosen(me.ears !== "out") }}>
+                  In the hat
+                </button>
+                <button data-ears-pick="out" aria-pressed={me.ears === "out"} onClick={() => edit({ ears: "out" })} style={{ ...s.chip, ...chosen(me.ears === "out") }}>
+                  Out of the hat
+                </button>
+              </div>
+            </div>
+          )}
           {me.hat !== "none" && <AccessoryColour what="hat" value={me.hatHue ?? null} onPick={(hatHue) => edit({ hatHue, hatTint: null })} tint={me.hatTint ?? null} onTint={(hatTint) => edit({ hatTint, hatHue: null })} from={wheelOf(me.hue)} />}
         </div>
       )}
@@ -1001,7 +1016,7 @@ function SoundIcon({ on }: { on: boolean }) {
   );
 }
 
-const REACT: [keyof Character, Gesture][] = [["hat", "hop"], ["glasses", "nod"], ["personality", "hop"], ["shape", "jelly"], ["goo", "jelly"], ["eyes", "nod"], ["specialty", "nod"], ["hue", "wiggle"], ["hue2", "wiggle"], ["finish", "wiggle"], ["voice", "squish"]];
+const REACT: [keyof Character, Gesture][] = [["hat", "hop"], ["glasses", "nod"], ["personality", "hop"], ["shape", "jelly"], ["goo", "jelly"], ["eyes", "nod"], ["specialty", "nod"], ["hue", "wiggle"], ["hue2", "wiggle"], ["finish", "wiggle"], ["voice", "squish"], ["ears", "wiggle"]];
 
 // "floor": the office itself, everyone at work (owner, 10-05: "the office should be a whole office visual of
 // them working in an office"); "orb": one orb's profile, pressed on the floor or picked in the side menu
@@ -1199,7 +1214,10 @@ function App() {
   };
   const edit = (patch: Partial<Character>): void => {
     if (view.kind !== "new") return; // once he is in the office he is fixed
-    setView({ kind: "new", draft: { ...view.draft, ...patch } });
+    const next = { ...view.draft, ...patch };
+    // his ears out only under a hat that would take them in: another hat or shape, and they are as any orb's again
+    if (next.ears === "out" && !earsInside(next.hat, next.shape)) next.ears = null;
+    setView({ kind: "new", draft: next });
     // he reacts to what you choose for him (at most every 300 ms, for a slider dragged)
     const g = REACT.find(([k]) => k in patch && patch[k] !== view.draft[k])?.[1];
     const t = performance.now();
