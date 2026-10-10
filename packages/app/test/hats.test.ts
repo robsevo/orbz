@@ -7,9 +7,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { HAT_FS, HAT_VS, ORB_FS } from "../src/orb/glsl.ts";
-import { HEAD, MAT, PITCH } from "../src/orb/hats/geo.ts";
+import { HEAD, MAT, PITCH, SLOT } from "../src/orb/hats/geo.ts";
+import { FACE, glassesMesh } from "../src/orb/hats/glasses.ts";
 import { glowOf, hatMesh, MODELS } from "../src/orb/hats/models.ts";
-import { HATS, type HatName } from "../src/orb/spec.ts";
+import { EYES, GLASSES, HATS, isShades, type GlassesName, type HatName } from "../src/orb/spec.ts";
 
 const hats = (Object.keys(HATS) as HatName[]).filter((h) => h !== "none");
 const built = new Map(hats.map((h) => [h, hatMesh(HATS[h].id)!]));
@@ -120,4 +121,44 @@ test("the shaders share the hats' numbers: where his hat sits each frame, how it
   const inShader = Object.fromEntries(decl.split(",").map((d) => d.trim().split(/\s*=\s*/)).map(([k, v]) => [k!.toLowerCase(), Number(v)]));
   assert.deepEqual(inShader, { ...MAT }, "every material is the same number in the shader");
   assert.equal(Object.keys(MODELS).length, hats.length, "control: every hat has a model to read");
+});
+
+// ── the glasses as models (owner, 10-09: "can we do the same thing we did to the hats to the eyes and the glasses") ──
+test("every pair of glasses is a sound model for every eyes, its lenses over his eyes, in front of his face", () => {
+  for (const [name, g] of Object.entries(GLASSES)) {
+    if (!g.id) continue;
+    for (const [eyesName, e] of Object.entries(EYES)) {
+      const b = glassesMesh(g.id, e.a, g.dark)!;
+      const n = b.pos.length / 3;
+      const what = `${name} on ${eyesName} eyes`;
+      assert.ok(n > 50 && b.count % 3 === 0, `${what}: a model`);
+      assert.ok([...b.pos, ...b.nrm, ...b.mat].every(Number.isFinite), `${what}: every number finite`);
+      // the lenses: over his eyes (one for a monocle, on his left; one across both for a visor)
+      const lens: [number, number, number][] = [];
+      for (let v = 0; v < n; v++) if (b.mat[v * 4] === MAT.glass && b.mat[v * 4 + 1] === SLOT.lens) lens.push([b.pos[v * 3]!, b.pos[v * 3 + 1]!, b.pos[v * 3 + 2]!]);
+      const [, , gap, height] = e.a;
+      const sides = name === "visor" ? [0] : name === "monocle" ? [1] : [-1, 1];
+      for (const s of sides) {
+        const mine = lens.filter(([x]) => (s === 0 ? true : Math.sign(x) === s));
+        const cx = mine.reduce((t, p) => t + p[0], 0) / mine.length;
+        const cy = mine.reduce((t, p) => t + p[1], 0) / mine.length;
+        const ex = s === 0 ? 0 : s * Math.max(gap, Math.min(0.25, Math.max(0.15, e.a[0] * 1.5)) + 0.035);
+        assert.ok(Math.abs(cx - ex) < 0.06 && Math.abs(cy + height) < 0.09, `${what}: a lens over his ${s < 0 ? "right" : s > 0 ? "left" : "two"} eye${s ? "" : "s"} (${cx.toFixed(3)}, ${cy.toFixed(3)})`);
+        // in front of his face, where his eyes are seen through it: every point of it before the face just behind it
+        const zFace = (x: number, y: number): number => FACE.a * Math.sqrt(Math.max(0, 1 - (x / FACE.a) ** 2 - ((y - FACE.y) / FACE.b) ** 2));
+        assert.ok(mine.every((p) => p[2] > zFace(p[0], p[1]) + 0.01), `${what}: its lens in front of his face`);
+      }
+      // inside his outline, face on: nothing in front of him reaches past his sides
+      let wide = 0;
+      for (let v = 0; v < n; v++) if (b.pos[v * 3 + 2]! > 0.25) wide = Math.max(wide, Math.abs(b.pos[v * 3]!));
+      assert.ok(wide < 0.9, `${what}: ${wide.toFixed(3)} to his side, past his edge`);
+    }
+    // sunglasses are tinted dark; clear glasses are clear
+    const lensKinds = new Set<number>();
+    const b = glassesMesh(g.id, EYES.classic.a, g.dark)!;
+    for (let v = 0; v < b.pos.length / 3; v++) if (b.mat[v * 4 + 1] === SLOT.lens) lensKinds.add(b.mat[v * 4 + 3]!);
+    const tint = Math.max(...lensKinds);
+    if (isShades(name as GlassesName)) assert.ok(tint >= 0.7, `${name}: sunglasses tinted dark (${tint})`);
+    else if (g.dark === 0) assert.ok(tint < 0.05, `${name}: clear glass (${tint})`);
+  }
 });

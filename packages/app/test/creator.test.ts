@@ -234,7 +234,9 @@ test("the first of his kind starts as the Senior, the next of that kind a Junior
   await page.close();
 });
 
-test("your first orb is your CEO, the next your assistant: every roll is that one, and only it is offered; then what is open (owner, 10-07)", { skip, timeout: 240_000 }, async () => {
+// twenty-odd rolls, each redrawing every thumbnail in software WebGL: 181 s with the hats as models, about 7% more with
+// the glasses too (10-09, measured over six rolls); its own budget, so a slow gate does not cut it off
+test("your first orb is your CEO, the next your assistant: every roll is that one, and only it is offered; then what is open (owner, 10-07)", { skip, timeout: 360_000 }, async () => {
   const page = await open("desk"); // nothing in the office yet: the creator is on the first orb
   try {
     const said = () => page.locator("[data-cradle] > p").innerText();

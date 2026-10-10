@@ -34,7 +34,7 @@ export const MAT = {
   glow: 12, horn: 13, pearl: 14, feather: 15, tweed: 16, paper: 17, rubber: 18, fruit: 19, wood: 20, glass: 21,
 } as const;
 /** Which colour: the hat's own (main), its second, or one of the shader's fixed ones. */
-export const SLOT = { main: 0, second: 1, gold: 2, steel: 3, cream: 4, ink: 5, leaf: 6, wood: 7, white: 8, fur: 9 } as const;
+export const SLOT = { main: 0, second: 1, gold: 2, steel: 3, cream: 4, ink: 5, leaf: 6, wood: 7, white: 8, fur: 9, lens: 10 } as const;
 
 export class Mesh {
   readonly pos: number[] = [];
@@ -107,6 +107,8 @@ export function noise3(p: V3): number {
       for (let x = 0; x < 2; x++) s += hash3(i[0] + x, i[1] + y, i[2] + z) * (x ? u[0] : 1 - u[0]) * (y ? u[1] : 1 - u[1]) * (z ? u[2] : 1 - u[2]);
   return s;
 }
+
+const spow = (x: number, e: number): number => Math.sign(x) * Math.abs(x) ** e;
 
 // ── the grid every part is made of ────────────────────────────────────────────────────────────
 type GridOpts = { flip?: boolean; uv?: (u: number, v: number) => P2; weld?: boolean };
@@ -320,7 +322,7 @@ export function tube(
   path: (t: number) => V3,
   radius: (t: number) => number,
   look: Look,
-  o: { n?: number; k?: number; caps?: boolean; closed?: boolean; flat?: number; twist?: (t: number) => number; up?: V3; bump?: (u: number, v: number) => number } = {},
+  o: { n?: number; k?: number; caps?: boolean; closed?: boolean; flat?: number; twist?: (t: number) => number; up?: V3; bump?: (u: number, v: number) => number; square?: number } = {},
 ): void {
   const n = o.n ?? 32;
   const k = o.k ?? 14;
@@ -374,7 +376,10 @@ export function tube(
       const b = cross(g.t, g.n);
       const a = 2 * Math.PI * u + g.tw;
       const r = g.r * (1 + (o.bump ? o.bump(u, v) : 0));
-      return add(g.c, add(mul(g.n, Math.cos(a) * r), mul(b, Math.sin(a) * r * flat)));
+      // a section from round (1) toward a rounded square (an acetate rim's, 0.5)
+      const ca = o.square ? spow(Math.cos(a), o.square) : Math.cos(a);
+      const sa = o.square ? spow(Math.sin(a), o.square) : Math.sin(a);
+      return add(g.c, add(mul(g.n, ca * r), mul(b, sa * r * flat)));
     },
     look,
     { uv: (u, v) => [u, rings[Math.round(v * (rings.length - 1))]!.s] },
@@ -403,7 +408,6 @@ export function ellipsoid(m: Mesh, c: V3, r: V3, look: Look, o: { R?: M3; nu?: n
   );
 }
 
-const spow = (x: number, e: number): number => Math.sign(x) * Math.abs(x) ** e;
 /** A rounded box (a superellipsoid): half-sizes `h`, `e` how square (0.1 nearly a box, 1 an ellipsoid). */
 export function rbox(m: Mesh, c: V3, h: V3, look: Look, o: { R?: M3; e?: number; nu?: number; nv?: number } = {}): void {
   const e = o.e ?? 0.25;

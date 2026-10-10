@@ -199,8 +199,8 @@ function partyHat(m: Mesh): void {
 
 /** An antenna: a domed foot, a coiled spring, a slim steel stalk with a little bend, and a bead of his own light in a
  * collar. */
-const FOOT = onHead(0.28, 0.12, 0); // where it stands on his head: off its very top and a little toward you (a heart's
-// top dips between its lobes; there it stands on one), so you see it stand on him
+const FOOT = onHead(0.06, 0.32, 0); // where it stands on his head: on the front of his crown, near its middle (owner, 10-09:
+// "a tad better placement"), far enough forward that on a heart it stands below the dip between its lobes
 const ANTENNA_TOP: V3 = add(FOOT, [0.05, 0.085 + 0.31, 0]);
 const BEAD = { at: add(ANTENNA_TOP, [0.004, 0.076, 0]), r: 0.074 };
 function antenna(m: Mesh): void {
@@ -221,7 +221,7 @@ function antenna(m: Mesh): void {
 function sprout(m: Mesh): void {
   const stem: Look = { kind: MAT.leaf, slot: SLOT.second };
   const leaf: Look = { kind: MAT.leaf, slot: SLOT.main, extra: 1 };
-  const f = onHead(-0.2, 0.34, -0.008); // on the front of his crown, off its very top (a heart's dips between its lobes)
+  const f = onHead(-0.03, 0.36, -0.008); // on the front of his crown, centred (owner, 10-09: "sprout needs to be centered a bit more")
   const path = spline([f, add(f, [0.004, 0.09, -0.02]), add(f, [-0.008, 0.18, -0.03]), add(f, [0.0, 0.27, -0.032])]);
   tube(m, path, (t) => mix(0.026, 0.02, t), stem, { n: 24, k: 12 });
   ellipsoid(m, add(f, mul(headNormal(f), 0.006)), [0.046, 0.046, 0.03], stem, { R: facing(headNormal(f), [0, 1, 0]), nu: 20, nv: 12 });
@@ -232,7 +232,7 @@ function sprout(m: Mesh): void {
 
 /** A big satin bow, worn to one side: two full loops folded at the knot, the knot, two tails. */
 function bigBow(m: Mesh): void {
-  const c = onHead(0.5, 0.25, 0.055);
+  const c = onHead(0.46, 0.25, 0.055);
   bow(m, c, norm(add(headNormal(c), [0, 0.1, 0.55])), 0.2, { kind: MAT.satin, slot: SLOT.main });
 }
 
@@ -341,7 +341,7 @@ function halo(m: Mesh): void {
 
 /** A flower tucked over his ear: five velvet petals cupped round a pollen centre, two leaves behind. */
 function flower(m: Mesh): void {
-  const c = onHead(0.6, 0.3, 0.045);
+  const c = onHead(0.5, 0.3, 0.045);
   const out = norm(add(headNormal(c), [0, 0.15, 0.55]));
   const B = facing(out);
   const petal: Look = { kind: MAT.petal, slot: SLOT.main };
@@ -497,7 +497,7 @@ function propeller(m: Mesh): void {
 
 /** A star clip: a five-pointed star cut like a gem, in gold, clipped to one side of his head. */
 function starClip(m: Mesh): void {
-  const c = onHead(0.62, 0.32, 0.04);
+  const c = onHead(0.5, 0.32, 0.04);
   star(m, c, 0.17, 0.072, 0.055, gold, facing(norm(add(headNormal(c), [0, 0.1, 0.6])), [0.2, 1, 0]));
 }
 
@@ -516,7 +516,7 @@ function beret(m: Mesh): void {
     const up = clamp((q[1] - yb) / 0.06);
     const side = 0.5 + 0.5 * Math.tanh(q[0] / 0.25);
     const k = up * (r / (rb + 0.125)) ** 2;
-    return [q[0] + 0.07 * k * side, q[1] - 0.11 * k * side + 0.03 * k * (1 - side), q[2]];
+    return [q[0] + 0.035 * k * side, q[1] - 0.1 * k * side + 0.03 * k * (1 - side), q[2]];
   };
   revolve(m, p.pts, felt(), { segs: 144, at: (q) => slump(q) });
   headBand(m, 0.7, 0.78, 0.018, { kind: MAT.felt, slot: SLOT.main }, 144);
@@ -563,14 +563,14 @@ function hardHat(m: Mesh): void {
 /** A bucket hat in cotton: a soft crown of four panels, a band, and a brim sloping down and out, its rows of stitching
  * round it, steel eyelets in its sides. */
 function bucketHat(m: Mesh): void {
-  const r0 = 0.255;
+  const r0 = 0.32;
   const y0 = seatAt(r0) - 0.01;
-  const H = 0.2;
+  const H = 0.23;
   const wall = (y: number): number => r0 - 0.022 * clamp((y - y0) / H);
   const crown = new Profile(r0 - 0.01, y0).line(r0, y0, 1).fn(10, (t) => [wall(y0 + t * (H - 0.06)), y0 + t * (H - 0.06)]).corner(wall(y0 + H), y0 + H, 0, y0 + H + 0.01, 0.06, 10).line(0, y0 + H + 0.01, 6);
   revolve(m, crown.pts, { kind: MAT.cotton, slot: SLOT.main, extra: 4 }, { segs: 96 });
   const a = 0.48; // the brim's slope
-  revolve(m, slab(0, 0.16, 0, 0.018), { kind: MAT.cotton, slot: SLOT.main, extra: 5 }, {
+  revolve(m, slab(0, 0.17, 0, 0.018), { kind: MAT.cotton, slot: SLOT.main, extra: 5 }, {
     segs: 96,
     at: (q, phi) => {
       const s = Math.hypot(q[0], q[2]);
@@ -600,7 +600,7 @@ function eyeshade(m: Mesh): void {
     const k = 0.62; // it slopes down over his eyes
     return around(Math.min(r, re) + ext * Math.cos(k), q[1] - ext * Math.sin(k), phi);
   };
-  revolve(m, pts, { kind: MAT.glass, slot: SLOT.main }, { segs: 64, from: -w - Math.PI, to: w - Math.PI, at: place });
+  revolve(m, pts, { kind: MAT.glass, slot: SLOT.main, extra: 0.57 }, { segs: 64, from: -w - Math.PI, to: w - Math.PI, at: place });
   tube(m, (t) => place([0, ye, re + L], mix(-w, w, t)), () => 0.006, { kind: MAT.rubber, slot: SLOT.second }, { n: 64, k: 8 });
 }
 
@@ -828,8 +828,8 @@ function vikingHelmet(m: Mesh): void {
 
 /** A bowler in felt: a round crown, a short brim curled up at the sides, a ribbon band with a small bow. */
 function bowler(m: Mesh): void {
-  const r0 = 0.245;
-  const rB = 0.36;
+  const r0 = 0.29;
+  const rB = 0.42;
   const y0 = seatAt(r0) - 0.012;
   const yb = y0 + 0.014;
   revolve(m, slab(0.2, rB, y0, 0.016), felt(), {
@@ -840,7 +840,7 @@ function bowler(m: Mesh): void {
       return [q[0], q[1] + 0.055 * Math.sin(phi) ** 2 * t * t - 0.012 * Math.cos(phi) ** 2 * t, q[2]];
     },
   });
-  const H = 0.21;
+  const H = 0.24;
   const crown = new Profile(r0 - 0.01, yb).line(r0, yb, 1).fn(24, (t) => {
     const a = (t * Math.PI) / 2;
     return [r0 * Math.cos(a) ** 0.85, yb + H * Math.sin(a)];
@@ -854,9 +854,9 @@ function bowler(m: Mesh): void {
 
 /** A fez in wool felt: a short tapered crown, flat on top, a gold button and a tassel on its cord, hanging off it. */
 function fez(m: Mesh): void {
-  const r0 = 0.2;
-  const r1 = 0.165;
-  const H = 0.24;
+  const r0 = 0.22;
+  const r1 = 0.18;
+  const H = 0.26;
   const y0 = seatAt(r0) - 0.012;
   const p = new Profile(r0 - 0.01, y0).line(r0, y0, 1).line(r1, y0 + H - 0.02, 8).corner(r1 - 0.004, y0 + H, 0, y0 + H + 0.006, 0.02, 8).line(0, y0 + H + 0.006, 6);
   revolve(m, p.pts, felt(), { segs: 112 });
@@ -1046,8 +1046,8 @@ function laurel(m: Mesh): void {
 /** A quill, the CFO's: a long feather tucked at the side of his head, its vane barbed and soft, a gold nib at its foot;
  * the books are kept. */
 function quill(m: Mesh): void {
-  const base = onHead(0.6, 0.18, 0.012);
-  const d = norm([0.4, 1, -0.22]);
+  const base = onHead(0.48, 0.2, 0.012);
+  const d = norm([0.36, 1, -0.22]);
   const face = norm(add(headNormal(base), [0, 0, 0.8]));
   const len = 0.36;
   const bend = -0.12;

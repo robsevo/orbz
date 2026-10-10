@@ -53,9 +53,6 @@ uniform float uAccGlowK;// 0 nothing, 1 a bead, 2 a ring
 uniform vec3 uAccGlowCol;
 uniform float uAccEdge[32]; // its lowest edge across it (x from -0.9 to 0.9, in the hat's units, +y down; -9 none there)
 uniform float uAccShade;    // how dark the shadow it casts on him (0: no hat, or one that is only light)
-uniform float uSpecs;   // his glasses (spec.ts GLASSES): 0 none
-uniform vec3 uSpecsCol, uSpecsCol2, uLensCol;   // the frame, a strap (goggles), the lens's tint
-uniform float uLensDark;                        // how much of his eyes the lens hides: 0 clear, ~0.9 sunglasses
 // Waking: he SWELLS and LIGHTS UP (the instrument rings that once unfurled are gone).
 const float AWAKE_GROW  = 0.13;   // how much bigger he is awake than idle
 const float WAKE_POP    = 0.06;   // the extra swell on the moment of waking, which then settles
@@ -172,83 +169,6 @@ float sdTri(vec2 p, vec2 a, vec2 b, vec2 c){
 }
 vec2 pick(vec2 a, vec2 b){ return a.x < b.x ? a : b; }   // the nearer of two parts
 vec2 rot(vec2 p, float a){ float c = cos(a), s = sin(a); return vec2(c*p.x - s*p.y, s*p.x + c*p.y); }
-
-// ---- his glasses (PLAN 2.2; owner, 2026-10-01: "different glasses ... can also be sunglasses") ----
-// In his face's own space (the face block's f: y down, his eyes at (+-gap, height)), so they turn
-// and tilt with his face. Returns (frame, lens, strap, temples): distances, negative inside. The
-// strap and the temples are clipped to his body where they are drawn.
-float sdHeart(vec2 p){   // y up, its point at the origin, about 1.1 tall
-  p.x = abs(p.x);
-  if (p.y + p.x > 1.0) return length(p - vec2(0.25, 0.75)) - 0.35355339;
-  vec2 a = p - vec2(0.0, 1.0), b = p - 0.5*max(p.x + p.y, 0.0);
-  return sqrt(min(dot(a, a), dot(b, b)))*sign(p.x - p.y);
-}
-float sdStar5(vec2 p, float r, float rf){   // y up, a point at the top
-  const vec2 k1 = vec2(0.809016994375, -0.587785252292);
-  const vec2 k2 = vec2(-0.809016994375, -0.587785252292);
-  p.x = abs(p.x);
-  p -= 2.0*max(dot(k1, p), 0.0)*k1;
-  p -= 2.0*max(dot(k2, p), 0.0)*k2;
-  p.x = abs(p.x);
-  p.y -= r;
-  vec2 ba = rf*vec2(-k1.y, k1.x) - vec2(0.0, 1.0);
-  float h = clamp(dot(p, ba)/dot(ba, ba), 0.0, r);
-  return length(p - ba*h)*sign(p.y*ba.x - p.x*ba.y);
-}
-vec4 specsSDF(vec2 f){
-  int id = int(uSpecs + 0.5);
-  float ey = uEyeA.w;
-  float L = clamp(uEyeA.x*1.5, 0.15, 0.25);              // a lens a little bigger than his eye
-  float Ly = L*clamp(uEyeA.y*0.85, 1.0, 1.35);           // taller for tall eyes
-  float cx = max(uEyeA.z, L + 0.035);                    // far enough apart for a bridge
-  float t = id == 4 || id == 10 ? 0.03 : id == 12 ? 0.042 : id == 20 ? 0.046 : 0.02;   // the frame's half-thickness
-  if (id == 6) {        // a monocle: one round lens on his left eye, and its chain
-    float d = length(f - vec2(cx, ey)) - L*1.05;
-    float chain = sdCap(f, vec2(cx + L*0.74, ey + L*0.74), vec2(cx + L*1.0, ey + 0.50), 0.011);
-    return vec4(abs(d) - t, d, 1e5, chain);
-  }
-  if (id == 13) {       // a visor: one band of tinted glass across both eyes
-    float d = sdBox(f - vec2(0.0, ey), vec2(cx + L*1.05, Ly*0.68), 0.12);
-    float arms = min(sdCap(f, vec2(-(cx + L), ey - 0.02), vec2(-(cx + L + 0.16), ey - 0.06), 0.016), sdCap(f, vec2(cx + L, ey - 0.02), vec2(cx + L + 0.16, ey - 0.06), 0.016));
-    return vec4(abs(d) - 0.016, d, 1e5, arms);
-  }
-  float lens = 1e5, temples = 1e5;
-  for (int i = 0; i < 2; i++) {
-    float sd = i == 0 ? -1.0 : 1.0;
-    vec2 v = f - vec2(sd*cx, ey);
-    vec2 m = vec2(sd*v.x, v.y);                          // mirrored: +x is out, toward his side
-    float d;
-    if (id == 2) d = sdBox(v, vec2(L*1.08, Ly*0.82), 0.05);                         // square
-    else if (id == 3) d = min(sdBox(rot(m, -0.20) - vec2(0.0, 0.02), vec2(L*1.08, Ly*0.70), 0.09),   // cat-eye: swept up at the outer corner
-                              sdTri(m, vec2(L*0.50, -Ly*0.50), vec2(L*1.22, -Ly*0.98), vec2(L*1.10, -Ly*0.12)) - 0.02);
-    else if (id == 4) d = sdEll(v, vec2(L, Ly)*1.2);                               // big round
-    else if (id == 5) { vec2 w = v - vec2(0.0, 0.06); d = max(sdEll(w, vec2(L*1.05, Ly*0.85)), -w.y); }   // reading: the lower half
-    else if (id == 7) d = sdHeart(vec2(v.x, -v.y)/(L*1.9) + vec2(0.0, 0.55))*L*1.9 - 0.01;   // hearts
-    else if (id == 8) d = sdStar5(vec2(v.x, -v.y), L*1.3, 0.5) - 0.025;            // stars
-    else if (id == 9) d = max(sdEll(rot(m - vec2(0.05, 0.10), -0.50), vec2(L*1.28, Ly*0.98)), -Ly*0.62 - v.y);   // aviators: a teardrop, flat on top, drooping outward
-    else if (id == 10) d = sdBox(vec2(v.x*(1.0 + 0.30*v.y/Ly), v.y), vec2(L*1.12, Ly*0.74), 0.07);   // shades: wider at the top
-    else if (id == 12) d = sdEll(v, vec2(L, Ly)*1.22);                              // goggles
-    else if (id == 14) d = sdBox(v, vec2(L*1.12, Ly*0.62), 0.03);                   // rectangle
-    else if (id == 15) d = sdBox(v, vec2(L*1.08, Ly*0.78), 0.06);                   // half-rims (the brow drawn thick below)
-    else if (id == 16) d = sdBox(rot(m - vec2(0.03, 0.0), 0.16), vec2(L*1.4, Ly*0.74), 0.15);   // sport: wrapped round, swept out and down
-    else if (id == 18) d = sdEll(v, vec2(L*1.2, Ly*0.72));                          // oval: wide and low
-    else if (id == 19) d = max(abs(v.x)*0.866 + abs(v.y)*0.5, abs(v.y)) - L*1.02;     // hexagon
-    else if (id == 20) d = sdEll(v, vec2(L, Ly)*1.1);                               // bold round: the frame thick
-    else if (id == 21) d = sdEll(rot(m - vec2(0.04, -0.03), 0.34), vec2(L*1.34, Ly*0.86));   // butterfly: swept up and out
-    else d = sdEll(v, vec2(L, Ly));                                                 // round, round shades
-    lens = min(lens, d);
-    // the temples: a short arm from each lens's outer edge back toward his side
-    temples = min(temples, sdCap(f, vec2(sd*(cx + L*1.02), ey - Ly*0.30), vec2(sd*(cx + L*1.02 + 0.16), ey - Ly*0.46), 0.016));
-  }
-  float frame = abs(lens) - (id == 15 ? mix(0.010, 0.036, step(f.y, ey - Ly*0.30)) : t);   // half-rims: a heavy brow, a fine rim
-  // the bridge between the lenses, never across them (aviators have a second bar, on top)
-  float bridge = sdCap(f, vec2(-cx, ey - Ly*0.18), vec2(cx, ey - Ly*0.18), 0.018);
-  if (id == 9) bridge = min(bridge, sdCap(f, vec2(-cx, ey - Ly*0.64), vec2(cx, ey - Ly*0.64), 0.014));
-  frame = min(frame, max(bridge, -lens));
-  // goggles: a strap right round his head instead of temples
-  float strap = id == 12 ? max(abs(f.y - ey) - 0.055, -lens - t) : 1e5;
-  return vec4(frame, lens, strap, id == 12 ? 1e5 : temples);
-}
 
 void main(){
   vec2 p = gl_FragCoord.xy - uRes*0.5; p.y = -p.y;
@@ -597,6 +517,17 @@ void main(){
       float lid = clamp(max(uBlink, max(uSleepy, uEyeB.y) + 0.18*uYawn*uSleepy), 0.0, 1.0);
       float lidY = mix(-er*1.08, er*1.08, lid);            // the lid's lower edge (y grows DOWN)
       float eyes = 0.0, shine = 0.0, arcs = 0.0, shut = 0.0;
+      // EYES WITH DEPTH (owner, 10-09: "can we do the same thing we did to the hats to the eyes"). Each eye is a glossy
+      // dome set into his glass, not a flat disc: dark, with a soft glow of his own colour low in it where the light that
+      // went in at its top comes out, a wet sheen and a fine bright rim along its top edge, and a faint shade round it where
+      // it is set in. The ^ ^ arcs, the brows and a shut lid's edge are rounded strokes, lit along their upper side. Every
+      // style, its sparkle and every mood are as they were.
+      float lightEyes = 1.0 - smoothstep(0.45, 0.8, uVal);            // on dark glass his eyes turn light
+      vec3 eyeDeep = mix(DARK*0.9, vec3(0.86, 0.90, 0.95), lightEyes);
+      vec3 glowC = mix(PALE, hue*1.15, 0.55 + 0.45*vcw);                // his own colour, held even at rest
+      vec3 Lf = normalize(vec3(-0.34, -0.62, 0.71));                    // the light his highlight comes from (+y down)
+      vec3 domeLit = vec3(0.0);
+      float dome = 0.0, socket = 0.0, strokeW = 0.0, strokeS = 0.0;
       for (int i = 0; i < 2; i++) {
         float sx = i == 0 ? -1.0 : 1.0;
         vec2 v = f - vec2(sx*uEyeA.z, uEyeA.w);
@@ -606,39 +537,66 @@ void main(){
         float inner = -sx*v.x;
         float cut = -er*0.30 + 0.75*inner;
         open *= mix(1.0, smoothstep(cut - 0.012, cut + 0.012, v.y), uMad);
-        float brow = smoothstep(0.024, 0.011, abs(v.y - (-er*1.30 + 0.55*inner))) * step(abs(v.x), er*0.95);
+        float browD = v.y - (-er*1.30 + 0.55*inner);
+        float brow = smoothstep(0.024, 0.011, abs(browD)) * step(abs(v.x), er*0.95);
         eyes  = max(eyes, brow*uMad);
         eyes  = max(eyes, open);
+        // the dome: the eye as a unit disc, a cap of a ball lit from his highlight's side
+        vec2 e = v*vec2(1.0, 1.0/uEyeA.y)/er;
+        float rr = length(e);
+        if (rr < 1.0) {
+          vec3 n = normalize(vec3(e*0.9, sqrt(max(0.0, 1.0 - rr*rr*0.81))));
+          float low = smoothstep(-0.15, 0.85, dot(e, vec2(0.32, 0.95)))*smoothstep(1.0, 0.4, rr);    // low in it, away from the light
+          float sheen = pow(max(0.0, dot(n, normalize(Lf + vec3(0.0, 0.0, 1.0)))), 16.0);
+          float rim = smoothstep(0.8, 0.98, rr)*smoothstep(0.15, -0.45, e.y);                         // along its top edge
+          vec3 lit = (glowC*low*0.34 + vec3(0.9)*sheen*0.12 + PALE*rim*0.18)*(1.0 - lightEyes)
+                   - vec3(0.30)*low*lightEyes + vec3(0.06)*sheen*lightEyes;                            // light eyes: deeper below
+          domeLit = mix(domeLit, lit, open);
+          dome = max(dome, open);
+        }
+        socket = max(socket, smoothstep(1.5, 1.02, rr)*step(1.0, rr));
+        if (brow*uMad > strokeW) { strokeW = brow*uMad; strokeS = clamp(-browD/0.016, -1.0, 1.0); }
         // the sparkle: one big catchlight up-left and a small one down-right, the same on both eyes
         shine = max(shine, uEyeB.x*open*max(smoothstep(0.052*k, 0.036*k, length(v - vec2(-0.046, -0.050*uEyeA.y)*k)),
                                     smoothstep(0.024*k, 0.012*k, length(v - vec2( 0.044,  0.044*uEyeA.y)*k))));
         // happy: the eye closes into an arc, ^ ^
-        float a = abs(length(v - vec2(0.0, er*0.60)) - er*0.82);
-        arcs  = max(arcs, smoothstep(0.036, 0.020, a) * step(v.y, er*0.25));
+        float ad = length(v - vec2(0.0, er*0.60)) - er*0.82;
+        float arc = smoothstep(0.036, 0.020, abs(ad)) * step(v.y, er*0.25);
+        if (arc > arcs) strokeS = mix(strokeS, clamp(ad/0.026, -1.0, 1.0), max(uHappy, uEyeB.z));
+        arcs  = max(arcs, arc);
         // shut (asleep, deep in a doze, mid-blink): the lid's edge is a soft closed curve, not nothing
         float cx = clamp(v.x/(er*0.95), -1.0, 1.0);
-        float lash = smoothstep(0.022, 0.010, abs(v.y - (er*0.10 + 0.32*er*(1.0 - cx*cx))))
-                   * step(abs(v.x), er*0.95);
-        shut  = max(shut, lash);
+        float lashD = v.y - (er*0.10 + 0.32*er*(1.0 - cx*cx));
+        float lash = smoothstep(0.022, 0.010, abs(lashD)) * step(abs(v.x), er*0.95);
+        if (lash > shut) { shut = lash; if (lid > 0.8) strokeS = clamp(-lashD/0.016, -1.0, 1.0); }
       }
-      eyes = max(eyes, shut*smoothstep(0.80, 0.97, lid));
+      float closed = smoothstep(0.80, 0.97, lid);
+      eyes = max(eyes, shut*closed);
       // a wink: the second eye stays open, the first is an arc
       float winkArc = 0.0, winkOpen = 0.0;
       if (uEyeB.w > 0.5) {
         vec2 v0 = f - vec2(-uEyeA.z, uEyeA.w), v1 = f - vec2(uEyeA.z, uEyeA.w);
-        winkArc = smoothstep(0.036, 0.020, abs(length(v0 - vec2(0.0, er*0.60)) - er*0.82)) * step(v0.y, er*0.25);
+        float wd = length(v0 - vec2(0.0, er*0.60)) - er*0.82;
+        winkArc = smoothstep(0.036, 0.020, abs(wd)) * step(v0.y, er*0.25);
         winkOpen = smoothstep(er, er - 0.016, length(v1*vec2(1.0, 1.0/uEyeA.y)));
         eyes = max(winkOpen, max(winkArc, eyes*step(0.0, f.x)));
         shine *= step(0.0, f.x);
+        if (f.x < 0.0) { strokeW = max(strokeW, winkArc); strokeS = clamp(wd/0.026, -1.0, 1.0); }
       }
-      float eyeA = mix(eyes, arcs, max(uHappy, uEyeB.z));
-      shine *= 1.0 - max(uHappy, uEyeB.z);
+      float happy = max(uHappy, uEyeB.z);
+      float eyeA = mix(eyes, arcs, happy);
+      shine *= 1.0 - happy;
+      // which is drawn here: the open dome, or a stroke (an arc, a brow, a shut lid's edge)
+      float strokes = max(max(strokeW, arcs*happy), shut*closed);
+      float asStroke = clamp(strokes/max(dome*(1.0 - happy) + strokes, 1e-3), 0.0, 1.0);
+      vec3 strokeLit = (PALE*0.22*max(0.0, strokeS) - vec3(0.02)*max(0.0, -strokeS))*(1.0 - lightEyes) - vec3(0.18)*max(0.0, -strokeS)*lightEyes;
+      vec3 eyeC = eyeDeep + mix(domeLit, strokeLit, asStroke);
       // NO MOUTH (owner, 2026-09-24: "dont give the orb a mouth. dark doesnt show it and its cool asf").
       // His eyes carry every mood: the sparkle, ^ ^ when happy, lids for sleepy, wide for surprise,
       // brows for mad. A yawn is his lids and a deep breath now, not an open mouth.
       // No cheeks either (owner, 2026-09-24: "take out the rosy cheeks").
-      // on dark glass (a black orb) his eyes turn light, or they would vanish into him
-      vec3 eyeC = mix(vec3(0.86, 0.90, 0.95), DARK*0.9, smoothstep(0.45, 0.8, uVal));
+      // where each eye is set into him, his glass a shade deeper (not round the arcs or a shut lid)
+      body *= 1.0 - 0.10*socket*(1.0 - happy)*(1.0 - closed)*faceA*(1.0 - lightEyes);
       body = mix(body, eyeC, eyeA*0.92*faceA);
       body = mix(body, vec3(1.0), shine*0.88*faceA);
     }
@@ -741,28 +699,8 @@ void main(){
     col += mix(PALE, hueGlow, cwGlow*0.7) * exp(-db/(Rg*0.9)) * uWake * 0.10;
   }
 
-  // ---- his glasses, on his face ------------------------------------------------------------------
-  if (uSpecs > 0.5) {
-    vec2 f = (pb/Rg)/0.94 - uGaze*0.16;                         // the face block's own space
-    float cs = cos(uTilt), sn = sin(uTilt);
-    f = vec2(cs*f.x - sn*f.y, sn*f.x + cs*f.y);
-    vec4 g = specsSDF(f);
-    float px = 1.3/(Rg*0.94);                                   // a pixel and a bit, in face units
-    float onBody = smoothstep(0.55, 0.95, A);                   // the strap and the arms stop at his edge
-    float lensA = smoothstep(px, -px, g.y);
-    // the lens: clear glass with a faint sheen, or tinted (sunglasses: nearly hides his eyes), and a
-    // streak of light across it, brighter the darker the glass
-    float streak = smoothstep(0.05, 0.0, abs(fract((f.x - 0.8*f.y)*2.6 + 0.15) - 0.5) - 0.12);
-    col = mix(col, uLensCol*0.85, lensA*uLensDark);
-    col += PALE*lensA*(0.05 + streak*(0.05 + 0.28*uLensDark));
-    float fa = max(smoothstep(px, -px, g.x), smoothstep(px, -px, g.w)*onBody);
-    float lit = 0.82 + 0.30*clamp(-(f.y - uEyeA.w)/0.25, -0.6, 1.0);   // lit from above
-    col = mix(col, uSpecsCol*lit + PALE*0.06, fa);
-    float sa = smoothstep(px, -px, g.z)*onBody;
-    col = mix(col, uSpecsCol2*(0.85 + 0.2*clamp(-(f.y - uEyeA.w)/0.06, -1.0, 1.0)), sa*(1.0 - fa));
-    A = max(A, max(fa, max(sa, lensA*uLensDark)));
-  }
-
+  // ---- his glasses are models (owner, 10-09: "the same thing we did to the hats to the eyes and the glasses"), drawn
+  // over his face by the renderer's second pass (hats/glasses.ts), in the face block's own space
   // ---- his hat's own light -------------------------------------------------------------------------
   // A hat is a model now, drawn over all of him (his ears too, owner 10-03) by the renderer's second pass (HAT_VS,
   // HAT_FS; owner, 10-09: "make them nice, to industry standards"). What on it gives off light, an antenna's bead or a
@@ -798,8 +736,9 @@ layout(location = 0) in vec3 aPos;
 layout(location = 1) in vec3 aNrm;
 layout(location = 2) in vec2 aUV;
 layout(location = 3) in vec4 aMat;
-uniform vec2 uRes, uSway, uAccFit;
-uniform float uTime, uLevel, uState, uWake, uR, uCy, uBreath, uMorph, uSquash, uAccTilt;
+uniform vec2 uRes, uSway, uAccFit, uGaze;
+uniform float uTime, uLevel, uState, uWake, uR, uCy, uBreath, uMorph, uSquash, uAccTilt, uTilt;
+uniform float uFace;   // 1: glasses, in his face's own space (the orb shader's face block); 0: a hat, on his head
 uniform vec4 uShapeD;
 out vec3 vN, vS, vP;
 out vec2 vUV;
@@ -821,15 +760,19 @@ void main(){
     mat2 S = mat2(cos(a), -sin(a), sin(a), cos(a));
     P.xz = S*P.xz; N.xz = S*N.xz;
   }
-  float cp = cos(PITCH), sp = sin(PITCH);
+  float pitch = uFace > 0.5 ? 0.0 : PITCH;                        // glasses are seen face on, a hat a little from above
+  float cp = cos(pitch), sp = sin(pitch);
   vec3 C = vec3(P.x, P.y*cp - P.z*sp, P.y*sp + P.z*cp);
   vec3 Cn = vec3(N.x, N.y*cp - N.z*sp, N.y*sp + N.z*cp);
-  mat2 roll = mat2(cos(uAccTilt), sin(uAccTilt), -sin(uAccTilt), cos(uAccTilt));
+  float turn = uFace > 0.5 ? uTilt : uAccTilt;
+  mat2 roll = mat2(cos(turn), sin(turn), -sin(turn), cos(turn));
   vec2 Sxy = roll*C.xy;
   vS = vec3(Sxy, C.z);
   vN = vec3(roll*Cn.xy, Cn.z);
   vP = aPos; vUV = aUV; vMat = aMat;
-  vec2 pp = vec2(0.0, -Rtop) + Rhat*vec2(Sxy.x, -Sxy.y);              // his space: +y down, from his centre
+  // his space (+y down, from his centre): a hat on the top of his head, glasses where the orb shader puts his face
+  // (its block: (p/Rg)/0.94 less his gaze, turned with his head), so they look where his eyes look
+  vec2 pp = uFace > 0.5 ? 0.94*Rg*(vec2(Sxy.x, -Sxy.y) + uGaze*0.16) : vec2(0.0, -Rtop) + Rhat*vec2(Sxy.x, -Sxy.y);
   vec2 fc = vec2(pp.x + uSway.x + uRes.x*0.5, uRes.y*(1.0 - uCy) - uSway.y - pp.y);
   gl_Position = vec4(fc/uRes*2.0 - 1.0, -C.z*0.25, 1.0);
 }`;
@@ -845,7 +788,8 @@ in vec3 vN, vS, vP;
 in vec2 vUV;
 in vec4 vMat;
 out vec4 O;
-uniform vec3 uCol, uCol2, uOrb;   // the hat's colour, its second, his own light
+uniform vec3 uCol, uCol2, uOrb;   // the hat's colour (or a frame's), its second, his own light
+uniform vec3 uCol3;                // a lens's tint (spec.ts GLASSES lens)
 uniform vec3 uPal[10];             // the fixed ones (geo.ts SLOT): gold, steel, cream, ink, leaf, wood, white, fur
 uniform float uTime, uState;
 const float PI = 3.14159265;
@@ -980,7 +924,7 @@ void main(){
   vec3 gu = framed ? (r1*du1.x + r2*du2.x)/det : vec3(0.0);
   vec3 gv = framed ? (r1*du1.y + r2*du2.y)/det : vec3(0.0);
   gUS = 1.0/max(length(gu), 1e-4);
-  vec3 base = slot == 0 ? uCol : slot == 1 ? uCol2 : uPal[slot];
+  vec3 base = slot == 0 ? uCol : slot == 1 ? uCol2 : slot == 10 ? uCol3 : uPal[slot];
   vec3 alb = lin(base);
   float h0 = heightOf(kind, vUV, extra);
   float amp = bumpOf(kind, extra);
@@ -1077,7 +1021,13 @@ void main(){
     alb *= mix(0.85, 1.0, h0);
   }
   else if (kind == WOOD) { rough = 0.7; alb *= mix(0.8, 1.05, h0); }
-  else if (kind == GLASS) { rough = 0.06; coat = 1.0; alpha = 0.55; }
+  else if (kind == GLASS) {
+    // glass: as see-through as its tint is light (a lens's darkness, spec.ts GLASSES dark): clear glass hardly there but
+    // for what it reflects, sunglasses nearly hiding his eyes, celluloid between
+    rough = 0.05; coat = 1.0;
+    alpha = mix(0.05, 0.93, clamp(extra, 0.0, 1.0));
+    if (extra < 0.04) alb = vec3(0.9);
+  }
 
   vec3 V = vec3(0.0, 0.0, 1.0);
   vec3 L = normalize(vec3(-0.50, 0.66, 0.56));

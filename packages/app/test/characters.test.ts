@@ -253,6 +253,51 @@ test("no mouth, by pixels: below his eyes nothing is as dark as an eye (and the 
   }
 });
 
+// owner, 10-09: "can we do the same thing we did to the hats to the eyes". Each eye is a glossy dome set into his glass,
+// not a flat dark disc: low in it, where no sparkle is (the big one is up to the left, the small one down to the right),
+// the light it lets through glows in his colour, so its shade runs across it. Measured 10-09 in the Eyes tab between the
+// tenth and ninetieth of those pixels (the lesser of his two eyes): 0.046 to 0.093; drawn flat, as they were, 0.017 to
+// 0.023. The line is halfway.
+const EYE_DEPTH = 0.034;
+test("his eyes are glossy domes, not flat discs: across the low part of each, its shade runs (owner, 10-09)", { skip }, async () => {
+  await page.getByRole("tab", { name: "Eyes" }).click();
+  await page.waitForTimeout(300);
+  const picks = ["classic", "big", "huge", "beans"] as const;
+  const geometry = { w: PORTRAIT.w, h: PORTRAIT.h, cy: PORTRAIT.cy, radius: PORTRAIT.radius, scale: lookOf(ASH).shapeD[1] };
+  const eyes = Object.fromEntries(picks.map((k) => [k, EYES[k].a]));
+  const rows = await page.evaluate(({ picks, geometry, eyes }) =>
+    picks.map((pick) => {
+      const c = document.querySelector<HTMLButtonElement>(`button[data-pick="${pick}"]`)!.querySelector("canvas")!;
+      const W = c.width, H = c.height;
+      const d = c.getContext("2d")!.getImageData(0, 0, W, H).data;
+      const k = Math.min(W / geometry.w, H / geometry.h);
+      const Rs = geometry.radius * k * geometry.scale * 0.94;
+      const cx = W / 2, cy = H * geometry.cy;
+      const [er, aspect, gap, ey] = eyes[pick]!;
+      const spreads: number[] = [];
+      for (const sx of [-1, 1]) {
+        const L: number[] = [];
+        for (let y = 0; y < H; y++)
+          for (let x = 0; x < W; x++) {
+            // in the eye's own units, the low quarter away from both sparkles
+            const vx = ((x - cx) / Rs - sx * gap!) / er!, vy = ((y - cy) / Rs - ey!) / (er! * aspect!);
+            if (vx > -0.15 || vx < -0.8 || vy < 0.15 || vy > 0.8 || Math.hypot(vx, vy) > 0.82) continue;
+            const i = (y * W + x) * 4;
+            L.push((0.2126 * d[i]! + 0.7152 * d[i + 1]! + 0.0722 * d[i + 2]!) / 255);
+          }
+        L.sort((a, b) => a - b);
+        spreads.push(L.length ? L[Math.floor(L.length * 0.9)]! - L[Math.floor(L.length * 0.1)]! : 0);
+        spreads.push(L.length);
+      }
+      return { pick, left: spreads[0]!, nLeft: spreads[1]!, right: spreads[2]!, nRight: spreads[3]! };
+    }), { picks, geometry, eyes });
+  if (process.env.ORBS_PRINT) console.log(rows.map((r) => `${r.pick} ${r.left.toFixed(3)} ${r.right.toFixed(3)} (${r.nLeft}, ${r.nRight} px)`).join("\n"));
+  for (const r of rows) {
+    assert.ok(r.nLeft > 20 && r.nRight > 20, `control: ${r.pick}'s eyes are found (${r.nLeft}, ${r.nRight} px)`);
+    assert.ok(Math.min(r.left, r.right) > EYE_DEPTH, `${r.pick}: flat eyes, their shade ${Math.min(r.left, r.right).toFixed(3)} across`);
+  }
+});
+
 /** Each glasses thumbnail against the one with none, over his eyes: how much differs, and how much
  * darker it is there. */
 function glassesOverEyes(p: Page, picks: string[]): Promise<{ pick: string; diff: number; darker: number }[]> {

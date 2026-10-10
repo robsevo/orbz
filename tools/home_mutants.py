@@ -2984,6 +2984,22 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ('a hat with no model is worn as nothing', 'src/orb/hats/models.ts', [
         ('  37: sombrero, 38: tiara,', '  38: tiara,'),
     ], ['spec.test.ts']),
+    # the glasses as models (owner, 10-09: "the same thing we did to the hats to the eyes and the glasses")
+    ("a pair's lenses sit off his eyes", 'src/orb/hats/glasses.ts', [
+        ('    const centre: P2 = D.one === "visor" ? [0, ey] : [side * cx, ey];', '    const centre: P2 = D.one === "visor" ? [0, ey] : [side * cx, ey + 0.15];'),
+    ], ['hats.test.ts']),
+    ('sunglasses are drawn clear', 'src/orb/hats/glasses.ts', [
+        ('  const lensLook: Look = { kind: MAT.glass, slot: SLOT.lens, extra: D.mirror || D.one === "visor" ? Math.max(dark, 0.92) : dark };', '  const lensLook: Look = { kind: MAT.glass, slot: SLOT.lens, extra: 0 };'),
+    ], ['hats.test.ts']),
+    ('glasses are drawn into his face', 'src/orb/hats/glasses.ts', [
+        ('const FRONT = 0.9;', 'const FRONT = 0.6;'),
+    ], ['hats.test.ts']),
+    ('the temples stick out past his sides', 'src/orb/hats/glasses.ts', [
+        ('[s * side * 0.97, y - 0.008, faceZ(side * 0.97, y) + 0.02]', '[s * (side + 0.15), y - 0.008, faceZ(side * 0.97, y) + 0.3]'),
+    ], ['hats.test.ts']),
+    ('his eyes are flat discs again', 'src/orb/glsl.ts', [
+        ('      vec3 eyeC = eyeDeep + mix(domeLit, strokeLit, asStroke);', '      vec3 eyeC = eyeDeep;'),
+    ], ['characters.test.ts']),
 ]
 
 # the `orbs` terminal (PLAN 1.9): paths are inside packages/terminal

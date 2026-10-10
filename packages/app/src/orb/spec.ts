@@ -212,7 +212,7 @@ const tone = (h: AccessoryHue, c: Pick<Character, "hue" | "tint">): [number, num
 /** A hat: the shader's shape number, what its two parts are made of, and its slant. */
 export const HATS = {
   none: { id: 0, main: "ink", second: "ink", tilt: 0 },
-  "top hat": { id: 1, main: "ink", second: "accent", tilt: -0.16 },
+  "top hat": { id: 1, main: "ink", second: "accent", tilt: -0.1 },
   beanie: { id: 2, main: "accent", second: "cream", tilt: 0.08 },
   "party hat": { id: 3, main: "accent", second: "cream", tilt: 0.22 },
   antenna: { id: 4, main: "steel", second: "accent", tilt: 0 },

@@ -6,6 +6,7 @@
 import { MATERIALS } from "../design/tokens.ts";
 import { HAT_FS, HAT_VS, ORB_FS, ORB_VS } from "./glsl.ts";
 import type { Built } from "./hats/geo.ts";
+import { faceMesh, glassesMesh } from "./hats/glasses.ts";
 import { hatMesh, headMesh } from "./hats/models.ts";
 
 export type OrbFrame = {
@@ -88,9 +89,9 @@ const SUPERSAMPLE = 1.5;
 const UNIFORMS = [
   "uRes", "uTime", "uLevel", "uState", "uWake", "uR", "uCy", "uEdge", "uBreath", "uBlink", "uMorph", "uGaze", "uSway",
   "uHappy", "uSleepy", "uYawn", "uSurprise", "uTilt", "uMad", "uJiggle", "uHue", "uSat", "uVal", "uHue2", "uGrad", "uTint",
-  "uShapeA", "uShapeB", "uShapeC", "uShapeD", "uShapeE", "uShapeF", "uGoo", "uSquash", "uEyeA", "uEyeB", "uAccFit", "uAccTilt", "uAccGlow", "uAccGlowK", "uAccGlowCol", "uAccEdge", "uAccShade", "uSpecs", "uSpecsCol", "uSpecsCol2", "uLensCol", "uLensDark",
+  "uShapeA", "uShapeB", "uShapeC", "uShapeD", "uShapeE", "uShapeF", "uGoo", "uSquash", "uEyeA", "uEyeB", "uAccFit", "uAccTilt", "uAccGlow", "uAccGlowK", "uAccGlowCol", "uAccEdge", "uAccShade",
 ] as const;
-const HAT_UNIFORMS = ["uRes", "uSway", "uAccFit", "uTime", "uLevel", "uState", "uWake", "uR", "uCy", "uBreath", "uMorph", "uSquash", "uAccTilt", "uShapeD", "uCol", "uCol2", "uOrb", "uPal"] as const;
+const HAT_UNIFORMS = ["uRes", "uSway", "uAccFit", "uGaze", "uTime", "uLevel", "uState", "uWake", "uR", "uCy", "uBreath", "uMorph", "uSquash", "uAccTilt", "uTilt", "uFace", "uShapeD", "uCol", "uCol2", "uCol3", "uOrb", "uPal"] as const;
 
 type Uniforms = Record<(typeof UNIFORMS)[number], WebGLUniformLocation | null>;
 type HatUniforms = Record<(typeof HAT_UNIFORMS)[number], WebGLUniformLocation | null>;
@@ -111,7 +112,9 @@ export class OrbRenderer {
   readonly #hu: HatUniforms;
   readonly #empty: WebGLVertexArrayObject;
   readonly #drawn = new Map<number, Drawn | null>();
+  readonly #pairs = new Map<string, Drawn | null>();
   #head: Drawn | null = null;
+  #faceProxy: Drawn | null = null;
 
   constructor() {
     this.canvas = document.createElement("canvas");
@@ -157,6 +160,17 @@ export class OrbRenderer {
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, b.idx, gl.STATIC_DRAW);
     gl.bindVertexArray(null);
     return { vao, count: b.count, edge: b.edge };
+  }
+
+  /** A pair of glasses made for his eyes, uploaded the first time it is worn (null: none). */
+  #pair(look: OrbLook): Drawn | null {
+    if (!look.specs) return null;
+    const key = `${look.specs}:${look.eyeA.map((v) => v.toFixed(3)).join(",")}:${look.lensDark}`;
+    if (!this.#pairs.has(key)) {
+      const b = glassesMesh(look.specs, look.eyeA, look.lensDark);
+      this.#pairs.set(key, b ? this.#upload(b) : null);
+    }
+    return this.#pairs.get(key)!;
   }
 
   /** A hat's model, uploaded the first time it is worn (null: no hat). */
@@ -231,13 +245,11 @@ export class OrbRenderer {
     gl.uniform3f(u.uAccGlowCol, ...look.accGlowCol);
     gl.uniform1fv(u.uAccEdge, hat ? hat.edge : NO_EDGE);
     gl.uniform1f(u.uAccShade, hat ? SHADE : 0);
-    gl.uniform1f(u.uSpecs, look.specs);
-    gl.uniform3f(u.uSpecsCol, ...look.specsCol);
-    gl.uniform3f(u.uSpecsCol2, ...look.specsCol2);
-    gl.uniform3f(u.uLensCol, ...look.lensCol);
-    gl.uniform1f(u.uLensDark, look.lensDark);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
-    if (hat) this.#drawHat(hat, look, f, time, framing.radius * scale, framing.cy, w, h, [f.sway[0] * scale, f.sway[1] * scale]);
+    const pair = this.#pair(look);
+    const sway: [number, number] = [f.sway[0] * scale, f.sway[1] * scale];
+    if (pair) this.#drawWorn(pair, look, f, time, framing.radius * scale, framing.cy, w, h, sway, true);
+    if (hat) this.#drawWorn(hat, look, f, time, framing.radius * scale, framing.cy, w, h, sway, false);
     const ctx = target.getContext("2d")!;
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
@@ -245,12 +257,17 @@ export class OrbRenderer {
     ctx.drawImage(this.canvas, 0, 0, target.width, target.height);
   }
 
-  /** The hat, over all of him (owner, 10-03: a hat is in front of his ears too): his head into depth alone, so what
-   * goes round behind it hides, then the model, solid. */
-  #drawHat(hat: Drawn, look: OrbLook, f: OrbFrame, time: number, R: number, cy: number, w: number, h: number, sway: [number, number]): void {
+  /** What he wears, over his glass: his glasses in his face's own space, then his hat over all of him (owner, 10-03: a
+   * hat is in front of his ears too). Each with his head or face drawn into depth alone first, so what goes round
+   * behind him hides, then the model. */
+  #drawWorn(hat: Drawn, look: OrbLook, f: OrbFrame, time: number, R: number, cy: number, w: number, h: number, sway: [number, number], onFace: boolean): void {
     const { gl } = this;
     const u = this.#hu;
     gl.useProgram(this.#hat);
+    gl.clear(gl.DEPTH_BUFFER_BIT);
+    gl.uniform1f(u.uFace, onFace ? 1 : 0);
+    gl.uniform2f(u.uGaze, f.gaze[0], f.gaze[1]);
+    gl.uniform1f(u.uTilt, f.tilt);
     gl.uniform2f(u.uRes, w, h);
     gl.uniform2f(u.uSway, sway[0], sway[1]);
     gl.uniform2f(u.uAccFit, ...look.accFit);
@@ -265,16 +282,19 @@ export class OrbRenderer {
     gl.uniform1f(u.uSquash, f.squash);
     gl.uniform1f(u.uAccTilt, look.accTilt);
     gl.uniform4f(u.uShapeD, ...look.shapeD);
-    gl.uniform3f(u.uCol, ...look.accCol);
-    gl.uniform3f(u.uCol2, ...look.accCol2);
+    gl.uniform3f(u.uCol, ...(onFace ? look.specsCol : look.accCol));
+    gl.uniform3f(u.uCol2, ...(onFace ? look.specsCol2 : look.accCol2));
+    gl.uniform3f(u.uCol3, ...look.lensCol);
     gl.uniform3f(u.uOrb, ...look.orbCol);
     gl.uniform3fv(u.uPal, PALETTE);
     gl.enable(gl.DEPTH_TEST);
     gl.depthFunc(gl.LESS);
     gl.colorMask(false, false, false, false);
     this.#head ??= this.#upload(headMesh());
-    gl.bindVertexArray(this.#head.vao);
-    gl.drawElements(gl.TRIANGLES, this.#head.count, gl.UNSIGNED_INT, 0);
+    this.#faceProxy ??= this.#upload(faceMesh());
+    const behind = onFace ? this.#faceProxy : this.#head;
+    gl.bindVertexArray(behind.vao);
+    gl.drawElements(gl.TRIANGLES, behind.count, gl.UNSIGNED_INT, 0);
     gl.colorMask(true, true, true, true);
     gl.bindVertexArray(hat.vao);
     gl.drawElements(gl.TRIANGLES, hat.count, gl.UNSIGNED_INT, 0);

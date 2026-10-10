@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { type HueName, HUES, MATERIALS } from "../src/design/tokens.ts";
 import { HAT_FS, HAT_VS, ORB_FS } from "../src/orb/glsl.ts";
+import { glassesMesh, GLASSES_MODELS } from "../src/orb/hats/glasses.ts";
 import { hatMesh, MODELS } from "../src/orb/hats/models.ts";
 import {
   ASH, EYES, FAMILIES, FINISHES, GLASSES, GRADES, hatFit, HATS, inHarmony, isShades, lookOf, NOT_OURS, offered, outline, PEOPLE_NAMES, PERSONALITIES, sane, SHAPES, sheetOf, SPECIALTIES, surprise, voice, VOICES, wearing, wheelSteps, withPersonality,
@@ -230,20 +231,14 @@ test("white and black for a hat and frames (owner, 10-03); every hat and pair of
   assert.equal(sane({ ...ASH, name: "Rex", hatHue: "white" }, ASH).hatHue, "white", "kept when the office loads him");
   assert.equal(sane({ ...ASH, name: "Rex", glassesHue: "black" }, ASH).glassesHue, "black");
   assert.equal(sane({ ...ASH, name: "Rex", hatHue: "silver" as never }, ASH).hatHue ?? null, ASH.hatHue ?? null, "a colour that is not one is not taken");
-  // a hat's or glasses' number with no drawing draws nothing at all. A hat is a model now (hats/models.ts, 10-09), its
-  // glasses still drawn in the orb's shader, each looked for in its own function.
-  const body = (head: string): string => {
-    const at = ORB_FS.indexOf(head);
-    assert.ok(at >= 0, `the shader has ${head}`);
-    return ORB_FS.slice(at, ORB_FS.indexOf("\n}\n", at));
-  };
-  const specs = body("vec4 specsSDF(vec2 f){");
+  // a hat's or glasses' number with no drawing draws nothing at all. Both are models now (hats/models.ts and
+  // hats/glasses.ts, 10-09), each pair made for the eyes it sits over.
   for (const [name, h] of Object.entries(HATS)) if (h.id) assert.ok((hatMesh(h.id)?.count ?? 0) > 0, `${name} (${h.id}) is drawn`);
   assert.equal(hatMesh(0), null, "control: no hat is no model");
   assert.deepEqual(Object.keys(MODELS).map(Number).sort((a, b) => a - b), Object.values(HATS).map((h) => h.id).filter(Boolean).sort((a, b) => a - b), "a model for every hat, and none for a hat there is not");
-  const roundish = new Set([1, 11, 17]); // round, round shades and rose tint take the round lens
-  for (const [name, g] of Object.entries(GLASSES)) if (g.id && !roundish.has(g.id)) assert.match(specs, new RegExp(`id == ${g.id}\\b`), `${name} (${g.id}) is drawn`);
-  assert.doesNotMatch(specs, /id == 40\b/, "control: the glasses are read apart from the hats");
+  for (const [name, g] of Object.entries(GLASSES)) if (g.id) for (const e of Object.values(EYES)) assert.ok((glassesMesh(g.id, e.a, g.dark)?.count ?? 0) > 0, `${name} (${g.id}) is drawn for every eyes`);
+  assert.equal(glassesMesh(0, EYES.classic.a, 0), null, "control: no glasses is no model");
+  assert.deepEqual(Object.keys(GLASSES_MODELS).map(Number).sort((a, b) => a - b), Object.values(GLASSES).map((g) => g.id).filter(Boolean).sort((a, b) => a - b), "a model for every pair, and none for a pair there is not");
   const ids = (o: Record<string, { id: number }>) => Object.values(o).map((x) => x.id);
   assert.equal(new Set(ids(HATS)).size, ids(HATS).length, "no two hats share a number");
   assert.equal(new Set(ids(GLASSES)).size, ids(GLASSES).length, "no two glasses share a number");
@@ -281,11 +276,12 @@ test("no pow of a base that can dip below zero, and a solid hat replaces what is
   const safe = (b: string): boolean => /^(max|clamp|smoothstep|exp)\(/.test(b);
   assert.deepEqual(bases.filter((b) => !safe(b)), [], "a pow's base that can go below zero");
   assert.ok(!safe("1.0 - abs(N.y)") && !safe("(a - 0.35)/0.55"), "control: the old bases are caught");
-  // a hat is its own pass now, over his finished glass: its pixels are written at full alpha (only celluloid lets him
-  // through), so nothing under a solid hat, a NaN least of all, reaches what is drawn
+  // a hat (and a pair of glasses) is its own pass now, over his finished glass: its pixels are written at full alpha
+  // (only glass lets him through: a lens, celluloid), so nothing under a solid hat, a NaN least of all, reaches what is drawn
   assert.match(HAT_FS, /float alpha = 1\.0;/, "a solid hat is drawn at full alpha");
-  assert.deepEqual([...HAT_FS.matchAll(/alpha = (0\.\d+)/g)].map((m) => m[1]), ["0.55"], "and only one material is see-through");
-  assert.doesNotMatch(ORB_FS, /accSDF/, "the orb's shader draws no hat of its own any more");
+  assert.equal([...HAT_FS.matchAll(/\balpha = (mix\(|0\.)/g)].length, 1, "and only one material sets its own: glass");
+  assert.match(HAT_FS, /else if \(kind == GLASS\) \{[^}]*alpha = mix\(/, "the one is glass");
+  assert.doesNotMatch(ORB_FS, /accSDF|specsSDF/, "the orb's shader draws no hat or glasses of its own any more");
 });
 
 test("a roll's colours go together on the colour wheel, accessories too, and every kind turns up", () => {
