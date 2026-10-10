@@ -6,12 +6,19 @@
 // renderer's second pass in his face's own space, so they look where his eyes look and tilt with his face; his face is
 // drawn into depth first, so what goes round behind him hides. Units: the face block's (1 is 0.94 of his radius), +y
 // up, +z toward you, his centre the origin. Pure.
-import { add, bake, built, clamp, ellipsoid, grid, MAT, mix, Mesh, rbox, SLOT, spline, tube, type Built, type Look, type P2, type V3 } from "./geo.ts";
+import { add, bake, built, clamp, ellipsoid, grid, MAT, mix, Mesh, rbox, revolve, SLOT, spline, tube, type Built, type Look, type P2, type V3 } from "./geo.ts";
 
 /** His face as the glasses see it: Ash's bean's body, an ellipsoid round his centre (`y` below it), `a` across and
  * deep, `b` up. Fitted 10-09 to spec.ts outline in the face block's units. */
 export const FACE = { y: -0.0825, a: 0.855, b: 0.9575 } as const;
-/** How far toward you the frames stand (his face is about 0.81 out at his eyes). */
+/** A face the glasses are made for: how far it reaches to either side at each height (face units, +y up), round the axis
+ * as his head is; `key` names it for the renderer's caches. Every shape has its own (heads.ts faceOf; owner, 10-10: "the
+ * glasses are off too on some orbs: they overlap the body and face": made for the bean's face, a pair's temples ended
+ * half way across a squish and stood out past a pill). */
+export type Face = { key: string; w: (y: number) => number };
+/** The bean's: FACE's ellipsoid. */
+export const BEAN_FACE: Face = { key: "bean", w: (y) => FACE.a * Math.sqrt(Math.max(0, 1 - ((y - FACE.y) / FACE.b) ** 2)) };
+/** How far toward you the frames stand on the bean (his face is about 0.81 out at his eyes); a fuller face, further. */
 const FRONT = 0.9;
 const TAU = 2 * Math.PI;
 
@@ -122,14 +129,14 @@ const DESIGNS: Record<number, Design> = {
   21: { outline: (L, Ly) => turned(superE(L * 1.34, Ly * 0.86, 2.4), 0.34, 0.04, 0.03), rim: "rim" },
 };
 
-/** Where his face is, this far round his centre (the glasses' temples and a strap lie against it). */
-const faceZ = (x: number, y: number): number => FACE.a * Math.sqrt(Math.max(0, 1 - (x / FACE.a) ** 2 - ((y - FACE.y) / FACE.b) ** 2));
-
-/** A pair for the eyes they sit over, ready for the GPU (null: no glasses, or none of that number). `dark` is how much of
- * his eyes the lens hides (spec.ts GLASSES), which is what its glass is tinted to. */
-export function glassesMesh(id: number, eyes: EyeNums, dark: number): Built | null {
+/** A pair for the eyes they sit over, made on his face (the bean's until one is given), ready for the GPU (null: no
+ * glasses, or none of that number). `dark` is how much of his eyes the lens hides (spec.ts GLASSES), which is what its
+ * glass is tinted to. */
+export function glassesMesh(id: number, eyes: EyeNums, dark: number, face: Face = BEAN_FACE): Built | null {
   const D = DESIGNS[id];
   if (!D) return null;
+  /** Where his face is, this far round his centre (the glasses' temples and a strap lie against it). */
+  const faceZ = (x: number, y: number): number => Math.sqrt(Math.max(0, face.w(y) ** 2 - x ** 2));
   const m = new Mesh();
   // the lenses' size and place, as the flat drawing measured them (glsl.ts specsSDF, until 10-09)
   const L = clamp(eyes[0] * 1.5, 0.15, 0.25);
@@ -141,8 +148,9 @@ export function glassesMesh(id: number, eyes: EyeNums, dark: number): Built | nu
   const wire = 0.0085, acetate = 0.018, thick = 0.026;
   const rr = D.rim === "wire" ? wire : D.rim === "thick" ? thick : acetate;
   const span = cx + L * 1.4; // how far out the frame wraps back (a visor across both eyes as far as a pair)
-  // the frame's front: a gentle wrap back toward his sides
-  const zAt = (x: number): number => FRONT - 0.07 * (x / span) ** 2;
+  // the frame's front: a gentle wrap back toward his sides, as far out of a fuller face as of the bean's
+  const front = face === BEAN_FACE ? FRONT : Math.max(FRONT, faceZ(cx, ey) + (FRONT - 0.8145));
+  const zAt = (x: number): number => front - 0.07 * (x / span) ** 2;
   const at = (x: number, y: number, dz = 0): V3 => [x, y, zAt(x) + dz];
   const lenses = D.one === "monocle" ? [1] : D.one === "visor" ? [0] : [-1, 1];
   const ring = (o: Outline, side: number, c: P2): ((t: number) => V3) => (t) => {
@@ -232,7 +240,7 @@ export function glassesMesh(id: number, eyes: EyeNums, dark: number): Built | nu
     if (D.goggles || D.one === "monocle") continue;
     rbox(m, add(h, [s * 0.012, 0, -0.012]), [0.016, 0.014, 0.024], frame, { e: 0.35, nu: 16, nv: 10 });
     const y = h[1];
-    const side = FACE.a * Math.sqrt(Math.max(0, 1 - ((y - FACE.y) / FACE.b) ** 2));
+    const side = face.w(y);
     // back along his head, just off it, so face on it shows from the hinge to his edge and no further
     const temple = spline([add(h, [s * 0.016, 0, -0.03]), [s * side * 0.86, y, faceZ(side * 0.86, y) + 0.035], [s * side * 0.97, y - 0.008, faceZ(side * 0.97, y) + 0.02], [s * side * 0.96, y - 0.03, -0.25]]);
     tube(m, temple, () => (D.rim === "wire" ? 0.008 : 0.011), frame, { n: 40, k: 8, up: [0, 1, 0], flat: D.rim === "wire" ? 1 : 0.55 });
@@ -240,7 +248,7 @@ export function glassesMesh(id: number, eyes: EyeNums, dark: number): Built | nu
   if (D.goggles) {
     // the strap: right round his head at his eyes, wide and soft, from cup to cup
     const yS = ey + 0.01;
-    const ra = FACE.a * Math.sqrt(Math.max(0, 1 - ((yS - FACE.y) / FACE.b) ** 2)) * 0.985 + 0.004; // against his head
+    const ra = face.w(yS) * 0.985 + 0.004; // against his head
     const from = Math.asin(Math.min(0.99, (cx + L * 1.1) / ra)); // from each cup's outer edge, round behind him
     tube(m, (t) => { const a = mix(from, TAU - from, t); return [ra * Math.sin(a), yS, ra * Math.cos(a)]; }, () => 0.05, { kind: MAT.cotton, slot: SLOT.second, extra: 0 }, { n: 120, k: 10, up: [0, 1, 0], flat: 0.22 });
   }
@@ -248,15 +256,25 @@ export function glassesMesh(id: number, eyes: EyeNums, dark: number): Built | nu
   return built(m);
 }
 
-let face: Built | null = null;
-/** His face as the glasses see it: what hides their temples and a strap where they go round behind him (depth only). */
-export function faceMesh(): Built {
-  if (!face) {
+const proxies = new Map<string, Built>();
+/** His face as the glasses see it: what hides their temples and a strap where they go round behind him (depth only); the
+ * bean's an ellipsoid, any other his outline turned round the axis. */
+export function faceMesh(face: Face = BEAN_FACE): Built {
+  let b = proxies.get(face.key);
+  if (!b) {
     const m = new Mesh();
-    ellipsoid(m, [0, FACE.y, 0], [FACE.a * 0.985, FACE.b * 0.985, FACE.a * 0.985], { kind: 0, slot: 0 }, { nu: 48, nv: 32 });
-    face = built(m);
+    if (face === BEAN_FACE) ellipsoid(m, [0, FACE.y, 0], [FACE.a * 0.985, FACE.b * 0.985, FACE.a * 0.985], { kind: 0, slot: 0 }, { nu: 48, nv: 32 });
+    else {
+      // from his foot to his top, where he has width
+      const pts: P2[] = [];
+      for (let y = -1.6; y <= 1.6; y += 0.02) if (face.w(y) > 0.002) pts.push([face.w(y) * 0.985, y]);
+      const [lo, hi] = [pts[0]!, pts[pts.length - 1]!];
+      revolve(m, [[0, lo[1] - 0.01], ...pts, [0, hi[1] + 0.01]], { kind: 0, slot: 0 }, { segs: 64 });
+    }
+    b = built(m);
+    proxies.set(face.key, b);
   }
-  return face;
+  return b;
 }
 
 /** Every pair's design, by its number in spec.ts GLASSES (0, none, has none). */

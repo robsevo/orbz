@@ -119,6 +119,43 @@ test("the brains in Settings: the order, a Gemini key kept (never shown back), a
   await brains.locator('[data-brain="local"][data-state="absent"]').waitFor({ timeout: 20_000 });
 });
 
+// owner, 10-10: "organize it professionally ... just organize the containers better". Settings has an index beside its
+// sections on a wide screen: a press takes you to one and lights it; the last, which can never reach the top, too.
+test("Settings' index: a press takes you to its section and lights it, the last one too", { skip, timeout: 120_000 }, async (t) => {
+  const data = mkdtempSync(join(tmpdir(), "orbs-settings-index-"));
+  t.after(() => rmSync(data, { recursive: true, force: true }));
+  const h = Home.open({ dataDir: data, protect: [], spendCapUsd: null, brains: { store: new MemoryStore() }, chatgpt: { store: new MemoryStore() } });
+  t.after(() => h.close());
+  h.start();
+  h.about.setName("Robin");
+  h.inbox.addOrb("ada", "Ada", "accountant", { shape: "bean", eyes: "classic", hue: "teal" });
+  const d = await serve(h, { port: 0, appDir: dist });
+  t.after(() => d.close());
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: "dark" });
+  t.after(() => ctx.close());
+  const page = await ctx.newPage();
+  await page.goto(d.pairLink());
+  await page.locator(".orbs-window").waitFor({ timeout: 30_000 });
+  await page.goto(page.url().replace(/#.*$/, "#/settings"));
+  const index = page.getByRole("navigation", { name: "Settings sections" });
+  await index.waitFor({ timeout: 20_000 });
+  const lit = (): Promise<string[]> => index.locator('[aria-current="location"]').allInnerTexts();
+  const top = (name: string): Promise<number> => page.getByRole("region", { name }).evaluate((el) => el.getBoundingClientRect().top);
+  // the control: the brains start below the fold, and You is the one lit
+  assert.ok((await top("Brains")) > 900, "control: the brains are below the fold");
+  assert.deepEqual(await lit(), ["You"]);
+  await index.getByRole("link", { name: "Brains" }).click();
+  await page.waitForFunction(() => document.querySelector('[aria-label="Brains"]')!.getBoundingClientRect().top < innerHeight * 0.3, undefined, { timeout: 10_000 });
+  assert.deepEqual(await lit(), ["Brains"], "the brains lit");
+  assert.equal(await page.evaluate(() => location.hash), "#/settings", "still Settings: a way round the page, not another place");
+  // the last one: as far down as the page goes, lit
+  await index.getByRole("link", { name: "Devices" }).click();
+  await page.waitForFunction(() => innerHeight + scrollY >= document.documentElement.scrollHeight - 2, undefined, { timeout: 10_000 });
+  await page.waitForTimeout(300);
+  assert.deepEqual(await lit(), ["Devices"], "the last section lit");
+  assert.ok((await top("Your devices")) < 900, "and in view");
+});
+
 test("the first open asks what he thinks with: a Gemini key kept there, then you make him", { skip, timeout: 150_000 }, async (t) => {
   const gemini = await fakeModel(t, []);
   gemini.models = ["models/gemini-3.8-flash"];

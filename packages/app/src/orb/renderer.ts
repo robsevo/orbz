@@ -6,6 +6,7 @@
 import { MATERIALS } from "../design/tokens.ts";
 import { HAT_FS, HAT_VS, ORB_FS, ORB_VS } from "./glsl.ts";
 import type { Built, Head } from "./hats/geo.ts";
+import type { Face } from "./hats/glasses.ts";
 import { faceMesh, glassesMesh } from "./hats/glasses.ts";
 import { hatMesh, headMesh } from "./hats/models.ts";
 
@@ -56,6 +57,8 @@ export type OrbLook = {
   acc: number;
   /** The head his hat is made on, his shape's (hats/heads.ts). */
   head: Head;
+  /** The face his glasses are made on, his shape's (hats/heads.ts faceOf). */
+  face: Face;
   /** Where his hat sits and how big it is, for his shape (spec.ts hatFit). */
   accFit: [number, number];
   accCol: [number, number, number];
@@ -118,7 +121,7 @@ export class OrbRenderer {
   readonly #drawn = new Map<string, Drawn | null>();
   readonly #pairs = new Map<string, Drawn | null>();
   readonly #heads = new Map<string, Drawn>();
-  #faceProxy: Drawn | null = null;
+  readonly #faceProxies = new Map<string, Drawn>();
 
   constructor() {
     this.canvas = document.createElement("canvas");
@@ -169,9 +172,9 @@ export class OrbRenderer {
   /** A pair of glasses made for his eyes, uploaded the first time it is worn (null: none). */
   #pair(look: OrbLook): Drawn | null {
     if (!look.specs) return null;
-    const key = `${look.specs}:${look.eyeA.map((v) => v.toFixed(3)).join(",")}:${look.lensDark}`;
+    const key = `${look.specs}:${look.eyeA.map((v) => v.toFixed(3)).join(",")}:${look.lensDark}:${look.face.key}`;
     if (!this.#pairs.has(key)) {
-      const b = glassesMesh(look.specs, look.eyeA, look.lensDark);
+      const b = glassesMesh(look.specs, look.eyeA, look.lensDark, look.face);
       this.#pairs.set(key, b ? this.#upload(b) : null);
     }
     return this.#pairs.get(key)!;
@@ -296,9 +299,9 @@ export class OrbRenderer {
     gl.enable(gl.DEPTH_TEST);
     gl.depthFunc(gl.LESS);
     gl.colorMask(false, false, false, false);
-    this.#faceProxy ??= this.#upload(faceMesh());
+    if (onFace && !this.#faceProxies.has(look.face.key)) this.#faceProxies.set(look.face.key, this.#upload(faceMesh(look.face)));
     if (!onFace && !this.#heads.has(look.head.key)) this.#heads.set(look.head.key, this.#upload(headMesh(look.head)));
-    const behind = onFace ? this.#faceProxy : this.#heads.get(look.head.key)!;
+    const behind = onFace ? this.#faceProxies.get(look.face.key)! : this.#heads.get(look.head.key)!;
     gl.bindVertexArray(behind.vao);
     gl.drawElements(gl.TRIANGLES, behind.count, gl.UNSIGNED_INT, 0);
     gl.colorMask(true, true, true, true);

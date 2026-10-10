@@ -3019,6 +3019,29 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ('a close-up cuts his hat again', 'src/orb/spec.ts', [
         ('  const over = hatReach(c) * f.radius * 1.06 + 3 - f.cy * f.h;', '  const over = 0;'),
     ], ['hats.test.ts']),
+    # the containers organized (owner, 10-10): the studio, Settings' index, the CV, the bell
+    ('the orb and its DNA scroll away while its colours are chosen (desk)', 'src/orbs.tsx', [
+        ('  .orbs-stage { position: sticky; top: var(--s4);', '  .orbs-stage { top: var(--s4);'),
+    ], ['creator.test.ts']),
+    ('no small orb at the editor\'s head on a phone', 'src/orbs.tsx', [
+        ('peek={!wide}', 'peek={false}'),
+    ], ['creator.test.ts']),
+    ("the CV's Interview, Hire and Pass scroll away", 'src/rooms/Recruiter.tsx', [
+        ('<div data-cv-answer style={{ position: "sticky", bottom: 0,', '<div data-cv-answer style={{ position: "relative", bottom: 0,'),
+    ], ['recruiter-view.test.ts']),
+    ("Settings' index takes you nowhere", 'src/rooms/Settings.tsx', [
+        ('    document.getElementById(`settings-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });\n', ''),
+    ], ['brains.test.ts']),
+    ('Notifications is no bell', 'src/orbs.tsx', [
+        ('<BellIcon />, notices.notices.length)', '"◔", notices.notices.length)'),
+    ], ['nav.test.ts']),
+    # headbands and glasses on every shape (owner, 10-10: "some headbands are a little off ... the glasses are off too")
+    ('the back of a headband shows over a flat head again', 'src/orb/hats/models.ts', [
+        ('const BAND_REST = -0.012;', 'const BAND_REST = 1;'),
+    ], ['hats.test.ts']),
+    ("every shape's glasses made on the bean's face again", 'src/orb/hats/heads.ts', [
+        ('  if (name === "bean") return BEAN_FACE;', '  return BEAN_FACE;'),
+    ], ['hats.test.ts']),
 ]
 
 # the `orbs` terminal (PLAN 1.9): paths are inside packages/terminal

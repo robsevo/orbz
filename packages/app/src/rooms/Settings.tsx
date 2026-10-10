@@ -32,8 +32,9 @@ const SECTIONS = [["you", "You"], ["budget", "Budget"], ["theme", "Theme"], ["so
 type SectionId = (typeof SECTIONS)[number][0];
 const sectionStyle: CSSProperties = { display: "grid", gap: "var(--s4)", minWidth: 0, scrollMarginTop: "var(--s4)" };
 
-function Index({ ids, active, wide }: { ids: SectionId[]; active: SectionId | null; wide: boolean }) {
+function Index({ ids, active, wide, lit }: { ids: SectionId[]; active: SectionId | null; wide: boolean; lit: (id: SectionId) => void }) {
   const jump = (id: SectionId): void => {
+    lit(id); // lit at once: the last sections never reach the top of the screen
     document.getElementById(`settings-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
   const items = SECTIONS.filter(([id]) => ids.includes(id)).map(([id, label]) => (
@@ -126,6 +127,8 @@ export function Settings(o: {
   const [active, setActive] = useState<SectionId | null>("you");
   useEffect(() => {
     const at = (): void => {
+      // at the foot of the page, the last section (it can never reach the line)
+      if (innerHeight + scrollY >= document.documentElement.scrollHeight - 2 && scrollY > 0) return setActive(ids[ids.length - 1] ?? null);
       const line = innerHeight * 0.2;
       let on: SectionId | null = null;
       for (const id of ids) {
@@ -151,7 +154,7 @@ export function Settings(o: {
   return (
     <div className="orbs-settings" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "var(--s4) var(--s5)", padding: "var(--s5)", alignContent: "start", alignItems: "start", width: "100%" }}>
       <h2 style={{ gridColumn: "1 / -1", margin: 0, font: "800 28px/34px var(--font)", color: "var(--text-1)" }}>Settings</h2>
-      <Index ids={ids} active={active} wide={wide} />
+      <Index ids={ids} active={active} wide={wide} lit={setActive} />
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "var(--s4)", minWidth: 0, maxWidth: 760 }}>
       <div id="settings-you" style={sectionStyle}>
       <Panel title="You">

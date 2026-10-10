@@ -411,15 +411,17 @@ function LevelUp({ c, g }: { c: Character; g: Growth }) {
 // the orbs profile when we click on it")
 // `strand`: its DNA strand at the end of the card (an applicant's); the creator and an orb's page show it in a card of its
 // own beside what changes it (owner, 10-10: "DNA strand close and next to horizontally but not in same container")
-function Sheet({ c, onRename, replies, standing, startsAs, career, applying, friends, onChat, onCareer, strand = true }: { c: Character; onRename?: (name: string) => void; replies: Replies; standing?: Standing | null; startsAs?: "Junior" | "Senior"; career?: CareerState | null; applying?: boolean; friends?: Friend[] | null; onChat?: () => void; onCareer?: () => void; strand?: boolean }) {
+// `part`: the whole card (an applicant's), or its head (who it is: name, title, level, what it does) or its body (the
+// stats), each a card of its own where the studio sets them apart (owner, 10-10: "put that part with the dna strand to
+// the left")
+function Sheet({ c, onRename, replies, standing, startsAs, career, applying, friends, onChat, onCareer, strand = true, part = "all" }: { c: Character; onRename?: (name: string) => void; replies: Replies; standing?: Standing | null; startsAs?: "Junior" | "Senior"; career?: CareerState | null; applying?: boolean; friends?: Friend[] | null; onChat?: () => void; onCareer?: () => void; strand?: boolean; part?: "all" | "head" | "body" }) {
   const sh = sheetOf(c);
   // what his graded work has grown him into (PLAN 3.11), once a home has some to show
   const grown = career ? grownOf(c, sh.leans, career.radar, career.niches, sh.dna, standing?.xp ?? career.xp) : null;
   const grew = grown && grown.level.level > 1 ? grown : null; // grown past where every orb starts
   const v = voice(c.voice);
   const name = { font: "800 26px/32px var(--font)", color: "var(--accent)" } satisfies CSSProperties;
-  return (
-    <div data-orb={c.hue} className="orbs-sheet" style={{ ...s.panel, display: "grid", gap: "var(--s4)" }}>
+  const head = (
       <div style={{ display: "grid", gap: 4 }}>
         {onRename ? (
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -450,7 +452,7 @@ function Sheet({ c, onRename, replies, standing, startsAs, career, applying, fri
             )}
           </div>
         )}
-        <span style={{ font: "600 15px/20px var(--font)", color: "var(--text-1)" }}>{cap(sh.title)}</span>
+        <span data-title style={{ font: "600 15px/20px var(--font)", color: "var(--text-1)" }}>{cap(sh.title)}</span>
         <span style={{ font: "400 13px/18px var(--font)", color: "var(--text-3)" }}>
           {onRename
             ? "Not in the office yet · fixed once created"
@@ -472,17 +474,19 @@ function Sheet({ c, onRename, replies, standing, startsAs, career, applying, fri
           </span>
         )}
       </div>
-      {/* on a phone the rest scrolls under his name (owner, 10-04); an applicant's CV is a dialog that scrolls as one, so
-          there it does not scroll again inside it (owner, 10-10: "fix CV page in recruiting") */}
-      {(applying
-        ? (all: ReactNode) => <div style={{ display: "grid", gap: "var(--s4)" }}>{all}</div>
-        : (all: ReactNode) => <Tall label={`${c.name || "Your orb"}'s card`} style={{ display: "grid", gap: "var(--s4)" }}>{all}</Tall>)(<>
+  );
+  const lede = (
+    <>
       {grown && <LevelUp c={c} g={grown} />}
       <p style={{ margin: 0, font: "400 15px/21px var(--font)", color: "var(--text-2)", textWrap: "pretty" }}>{grew && grownSays(grew) ? `${sh.bio} ${grownSays(grew)}` : sh.bio}</p>
       {/* a role a licence stands behind says so: he is a persona that helps, never the professional */}
       {"limits" in SPECIALTIES[c.specialty] && (
         <p style={{ margin: 0, font: "400 13px/18px var(--font)", color: "var(--text-3)" }}>{(SPECIALTIES[c.specialty] as { limits: string }).limits}</p>
       )}
+    </>
+  );
+  const stats = (
+    <>
       {/* the small facts side by side, and his traits beside what shaped them, where the card is wide enough (owner,
           10-10: "organize the sections much better and make them more compact"); one above the other on a phone */}
       <div className="orbs-facts" style={{ display: "grid", gap: "var(--s3)", gridTemplateColumns: "minmax(0, 1fr)" }}>
@@ -523,7 +527,29 @@ function Sheet({ c, onRename, replies, standing, startsAs, career, applying, fri
         <span style={{ font: "400 12px/16px var(--font)", color: "var(--text-3)" }}>24 points across them, like every orb: its specialty sets the shape, its traits pull it</span>
       </div>
       {friends && friends.length > 0 && <Colleagues me={c.name} friends={friends} />}
-      </>)}
+    </>
+  );
+  // on a phone what is long scrolls inside its card (owner, 10-04); an applicant's CV is a dialog that scrolls as one, so
+  // there it does not scroll again inside it (owner, 10-10: "fix CV page in recruiting")
+  const scroll = (all: ReactNode): ReactNode =>
+    applying ? <div style={{ display: "grid", gap: "var(--s4)" }}>{all}</div> : <Tall label={`${c.name || "Your orb"}'s card`} style={{ display: "grid", gap: "var(--s4)" }}>{all}</Tall>;
+  if (part === "head")
+    return (
+      <div data-orb={c.hue} className="orbs-sheet" data-sheet-head style={{ ...s.panel, display: "grid", gap: "var(--s3)" }}>
+        {head}
+        {lede}
+      </div>
+    );
+  if (part === "body")
+    return (
+      <div data-orb={c.hue} className="orbs-sheet-body" data-sheet-body style={{ ...s.panel, display: "grid", gap: "var(--s4)" }}>
+        {scroll(stats)}
+      </div>
+    );
+  return (
+    <div data-orb={c.hue} className="orbs-sheet" style={{ ...s.panel, display: "grid", gap: "var(--s4)" }}>
+      {head}
+      {scroll(<>{lede}{stats}</>)}
     </div>
   );
 }
@@ -1310,6 +1336,36 @@ function App() {
     </button>
   );
   // `locked`: why it is not open yet (greyed, not pressable, its reason on hover)
+  // an orb's moods and its moves (owner, 10-07: the moods a little more square, the moves smaller and quieter under them):
+  // under it in its card on a narrower screen; on a wide one to the right, over its stats (owner, 10-10: "awake listening
+  // etc put that to the right over traits"), the orb in view beside them
+  const moves = (
+    <>
+        {/* his moods a little more square, and his gestures as small, quieter boxes under them, not a row to scroll
+            (owner, 10-07: "make the awake listening etc a little more square ... take out the wheel under it, put
+            those as smaller containers under awake lisening etc with a dimmer font color") */}
+        <OneLine>
+          {MOODS.map(([m, label]) => (
+            <button key={m} data-mood-pick={m} onClick={() => (setState(m), setPicked(true))} aria-pressed={worn === m} style={{ ...s.chip, ...chosen(worn === m), borderRadius: 10 }}>
+              {label}
+            </button>
+          ))}
+        </OneLine>
+        <div role="group" aria-label={`What ${me.name || "your orb"} can do`} data-gestures style={{ display: "grid", gap: 8, justifyItems: "center", maxWidth: "100%" }}>
+          {(smallPhone ? [GESTURES.slice(0, 3), GESTURES.slice(3, 6), GESTURES.slice(6)] : [GESTURES.slice(0, 5), GESTURES.slice(5)]).map((row, r) => (
+            <div key={r} style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 6 }}>
+              {row.map(([g, label]) => (
+                <button key={g} className="orbs-small" data-gesture-pick={g} data-flash={flash?.g === g ? flash.n : undefined}
+                  style={{ font: "600 12px/16px var(--font)", color: "var(--text-3)", background: "var(--fill)", boxShadow: "inset 0 0 0 .5px var(--hairline)", border: 0, borderRadius: 8, padding: "6px 11px", minHeight: 30, cursor: "pointer", whiteSpace: "nowrap", ...(flash?.g === g && { animation: `${flash.n % 2 ? "orbs-flash-a" : "orbs-flash-b"} 900ms ease-out` }) }}
+                  onClick={() => (play(g), setFlash((f) => ({ g, n: (f?.n ?? 0) + 1 })))}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+    </>
+  );
   const navItem = (label: string, on: boolean, to: Route, mark: ReactNode, count = 0, invite = false, locked = ""): ReactNode => (
     <button key={label} aria-current={on ? "page" : undefined} aria-label={count ? `${label}, ${count} waiting` : undefined} onClick={locked ? undefined : () => go(to)} disabled={Boolean(locked)} title={locked || undefined} data-locked={locked ? "" : undefined} data-invite={invite || undefined} style={{ ...s.btn, display: "flex", alignItems: "center", gap: 10, textAlign: "left", background: on ? "var(--accent-wash)" : "transparent", boxShadow: on ? "inset 0 0 0 1px var(--accent)" : "none", ...(locked && { opacity: 0.45, cursor: "not-allowed" }), ...(invite && { background: "var(--accent)", color: "var(--ground)", fontWeight: 800, boxShadow: on ? "0 0 0 2px var(--card), 0 0 0 3.5px var(--accent)" : "none" }) }} data-orb={me.hue}>
       <span aria-hidden style={{ width: 18, display: "grid", placeItems: "center", color: invite ? "var(--ground)" : "var(--accent)", font: invite ? "800 20px/16px var(--font)" : "800 15px/16px var(--font)" }}>{mark}</span>
@@ -1502,35 +1558,14 @@ function App() {
                 <SoundIcon on={sounds} />
               </button>
             </div>
-            <Evolving me={me} from={evolve} size={phone ? 128 : 176} state={worn} gesture={gesture} onDone={setShown} />
+            <Evolving me={me} from={evolve} size={phone ? 128 : wide ? 156 : 176} state={worn} gesture={gesture} onDone={setShown} />
             {live && !picked && WORN[live.mood].words && (
               <span data-mood={live.mood} style={{ font: "600 13px/18px var(--font)", color: "var(--text-2)" }}>
                 {WORN[live.mood].words}
               </span>
             )}
-            {/* his moods a little more square, and his gestures as small, quieter boxes under them, not a row to scroll
-                (owner, 10-07: "make the awake listening etc a little more square ... take out the wheel under it, put
-                those as smaller containers under awake lisening etc with a dimmer font color") */}
-            <OneLine>
-              {MOODS.map(([m, label]) => (
-                <button key={m} data-mood-pick={m} onClick={() => (setState(m), setPicked(true))} aria-pressed={worn === m} style={{ ...s.chip, ...chosen(worn === m), borderRadius: 10 }}>
-                  {label}
-                </button>
-              ))}
-            </OneLine>
-            <div role="group" aria-label={`What ${me.name || "your orb"} can do`} data-gestures style={{ display: "grid", gap: 8, justifyItems: "center", maxWidth: "100%" }}>
-              {(smallPhone || wide ? [GESTURES.slice(0, 3), GESTURES.slice(3, 6), GESTURES.slice(6)] : [GESTURES.slice(0, 5), GESTURES.slice(5)]).map((row, r) => (
-                <div key={r} style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 6 }}>
-                  {row.map(([g, label]) => (
-                    <button key={g} className="orbs-small" data-gesture-pick={g} data-flash={flash?.g === g ? flash.n : undefined}
-                      style={{ font: "600 12px/16px var(--font)", color: "var(--text-3)", background: "var(--fill)", boxShadow: "inset 0 0 0 .5px var(--hairline)", border: 0, borderRadius: 8, padding: "6px 11px", minHeight: 30, cursor: "pointer", whiteSpace: "nowrap", ...(flash?.g === g && { animation: `${flash.n % 2 ? "orbs-flash-a" : "orbs-flash-b"} 900ms ease-out` }) }}
-                      onClick={() => (play(g), setFlash((f) => ({ g, n: (f?.n ?? 0) + 1 })))}>
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              ))}
-            </div>
+            {/* on a narrower screen its moods and moves under it, where pressing one shows him doing it */}
+            {!wide && moves}
             {making && (
               <OneLine gap={8} style={{ marginTop: "var(--s2)" }}>
                 <button
@@ -1553,7 +1588,8 @@ function App() {
               </OneLine>
             )}
             <p style={{ margin: 0, font: "400 13px/18px var(--font)", color: blocked ? "var(--alert)" : "var(--text-3)", textAlign: "center" }}>
-              {before ? `${before.name || "Your orb"}, ${sheetOf(before).title}. Give a click, or move your pointer: the eyes follow.` : blocked ?? `${name || "Your orb"}, ${sheetOf(me).title}. Give a click, or move your pointer: the eyes follow.`}
+              {/* its name and title are in its card below */}
+              {before || !blocked ? "Give a click, or move your pointer: the eyes follow." : blocked}
             </p>
           </div>
 
@@ -1584,21 +1620,28 @@ function App() {
               </form>
             )}
           </div>
+          {/* who it is, under its DNA (owner, 10-10: "put that part with the dna strand to the left"): its name, title, level and
+              what it does */}
+          {making ? (
+            <Sheet part="head" c={before ?? me} key={before ? "was-head" : "now-head"} onRename={(n) => edit({ name: n })} replies={replies} standing={null} startsAs={startsAs} career={null} friends={null} />
+          ) : (
+            // Chat and its career beside its name (owner, 10-07)
+            <Sheet part="head" c={before ?? me} key={before ? "was-head" : "now-head"} replies={replies} standing={standing} startsAs={startsAs} career={career} friends={friends}
+              onChat={() => go({ room: "chat", orb: me.name })} onCareer={() => go({ room: "career", orb: me.name })} />
+          )}
           </div>
           <div className="orbs-work" style={{ display: "grid", gap: "var(--s4)", alignContent: "start", minWidth: 0 }}>
-            {making ? (
-              <>
-                <Creator me={me} edit={edit} replies={replies} setReplies={setReplies} kinds={kinds} peek={!wide} />
-                <Sheet c={before ?? me} key={before ? "was" : "now"} onRename={(n) => edit({ name: n })} replies={replies} standing={null} startsAs={startsAs} career={null} friends={null} strand={false} />
-              </>
-            ) : (
-              <>
-                {/* Chat and its career beside its name (owner, 10-07) */}
-                <Sheet c={before ?? me} key={before ? "was" : "now"} replies={replies} standing={standing} startsAs={startsAs} career={career} friends={friends} strand={false}
-                  onChat={() => go({ room: "chat", orb: me.name })} onCareer={() => go({ room: "career", orb: me.name })} />
-                <Card c={me} replies={replies} setReplies={setReplies} onDelete={(handTo, school) => remove(me.name, handTo, school)} others={office.filter((o) => o.name !== me.name)} />
-              </>
+            {/* on a wide screen its moods and moves at the top, beside the orb (owner, 10-10: "awake listening etc put that to
+                the right over traits"); the editor first while it is being made; what it is made of over its stats (owner,
+                10-10: "put made of container over the stats container") */}
+            {making && <Creator me={me} edit={edit} replies={replies} setReplies={setReplies} kinds={kinds} peek={!wide} />}
+            {wide && (
+              <div data-moves data-orb={me.hue} style={{ ...s.panel, display: "grid", gap: "var(--s3)", justifyItems: "center" }}>
+                {moves}
+              </div>
             )}
+            {!making && <Card c={me} replies={replies} setReplies={setReplies} onDelete={(handTo, school) => remove(me.name, handTo, school)} others={office.filter((o) => o.name !== me.name)} />}
+            <Sheet part="body" c={before ?? me} key={before ? "was" : "now"} replies={replies} standing={making ? null : standing} startsAs={startsAs} career={making ? null : career} friends={making ? null : friends} strand={false} />
           </div>
           </div>
 
@@ -1717,7 +1760,7 @@ main.orbs-main { padding: max(var(--s5), env(safe-area-inset-top)) max(var(--mar
 }
 /* an orb's card, wide enough: its small facts three across, its traits beside what shaped them (a container query: the
    card's own width, wherever it is) */
-.orbs-sheet { container-type: inline-size; }
+.orbs-sheet, .orbs-sheet-body { container-type: inline-size; }
 @container (min-width: 520px) {
   .orbs-facts { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
   .orbs-two { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important; }

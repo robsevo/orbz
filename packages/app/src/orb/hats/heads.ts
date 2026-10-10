@@ -10,6 +10,7 @@
 // a heart's notch or a cloud's puffs as a hat goes over them. Below where hats reach it is his outline. Pure.
 import { hatFit, outline, SHAPES, type ShapeName, type ShapeNumbers } from "../shapes.ts";
 import { headFrom, PITCH, type Built, type Head } from "./geo.ts";
+import { BEAN_FACE, type Face } from "./glasses.ts";
 
 /** Narrow bumps at his top are ears; wide ones (a heart's lobes) are his head (shapes.ts hatFit says the same). */
 export const hasEars = (S: ShapeNumbers): boolean => S.c[2] > 0 && S.d[0] < 0.3;
@@ -127,6 +128,51 @@ export function headOf(name: ShapeName, floating = false): Head {
   h = { ...headFrom(key, -top / unit, radius, (peak - top) / unit), skin: headFrom(`${key}/skin`, -top / unit, raw, (peak - top) / unit) };
   heads.set(key, h);
   return h;
+}
+
+// ── his face, as the glasses see it ─────────────────────────────────────────────────────────────
+const faces = new Map<string, Face>();
+/** A shape's face for its glasses (glasses.ts Face; owner, 10-10: "the glasses are off too on some orbs: they overlap the
+ * body and face"): how far his outline reaches to either side at each height, the wider of his two sides, his ears left
+ * out, in the face block's units (1 is 0.94 of his radius, his centre the origin, +y up). The bean's is FACE's ellipsoid,
+ * which its pairs were made and measured on. */
+export function faceOf(name: ShapeName): Face {
+  if (name === "bean") return BEAN_FACE;
+  let f = faces.get(name);
+  if (f) return f;
+  const S0 = SHAPES[name];
+  const S = hasEars(S0) ? earless(S0) : S0;
+  // his outline as points, +y up
+  const N = 2048;
+  const pts: [number, number][] = [];
+  for (let i = 0; i <= N; i++) {
+    const a = -Math.PI + (2 * Math.PI * i) / N;
+    const r = (S.d[1] * (1 + outline(S, a))) / 0.94;
+    pts.push([r * Math.cos(a), -r * Math.sin(a)]);
+  }
+  // his reach at each height: the widest of where his outline crosses it
+  const Y0 = -1.6, STEP = 0.005, NY = Math.round(3.2 / STEP);
+  const w = new Float64Array(NY + 1);
+  for (let k = 0; k < N; k++) {
+    const [x0, y0] = pts[k]!, [x1, y1] = pts[k + 1]!;
+    const lo = Math.min(y0, y1), hi = Math.max(y0, y1);
+    for (let j = Math.ceil((lo - Y0) / STEP); j <= Math.floor((hi - Y0) / STEP); j++) {
+      const y = Y0 + j * STEP;
+      const x = Math.abs(hi === lo ? x0 : x0 + ((x1 - x0) * (y - y0)) / (y1 - y0));
+      if (x > w[j]!) w[j] = x;
+    }
+  }
+  f = {
+    key: name,
+    w: (y) => {
+      const u = (y - Y0) / STEP;
+      if (u <= 0 || u >= NY) return 0;
+      const j = Math.floor(u);
+      return w[j]! + (w[j + 1]! - w[j]!) * (u - j);
+    },
+  };
+  faces.set(name, f);
+  return f;
 }
 
 // ── his ears, inside a hat ───────────────────────────────────────────────────────────────────

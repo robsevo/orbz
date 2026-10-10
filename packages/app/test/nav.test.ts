@@ -158,6 +158,19 @@ test("the menu open on a phone, then the window made wide: the desk's own layout
   }
 });
 
+// owner, 10-10: "Change notification Icon to a bell in menu"
+test("Notifications is a bell in the menu, as the lab is a flask", { skip }, async () => {
+  const page = await open("#/home");
+  try {
+    const item = (name: RegExp) => menu(page).getByRole("button", { name });
+    assert.equal(await item(/^Notifications/).locator('[data-icon="bell"]').count(), 1, "a bell");
+    assert.equal(await item(/^The lab$/).locator('[data-icon="flask"]').count(), 1, "control: the probe finds the lab's flask");
+    assert.equal(await menu(page).locator('[data-icon="bell"]').count(), 1, "one bell, on Notifications");
+  } finally {
+    await page.context().close();
+  }
+});
+
 test("Settings: the Founder's name, the sounds, and the story again", { skip }, async () => {
   const page = await open("#/settings");
   try {

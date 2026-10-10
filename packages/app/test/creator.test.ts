@@ -129,6 +129,41 @@ for (const size of ["desk", "phone"] as const) {
   });
 }
 
+// owner, 10-10: "we also dont see our orb as were changing colors ... make sure DNA strand is close and next to
+// horizontally but not in same container, so we see the switch in dna as we change the colors". Scrolled to the
+// gradient's colours, the orb and its DNA are in view (on a desk the orb's card and the DNA's beside the editor; on a
+// phone, small, at the editor's head), and the DNA changes as a colour is chosen.
+for (const size of ["desk", "phone"] as const) {
+  test(`at ${size} size the orb and its DNA stay in view while its colours are chosen, and the DNA changes with them`, { skip }, async () => {
+    const page = await plainAt(size);
+    await page.getByRole("tab", { name: "Colour" }).click();
+    await page.getByRole("button", { name: "then coral" }).evaluate((b) => b.scrollIntoView({ block: "center" }));
+    await page.waitForTimeout(400);
+    const vh = page.viewportSize()!.height;
+    const seen = async (sel: string): Promise<boolean> => {
+      const b = await page.locator(sel).first().boundingBox();
+      return b !== null && b.y >= -1 && b.y + b.height <= vh + 1;
+    };
+    const orb = size === "desk" ? "[data-cradle] canvas" : "[data-peek] canvas";
+    const dna = size === "desk" ? "[data-strand-card] [data-dna]" : "[data-peek-dna]";
+    assert.ok(await seen(orb), "the orb in view");
+    assert.ok(await seen(dna), "its DNA in view");
+    if (size === "desk") {
+      const card = (await page.locator("[data-strand-card]").boundingBox())!, editor = (await page.locator("[data-editor]").boundingBox())!;
+      assert.ok(card.x + card.width <= editor.x, "the DNA's own card beside the editor, not in it");
+    } else assert.ok(!(await seen("[data-cradle] canvas")), "control: on a phone the big orb has scrolled away, the small one is what is seen");
+    const before = await page.locator(dna).first().innerText();
+    await page.getByRole("button", { name: "then coral" }).click();
+    let after = before;
+    for (let i = 0; i < 40 && after === before; i++) {
+      await page.waitForTimeout(50);
+      after = await page.locator(dna).first().innerText();
+    }
+    assert.notEqual(after, before, "the DNA changes with the colour");
+    await page.getByRole("button", { name: "No gradient" }).click(); // as plain as it was, for the tests after
+  });
+}
+
 test("a roll of the dice that lands on another page turns to it", { skip }, async () => {
   // shapes: a roll changes no thumbnail (each shows its own shape), so nothing is redrawn and the
   // test stays quick in the gate (a hat's roll can change its colour, and every thumbnail with it)
@@ -262,7 +297,8 @@ test("the first of his kind starts as the Senior, the next of that kind a Junior
 test("your first orb is your CEO, the next your assistant: every roll is that one, and only it is offered; then what is open (owner, 10-07)", { skip, timeout: 360_000 }, async () => {
   const page = await open("desk"); // nothing in the office yet: the creator is on the first orb
   try {
-    const said = () => page.locator("[data-cradle] > p").innerText();
+    // its title, on its card under the orb (10-10: the orb's caption no longer repeats it)
+    const said = () => page.locator("[data-sheet-head] [data-title]").innerText();
     const rolls = async (want: RegExp, what: string): Promise<void> => {
       for (let i = 0; i < 5; i++) {
         await page.getByRole("button", { name: /Roll everything/ }).click();
@@ -270,17 +306,17 @@ test("your first orb is your CEO, the next your assistant: every roll is that on
         assert.match(await said(), want, `${what}, roll ${i}: ${await said()}`);
       }
     };
-    await rolls(/Chief Executive Officer\./, "your CEO first");
+    await rolls(/Chief Executive Officer/, "your CEO first");
     await page.getByRole("tab", { name: "Specialty" }).click();
     assert.equal(await page.locator('[data-founding="ceo"] button').count(), 1, "only the CEO is offered");
     await page.getByRole("button", { name: "Roll specialty" }).click();
-    assert.match(await said(), /Chief Executive Officer\./, "its own die too");
+    assert.match(await said(), /Chief Executive Officer/, "its own die too");
     await page.getByRole("textbox", { name: "Name" }).fill("Maya");
     await page.getByRole("button", { name: "Create Maya" }).click();
     await page.getByRole("heading", { name: "Maya" }).waitFor();
     // then your personal assistant
     await page.getByRole("button", { name: "New orb" }).first().click();
-    await rolls(/Personal Assistant\./, "then your assistant");
+    await rolls(/Personal Assistant/, "then your assistant");
     await page.getByRole("tab", { name: "Specialty" }).click();
     assert.equal(await page.locator('[data-founding="assistant"] button').count(), 1, "only the assistant is offered");
     await page.getByRole("textbox", { name: "Name" }).fill("Bea");

@@ -9,9 +9,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { HAT_FS, HAT_VS, ORB_FS } from "../src/orb/glsl.ts";
-import { BEAN_CY, MAT, onThe, outOfHead, PITCH, SLOT } from "../src/orb/hats/geo.ts";
-import { FACE, glassesMesh } from "../src/orb/hats/glasses.ts";
-import { hasEars, hatCells, headCells, headOf, NX, NY } from "../src/orb/hats/heads.ts";
+import { BEAN_CY, built as builtOf, headAt, MAT, Mesh, onThe, outOfHead, PITCH, revolve, seatAt, SLOT } from "../src/orb/hats/geo.ts";
+import { BEAN_FACE, FACE, glassesMesh, type Face } from "../src/orb/hats/glasses.ts";
+import { faceOf, hasEars, hatCells, headCells, headOf, NX, NY } from "../src/orb/hats/heads.ts";
 import { glowOf, hatMesh, MODELS } from "../src/orb/hats/models.ts";
 import { ASH, closeUp, COVERS, earsInside, EYES, GLASSES, halfWidth, HATS, hatReach, isShades, lookOf, SHAPES, type GlassesName, type HatName, type ShapeName } from "../src/orb/spec.ts";
 import { PORTRAIT } from "../src/orb/renderer.ts";
@@ -251,4 +251,69 @@ test("a close-up keeps his hat in: every hat on every shape stands inside its fr
   const was = { ...PORTRAIT, radius: Math.min(PORTRAIT.radius, PORTRAIT.w / 2 / (halfWidth("bean") + PORTRAIT.edge + 0.04)) };
   assert.ok(was.cy * was.h - hatReach({ shape: "bean", hat: "crown" }) * was.radius < 0, "control: the old close-up cuts the crown");
   assert.equal(closeUp(PORTRAIT, { shape: "bean", hat: "none" }).h, PORTRAIT.h, "no hat: the frame the eye checks measured");
+});
+
+// owner, 10-10: "the glasses are off too on some orbs: they overlap the body and face". A pair is made on the face of the
+// shape that wears it: face on, nothing of it shows past his outline, and its temples reach his edge (on the bean's face,
+// they ended half way across a squish and stood out past a pill).
+test("a pair of glasses fits the face of the shape that wears it: nothing past his edge, its temples reaching it", () => {
+  /** Face on, how far past his outline anything of the pair shows (hidden only where it is behind his face), and how far
+   * out its temples reach, as a share of his half-width there. */
+  const fit = (shape: ShapeName, id: number, face: Face): { past: number; reach: number } => {
+    const b = glassesMesh(id, EYES.classic.a, 0, face)!;
+    const own = faceOf(shape);
+    let past = 0, reach = 0;
+    for (let v = 0; v < b.pos.length / 3; v++) {
+      const x = Math.abs(b.pos[v * 3]!), y = b.pos[v * 3 + 1]!, z = b.pos[v * 3 + 2]!;
+      const w = own.w(y);
+      if (w <= 0) continue;
+      const behind = x < w && z < Math.sqrt(w * w - x * x);
+      if (!behind) past = Math.max(past, x - w);
+      if (w > 0.2) reach = Math.max(reach, Math.min(x / w, 1.05)); // at whatever height its temples are
+    }
+    return { past, reach };
+  };
+  const PAST = 0.045; // a temple's thickness at his very edge
+  for (const shape of ["pill", "squish", "pebble", "egg", "kitty", "star", "squircle"] as ShapeName[])
+    for (const g of ["round", "hearts", "aviators", "cat-eye"] as GlassesName[]) {
+      const r = fit(shape, GLASSES[g].id, faceOf(shape));
+      assert.ok(r.past < PAST, `${g} on a ${shape}: ${r.past.toFixed(3)} past his outline`);
+      assert.ok(r.reach > 0.93, `${g} on a ${shape}: its temples reach ${(r.reach * 100).toFixed(0)}% of the way to his edge`);
+    }
+  // the controls: made on the bean's face, a pair stands out past a pill and stops short on a squish
+  assert.ok(fit("pill", GLASSES.round.id, BEAN_FACE).past > PAST, "control: the bean's pair stands out past a pill");
+  assert.ok(fit("squish", GLASSES.round.id, BEAN_FACE).reach < 0.9, "control: the bean's pair stops short on a squish");
+});
+
+// owner, 10-10: "some headbands are a little off, you see the cut off in the back of the head as its trying to wrap
+// around". Seen from a little above, the back of a band round a flat head stood over his outline (his glass is drawn
+// straight on) and was cut where his head hid it. Now the back of a band of its own is let down out of sight: nothing
+// of it behind his middle is seen over his outline.
+test("the back of a headband never shows over a flat head: a band round his head goes round behind him", () => {
+  /** How far over his outline (hat units) the most of its band (what is made of `kind`) behind his middle is seen, as the
+   * renderer draws it: an ear or an antler standing up over him is meant to be seen. */
+  const over = (b: { pos: ArrayLike<number>; mat: ArrayLike<number> }, kind: number): number => {
+    const cp = Math.cos(PITCH), sp = Math.sin(PITCH);
+    let most = -1;
+    for (let v = 0; v < b.pos.length / 3; v++) {
+      const x = b.pos[v * 3]!, y = b.pos[v * 3 + 1]!, z = b.pos[v * 3 + 2]!;
+      if (z >= -0.02 || b.mat[v * 4] !== kind) continue;
+      most = Math.max(most, y * cp - z * sp - seatAt(Math.abs(x)));
+    }
+    return most;
+  };
+  for (const shape of ["pebble", "squircle", "squish", "bean"] as ShapeName[])
+    for (const [hat, kind] of [["sweatband", MAT.cotton], ["eyeshade", MAT.rubber], ["sun visor", MAT.cotton], ["bunny ears", MAT.plastic], ["antlers", MAT.leather]] as [HatName, number][]) {
+      const head = headOf(shape);
+      const seen = onThe(head, () => over(hatMesh(HATS[hat].id, head)!, kind));
+      assert.ok(seen <= 0.005, `${hat} on a ${shape}: its back seen ${seen.toFixed(3)} over his outline`);
+    }
+  // the control: a sweatband's ring as it was, round a pebble's head with nothing let down, is seen over it
+  const head = headOf("pebble");
+  const ring = onThe(head, () => {
+    const m = new Mesh();
+    revolve(m, [headAt(1.0, 0), headAt(1.0, 0.038), headAt(0.78, 0.038), headAt(0.78, 0)], { kind: MAT.cotton, slot: SLOT.main }, { segs: 120 });
+    return over(builtOf(m), MAT.cotton);
+  });
+  assert.ok(ring > 0.02, `control: a band's ring round a pebble, as it was, is seen ${ring.toFixed(3)} over his outline`);
 });

@@ -109,6 +109,17 @@ test("tick a position, interview, hire, pass; an orb let go applies again; desk 
   assert.match(await card.innerText(), new RegExp(`Applying: Frontend Builder[\\s\\S]*#1 for your team[\\s\\S]*${names[0]}[\\s\\S]*Applying · would start as the Senior[\\s\\S]*Traits[\\s\\S]*DNA[\\s\\S]*Leans toward`, "i"));
   await page.waitForTimeout(400);
   assert.deepEqual(await measure(page), [], "the profile, at desk size");
+  // its CV (owner, 10-10: "fix CV page in recruiting"): one scroll, never a box scrolling inside it, and Interview, Hire
+  // and Pass in view at its foot wherever it is scrolled
+  assert.equal(await card.locator(".orbs-tall").count(), 0, "no box scrolling inside the CV");
+  const cv = card.locator(".orbs-cv");
+  assert.ok(await cv.evaluate((el) => el.scrollHeight > el.clientHeight + 40), "control: the CV is longer than its window, so it scrolls");
+  for (const to of ["top", "bottom"] as const) {
+    await cv.evaluate((el, to) => el.scrollTo({ top: to === "top" ? 0 : el.scrollHeight }), to);
+    await page.waitForTimeout(200);
+    const a = (await card.locator("[data-cv-answer]").boundingBox())!, w = (await cv.boundingBox())!;
+    assert.ok(a.y >= w.y - 1 && a.y + a.height <= w.y + w.height + 1, `Interview, Hire and Pass in view, scrolled to the ${to}`);
+  }
   await page.keyboard.press("Escape");
   await card.waitFor({ state: "detached", timeout: 5_000 });
 

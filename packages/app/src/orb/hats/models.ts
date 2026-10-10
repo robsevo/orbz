@@ -93,20 +93,39 @@ function band(m: Mesh, wall: (y: number) => number, y0: number, y1: number, look
 const slab = (r0: number, r1: number, y: number, th: number): P2[] =>
   new Profile(r0, y - th / 2).line(r1 - th / 2, y - th / 2, 14).arc(r1 - th / 2, y, Math.PI / 2, 8).line(r0, y + th / 2, 14).pts;
 
+/** How far under his outline the back of a band is let down (geo.ts rest), where seen from a little above it would show
+ * over his head: his glass is drawn straight on, so the back of a band round a flat head (a pebble's, a squircle's) stood
+ * over it and was cut where his head hid it (owner, 10-10: "you see the cut off in the back of the head as its trying to
+ * wrap around"). Under it, his head hides it, and the band goes round behind him. */
+const BAND_REST = -0.012;
+
 /** A band that goes round his head (a sweatband, a headband): its section from `t0` to `t1` radians down his head,
- * `d` out from it, its edges rounded. */
-function headBand(m: Mesh, t0: number, t1: number, d: number, look: Look, segs = 120): void {
+ * `d` out from it, its edges rounded; `free` (a band of its own, not the rim under a hat) lets its back down out of sight. */
+function headBand(m: Mesh, t0: number, t1: number, d: number, look: Look, segs = 120, free = false): void {
   const r = Math.min(0.03, d * 0.9, (t1 - t0) * 0.3);
   const p = new Profile(t1, 0).corner(t1, d, t0, d, r, 6).corner(t0, d, t0, 0, r, 6).line(t0, 0.004, 1);
-  revolve(m, p.pts.map(([th, dd]) => headAt(th, dd)), look, { segs });
+  revolve(m, p.pts.map(([th, dd]) => headAt(th, dd)), look, { segs, ...(free && { at: (q: V3) => rest(q, BAND_REST) }) });
 }
 
 /** An arc over his head from ear to ear (a headband's, headphones'): at `front` radians toward you, `out` off his head,
- * from `-reach` to `reach` radians either side of his top. */
+ * from `-reach` to `reach` radians either side of his top; `free`, its back let down as a band's is. */
 const overHead =
-  (reach: number, out: number, front = 0): ((t: number) => V3) =>
-  (t) =>
-    onHead(mix(-reach, reach, t), front, out);
+  (reach: number, out: number, front = 0, free = false): ((t: number) => V3) =>
+  (t) => {
+    const p = onHead(mix(-reach, reach, t), front, out);
+    return free ? rest(p, BAND_REST) : p;
+  };
+
+/** A headband's arc over his top whose ends go under his head toward his sides, as a band's ends go into the hair: its
+ * last part dives a little back and under his surface, where his head hides it, so no end stands in the air past his
+ * outline (owner, 10-10: "some headbands are a little off"). */
+const tucked =
+  (reach: number, out: number, front: number): ((t: number) => V3) =>
+  (t) => {
+    const side = mix(-reach, reach, t);
+    const e = smooth(reach - 0.38, reach, Math.abs(side));
+    return rest(onHead(side, front - 0.25 * e, out - 0.07 * e), BAND_REST);
+  };
 
 /** A peak (a cap's, a visor's): out from the edge (re, ye) round the angle `phc`, `L0` deep at its middle, `w`
  * radians either side, curving down at its sides; stitched round its edge. */
@@ -373,9 +392,11 @@ function horns(m: Mesh): void {
 
 /** Bunny ears on a headband: plush outer ears, their insides in his second colour, one a little bent. */
 function bunnyEars(m: Mesh): void {
-  tube(m, overHead(1.2, 0.012, 0.38), () => 0.024, { kind: MAT.plastic, slot: SLOT.main }, { n: 56, k: 12, flat: 0.4, up: [0, 0, 1] });
+  // the band a little forward of his top, ear to ear, its ends tucked under his head (owner, 10-10: they ended in the air
+  // past his sides), the ears standing on it
+  tube(m, tucked(1.32, 0.012, 0.2), () => 0.024, { kind: MAT.plastic, slot: SLOT.main }, { n: 72, k: 12, flat: 0.4, up: [0, 0, 1] });
   for (const s of [-1, 1]) {
-    const base = onHead(s * 0.34, 0.36, 0.0);
+    const base = onHead(s * 0.34, 0.2, 0.0);
     const d = norm([s * 0.3, 1, -0.16]);
     const face: V3 = [0, 0.05, 1];
     const shape = (t: number): number => Math.sin(Math.PI * t) ** 0.55 * (0.8 + 0.2 * t);
@@ -593,7 +614,7 @@ function bucketHat(m: Mesh): void {
 /** An accountant's eyeshade: a band round his head and a visor of tinted, see-through celluloid over his brow, bound
  * at its edge. */
 function eyeshade(m: Mesh): void {
-  headBand(m, 0.86, 0.96, 0.014, { kind: MAT.rubber, slot: SLOT.second });
+  headBand(m, 0.86, 0.96, 0.014, { kind: MAT.rubber, slot: SLOT.second }, 120, true);
   const [re, ye] = headAt(0.96, 0.014);
   const L = 0.27;
   const w = 1.1;
@@ -628,8 +649,8 @@ function headset(m: Mesh): void {
 
 /** A terry sweatband round his forehead, a stripe through its middle. */
 function sweatband(m: Mesh): void {
-  headBand(m, 0.78, 1.0, 0.038, { kind: MAT.cotton, slot: SLOT.main, extra: 3 });
-  headBand(m, 0.87, 0.91, 0.042, { kind: MAT.cotton, slot: SLOT.second, extra: 3 });
+  headBand(m, 0.78, 1.0, 0.038, { kind: MAT.cotton, slot: SLOT.main, extra: 3 }, 120, true);
+  headBand(m, 0.87, 0.91, 0.042, { kind: MAT.cotton, slot: SLOT.second, extra: 3 }, 120, true);
 }
 
 /** An apple sat on his head: a glossy, lightly streaked apple with its five soft lobes, a woody stem and a leaf. */
@@ -760,7 +781,7 @@ function deerstalker(m: Mesh): void {
 
 /** A sun visor: a band round his head and a wide peak with its edge piped in his second colour, no crown. */
 function sunVisor(m: Mesh): void {
-  headBand(m, 0.74, 0.9, 0.016, { kind: MAT.cotton, slot: SLOT.main });
+  headBand(m, 0.74, 0.9, 0.016, { kind: MAT.cotton, slot: SLOT.main }, 120, true);
   const [re, ye] = headAt(0.9, 0.016);
   const L = 0.3;
   const w = 1.15;
@@ -786,7 +807,7 @@ function flowerCrown(m: Mesh): void {
   const [rv, yv] = headAt(0.62, 0.016);
   // the vine's back, round a flat head, lies on it; the flowers go round his front and sides, where they are seen (round
   // behind him, their petals stood up over a flat head's top with nothing under them)
-  tube(m, (t) => rest(around(rv, yv, TAU * t), 0), () => 0.009, greenery, { closed: true, n: 120, k: 8 });
+  tube(m, (t) => rest(around(rv, yv, TAU * t), BAND_REST), () => 0.009, greenery, { closed: true, n: 120, k: 8 });
   const petal: Look = { kind: MAT.petal, slot: SLOT.main };
   [-1.7, -1.13, -0.56, 0, 0.56, 1.13, 1.7].forEach((phi, i) => {
     const sz = i % 2 ? 0.8 : 1;
@@ -989,10 +1010,11 @@ function tiara(m: Mesh): void {
 
 /** Antlers on a headband: a beam each side curving up and out, with its tines, in bone. */
 function antlers(m: Mesh): void {
-  tube(m, overHead(1.2, 0.012, 0.32), () => 0.022, { kind: MAT.leather, slot: SLOT.second }, { n: 56, k: 12, flat: 0.45, up: [0, 0, 1] });
+  // as the bunny ears' band: its ends tucked under his head, the antlers on it
+  tube(m, tucked(1.32, 0.012, 0.2), () => 0.022, { kind: MAT.leather, slot: SLOT.second }, { n: 72, k: 12, flat: 0.45, up: [0, 0, 1] });
   const bone: Look = { kind: MAT.horn, slot: SLOT.main, extra: 1 };
   for (const s of [-1, 1]) {
-    const base = onHead(s * 0.4, 0.3, 0.01);
+    const base = onHead(s * 0.4, 0.2, 0.01);
     const beam = spline([base, add(base, [s * 0.03, 0.08, 0]), add(base, [s * 0.1, 0.17, -0.01]), add(base, [s * 0.15, 0.27, -0.02]), add(base, [s * 0.13, 0.36, -0.03])]);
     tube(m, beam, (t) => mix(0.024, 0.011, t), bone, { n: 40, k: 12 });
     const tine = (t: number, d: V3, l: number, r: number): void => {

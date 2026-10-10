@@ -143,7 +143,9 @@ test("the office is the floor: an orb at work at its desk, a board vote at the B
     }
   }
   await page.locator(".orbs-sheet").filter({ hasText: "Pip" }).waitFor({ timeout: 10_000 });
-  assert.match(await page.locator(".orbs-sheet").innerText(), /Pip[\s\S]*Personal Assistant[\s\S]*Traits/i, "its profile, stats and all");
+  // who it is in its own card, its stats in another (owner, 10-10: "put that part with the dna strand to the left")
+  assert.match(await page.locator(".orbs-sheet").innerText(), /Pip[\s\S]*Personal Assistant/i, "its profile");
+  assert.match(await page.locator("[data-sheet-body]").innerText(), /Traits/i, "its stats and all");
   // and The office goes back to the floor
   await page.getByRole("button", { name: "The office", exact: true }).click();
   await page.locator("[data-floor]").waitFor({ timeout: 10_000 });
