@@ -269,7 +269,10 @@ test("a phone's scrolling rows; an orb's compact controls above its DNA and Chat
       const b = actions.locator(sel);
       assert.deepEqual([await b.innerText(), await b.getAttribute("aria-label")], [words, label]);
     }
-    assert.equal(await page.locator("[data-sheet-head] [data-chat-with], [data-sheet-head] [data-career-open]").count(), 0, "the buttons left the name line");
+    // on a phone, under its level and over what it does (owner, 10-10: "chat and career buttons in between orb bio and where
+    // it says Lv. XP to Lv.")
+    const [lv, bio] = await Promise.all([page.locator("[data-sheet-head] [data-level]").boundingBox(), page.locator("[data-sheet-head] [data-bio]").boundingBox()]);
+    assert.ok(lv && bio && actionBox.y >= lv.y + lv.height - 1 && actionBox.y + actionBox.height <= bio.y + 1, "Chat and Career under its level, over what it does");
     const [heroBox, headBox, controlsBox, dnaBox] = await Promise.all(["[data-profile-hero]", "[data-sheet-head]", "[data-moves]", "[data-strand-card]"].map((sel) => page.locator(sel).boundingBox()));
     assert.ok(heroBox && headBox && controlsBox && dnaBox);
     assert.ok(headBox.x >= heroBox.x && headBox.x + headBox.width <= heroBox.x + heroBox.width + 1, "the name and description share the orb's hero container");

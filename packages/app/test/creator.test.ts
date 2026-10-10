@@ -179,6 +179,14 @@ for (const size of ["desk", "phone"] as const) {
     ]);
     assert.ok(card && canvas && roll && create && moves && dna);
     assert.ok(roll.y >= canvas.y + canvas.height - 1 && create.y >= canvas.y + canvas.height - 1, "Roll and Create under the orb");
+    if (size === "phone") {
+      // under its title and level, over what it does, and a little smaller (owner, 10-10: "put roll everything button and
+      // create "orbname" buttons right in between the description of the orb and "starts as the senior: your first" ...
+      // make the rectangles and font a bit smaller too")
+      const [title, bio] = await Promise.all([hero.locator("[data-title]").boundingBox(), hero.locator("[data-bio]").boundingBox()]);
+      assert.ok(title && bio && roll.y >= title.y + title.height - 1 && roll.y + roll.height <= bio.y + 1, "Roll and Create under its level, over what it does");
+      assert.ok(roll.height <= 32 && create.height <= 32, `smaller (${Math.round(roll.height)} and ${Math.round(create.height)} px)`);
+    }
     assert.ok(card.y + card.height <= moves.y + 1 && moves.y + moves.height <= dna.y + 1, "the orb's card, its moods, then its DNA");
     assert.deepEqual([await page.locator("[data-sheet-body]").count(), await page.locator("[data-sheet-skills]").count()], [1, 1], "its stats in two cards");
     if (size === "desk") assert.ok(dna.y + dna.height <= page.viewportSize()!.height, `the card, the moods and the DNA in a desk's height (the DNA ends at ${Math.round(dna.y + dna.height)})`);

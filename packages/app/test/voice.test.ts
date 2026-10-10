@@ -107,8 +107,9 @@ async function talking(t: TestContext, line: string | (string | number | { backw
     // not the time Playwright takes to land its click on a busy machine
     document.addEventListener("pointerdown", (e) => {
       const b = (e.target as Element | null)?.closest?.("button");
-      if (b?.textContent?.trim() === "Stop") said.push({ kind: "pressed", at: performance.now() });
-      if (b?.textContent?.trim() === "Hands-free") said.push({ kind: "listening", at: performance.now() }); // the microphone starts its recording now
+      const name = (b?.getAttribute("aria-label") ?? b?.textContent ?? "").trim(); // (icons since 10-10: their names are their labels)
+      if (name === "Stop") said.push({ kind: "pressed", at: performance.now() });
+      if (name === "Hands-free") said.push({ kind: "listening", at: performance.now() }); // the microphone starts its recording now
     }, true);
   });
   const page = await ctx.newPage();

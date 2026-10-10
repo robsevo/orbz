@@ -54,6 +54,26 @@ test("a file given in a private chat: kept in from-you, a chip until sent, its p
   await page.locator(".orbs-window").waitFor({ timeout: 30_000 });
   await page.goto(page.url().replace(/#.*$/, "#/chat/Ada"));
   await page.getByRole("button", { name: "Give Ada a file" }).waitFor({ timeout: 20_000 });
+  // the composer (owner, 10-10, on a phone: "hands free and file containers should be icons. and placed differently, even
+  // the text box when we type it grows weirdly, make it bigger"): what you write across the composer, the file, hands-free
+  // and the microphone as icons under it, and a long message in a few full lines (beside the three as words the box was
+  // 170 px wide and this message filled its 160 px cap; across, 108 px: the line halfway)
+  const [composer, field, file, hands, mic] = await Promise.all([
+    page.locator("[data-composer]").boundingBox(), page.locator("[data-composer] textarea").boundingBox(),
+    page.getByRole("button", { name: "Give Ada a file" }).boundingBox(), page.getByRole("button", { name: "Hands-free" }).boundingBox(),
+    page.getByRole("button", { name: "Talk to Ada" }).boundingBox(),
+  ]);
+  assert.ok(composer && field && file && hands && mic);
+  assert.ok(field.width >= composer.width * 0.85, `the text box across the composer (${Math.round(field.width)} of ${Math.round(composer.width)} px)`);
+  for (const [what, b] of [["the file", file], ["hands-free", hands], ["the microphone", mic]] as const) {
+    assert.ok(b.width <= 44 && b.height <= 44, `${what} an icon (${Math.round(b.width)} by ${Math.round(b.height)})`);
+    assert.ok(b.y >= field.y + field.height - 1, `${what} under the text box`);
+  }
+  const field2 = page.locator("[data-composer] textarea");
+  await field2.fill("Can you look over the invoices for this month and tell me which ones are late, and draft a polite reminder for each client that has not paid yet?");
+  const tall = await field2.evaluate((el) => el.getBoundingClientRect().height);
+  assert.ok(tall <= 134, `a long message in a few full lines (${Math.round(tall)} px)`);
+  await field2.fill("");
   await page.getByLabel("Files to give Ada").setInputFiles([
     { name: "sales.csv", mimeType: "text/csv", buffer: Buffer.from("month,total\nJan,12\nFeb,30\n") },
     { name: "draft.txt", mimeType: "text/plain", buffer: Buffer.from("not this one") },

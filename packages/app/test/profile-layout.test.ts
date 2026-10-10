@@ -81,7 +81,16 @@ test("the profile uses one Career-like hero, then compact controls and DNA", { s
         // nothing in it, can we split the stats container in two")
         assert.ok(Math.abs(skills.x - dna.x) <= 2 && skills.y >= dna.y + dna.height - 1, "its skills and the office under its DNA, in that column");
         assert.ok(traits.x >= skills.x + skills.width - 1, "its traits in the other column, beside them");
-      } else assert.ok(skills.y >= traits.y + traits.height - 1, "on a phone its skills follow its traits, one column");
+      } else {
+        assert.ok(skills.y >= traits.y + traits.height - 1, "on a phone its skills follow its traits, one column");
+        // Chat and Career under its level, over what it does (owner, 10-10)
+        const [lv, bio] = await Promise.all([page.locator("[data-sheet-head] [data-level]").boundingBox(), page.locator("[data-sheet-head] [data-bio]").boundingBox()]);
+        assert.ok(lv && bio && actions.y >= lv.y + lv.height - 1 && actions.y + actions.height <= bio.y + 1, "on a phone Chat and Career under its level, over what it does");
+      }
+      // small and square, as a new orb's are (owner, 10-10: "make the chat and career buttons smaller, and square like the new
+      // orb page buttons"): a pill's corners were half its height
+      const chat = await page.locator("[data-chat-with]").evaluate((el) => ({ r: parseFloat(getComputedStyle(el).borderTopLeftRadius), h: el.getBoundingClientRect().height }));
+      assert.ok(chat.r <= 10 && chat.h <= 32, `Chat small and square (${JSON.stringify(chat)})`);
       assert.deepEqual(await measure(page), [], `the profile fits at ${width} px`);
     } finally {
       await ctx.close();

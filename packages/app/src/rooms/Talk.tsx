@@ -28,7 +28,18 @@ const bubble = (mine: boolean): CSSProperties => ({
 });
 const button: CSSProperties = { font: "600 14px/20px var(--font)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 10, padding: "8px 14px", cursor: "pointer", boxShadow: "inset 0 0 0 .5px var(--hairline)", minHeight: 36 };
 /** How tall the box you write in grows before it scrolls. */
-const BOX_MAX = 160;
+const BOX_MAX = 200; // about seven lines, then it scrolls (owner, 10-10: "make it bigger")
+// the composer's icons: round, quiet, the size of a fingertip with orbs-small's reach above and below
+const icon: CSSProperties = { display: "grid", placeItems: "center", width: 40, height: 40, minHeight: 40, padding: 0, border: 0, borderRadius: 999, background: "transparent", color: "var(--text-2)", cursor: "pointer", flex: "0 0 auto" };
+const round: CSSProperties = { ...icon, background: "var(--accent)", color: "var(--ground)" };
+/** A line glyph in the button's own colour. */
+function Glyph({ d, width = 1.9 }: { d: string; width?: number }) {
+  return (
+    <svg aria-hidden width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={width} strokeLinecap="round" strokeLinejoin="round" style={{ display: "block" }}>
+      <path d={d} />
+    </svg>
+  );
+}
 
 export type Busy = Record<string, "thinking" | "speaking">;
 
@@ -383,18 +394,8 @@ export function Talk(o: {
           e.preventDefault();
           send();
         }}
-        style={{ display: "grid", gap: 8, padding: "var(--s3) var(--s5) var(--s4)", boxShadow: "0 -1px 0 var(--sep)" }}
+        style={{ display: "grid", gap: 8, padding: "var(--s3) var(--s4) var(--s4)", boxShadow: "0 -1px 0 var(--sep)" }}
       >
-        {o.voice && (
-          <div data-ears style={{ display: "flex", gap: 8, alignItems: "center", minWidth: 0 }}>
-            <button type="button" aria-pressed={ears !== null} onClick={handsFree} style={{ ...button, padding: "4px 10px", minHeight: 28, font: "600 12px/16px var(--font)", background: ears ? "var(--accent-fill)" : "var(--fill)", boxShadow: ears ? "inset 0 0 0 1.5px var(--accent)" : button.boxShadow }}>
-              Hands-free
-            </button>
-            <span style={{ font: "500 12px/16px var(--font)", color: "var(--text-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
-              {ears === "called" ? `${o.voice.orb.name} is listening…` : ears === "hearing" ? "Hearing you…" : ears === "conversing" ? `Talking with ${o.voice.orb.name} · “thanks” ends it` : ears ? `Say “hey ${o.voice.orb.name}”` : recording ? "Recording: press the microphone again to send" : ""}
-            </span>
-          </div>
-        )}
         {given.length > 0 && (
           <div data-given style={{ display: "flex", gap: 6, flexWrap: "wrap", minWidth: 0 }}>
             {given.map((p) => (
@@ -407,28 +408,13 @@ export function Talk(o: {
             ))}
           </div>
         )}
-        {/* the buttons keep their height at the foot of the box as it grows */}
-        <div style={{ display: "flex", alignItems: "flex-end", gap: 8, minWidth: 0 }}>
-        {o.attach && (
-          <>
-            <input ref={picker} type="file" multiple hidden aria-label={`Files to give ${o.orbs[0]?.name ?? "the orb"}`} onChange={(e) => give(e.target.files)} />
-            <button type="button" onClick={() => picker.current?.click()} aria-label={`Give ${o.orbs[0]?.name ?? "the orb"} a file`} style={{ ...button, padding: "8px 12px" }}>
-              File
-            </button>
-          </>
-        )}
-        {o.voice && (
-          <button type="button" onClick={talk} aria-pressed={recording !== null} aria-label={recording ? "Send what you said" : `Talk to ${o.voice.orb.name}`} style={{ ...button, padding: "8px 12px", background: recording ? "var(--accent-fill)" : "var(--fill)", boxShadow: recording ? "inset 0 0 0 1.5px var(--accent)" : button.boxShadow }}>
-            {/* drawn here, in the text's own colour: no glyph brings a colour of its own */}
-            <svg aria-hidden width="16" height="16" viewBox="0 0 16 16" style={{ display: "block" }}>
-              {recording ? (
-                <rect x="4" y="4" width="8" height="8" rx="2" fill="currentColor" />
-              ) : (
-                <path d="M8 1.5a2.5 2.5 0 0 1 2.5 2.5v4a2.5 2.5 0 0 1-5 0V4A2.5 2.5 0 0 1 8 1.5Zm-4.5 6.5h1a3.5 3.5 0 0 0 7 0h1a4.5 4.5 0 0 1-4 4.47V14.5h-1v-2.03A4.5 4.5 0 0 1 3.5 8Z" fill="currentColor" />
-              )}
-            </svg>
-          </button>
-        )}
+        {/* one composer (owner, 10-10, on a phone: "restructure the chat box and its surroundings on mobile professionally.
+            hands free and file containers should be icons. and placed differently, even the text box when we type it grows
+            weirdly, make it bigger"): what you write across the whole of it (it had a third of a phone's width beside File,
+            the microphone and Send, so a line wrapped every few words); under it, inside it, a file and hands-free as icons
+            with what hands-free hears beside them, and one round button at the end: the microphone while there is nothing to
+            send, Send once there is, Stop while he talks or works */}
+        <div data-composer style={{ display: "grid", gap: 2, padding: 6, borderRadius: 22, background: "var(--fill)", boxShadow: "inset 0 0 0 1px var(--hairline)" }}>
         <textarea
           ref={box}
           value={draft}
@@ -442,17 +428,50 @@ export function Talk(o: {
           aria-label={o.placeholder}
           placeholder={hint}
           rows={1}
-          style={{ flex: "1 1 auto", minWidth: 0, resize: "none", font: "400 15px/22px var(--font)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 14, padding: "10px 14px", outline: 0, boxShadow: "inset 0 0 0 1px var(--hairline)", maxHeight: BOX_MAX }}
+          style={{ display: "block", width: "100%", minWidth: 0, resize: "none", font: "400 16px/24px var(--font)", color: "var(--text-1)", background: "transparent", border: 0, padding: "8px 10px 4px", outline: 0, maxHeight: BOX_MAX }}
         />
-        {o.voice && (talking || Object.keys(busy).length > 0) && !draft.trim() ? (
-          <button type="button" onClick={stop} style={{ ...button, flexShrink: 0, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)" }}>
-            Stop
-          </button>
-        ) : (
-          <button type="submit" data-sound="pick" disabled={!draft.trim() && !given.length} style={{ ...button, flexShrink: 0, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)", opacity: draft.trim() || given.length ? 1 : 0.5 }}>
-            Send
-          </button>
-        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 2, minWidth: 0 }}>
+          {o.attach && (
+            <>
+              <input ref={picker} type="file" multiple hidden aria-label={`Files to give ${o.orbs[0]?.name ?? "the orb"}`} onChange={(e) => give(e.target.files)} />
+              <button type="button" className="orbs-small" onClick={() => picker.current?.click()} aria-label={`Give ${o.orbs[0]?.name ?? "the orb"} a file`} title="Give a file" style={icon}>
+                <Glyph d="M15 7.5 8.6 13.9a1.9 1.9 0 0 0 2.7 2.7l7-7a3.9 3.9 0 0 0-5.5-5.5l-7.1 7.1a5.9 5.9 0 0 0 8.3 8.3l6.4-6.4" />
+              </button>
+            </>
+          )}
+          {o.voice ? (
+            <div data-ears style={{ display: "flex", gap: 4, alignItems: "center", minWidth: 0, flex: "1 1 auto" }}>
+              <button type="button" className="orbs-small" aria-pressed={ears !== null} aria-label="Hands-free" onClick={handsFree} title="Hands-free: say his name" style={{ ...icon, ...(ears && { background: "var(--accent-fill)", color: "var(--text-1)", boxShadow: "inset 0 0 0 1.5px var(--accent)" }) }}>
+                <Glyph d="M5 10.5v3M8.5 8v8M12 5v14M15.5 8v8M19 10.5v3" />
+              </button>
+              <span style={{ font: "500 12px/16px var(--font)", color: "var(--text-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
+                {ears === "called" ? `${o.voice.orb.name} is listening…` : ears === "hearing" ? "Hearing you…" : ears === "conversing" ? `Talking with ${o.voice.orb.name} · “thanks” ends it` : ears ? `Say “hey ${o.voice.orb.name}”` : recording ? "Recording: press the microphone again to send" : ""}
+              </span>
+            </div>
+          ) : (
+            <span style={{ flex: "1 1 auto" }} />
+          )}
+          {o.voice && (talking || Object.keys(busy).length > 0) && !draft.trim() ? (
+            <button type="button" className="orbs-small" aria-label="Stop" onClick={stop} style={{ ...round, background: "var(--accent-fill)", color: "var(--text-1)", boxShadow: "inset 0 0 0 1.5px var(--accent)" }}>
+              <svg aria-hidden width="14" height="14" viewBox="0 0 14 14" style={{ display: "block" }}><rect x="2" y="2" width="10" height="10" rx="2" fill="currentColor" /></svg>
+            </button>
+          ) : !o.voice || draft.trim() || given.length > 0 ? (
+            <button type="submit" className="orbs-small" aria-label="Send" data-sound="pick" disabled={!draft.trim() && !given.length} style={{ ...round, opacity: draft.trim() || given.length ? 1 : 0.4 }}>
+              <Glyph d="M12 19V5.5M6 11.5l6-6 6 6" width={2.2} />
+            </button>
+          ) : (
+            <button type="button" className="orbs-small" onClick={talk} aria-pressed={recording !== null} aria-label={recording ? "Send what you said" : `Talk to ${o.voice.orb.name}`} style={{ ...round, ...(!recording && { background: "var(--raised)", color: "var(--text-1)", boxShadow: "inset 0 0 0 1px var(--hairline)" }) }}>
+              {/* drawn here, in the text's own colour: no glyph brings a colour of its own */}
+              <svg aria-hidden width="18" height="18" viewBox="0 0 16 16" style={{ display: "block" }}>
+                {recording ? (
+                  <rect x="4" y="4" width="8" height="8" rx="2" fill="currentColor" />
+                ) : (
+                  <path d="M8 1.5a2.5 2.5 0 0 1 2.5 2.5v4a2.5 2.5 0 0 1-5 0V4A2.5 2.5 0 0 1 8 1.5Zm-4.5 6.5h1a3.5 3.5 0 0 0 7 0h1a4.5 4.5 0 0 1-4 4.47V14.5h-1v-2.03A4.5 4.5 0 0 1 3.5 8Z" fill="currentColor" />
+                )}
+              </svg>
+            </button>
+          )}
+        </div>
         </div>
       </form>
     </div>

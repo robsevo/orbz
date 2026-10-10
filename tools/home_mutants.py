@@ -2023,9 +2023,11 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("the box does not grow with what is written", "src/rooms/Talk.tsx", [
         ("useLayoutEffect(grow, [draft]);", "useLayoutEffect(() => {}, [draft]);"),
     ], ["sessions.test.ts"]),
-    ("Send stretches with the box", "src/rooms/Talk.tsx", [
-        ('<div style={{ display: "flex", alignItems: "flex-end", gap: 8, minWidth: 0 }}>', '<div style={{ display: "flex", gap: 8, minWidth: 0 }}>'),
-    ], ["sessions.test.ts"]),
+    # (was "Send stretches with the box": since 10-10 the buttons have a row of their own under the box, so the defect
+    # left to plant is the box sharing a row with them again, narrow, as it was)
+    ("the composer's text box shares a row with its buttons again", "src/rooms/Talk.tsx", [
+        ('<div data-composer style={{ display: "grid", gap: 2,', '<div data-composer style={{ display: "flex", alignItems: "flex-end", gap: 2,'),
+    ], ["attach.test.ts"]),
     # any colour, Dark, the strand in hex (PLAN 2.20; owner, 10-08)
     ("one of the 24 is drawn other than it was", "src/orb/spec.ts", [
         ("sat: f.sat * (own ? own.sat : dark ? DARK_GLASS.sat : 1),", "sat: f.sat * (own ? own.sat : dark ? DARK_GLASS.sat : 1.05),"),
@@ -3060,12 +3062,27 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ], ['sessions.test.ts']),
     # a new orb's page laid out as an orb's own (owner, 10-10: "the same flavour")
     ("a new orb's name card stands apart from its orb again", 'src/orbs.tsx', [
-        ('              <Sheet bare centered part="head" c={before ?? me} key={before ? "was-head" : "now-head"} onRename={(n) => edit({ name: n })} replies={replies} standing={null} startsAs={startsAs} career={null} friends={null} />\n            </div>', '            </div>'),
+        ('              <Sheet bare centered part="head" c={before ?? me} key={before ? "was-head" : "now-head"} onRename={(n) => edit({ name: n })} replies={replies} standing={null} startsAs={startsAs} career={null} friends={null} between={phone ? rollCreate : undefined} />\n            </div>', '            </div>'),
     ], ['creator.test.ts']),
     ("a new orb's moods go back under its editor", 'src/orbs.tsx', [
         ('          <div data-moves data-orb={me.hue} style={{ ...s.panel, display: "grid", gap: 8, padding: "var(--s3)", justifyItems: "center" }}>\n            {moves}\n          </div>', '          {!making && <div data-moves data-orb={me.hue} style={{ ...s.panel, display: "grid", gap: 8, padding: "var(--s3)", justifyItems: "center" }}>{moves}</div>}'),
         ('            {making && <Creator me={me} edit={edit} replies={replies} setReplies={setReplies} kinds={kinds} peek={!wide} />}', '            {making && <Creator me={me} edit={edit} replies={replies} setReplies={setReplies} kinds={kinds} peek={!wide} />}{making && <div data-moves data-orb={me.hue} style={s.panel}>{moves}</div>}'),
     ], ['creator.test.ts']),
+    # on a phone, the buttons under its level (owner, 10-10); the chat's composer
+    ("on a phone Chat and Career stay under the orb", 'src/orbs.tsx', [
+        ('                  {!phone && profileActions}', '                  {profileActions}'),
+        ('between={phone ? profileActions : undefined}', 'between={undefined}'),
+    ], ['profile-layout.test.ts']),
+    ("on a phone a new orb's Roll and Create stay under the orb", 'src/orbs.tsx', [
+        ('                {!phone && rollCreate}', '                {rollCreate}'),
+        ('between={phone ? rollCreate : undefined}', 'between={undefined}'),
+    ], ['creator.test.ts']),
+    ("the composer's text box narrow again", 'src/rooms/Talk.tsx', [
+        ('style={{ display: "block", width: "100%", minWidth: 0, resize: "none",', 'style={{ display: "block", width: "100%", maxWidth: 170, minWidth: 0, resize: "none",'),
+    ], ['attach.test.ts']),
+    ("the composer's file is a word again", 'src/rooms/Talk.tsx', [
+        ('                <Glyph d="M15 7.5 8.6 13.9a1.9 1.9 0 0 0 2.7 2.7l7-7a3.9 3.9 0 0 0-5.5-5.5l-7.1 7.1a5.9 5.9 0 0 0 8.3 8.3l6.4-6.4" />', '                File to give'),
+    ], ['attach.test.ts']),
     # the orb's page, 10-10 later: its stats in two, the orb apart from its words
     ("the orb page's skills stay under its traits on a desk", 'src/orbs.tsx', [
         ('{!making && wide && <Sheet part="skills"', '{false && <Sheet part="skills"'),

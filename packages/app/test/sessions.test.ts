@@ -283,9 +283,12 @@ test("a conversation scrolls inside the screen, never the page: what you type st
     });
     assert.ok(words.fits, `${size.width}: "${words.placeholder}" fits the box`);
     if (size.width === 1280) assert.equal(words.placeholder, "Say something to the Brainstorm", "a desk has room for all of it");
+    // grows by a line or more from empty (its width varies: since 10-10 it runs the composer's whole width), never past
+    // its cap
+    const empty = await box.evaluate((el) => el.getBoundingClientRect().height);
     await box.fill("A long message, to see the box grow with what is written in it. ".repeat(4));
     const grown = await box.evaluate((el) => el.getBoundingClientRect().height);
-    assert.ok(grown > 60 && grown <= 160, `${size.width}: the box grows with what you write, up to its cap (${grown} px)`);
+    assert.ok(grown >= empty + 20 && grown <= 200, `${size.width}: the box grows with what you write, up to its cap (${empty} to ${grown} px)`);
     const send = await page.getByRole("button", { name: "Send" }).boundingBox();
     assert.ok(send && send.height < 50, `${size.width}: Send keeps its height (${send?.height} px)`);
     await box.fill("");

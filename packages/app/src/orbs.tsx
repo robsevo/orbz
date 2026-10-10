@@ -97,6 +97,9 @@ const s = {
   head: { font: "700 11px/16px var(--font)", letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)", margin: 0 },
   btn: { font: "600 14px/20px var(--font)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 10, padding: "8px 14px", cursor: "pointer", boxShadow: "inset 0 0 0 .5px var(--hairline)", minHeight: 36 },
   chip: { font: "600 13px/18px var(--font)", color: "var(--text-2)", background: "var(--fill)", border: 0, borderRadius: 999, padding: "6px 12px", cursor: "pointer", minHeight: 32 },
+  // btn made small, still square (owner, 10-10: Chat and Career "smaller, and square like the new orb page buttons"; those
+  // "a bit smaller" on a phone); with className orbs-small, whose ::after keeps a finger's target
+  small: { font: "700 13px/18px var(--font)", borderRadius: 9, padding: "5px 12px", minHeight: 30 },
   panel: { background: "var(--fill)", borderRadius: 18, boxShadow: "inset 0 0 0 1px var(--hairline)", padding: "var(--s4)", minWidth: 0, gridTemplateColumns: "minmax(0, 1fr)" },
 } satisfies Record<string, CSSProperties>;
 
@@ -315,7 +318,8 @@ function Bars({ items, max = CEILING, kind = "traits" }: { items: { name: string
 /** His DNA strand (owner, 10-04: "a unique dna strand number or string the user gets and can share with
  * others or recreate the orb in question"): everything he is made of, to copy and share; pasted into
  * the creator, it makes him again (orb/strand.ts). */
-function Strand({ c }: { c: Character }) {
+// `quiet`: no line saying how to share it, where a field to paste one sits right under it (the creator's)
+function Strand({ c, quiet = false }: { c: Character; quiet?: boolean }) {
   const [copied, setCopied] = useState(false);
   let strand: string | null = null;
   try {
@@ -334,7 +338,7 @@ function Strand({ c }: { c: Character }) {
         <span data-dna style={{ padding: "6px 12px", borderRadius: 999, background: "var(--fill)", boxShadow: "inset 0 0 0 .5px var(--hairline)", font: "700 13px/20px var(--font)", color: "var(--text-1)", letterSpacing: ".04em", fontVariantNumeric: "tabular-nums", userSelect: "all", overflowWrap: "anywhere" }}>{strand}</span>
         <button onClick={copy} data-sound="pick" style={{ ...s.chip, padding: "4px 12px" }}>{copied ? "Copied" : "Copy"}</button>
       </div>
-      <span style={{ font: "400 12px/16px var(--font)", color: "var(--text-3)" }}>Share it: pasted into New orb, it makes {c.name || "this orb"} again, traits and all.</span>
+      {!quiet && <span style={{ font: "400 12px/16px var(--font)", color: "var(--text-3)" }}>Share it: pasted into New orb, it makes {c.name || "this orb"} again, traits and all.</span>}
     </div>
   );
 }
@@ -415,7 +419,7 @@ function LevelUp({ c, g }: { c: Character; g: Growth }) {
 // stats), each a card of its own where the studio sets them apart (owner, 10-10: "put that part with the dna strand to
 // the left"); on an orb's page its body in two, its traits and its skills with the office (owner, 10-10: "theres a big
 // open space there with nothing in it, can we split the stats container in two"): the skills under its DNA on a desk
-function Sheet({ c, onRename, replies, standing, startsAs, career, applying, friends, strand = true, part = "all", bare = false, centered = false }: { c: Character; onRename?: (name: string) => void; replies: Replies; standing?: Standing | null; startsAs?: "Junior" | "Senior"; career?: CareerState | null; applying?: boolean; friends?: Friend[] | null; strand?: boolean; part?: "all" | "head" | "body" | "traits" | "skills"; bare?: boolean; centered?: boolean }) {
+function Sheet({ c, onRename, replies, standing, startsAs, career, applying, friends, strand = true, part = "all", bare = false, centered = false, between }: { c: Character; onRename?: (name: string) => void; replies: Replies; standing?: Standing | null; startsAs?: "Junior" | "Senior"; career?: CareerState | null; applying?: boolean; friends?: Friend[] | null; strand?: boolean; part?: "all" | "head" | "body" | "traits" | "skills"; bare?: boolean; centered?: boolean; between?: ReactNode }) {
   const sh = sheetOf(c);
   // what his graded work has grown him into (PLAN 3.11), once a home has some to show
   const grown = career ? grownOf(c, sh.leans, career.radar, career.niches, sh.dna, standing?.xp ?? career.xp) : null;
@@ -463,7 +467,9 @@ function Sheet({ c, onRename, replies, standing, startsAs, career, applying, fri
   const lede = (
     <>
       {grown && <LevelUp c={c} g={grown} />}
-      <p style={{ margin: 0, font: "400 15px/21px var(--font)", color: "var(--text-2)", textWrap: "pretty" }}>{grew && grownSays(grew) ? `${sh.bio} ${grownSays(grew)}` : sh.bio}</p>
+      {/* on a phone, its buttons: under its level, over what it does (owner, 10-10) */}
+      {between}
+      <p data-bio style={{ margin: 0, font: "400 15px/21px var(--font)", color: "var(--text-2)", textWrap: "pretty" }}>{grew && grownSays(grew) ? `${sh.bio} ${grownSays(grew)}` : sh.bio}</p>
       {/* a role a licence stands behind says so: he is a persona that helps, never the professional */}
       {"limits" in SPECIALTIES[c.specialty] && (
         <p style={{ margin: 0, font: "400 13px/18px var(--font)", color: "var(--text-3)" }}>{(SPECIALTIES[c.specialty] as { limits: string }).limits}</p>
@@ -1345,6 +1351,44 @@ function App() {
     </button>
   );
   // `locked`: why it is not open yet (greyed, not pressable, its reason on hover)
+  // Chat and Career, small and square: under the orb on a desk; on a phone under its level, over what it does (owner,
+  // 10-10: "chat and career buttons in between orb bio and where it says Lv. XP to Lv. and make the chat and career
+  // buttons smaller, and square like the new orb page buttons")
+  const profileActions = (
+    <div data-profile-actions style={{ display: "flex", justifyContent: "center", gap: 8, flexWrap: "wrap" }}>
+      <button data-sound="pick" data-chat-with aria-label={`Chat with ${me.name}`} className="orbs-small" onClick={() => go({ room: "chat", orb: me.name })} style={{ ...s.btn, ...s.small, background: "var(--accent)", color: "var(--ground)", boxShadow: "none" }}>
+        Chat
+      </button>
+      <button data-career-open aria-label={`${me.name}'s career`} className="orbs-small" onClick={() => go({ room: "career", orb: me.name })} style={{ ...s.btn, ...s.small, background: "var(--accent-wash)", boxShadow: "inset 0 0 0 1.5px var(--accent)", color: "var(--text-1)" }}>
+        Career
+      </button>
+    </div>
+  );
+  // a new orb's Roll and Create: under the orb on a desk; on a phone a little smaller, under its level, over what it does
+  // (owner, 10-10: "put roll everything button and create "orbname" buttons right in between the description of the orb
+  // and "starts as the senior: your first" ... make the rectangles and font a bit smaller too")
+  const rollCreate = (
+    <OneLine gap={8}>
+      <button
+        data-sound="roll"
+        className={phone ? "orbs-small" : undefined}
+        style={{ ...s.btn, ...(phone && s.small), display: "inline-flex", alignItems: "center", gap: phone ? 6 : 8 }}
+        onClick={() => {
+          setEvolve((x) => ({ c: me, n: (x?.n ?? 0) + 1 }));
+          edit(fresh());
+          setRolls((n) => n + 1);
+          // the hop as his colours come back (at once, with less motion)
+          window.setTimeout(() => play("hop"), calm() ? 0 : REVEAL);
+        }}
+      >
+        <DieIcon size={phone ? 15 : 18} spins={rolls} />
+        Roll everything
+      </button>
+      <button data-sound="create" disabled={Boolean(blocked)} onClick={create} className={phone ? "orbs-small" : undefined} style={{ ...s.btn, ...(phone && s.small), background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)", fontWeight: 800, opacity: blocked ? 0.5 : 1, cursor: blocked ? "not-allowed" : "pointer" }}>
+        Create {name || "your orb"}
+      </button>
+    </OneLine>
+  );
   // An orb's moods and moves: one compact card immediately above its DNA, on its page and in the creator (owner, 10-10)
   const moves = (
     <>
@@ -1572,17 +1616,10 @@ function App() {
               <div data-profile-head style={{ display: "flex", flexDirection: phone ? "column" : "row", gap: phone ? "var(--s3)" : "var(--s7)", alignItems: phone ? "center" : "flex-start", justifyContent: "center", minWidth: 0 }}>
                 <div data-profile-portrait style={{ display: "grid", justifyItems: "center", gap: "var(--s2)", flex: "0 0 auto" }}>
                   <Evolving me={me} from={evolve} size={phone ? 120 : 136} state={worn} gesture={gesture} onDone={setShown} />
-                  <div data-profile-actions style={{ display: "flex", justifyContent: "center", gap: 8, flexWrap: "wrap" }}>
-                    <button data-sound="pick" data-chat-with aria-label={`Chat with ${me.name}`} onClick={() => go({ room: "chat", orb: me.name })} style={{ ...s.chip, background: "var(--accent)", color: "var(--ground)", fontWeight: 800 }}>
-                      Chat
-                    </button>
-                    <button data-career-open aria-label={`${me.name}'s career`} onClick={() => go({ room: "career", orb: me.name })} style={{ ...s.chip, background: "var(--accent-wash)", boxShadow: "inset 0 0 0 1.5px var(--accent)", color: "var(--text-1)", fontWeight: 800 }}>
-                      Career
-                    </button>
-                  </div>
+                  {!phone && profileActions}
                   {live && !picked && WORN[live.mood].words && <span data-mood={live.mood} style={{ font: "600 13px/18px var(--font)", color: "var(--text-2)" }}>{WORN[live.mood].words}</span>}
                 </div>
-                <Sheet bare centered={phone} part="head" c={before ?? me} key={before ? "was-head" : "now-head"} replies={replies} standing={standing} startsAs={startsAs} career={career} friends={friends} />
+                <Sheet bare centered={phone} part="head" c={before ?? me} key={before ? "was-head" : "now-head"} replies={replies} standing={standing} startsAs={startsAs} career={career} friends={friends} between={phone ? profileActions : undefined} />
               </div>
               <p style={{ margin: 0, font: "400 13px/18px var(--font)", color: "var(--text-3)", textAlign: "center" }}>Give a click, or move your pointer: the eyes follow.</p>
             </div>
@@ -1608,27 +1645,9 @@ function App() {
                     {WORN[live.mood].words}
                   </span>
                 )}
-                <OneLine gap={8}>
-                  <button
-                    data-sound="roll"
-                    style={{ ...s.btn, display: "inline-flex", alignItems: "center", gap: 8 }}
-                    onClick={() => {
-                      setEvolve((x) => ({ c: me, n: (x?.n ?? 0) + 1 }));
-                      edit(fresh());
-                      setRolls((n) => n + 1);
-                      // the hop as his colours come back (at once, with less motion)
-                      window.setTimeout(() => play("hop"), calm() ? 0 : REVEAL);
-                    }}
-                  >
-                    <DieIcon size={18} spins={rolls} />
-                    Roll everything
-                  </button>
-                  <button data-sound="create" disabled={Boolean(blocked)} onClick={create} style={{ ...s.btn, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)", fontWeight: 800, opacity: blocked ? 0.5 : 1, cursor: blocked ? "not-allowed" : "pointer" }}>
-                    Create {name || "your orb"}
-                  </button>
-                </OneLine>
+                {!phone && rollCreate}
               </div>
-              <Sheet bare centered part="head" c={before ?? me} key={before ? "was-head" : "now-head"} onRename={(n) => edit({ name: n })} replies={replies} standing={null} startsAs={startsAs} career={null} friends={null} />
+              <Sheet bare centered part="head" c={before ?? me} key={before ? "was-head" : "now-head"} onRename={(n) => edit({ name: n })} replies={replies} standing={null} startsAs={startsAs} career={null} friends={null} between={phone ? rollCreate : undefined} />
             </div>
             {(!wide || (blocked && !before)) && (
               <p style={{ margin: 0, font: "400 13px/18px var(--font)", color: blocked ? "var(--alert)" : "var(--text-3)", textAlign: "center" }}>
@@ -1643,7 +1662,8 @@ function App() {
             {moves}
           </div>
           <div data-strand-card data-orb={me.hue} style={{ ...s.panel, display: "grid", gap: "var(--s3)" }}>
-            <Strand key={(before ?? me).name + (before ?? me).seed} c={before ?? me} />
+            {/* in the creator its paste field says how a strand is used; the column must fit a desk's height (owner, 10-10) */}
+            <Strand key={(before ?? me).name + (before ?? me).seed} c={before ?? me} quiet={making} />
             {making && (
               // an orb from its DNA: someone's strand, pasted, and the creator changes into that orb
               <form
