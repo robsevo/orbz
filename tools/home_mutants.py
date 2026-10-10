@@ -2228,7 +2228,7 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ("    const t = setInterval(() => setNow(new Date()), 1000);", "    const t = setInterval(() => undefined, 1000);"),
     ], ["floor-view.test.ts"]),
     ("an orb's gestures are as loud as its moods", "src/orbs.tsx", [
-        ('style={{ font: "600 12px/16px var(--font)", color: "var(--text-3)", background: "var(--fill)", boxShadow: "inset 0 0 0 .5px var(--hairline)", border: 0, borderRadius: 8,', 'style={{ font: "600 13px/18px var(--font)", color: "var(--text-2)", background: "var(--fill)", boxShadow: "inset 0 0 0 .5px var(--hairline)", border: 0, borderRadius: 8,'),
+        ('style={{ font: `600 ${compact ? 11 : 12}px/16px var(--font)`, color: "var(--text-3)", background: "var(--fill)",', 'style={{ font: `600 ${compact ? 11 : 12}px/16px var(--font)`, color: "var(--text-2)", background: "var(--fill)",'),
     ], ["phones.test.ts"]),
     ("the lab's mark is a star again", "src/orbs.tsx", [
         ('{navItem("The lab", room === "lab", { room: "lab" }, <FlaskIcon />)}', '{navItem("The lab", room === "lab", { room: "lab" }, "✦")}'),
@@ -2292,13 +2292,16 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("Android loses pinch-to-zoom", "src/ui/zoom.ts", [
         ("  if (!meta || !isIOS(nav) || /maximum-scale/.test(meta.content)) return false;", "  if (!meta || /maximum-scale/.test(meta.content)) return false;"),
     ], ["zoom.test.ts", "phones.test.ts"]),
-    # Chat and the career, right above who the orb is (owner, 10-07)
-    ("Chat and Career leave the orb's name", "src/orbs.tsx", [
-        ("\n                onChat={() => go({ room: \"chat\", orb: me.name })} onCareer={() => go({ room: \"career\", orb: me.name })} />", " />"),
-    ], ["phones.test.ts"]),
+    # The personal page opens like Career: the orb and its identity share one hero (owner, 10-10).
+    ("the profile hero stacks like a phone on a desk", "src/orbs.tsx", [
+        ('flexDirection: phone ? "column" : "row", gap: phone ? "var(--s3)" : "var(--s5)"', 'flexDirection: "column", gap: phone ? "var(--s3)" : "var(--s5)"'),
+    ], ["profile-layout.test.ts"]),
     ("the career page's orb sits at the left on a phone", "src/rooms/Career.tsx", [
         ('flexDirection: phone ? "column" : "row"', 'flexDirection: "row"'),
     ], ["phones.test.ts"]),
+    ("With the others grows without its scroll", "src/rooms/Career.tsx", [
+        ('maxHeight: "48dvh", overflowY: "auto"', 'maxHeight: "none", overflowY: "visible"'),
+    ], ["profile-layout.test.ts"]),
     # the Recruiter's departments and All (owner, 10-07)
     ("a department shows every department's positions", "src/rooms/Recruiter.tsx", [
         ("        {(group ? [group] : families).map((f) => {", "        {families.map((f) => {"),
@@ -3042,19 +3045,30 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("every shape's glasses made on the bean's face again", 'src/orb/hats/heads.ts', [
         ('  if (name === "bean") return BEAN_FACE;', '  return BEAN_FACE;'),
     ], ['hats.test.ts']),
-    # ears out of the hat, the owner's choice (10-10)
-    ('ears out of the hat are drawn under it', 'src/orb/renderer.ts', [
-        ('    if (hat && look.earsOut) {', '    if (false && hat && look.earsOut) {'),
-    ], ['characters.test.ts']),
-    ('the strand forgets the ears out of the hat', 'src/orb/strand.ts', [
-        ('  const v3 = c.ears === "out";', '  const v3 = false;'),
-    ], ['colours.test.ts']),
-    ('the creator never asks about the ears', 'src/orbs.tsx', [
-        ('          {earsInside(me.hat, me.shape) && (', '          {false && earsInside(me.hat, me.shape) && ('),
+    ('the deerstalker is offered again', 'src/orb/spec.ts', [
+        ('hat !== "deerstalker"', 'hat !== "not-a-hat"'),
+    ], ['spec.test.ts']),
+    # an orb's personal page, in the owner's order (10-10)
+    ('the profile state controls disappear from above DNA', 'src/orbs.tsx', [
+        ('          {!making && (\n            <div data-moves', '          {false && !making && (\n            <div data-moves'),
+    ], ['profile-layout.test.ts']),
+    ('Chat and Career float away from under the orb', 'src/orbs.tsx', [
+        ('<div data-profile-actions style={{ display: "flex", justifyContent: "center",', '<div data-profile-actions style={{ display: "flex", position: "absolute", top: 0, justifyContent: "center",'),
+    ], ['profile-layout.test.ts']),
+    ("Who's in shrinks its orbs again", 'src/rooms/Sessions.tsx', [
+        ('<Orb character={c} size={64} poke={false} still />', '<Orb character={c} size={44} poke={false} still />'),
+    ], ['sessions.test.ts']),
+    ("Who's in cuts a long name again", 'src/rooms/Sessions.tsx', [
+        ('flex: "0 0 auto", minWidth: 148, maxWidth: 240,', 'width: 148,'),
+    ], ['sessions.test.ts']),
+    # the same seed, the same orb, after the deerstalker's retirement (10-10)
+    ('a roll lands on other hats since the deerstalker left', 'src/orb/spec.ts', [
+        ('pickOne(ROLLED_HATS, r)', 'pickOne(HAT_CHOICES, r)'),
+    ], ['spec.test.ts']),
+    # a strand pasted into New orb is that orb (10-10)
+    ('a pasted strand keeps the colours chosen before it', 'src/orbs.tsx', [
+        ('edit({ tint: null, tint2: null, hatTint: null, glassesTint: null, ...sane(read.orb, ASH) });', 'edit(sane(read.orb, ASH));'),
     ], ['creator.test.ts']),
-    ('ears out of the hat move no traits', 'src/orb/dna.ts', [
-        ('  if (c.ears === "out" && c.hat !== "none") add(', '  if (false) add('),
-    ], ['dna.test.ts']),
 ]
 
 # the `orbs` terminal (PLAN 1.9): paths are inside packages/terminal

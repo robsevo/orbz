@@ -11,10 +11,11 @@
 //     the page's viewport caps its scale; as an Android phone, it does not (it would lose pinch-to-zoom);
 //   - a row too wide for a phone (owner, 10-07: "change the containers and add arrows to every side scroll") sits in
 //     a track with an arrow at each end, dimmed where there is no more, a press moving it; a row that fits has none;
-//   - an orb's profile (10-07: "put chat and career for orb on orb page next to the orbs name, but just put chat and
-//     career as smaller buttons"): Chat and Career on its name's line, in its sheet;
+//   - an orb's profile (10-10): one Career-like hero holds orb/actions and identity, followed by compact state and
+//     gesture controls immediately above its DNA;
 //   - its career page on a phone (10-07: "organize it, put scrolls for sections that are too long and center the
-//     orb"): the orb in the middle, the ladder in two rows of three, the long lists scrolling inside their cards;
+//     orb"; 10-10: "with the others needs a scroll in that container"): the orb in the middle, the ladder in two rows
+//     of three, the long lists scrolling inside their cards, all of With the others in one bounded scroll;
 //   - under 480, the app edge to edge.
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -171,7 +172,33 @@ test("an iPhone never zooms into a text box: as an iPhone the page caps its scal
   assert.doesNotMatch(await viewport("Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36"), /maximum-scale/, "control: Android keeps pinch-to-zoom");
 });
 
-test("a row too wide for a phone sits in a track with an arrow at each end, dimmed where there is no more; a row that fits has none; an orb's moods squarer and its gestures small, quieter boxes under them, never a track; Chat and Career beside the name; the career page centred, its long lists scrolling", { skip, timeout: 120_000 }, async () => {
+test("an orb's desk profile has a Career-like hero, then compact controls and DNA beside the details", { skip, timeout: 120_000 }, async () => {
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: "dark" });
+  try {
+    const page = await ctx.newPage();
+    await page.goto(door.pairLink().replace("orbs.html", "orbs.html?splash=0"));
+    await page.locator(".orbs-window").waitFor({ timeout: 30_000 });
+    await page.evaluate(() => (location.hash = "#/office/Ada"));
+    await page.locator("[data-moves]").waitFor({ timeout: 20_000 });
+    await page.waitForTimeout(500);
+    const boxes = await Promise.all(["[data-profile-hero]", "[data-profile-portrait]", "[data-sheet-head]", "[data-moves]", "[data-strand-card]"].map((sel) => page.locator(sel).boundingBox()));
+    assert.ok(boxes.every(Boolean));
+    const hero = boxes[0]!, portrait = boxes[1]!, head = boxes[2]!, controls = boxes[3]!, dna = boxes[4]!;
+    assert.ok(portrait.x + portrait.width <= head.x + 1, "as on Career, the orb sits beside its identity on a desk");
+    assert.ok(hero.x <= portrait.x && hero.x <= head.x && portrait.x + portrait.width <= hero.x + hero.width + 1 && head.x + head.width <= hero.x + hero.width + 1, "the orb and its identity share the hero container");
+    assert.ok(hero.y + hero.height <= controls.y + 1, "the Career-like hero comes before the controls");
+    assert.ok(controls.y + controls.height <= dna.y + 1, "the controls sit directly above DNA");
+    assert.ok(controls.height < 140, `the controls' card is compact (${Math.round(controls.height)} px)`);
+    const orbCanvas = (await page.locator("[data-profile-portrait] canvas").boundingBox())!;
+    const actions = (await page.locator("[data-profile-actions]").boundingBox())!;
+    assert.ok(actions.y >= orbCanvas.y + orbCanvas.height - 1, "Chat and Career are directly under the orb");
+    assert.deepEqual(await measure(page), [], "the rearranged profile keeps the layout rule");
+  } finally {
+    await ctx.close();
+  }
+});
+
+test("a phone's scrolling rows; an orb's compact controls above its DNA and Chat/Career under it; the career page organized", { skip, timeout: 120_000 }, async () => {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: "dark", hasTouch: true, isMobile: true });
   try {
     const page = await ctx.newPage();
@@ -222,7 +249,7 @@ test("a row too wide for a phone sits in a track with an arrow at each end, dimm
       return { radius: parseFloat(cs.borderTopLeftRadius), colour: cs.color, size: parseFloat(cs.fontSize), top: Math.round(r.top), bottom: r.bottom, h: r.height };
     });
     const mood = await look(page.locator("[data-mood-pick]").nth(1));
-    assert.ok(mood.radius <= 12, `the moods squarer (${mood.radius} px corners)`);
+    assert.ok(mood.radius <= 8 && mood.h <= 32, `the moods are compact, squarer boxes (${JSON.stringify(mood)})`);
     const gestures = page.locator("[data-gesture-pick]");
     assert.equal(await gestures.count(), 9);
     assert.equal(await page.locator(".side-scroll [data-gesture-pick]").count(), 0, "not in a track");
@@ -232,16 +259,22 @@ test("a row too wide for a phone sits in a track with an arrow at each end, dimm
     assert.ok(g.every((x) => x.colour === quiet) && quiet !== mood.colour, "a dimmer word than the moods'");
     assert.ok(g[0]!.top > mood.bottom - 1, "under the moods");
     assert.deepEqual([new Set(g.slice(0, 5).map((x) => x.top)).size, new Set(g.slice(5).map((x) => x.top)).size, g[5]!.top > g[0]!.top], [1, 1, true], "two rows, five then four");
-    // Chat and Career, small, on the name's line in its sheet
-    const sheet = page.locator(".orbs-sheet");
-    const name = (await sheet.locator("h2").boundingBox())!;
+    // Chat and Career directly under the orb. Its name and description, compact controls, then DNA follow in that order.
+    const cradle = page.locator("[data-cradle]");
+    const portrait = (await cradle.locator("canvas").first().boundingBox())!;
+    const actions = page.locator("[data-profile-actions]");
+    const actionBox = (await actions.boundingBox())!;
+    assert.ok(actionBox.y >= portrait.y + portrait.height - 1, "Chat and Career under the orb");
     for (const [sel, words, label] of [["[data-chat-with]", "Chat", "Chat with Ada"], ["[data-career-open]", "Career", "Ada's career"]] as const) {
-      const b = sheet.locator(sel);
-      const box = (await b.boundingBox())!;
-      assert.ok(box.y < name.y + name.height && box.y + box.height > name.y, `${words} on the name's line`);
-      assert.ok(box.x > name.x, `${words} after the name`);
+      const b = actions.locator(sel);
       assert.deepEqual([await b.innerText(), await b.getAttribute("aria-label")], [words, label]);
     }
+    assert.equal(await page.locator("[data-sheet-head] [data-chat-with], [data-sheet-head] [data-career-open]").count(), 0, "the buttons left the name line");
+    const [heroBox, headBox, controlsBox, dnaBox] = await Promise.all(["[data-profile-hero]", "[data-sheet-head]", "[data-moves]", "[data-strand-card]"].map((sel) => page.locator(sel).boundingBox()));
+    assert.ok(heroBox && headBox && controlsBox && dnaBox);
+    assert.ok(headBox.x >= heroBox.x && headBox.x + headBox.width <= heroBox.x + heroBox.width + 1, "the name and description share the orb's hero container");
+    assert.ok(heroBox.y + heroBox.height <= controlsBox.y + 1, "the whole Career-like hero is above the controls");
+    assert.ok(controlsBox.y + controlsBox.height <= dnaBox.y + 1, "the compact controls are immediately above DNA");
     // its career page: the orb in the middle, the ladder two rows of three, the long lists scrolling in their cards
     await page.evaluate(() => (location.hash = "#/career/Ada"));
     const head = page.locator("[data-career-head]");
@@ -252,6 +285,13 @@ test("a row too wide for a phone sits in a track with an arrow at each end, dimm
     const rungs = await page.locator("[data-rung]").evaluateAll((ls) => ls.map((l) => Math.round(l.getBoundingClientRect().top)));
     assert.deepEqual([new Set(rungs.slice(0, 3)).size, new Set(rungs.slice(3)).size, rungs[3]! > rungs[0]!], [1, 1, true], "the ladder: two rows of three");
     assert.ok(await page.locator('[data-career="ada"] .orbs-tall').count() >= 1, "a long list scrolls inside its card");
+    const social = page.getByLabel("With the others, every friend, meeting and lesson");
+    const socialBox = await social.evaluate((el) => {
+      const cs = getComputedStyle(el);
+      return { max: parseFloat(cs.maxHeight), overflow: cs.overflowY };
+    });
+    assert.ok(socialBox.max <= 0.49 * 844, `With the others is bounded to part of the screen (${socialBox.max} px)`);
+    assert.equal(socialBox.overflow, "auto", "With the others has one vertical scroll");
   } finally {
     await ctx.close();
   }

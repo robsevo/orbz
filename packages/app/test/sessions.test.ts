@@ -23,6 +23,7 @@ import { after, before, test } from "node:test";
 import { build } from "vite";
 import type { Browser } from "playwright-core";
 import { findChrome, launch, measure } from "./harness.ts";
+import { PEOPLE_NAMES } from "../src/orb/spec.ts";
 import { Home } from "../../home/src/home.ts";
 import { serve } from "../../home/src/api.ts";
 import { fakeModel } from "../../home/test/fakes/model.ts";
@@ -85,6 +86,23 @@ test("a session: the orbs you bring in, the Brainstorm's turns and what was agre
   await making.getByText("A session needs a title").waitFor();
   assert.equal(h.team.list().length, 0, "nothing is made without a title");
   await making.getByRole("textbox", { name: "What the session is for" }).fill("A birthday party");
+  const hazelPick = making.locator('[data-crew-pick="hazel"]');
+  const [tile, portrait] = await Promise.all([hazelPick.boundingBox(), hazelPick.locator("canvas").boundingBox()]);
+  assert.ok(tile && portrait);
+  assert.ok(portrait.width >= 64, `Who's in shows Hazel much bigger (${Math.round(portrait.width)} px wide)`);
+  assert.ok(tile.width > tile.height * 1.35 && tile.width > portrait.width * 2, `her tile is a wide rectangle (${Math.round(tile.width)} by ${Math.round(tile.height)})`);
+  assert.ok(parseFloat(await hazelPick.evaluate((el) => getComputedStyle(el).borderRadius)) <= 12, "the rectangle has restrained corners");
+  // every name the dice can give shows whole in such a tile (a twin of Hazel's, beside it, each name in turn): at a fixed
+  // 148 px, 33 of them were cut, Humphrey the widest at 64 px (measured 10-10)
+  const cut = await hazelPick.evaluate((tile, names) => {
+    const twin = tile.cloneNode(true) as HTMLElement;
+    const name = twin.querySelector<HTMLElement>("[data-crew-name]")!;
+    tile.after(twin);
+    const cut = names.filter((n) => ((name.textContent = n), name.scrollWidth > name.clientWidth));
+    twin.remove();
+    return cut;
+  }, PEOPLE_NAMES);
+  assert.deepEqual(cut, [], "every name from our list shows whole in its tile");
   assert.equal(await making.getByRole("button", { name: "Hazel" }).getAttribute("aria-pressed"), "true", "the office's first is in to start with");
   await making.getByRole("button", { name: "Milo" }).click();
   await making.getByRole("button", { name: "Start the session" }).click();

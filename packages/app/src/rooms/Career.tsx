@@ -182,10 +182,11 @@ export function CareerRoom({ home, orb }: { home: Office | null; orb: Character 
 
       {/* its life with the others: who it gets on with, what they traded, what it learned from whom */}
       <Section title="With the others" label="With the others">
+        {/* This whole history is one bounded scroll, on a desk as well as a phone: separate friend and meeting
+            scrollers still let their combined card grow taller than the screen (owner, 10-10). */}
+        <Tall max="48dvh" label="With the others, every friend, meeting and lesson" style={{ display: "grid", gap: 10, maxHeight: "48dvh", overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain", scrollbarWidth: "thin", scrollbarGutter: "stable", paddingRight: 8 }}>
         {c.friends?.length ? (
-          // a balanced grid: never one friend alone on a row (a wrapping row left one at 768 px, 10-07); a big office's
-          // scrolls on a phone
-          <Tall max="24dvh" label="Its friends, every one">
+          // a balanced grid: never one friend alone on a row (a wrapping row left one at 768 px, 10-07)
           <Balanced min={170} gap={6}>
             {c.friends.map((f) => (
               <span key={f.name} data-friend={f.name} style={{ display: "flex", gap: 6, alignItems: "baseline", minWidth: 0, padding: "4px 10px", borderRadius: 999, background: "var(--fill-2)" }}>
@@ -194,10 +195,8 @@ export function CareerRoom({ home, orb }: { home: Office | null; orb: Character 
               </span>
             ))}
           </Balanced>
-          </Tall>
         ) : <span style={small}>It has not met the others yet: free orbs meet through the office's day.</span>}
         {meetings.length > 0 && (
-          <Tall max="44dvh" label="Its meetings, every one">
           <ul style={{ display: "grid", gap: 10, margin: 0, padding: 0, listStyle: "none" }}>
             {meetings.map((m) => (
               <li key={m.at} data-meeting={m.kind} style={{ display: "grid", gap: 3, paddingLeft: 12, boxShadow: "inset 2px 0 0 var(--accent)" }}>
@@ -214,7 +213,6 @@ export function CareerRoom({ home, orb }: { home: Office | null; orb: Character 
               </li>
             ))}
           </ul>
-          </Tall>
         )}
         {c.lessons?.length ? (
           <div style={{ display: "grid", gap: 4 }}>
@@ -223,6 +221,7 @@ export function CareerRoom({ home, orb }: { home: Office | null; orb: Character 
             ))}
           </div>
         ) : null}
+        </Tall>
       </Section>
 
       <div className="orbs-pair" style={{ display: "grid", gap: "var(--s4)", minWidth: 0 }}>

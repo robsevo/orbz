@@ -54,8 +54,6 @@ export type OrbLook = {
   eyeB: [number, number, number, number];
   /** 1: his eyes are drawn as an X each (spec.ts EYES `cross`). */
   eyeX: number;
-  /** His ears come out of his hat (spec.ts earsOut): drawn again over it, his ears alone. */
-  earsOut: boolean;
   acc: number;
   /** The head his hat is made on, his shape's (hats/heads.ts). */
   head: Head;
@@ -98,7 +96,7 @@ const SUPERSAMPLE = 1.5;
 const UNIFORMS = [
   "uRes", "uTime", "uLevel", "uState", "uWake", "uR", "uCy", "uEdge", "uBreath", "uBlink", "uMorph", "uGaze", "uSway",
   "uHappy", "uSleepy", "uYawn", "uSurprise", "uTilt", "uMad", "uJiggle", "uHue", "uSat", "uVal", "uHue2", "uGrad", "uTint",
-  "uShapeA", "uShapeB", "uShapeC", "uShapeD", "uShapeE", "uShapeF", "uGoo", "uSquash", "uEyeA", "uEyeB", "uEyeX", "uEarsOnly", "uAccFit", "uAccTilt", "uAccGlow", "uAccGlowK", "uAccGlowCol", "uAccEdge", "uAccShade",
+  "uShapeA", "uShapeB", "uShapeC", "uShapeD", "uShapeE", "uShapeF", "uGoo", "uSquash", "uEyeA", "uEyeB", "uEyeX", "uAccFit", "uAccTilt", "uAccGlow", "uAccGlowK", "uAccGlowCol", "uAccEdge", "uAccShade",
 ] as const;
 const HAT_UNIFORMS = ["uRes", "uSway", "uAccFit", "uGaze", "uTime", "uLevel", "uState", "uWake", "uR", "uCy", "uBreath", "uMorph", "uSquash", "uAccTilt", "uTilt", "uFace", "uShapeD", "uCol", "uCol2", "uCol3", "uOrb", "uPal"] as const;
 
@@ -256,22 +254,11 @@ export class OrbRenderer {
     gl.uniform3f(u.uAccGlowCol, ...look.accGlowCol);
     gl.uniform1fv(u.uAccEdge, hat ? hat.edge : NO_EDGE);
     gl.uniform1f(u.uAccShade, hat ? SHADE : 0);
-    gl.uniform1f(u.uEarsOnly, 0);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     const pair = this.#pair(look);
     const sway: [number, number] = [f.sway[0] * scale, f.sway[1] * scale];
     if (pair) this.#drawWorn(pair, look, f, time, framing.radius * scale, framing.cy, w, h, sway, true);
     if (hat) this.#drawWorn(hat, look, f, time, framing.radius * scale, framing.cy, w, h, sway, false);
-    if (hat && look.earsOut) {
-      // his ears out of his hat (owner, 10-10: "make the ears come out of the hat"): his glass again, his ears alone, over
-      // it; no shade from the hat on them, no glow drawn twice (the program keeps every other number from his pass)
-      gl.useProgram(this.#prog);
-      gl.bindVertexArray(this.#empty);
-      gl.uniform1f(u.uEarsOnly, 1);
-      gl.uniform1f(u.uAccShade, 0);
-      gl.uniform1f(u.uAccGlowK, 0);
-      gl.drawArrays(gl.TRIANGLES, 0, 3);
-    }
     const ctx = target.getContext("2d")!;
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";

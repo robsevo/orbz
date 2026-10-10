@@ -14,7 +14,7 @@ import { after, before, test } from "node:test";
 import { build } from "vite";
 import type { Browser, Page } from "playwright-core";
 import { choose, findChrome, launch, measure, plainNewOrb, serveDir, SIZES } from "./harness.ts";
-import { EYES, FINISHES, GLASSES, HATS, SHAPES } from "../src/orb/spec.ts";
+import { EYES, FINISHES, GLASSES, HAT_CHOICES, SHAPES } from "../src/orb/spec.ts";
 import { readStrand } from "../src/orb/strand.ts";
 import { PER_PAGE } from "../src/ui/pages.ts";
 
@@ -47,7 +47,7 @@ async function open(size: keyof typeof SIZES): Promise<Page> {
 const TABS: [tab: string, paged: string, n: number][] = [
   ["Shape", "Shapes", Object.keys(SHAPES).length],
   ["Eyes", "Eyes", Object.keys(EYES).length],
-  ["Hat", "Hats", Object.keys(HATS).length],
+  ["Hat", "Hats", HAT_CHOICES.length],
   ["Glasses", "Glasses", Object.keys(GLASSES).length],
 ];
 
@@ -164,34 +164,15 @@ for (const size of ["desk", "phone"] as const) {
   });
 }
 
-// owner, 10-10: "why dont we make the ears come out of the hat ... or give the user the choice?". Under a hat that would
-// take its ears in, the choice: in the hat (as before) or out of it. A bean has no ears and a party hat sits between them:
-// nothing to choose there. (What it draws: characters.test.ts.)
-test("an eared orb under a hat that takes its ears in is asked: In the hat or Out of the hat; nowhere else", { skip }, async () => {
+test("a covering hat keeps ears inside, with no ears choice; the deerstalker is not offered", { skip }, async () => {
   const page = await plainAt("desk");
-  try {
-    await page.getByRole("tab", { name: "Hat" }).click();
-    await choose(page, "beanie");
-    assert.equal(await page.locator("[data-ears]").count(), 0, "a bean has no ears: nothing to choose");
-    await page.getByRole("tab", { name: "Shape" }).click();
-    await choose(page, "kitty");
-    await page.getByRole("tab", { name: "Hat" }).click();
-    await page.locator("[data-ears]").waitFor({ timeout: 20_000 });
-    assert.equal(await page.locator('[data-ears-pick="in"]').getAttribute("aria-pressed"), "true", "in the hat, unless chosen");
-    await page.locator('[data-ears-pick="out"]').click();
-    assert.equal(await page.locator('[data-ears-pick="out"]').getAttribute("aria-pressed"), "true", "out, once chosen");
-    assert.deepEqual(await measure(page), [], "the layout rule");
-    await choose(page, "party hat");
-    assert.equal(await page.locator("[data-ears]").count(), 0, "a party hat sits between them: nothing to choose");
-    await choose(page, "beanie");
-    assert.equal(await page.locator('[data-ears-pick="in"]').getAttribute("aria-pressed"), "true", "and back under a beanie, in again: out was the party hat's to drop");
-  } finally {
-    // as plain as it was, for the tests after: the bean, no hat
-    await page.getByRole("tab", { name: "Hat" }).click();
-    await choose(page, "none");
-    await page.getByRole("tab", { name: "Shape" }).click();
-    await choose(page, "bean");
-  }
+  await page.getByRole("tab", { name: "Shape" }).click();
+  await choose(page, "kitty");
+  await page.getByRole("tab", { name: "Hat" }).click();
+  await choose(page, "beanie");
+  assert.equal(await page.locator("[data-ears-pick]").count(), 0, "no choice can put the ears through it");
+  assert.equal(await page.getByRole("button", { name: "Deerstalker", exact: true }).count(), 0, "the retired hat is absent");
+  assert.deepEqual(await measure(page), [], "the Hat tab still keeps the layout rule");
 });
 
 test("a roll of the dice that lands on another page turns to it", { skip }, async () => {
@@ -452,6 +433,13 @@ test("any colour: Dark and a typed colour reach the orb and its DNA strand, a sl
   assert.match(await dna(), /^2/);
   await page.waitForTimeout(300);
   assert.deepEqual(await measure(page), [], "the hat's picker open, at desk size");
+  // a strand pasted makes that orb, without the colours chosen before it: Basil's (the 10-08 strand, no colour of its own)
+  // over this green beanie is Basil's strand again, not a second-version one with the green still on
+  const basil = "12BW-JRVY-RAG9-BQT1-RNC9-Z";
+  await page.getByRole("textbox", { name: "DNA strand" }).fill(basil);
+  await page.getByRole("button", { name: "Make it" }).click();
+  await page.waitForFunction((want) => document.querySelector("[data-dna]")?.textContent?.trim() === want, basil, { timeout: 10_000 }).catch(() => {});
+  assert.equal(await dna(), basil, "the pasted strand, made again whole");
   await page.close();
   // a phone: the picker open fits, its hex field big enough that an iPhone does not zoom into it
   const phone = await open("phone");

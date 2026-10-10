@@ -114,6 +114,12 @@ export const HATS = {
   quill: { id: 42, main: "cream", second: "gold", tilt: 0.05 },
 } satisfies Record<string, { id: number; main: Paint; second: Paint; tilt: number }>;
 export type HatName = keyof typeof HATS;
+/** Hats offered for new orbs. Deerstalker's slot stays frozen in HATS so every older DNA field after it keeps its
+ * number, but the hat itself is retired (owner, 10-10: "its weird, never fit"). */
+export const HAT_CHOICES: HatName[] = (Object.keys(HATS) as HatName[]).filter((hat) => hat !== "deerstalker");
+/** The hats the dice land on: every slot still there, so each seed lands where it always did (the same seed, the same
+ * orb, an applicant's hat with it); the retired deerstalker's slot comes up as no hat. */
+const ROLLED_HATS: HatName[] = (Object.keys(HATS) as HatName[]).map((hat) => (HAT_CHOICES.includes(hat) ? hat : "none"));
 /** Hats that go on over his head, with an opening (the rest sit on it, clip to it, or float). His ears go inside one that
  * would be drawn over them (owner, 10-09: "watch out for ears, they should be inside hat when on"): a beanie, a bowler's
  * brim; a party hat between a kitty's ears leaves them be. */
@@ -404,7 +410,7 @@ export const SPECIALTIES = {
   lead: { family: "think", label: "Team lead", title: "Team Lead", focus: "running the team: who does what, unblocking, deciding", lean: [5, 2, 2, 2, 4, 2, 2, 4], hat: "crown", glasses: "none" },
   product: { family: "think", label: "Product", title: "Product Manager", focus: "what to build and why: users, priorities, trade-offs", lean: [5, 2, 3, 3, 4, 3, 2, 3], hat: "none", glasses: "half-rims" },
   research: { family: "think", label: "Research", title: "Researcher", focus: "finding out, reading widely, citing sources", lean: [3, 1, 3, 1, 4, 5, 1, 2], hat: "wizard hat", glasses: "big round" },
-  factcheck: { family: "think", label: "Fact-checking", title: "Fact-Checker", focus: "checking claims against sources, and saying what holds", lean: [2, 1, 3, 1, 4, 5, 1, 1], hat: "deerstalker", glasses: "monocle" },
+  factcheck: { family: "think", label: "Fact-checking", title: "Fact-Checker", focus: "checking claims against sources, and saying what holds", lean: [2, 1, 3, 1, 4, 5, 1, 1], hat: "fedora", glasses: "monocle" },
   analyst: { family: "think", label: "Analysis", title: "Analyst", focus: "numbers into answers: reports, trends, forecasts", lean: [3, 2, 5, 2, 3, 4, 4, 1], hat: "none", glasses: "half-rims" },
   architect: { family: "think", label: "Architecture", title: "Architect", focus: "how a system fits together, before it is built", lean: [5, 4, 3, 3, 3, 3, 1, 1], hat: "none", glasses: "rectangle" },
   // make
@@ -442,9 +448,10 @@ export const SPECIALTIES = {
   language: { family: "life", label: "Languages", title: "Language Buddy", focus: "practising a language with you, a little every day", lean: [3, 1, 1, 1, 5, 2, 1, 4], hat: "beret", glasses: "none" },
   // owner, 10-07: "add fundamental analysis as one of the position for stocks and crypto, one where the orb acts
   // like a really good and well trained fundamental analyst, looks at the compaies books, finds where they might
-  // be lying or there might be a crash, like a michael burry kind of character or Mark Baum". A detective's hat:
-  // it reads the footnotes. Last in the list, as every addition is (strand.ts keeps a specialty by its place)
-  fundamentals: { family: "finance", label: "Fundamentals", title: "Fundamental Analyst", focus: "stocks and crypto read to the bone: the filings and their footnotes, cash against earnings, debt, dilution, a token's supply and who holds it; where the story and the numbers part ways, before the crash", lean: [3, 1, 5, 1, 3, 5, 5, 1], hat: "deerstalker", glasses: "half-rims", limits: "Not a licensed financial adviser: reads the books and says what does not add up; every buy, sell or short is yours to make." },
+  // be lying or there might be a crash, like a michael burry kind of character or Mark Baum". It wore a detective's
+  // deerstalker until that hat was retired (10-10); bareheaded now, it reads the footnotes. Last in the list, as every
+  // addition is (strand.ts keeps a specialty by its place)
+  fundamentals: { family: "finance", label: "Fundamentals", title: "Fundamental Analyst", focus: "stocks and crypto read to the bone: the filings and their footnotes, cash against earnings, debt, dilution, a token's supply and who holds it; where the story and the numbers part ways, before the crash", lean: [3, 1, 5, 1, 3, 5, 5, 1], hat: "none", glasses: "half-rims", limits: "Not a licensed financial adviser: reads the books and says what does not add up; every buy, sell or short is yours to make." },
   // the Executive (owner, 10-07: "COO, CTO, CMO, Chief of Staff", with the CEO and the CFO): each heads a department
   // (org: department heads) and sits on the board by its post. Last in the list, as every addition is
   ceo: { family: "exec", label: "CEO", title: "Chief Executive Officer", focus: "running the company: its direction, who does what, the work led and answered for; chairs the board", lean: [5, 2, 3, 2, 4, 3, 3, 4], hat: "laurel", glasses: "none" },
@@ -536,10 +543,6 @@ export type Character = {
   /** The hat's and the frames' colour as any colour (hex), over `hatHue` and `glassesHue`. */
   hatTint?: string | null;
   glassesTint?: string | null;
-  /** His ears under a hat that covers them: inside it (the default, owner 10-09: "ears, they should be inside hat when
-   * on") or out of it, through it (owner, 10-10: "why dont we make the ears come out of the hat ... give the user the
-   * choice"). Only where the hat would take them in (earsInside); the strand carries "out" alone (strand.ts "3"). */
-  ears?: "in" | "out" | null;
   voice: string;
   goo: number;
 };
@@ -592,10 +595,6 @@ export function closeUp<F extends { w: number; h: number; cy: number; radius: nu
   return over > 0 ? { ...f, h: f.h + over, cy: (f.cy * f.h + over) / (f.h + over) } : f;
 }
 
-/** Whether his ears come out of his hat: chosen so, and a hat that would take them in (with any other hat they are out
- * already). */
-export const earsOut = (c: Pick<Character, "ears" | "hat" | "shape">): boolean => c.ears === "out" && earsInside(c.hat, c.shape);
-
 /** What the shader needs to draw this character. */
 export function lookOf(c: Character): OrbLook {
   const s = SHAPES[c.shape];
@@ -603,8 +602,7 @@ export function lookOf(c: Character): OrbLook {
   const w = HATS[c.hat];
   const g = GLASSES[c.glasses];
   return {
-    shapeA: [...s.a], shapeB: [...s.b], shapeC: earsInside(c.hat, c.shape) && !earsOut(c) ? [s.c[0], s.c[1], 0, s.c[3]] : [...s.c], shapeD: [...s.d], shapeE: [...s.e], shapeF: [...s.f],
-    earsOut: earsOut(c),
+    shapeA: [...s.a], shapeB: [...s.b], shapeC: earsInside(c.hat, c.shape) ? [s.c[0], s.c[1], 0, s.c[3]] : [...s.c], shapeD: [...s.d], shapeE: [...s.e], shapeF: [...s.f],
     eyeA: [...e.a] as V4, eyeB: [...e.b] as V4, eyeX: "cross" in e && e.cross ? 1 : 0,
     acc: w.id, head: headOf(c.shape, c.hat === "halo"), accFit: (({ seat, size, float }) => [c.hat === "halo" ? float : seat, size] as [number, number])(hatFit(c.shape)), accCol: c.hatTint ? rgb01(c.hatTint) : c.hatHue ? tone(c.hatHue, c) : paint(w.main, c), accCol2: paint(w.second, c), accTilt: w.tilt, orbCol: paint("accent", c),
     ...(() => {
@@ -682,7 +680,7 @@ export function sane(c: Partial<Character> & { name: string }, base: Character):
     finish: pick("finish", inside(FINISHES)),
     shape: pick("shape", inside(SHAPES)),
     eyes: pick("eyes", inside(EYES)),
-    hat: pick("hat", inside(HATS)),
+    hat: pick("hat", (v) => HAT_CHOICES.includes(v as HatName)),
     glasses: pick("glasses", inside(GLASSES)),
     hatHue: typeof c.hatHue === "string" && (hues.includes(c.hatHue) || c.hatHue === "white" || c.hatHue === "black") ? (c.hatHue as AccessoryHue) : c.hatHue === null ? null : base.hatHue ?? null,
     glassesHue: typeof c.glassesHue === "string" && (hues.includes(c.glassesHue) || c.glassesHue === "white" || c.glassesHue === "black") ? (c.glassesHue as AccessoryHue) : c.glassesHue === null ? null : base.glassesHue ?? null,
@@ -755,7 +753,7 @@ export function surprise(seed: number, o: { specialty?: SpecialtyName } = {}): C
     finish: r() < 0.75 ? "glass" : pickOne(Object.keys(FINISHES) as FinishName[], r),
     shape: pickOne(Object.keys(SHAPES) as ShapeName[], r),
     eyes: r() < 0.7 ? P.eyes : pickOne(Object.keys(EYES) as EyesName[], r),
-    hat: r() < 0.5 ? SPECIALTIES[specialty].hat : pickOne(Object.keys(HATS) as HatName[], r),
+    hat: r() < 0.5 ? SPECIALTIES[specialty].hat : pickOne(ROLLED_HATS, r),
     glasses: r() < 0.5 ? SPECIALTIES[specialty].glasses : r() < 0.5 ? "none" : pickOne(Object.keys(GLASSES) as GlassesName[], r),
     voice: pickOne(P.voices.filter((v) => v !== "ash"), r) ?? "silent",
     goo: Math.round(Math.max(0, Math.min(1, P.goo + (r() - 0.5) * 0.2)) * 100) / 100, // in hundredths, the slider's step

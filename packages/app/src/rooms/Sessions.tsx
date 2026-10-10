@@ -129,9 +129,12 @@ function Picker({ office, chosen, set }: { office: Character[]; chosen: string[]
         const id = idOf(c.name);
         const on = chosen.includes(id);
         return (
-          <button key={id} data-orb={c.hue} aria-pressed={on} onClick={() => set(on ? chosen.filter((x) => x !== id) : [...chosen, id])} style={{ ...button, display: "grid", justifyItems: "center", gap: 2, padding: "6px 10px", borderRadius: 14, background: on ? "var(--accent-fill)" : "var(--fill)", boxShadow: on ? "inset 0 0 0 1.5px var(--accent)" : "inset 0 0 0 1px var(--hairline)" }}>
-            <Orb character={c} size={44} poke={false} still />
-            <span style={{ font: "700 12px/16px var(--font)", color: on ? "var(--text-1)" : "var(--text-3)" }}>{c.name}</span>
+          // A wider, rectangular crew tile, with the orb large enough to recognise at a glance (owner, 10-10). It grows
+          // with its name: a fixed 148 px left a name 50 px and cut 33 of our 528 (Humphrey, the widest, is 64 px, measured
+          // 10-10); only a name past 240 px is cut
+          <button key={id} data-crew-pick={id} data-orb={c.hue} aria-pressed={on} onClick={() => set(on ? chosen.filter((x) => x !== id) : [...chosen, id])} style={{ ...button, display: "flex", alignItems: "center", gap: 10, flex: "0 0 auto", minWidth: 148, maxWidth: 240, padding: "8px 12px", borderRadius: 12, textAlign: "left", background: on ? "var(--accent-fill)" : "var(--fill)", boxShadow: on ? "inset 0 0 0 1.5px var(--accent)" : "inset 0 0 0 1px var(--hairline)" }}>
+            <Orb character={c} size={64} poke={false} still />
+            <span data-crew-name style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", font: "800 13px/18px var(--font)", color: on ? "var(--text-1)" : "var(--text-3)" }}>{c.name}</span>
           </button>
         );
       })}

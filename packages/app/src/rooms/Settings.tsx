@@ -2,7 +2,7 @@
 // What is the person's to set, in the app: what the office calls you, the sounds, how every orb
 // replies, and the opening story again. Brains (ChatGPT, one Gemini key, a local coder) are the
 // home's (PLAN 1.11), and are chosen here once the app talks to it (2.4); until then it says so.
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { REPLIES, type Replies } from "../orb/spec.ts";
 import { Balanced, OneLine } from "../ui/Balanced.tsx";
 import { applyTheme, savedTheme } from "../ui/theme.ts";
@@ -43,7 +43,7 @@ function Index({ ids, active, wide, lit }: { ids: SectionId[]; active: SectionId
         e.preventDefault();
         jump(id);
       }}
-      style={{ font: "600 13px/18px var(--font)", textDecoration: "none", whiteSpace: "nowrap", borderRadius: wide ? 10 : 999, padding: wide ? "7px 12px" : "6px 12px", color: active === id ? "var(--text-1)" : "var(--text-3)", background: active === id ? "var(--fill-2)" : wide ? "transparent" : "var(--fill)", boxShadow: !wide && active !== id ? "inset 0 0 0 .5px var(--hairline)" : undefined }}>
+      style={{ display: "flex", alignItems: "center", minHeight: wide ? 32 : 44, font: "600 13px/18px var(--font)", textDecoration: "none", whiteSpace: "nowrap", borderRadius: wide ? 10 : 999, padding: wide ? "7px 12px" : "6px 12px", color: active === id ? "var(--text-1)" : "var(--text-3)", background: active === id ? "var(--fill-2)" : wide ? "transparent" : "var(--fill)", boxShadow: !wide && active !== id ? "inset 0 0 0 .5px var(--hairline)" : undefined }}>
       {label}
     </a>
   ));
@@ -125,8 +125,15 @@ export function Settings(o: {
   const ids: SectionId[] = ["you", ...(o.person ? ["budget" as const] : []), "theme", "sound", ...(o.fillDemo ? ["preview" as const] : []), ...(o.home ? ["folder" as const] : []), "brains", ...(o.home ? ["connections" as const, "passwords" as const, "devices" as const] : [])];
   // the section you are in: the last whose top has passed a fifth of the way down the screen
   const [active, setActive] = useState<SectionId | null>("you");
+  // During an index's smooth jump, the sections it passes must not steal the highlight from the one just pressed.
+  const jumpingUntil = useRef(0);
+  const light = (id: SectionId): void => {
+    jumpingUntil.current = performance.now() + 800;
+    setActive(id);
+  };
   useEffect(() => {
     const at = (): void => {
+      if (performance.now() < jumpingUntil.current) return;
       // at the foot of the page, the last section (it can never reach the line)
       if (innerHeight + scrollY >= document.documentElement.scrollHeight - 2 && scrollY > 0) return setActive(ids[ids.length - 1] ?? null);
       const line = innerHeight * 0.2;
@@ -154,7 +161,7 @@ export function Settings(o: {
   return (
     <div className="orbs-settings" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "var(--s4) var(--s5)", padding: "var(--s5)", alignContent: "start", alignItems: "start", width: "100%" }}>
       <h2 style={{ gridColumn: "1 / -1", margin: 0, font: "800 28px/34px var(--font)", color: "var(--text-1)" }}>Settings</h2>
-      <Index ids={ids} active={active} wide={wide} lit={setActive} />
+      <Index ids={ids} active={active} wide={wide} lit={light} />
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "var(--s4)", minWidth: 0, maxWidth: 760 }}>
       <div id="settings-you" style={sectionStyle}>
       <Panel title="You">

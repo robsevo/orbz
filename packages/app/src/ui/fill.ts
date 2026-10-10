@@ -13,11 +13,14 @@ const DVH = typeof CSS !== "undefined" && typeof CSS.supports === "function" && 
 
 /** Whether the screen is small for a conversation (narrow or short): its room's header draws smaller. */
 export function useCramped(query = "(max-width: 760px), (max-height: 720px)"): boolean {
-  const q = typeof matchMedia === "function" ? matchMedia(query) : null;
-  const [on, setOn] = useState(Boolean(q?.matches));
+  const [on, setOn] = useState(() => typeof matchMedia === "function" && matchMedia(query).matches);
   useEffect(() => {
+    const q = typeof matchMedia === "function" ? matchMedia(query) : null;
     if (!q) return;
     const changed = (): void => setOn(q.matches);
+    // what changed before this listener was there (a first shader compile can hold effects back for seconds), or a
+    // new query from the caller
+    changed();
     q.addEventListener("change", changed);
     return () => q.removeEventListener("change", changed);
   }, [query]);

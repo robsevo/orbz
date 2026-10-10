@@ -180,7 +180,7 @@ test("every pair of glasses is a sound model for every eyes, its lenses over his
 // we get this [a squircle's corners out from under a beanie made for the bean] ... Also watch out for ears, they should
 // be inside hat when on") ──
 /** The hats made over his head, which hug it. */
-const HUGS: HatName[] = ["beanie", "cap", "hard hat", "deerstalker", "viking helmet", "propeller", "beret"];
+const HUGS: HatName[] = ["beanie", "cap", "hard hat", "viking helmet", "propeller", "beret"];
 /** His head out from under a hat, as it is drawn: the cells of him above where the hat ends (in their own column, or as
  * far out as it reaches) that it is not drawn over, as a share of all of him there. */
 function poking(hat: Uint8Array, head: Uint8Array): number {

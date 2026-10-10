@@ -5,7 +5,7 @@ import { createRoot } from "react-dom/client";
 import { stylesheet } from "../src/design/tokens.ts";
 import { Orb } from "../src/orb/Orb.tsx";
 import type { Gesture } from "../src/orb/life.ts";
-import { ASH, EYES, GLASSES, HATS, type Character, type EyesName, type GlassesName, type HatName, type OrbHue, type ShapeName } from "../src/orb/spec.ts";
+import { ASH, EYES, GLASSES, HAT_CHOICES, type Character, type EyesName, type GlassesName, type HatName, type OrbHue, type ShapeName } from "../src/orb/spec.ts";
 
 export function mount(): void {
   const q = new URLSearchParams(location.search);
@@ -17,7 +17,7 @@ export function mount(): void {
   document.head.append(style);
   // what the sheet shows: every hat (the default), every pair of glasses, or every style of eyes (close up)
   const kind = q.get("kind") === "glasses" ? "glasses" : q.get("kind") === "eyes" ? "eyes" : "hat";
-  const all = kind === "glasses" ? Object.keys(GLASSES) : kind === "eyes" ? Object.keys(EYES) : Object.keys(HATS);
+  const all = kind === "glasses" ? Object.keys(GLASSES) : kind === "eyes" ? Object.keys(EYES) : HAT_CHOICES;
   const hats = all.filter((h) => (kind === "eyes" || h !== "none") && (!q.get("wears") || q.get("wears")!.split(",").includes(h)));
   const hues = (q.get("hues")?.split(",") ?? ["azure"]) as OrbHue[];
   const shape = (q.get("shape") ?? "bean") as ShapeName;
@@ -31,7 +31,7 @@ export function mount(): void {
       {hats.flatMap((h, i) => {
         const hue = hues[i % hues.length]!;
         const wear = kind === "glasses" ? { hat: "none" as HatName, glasses: h as GlassesName } : kind === "eyes" ? { hat: "none" as HatName, glasses: "none" as GlassesName, eyes: h as EyesName } : { hat: h as HatName, glasses: "none" as GlassesName };
-        const c: Character = { ...ASH, name: "Sheet", finish: "glass", shape, hue, ...wear, ears: q.get("ears") === "out" ? "out" : null };
+        const c: Character = { ...ASH, name: "Sheet", finish: "glass", shape, hue, ...wear };
         return [
           <div key={h} style={{ display: "grid", justifyItems: "center" }}>
             <Orb character={c} size={size} still poke={false} framing={close ? "portrait" : "window"} {...(pose && { pose: { gesture: pose, into: Number(q.get("into") ?? 0.5) } })} />

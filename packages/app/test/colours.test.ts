@@ -131,31 +131,6 @@ test("every strand made before reads and is made the same; a second-version stra
   assert.equal(readStrand(all.slice(0, -6) + all.slice(-1)).ok, false, "a strand cut short does not read");
 });
 
-// owner, 10-10: "why dont we make the ears come out of the hat ... or give the user the choice? which affects dna". The
-// strand carries an orb's ears out of its hat (the third version: the second's and one bit), and only then: every other
-// orb's strand is as it was.
-test("a third-version strand carries the ears out of the hat, whole; every other strand is as it was; typos are caught", () => {
-  const basil: Character = { ...surprise(4242), name: "Basil", hat: "beanie", hatHue: "white", glasses: "round", glassesHue: "black" };
-  for (const ears of [undefined, null, "in"] as const) assert.equal(shareOf({ ...basil, ears }), "Basil · 12BW-JRVY-RAG9-BQT1-RNC9-Z", `ears ${String(ears)}: the strand made on 10-08`);
-  const r = dice(37);
-  for (let i = 0; i < 120; i++) {
-    const c: Character = { ...surprise(Math.floor(r() * 200_000)), name: "Kit", shape: "kitty", hat: "beanie", ears: "out", ...(r() < 0.4 && { tint: anyColour(r) }), ...(r() < 0.3 && { hue: "dark" as const }) };
-    const s3 = strandOf(c);
-    assert.equal(s3[0], "3", `ears out: the third version (${s3})`);
-    const back = readStrand(s3, "Kit");
-    assert.ok(back.ok, `${s3}: ${!back.ok && back.why}`);
-    for (const k of ["ears", "hue", "tint", "hat", "shape", "seed"] as const) assert.equal(back.orb[k] ?? null, c[k] ?? null, `${k} of ${s3}`);
-    assert.equal(strandOf(back.orb), s3, "made again, the same strand");
-  }
-  // controls: a one-letter typo in a third-version strand is caught, and a strand cut short does not read
-  const s3 = strandOf({ ...ASH, shape: "kitty", hat: "beanie", ears: "out" }).replace(/-/g, "");
-  const ALPHA = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
-  for (let i = 1; i < s3.length; i++) for (const ch of ALPHA) if (ch !== s3[i]) assert.equal(readStrand(s3.slice(0, i) + ch + s3.slice(i + 1)).ok, false, `a typo at ${i}`);
-  assert.equal(readStrand(s3.slice(0, -3) + s3.slice(-1)).ok, false, "cut short");
-  const plain = readStrand(strandOf({ ...ASH, shape: "kitty", hat: "beanie" }));
-  assert.ok(plain.ok && (plain.orb.ears ?? null) === null, "and an orb with its ears in reads back with them in");
-});
-
 test("a look read back keeps a colour that is one and drops one that is not; Dark is kept", () => {
   const kept = sane({ ...ASH, hue: "dark", tint: "#7A3FE0", tint2: "nope", hatTint: "7a3fe0", glassesTint: 12 as unknown as string }, ASH);
   assert.equal(kept.hue, "dark");

@@ -56,8 +56,8 @@ import { applyTheme, savedTheme } from "./ui/theme.ts";
 applyTheme(savedTheme(), false); // before the first paint: the theme you chose, never a flash of another
 noFieldZoom(document, navigator); // an iPhone does not zoom into a text box (owner, 10-07)
 import {
-  ASH, earsInside, EYES, FAMILIES, FINISHES, GLASSES, HATS, offered, orbName, partnerOf, type Scheme, SCHEMES, type AccessoryHue, PERSONALITIES, REPLIES, SHAPES, sheetOf, speaks, SPECIALTIES, surprise, voice, VOICES, withPersonality,
-  type Character, type EyesName, type Family, type FinishName, type GlassesName, type HatName, type PersonalityName, type Replies, type ShapeName, type SpecialtyName, wheelOf } from "./orb/spec.ts";
+  ASH, EYES, FAMILIES, FINISHES, GLASSES, HAT_CHOICES, offered, orbName, partnerOf, type Scheme, SCHEMES, type AccessoryHue, PERSONALITIES, REPLIES, SHAPES, sheetOf, sane, speaks, SPECIALTIES, surprise, voice, VOICES, withPersonality,
+  type Character, type EyesName, type Family, type FinishName, type GlassesName, type PersonalityName, type Replies, type ShapeName, type SpecialtyName, wheelOf } from "./orb/spec.ts";
 
 
 
@@ -414,7 +414,7 @@ function LevelUp({ c, g }: { c: Character; g: Growth }) {
 // `part`: the whole card (an applicant's), or its head (who it is: name, title, level, what it does) or its body (the
 // stats), each a card of its own where the studio sets them apart (owner, 10-10: "put that part with the dna strand to
 // the left")
-function Sheet({ c, onRename, replies, standing, startsAs, career, applying, friends, onChat, onCareer, strand = true, part = "all" }: { c: Character; onRename?: (name: string) => void; replies: Replies; standing?: Standing | null; startsAs?: "Junior" | "Senior"; career?: CareerState | null; applying?: boolean; friends?: Friend[] | null; onChat?: () => void; onCareer?: () => void; strand?: boolean; part?: "all" | "head" | "body" }) {
+function Sheet({ c, onRename, replies, standing, startsAs, career, applying, friends, strand = true, part = "all", bare = false, centered = false }: { c: Character; onRename?: (name: string) => void; replies: Replies; standing?: Standing | null; startsAs?: "Junior" | "Senior"; career?: CareerState | null; applying?: boolean; friends?: Friend[] | null; strand?: boolean; part?: "all" | "head" | "body"; bare?: boolean; centered?: boolean }) {
   const sh = sheetOf(c);
   // what his graded work has grown him into (PLAN 3.11), once a home has some to show
   const grown = career ? grownOf(c, sh.leans, career.radar, career.niches, sh.dna, standing?.xp ?? career.xp) : null;
@@ -422,7 +422,7 @@ function Sheet({ c, onRename, replies, standing, startsAs, career, applying, fri
   const v = voice(c.voice);
   const name = { font: "800 26px/32px var(--font)", color: "var(--accent)" } satisfies CSSProperties;
   const head = (
-      <div style={{ display: "grid", gap: 4 }}>
+      <div style={{ display: "grid", gap: 4, ...(centered && { justifyItems: "center", textAlign: "center" }) }}>
         {onRename ? (
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <input
@@ -435,23 +435,7 @@ function Sheet({ c, onRename, replies, standing, startsAs, career, applying, fri
             />
             <Die label="Name" said="Roll a name" onRoll={() => onRename(orbName(() => Math.random()))} />
           </div>
-        ) : (
-          // its name, and beside it Chat and its career, small (owner, 10-07: "put chat and career for orb on orb page
-          // next to the orbs name, but just put chat and career as smaller buttons")
-          <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-            <h2 style={{ ...name, margin: 0, flex: "1 1 auto", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</h2>
-            {onChat && (
-              <button data-sound="pick" data-chat-with aria-label={`Chat with ${c.name}`} onClick={onChat} style={{ ...s.chip, flex: "0 0 auto", background: "var(--accent)", color: "var(--ground)", fontWeight: 800 }}>
-                Chat
-              </button>
-            )}
-            {onCareer && (
-              <button data-career-open aria-label={`${c.name}'s career`} onClick={onCareer} style={{ ...s.chip, flex: "0 0 auto", background: "var(--accent-wash)", boxShadow: "inset 0 0 0 1.5px var(--accent)", color: "var(--text-1)", fontWeight: 800 }}>
-                Career
-              </button>
-            )}
-          </div>
-        )}
+        ) : <h2 style={{ ...name, margin: 0, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</h2>}
         <span data-title style={{ font: "600 15px/20px var(--font)", color: "var(--text-1)" }}>{cap(sh.title)}</span>
         <span style={{ font: "400 13px/18px var(--font)", color: "var(--text-3)" }}>
           {onRename
@@ -533,13 +517,21 @@ function Sheet({ c, onRename, replies, standing, startsAs, career, applying, fri
   // there it does not scroll again inside it (owner, 10-10: "fix CV page in recruiting")
   const scroll = (all: ReactNode): ReactNode =>
     applying ? <div style={{ display: "grid", gap: "var(--s4)" }}>{all}</div> : <Tall label={`${c.name || "Your orb"}'s card`} style={{ display: "grid", gap: "var(--s4)" }}>{all}</Tall>;
-  if (part === "head")
+  if (part === "head") {
+    if (bare)
+      return (
+        <div data-orb={c.hue} className="orbs-sheet" data-sheet-head style={{ display: "grid", gap: "var(--s3)", width: "100%", maxWidth: 560, minWidth: 0, flex: centered ? undefined : "1 1 360px", alignContent: "center", ...(centered && { justifyItems: "center", textAlign: "center" }) }}>
+          {head}
+          {lede}
+        </div>
+      );
     return (
       <div data-orb={c.hue} className="orbs-sheet" data-sheet-head style={{ ...s.panel, display: "grid", gap: "var(--s3)" }}>
         {head}
         {lede}
       </div>
     );
+  }
   if (part === "body")
     return (
       <div data-orb={c.hue} className="orbs-sheet-body" data-sheet-body style={{ ...s.panel, display: "grid", gap: "var(--s4)" }}>
@@ -721,7 +713,7 @@ function Creator({ me, edit, replies, setReplies, kinds = [], peek = false }: { 
     Specialty: () => edit({ specialty: founding ?? pick((Object.keys(SPECIALTIES) as SpecialtyName[]).filter((k) => !whyNot(k, kinds))) }),
     Shape: () => edit({ shape: pick(Object.keys(SHAPES) as ShapeName[]) }),
     Eyes: () => edit({ eyes: pick(Object.keys(EYES) as EyesName[]) }),
-    Hat: () => edit({ hat: pick(Object.keys(HATS) as HatName[]), hatHue: Math.random() < 0.35 ? partner() : null, hatTint: null }),
+    Hat: () => edit({ hat: pick(HAT_CHOICES), hatHue: Math.random() < 0.35 ? partner() : null, hatTint: null }),
     Glasses: () => edit({ glasses: pick(Object.keys(GLASSES) as GlassesName[]), glassesHue: Math.random() < 0.35 ? partner() : null, glassesTint: null }),
     Colour: () => {
       const hue = pick(hues);
@@ -782,22 +774,7 @@ function Creator({ me, edit, replies, setReplies, kinds = [], peek = false }: { 
       {tab === "Eyes" && <Thumbs title="Eyes" c={me} options={Object.keys(EYES) as EyesName[]} field="eyes" label={cap} onPick={(eyes) => edit({ eyes })} face />}
       {tab === "Hat" && (
         <div style={{ display: "grid", gap: "var(--s4)" }}>
-          <Thumbs title="Hats" c={me} options={Object.keys(HATS) as HatName[]} field="hat" label={cap} onPick={(hat) => edit({ hat })} />
-          {/* his ears under a hat that covers them: in it, or out of it (owner, 10-10: "why dont we make the ears come out of
-              the hat ... or give the user the choice? which affects dna"); only where the hat would take them in */}
-          {earsInside(me.hat, me.shape) && (
-            <div data-ears style={{ display: "grid", gap: 8 }}>
-              <Head>Ears</Head>
-              <div role="group" aria-label="Ears" style={{ display: "flex", gap: 8, flexWrap: "wrap", minWidth: 0 }}>
-                <button data-ears-pick="in" aria-pressed={me.ears !== "out"} onClick={() => edit({ ears: null })} style={{ ...s.chip, ...chosen(me.ears !== "out") }}>
-                  In the hat
-                </button>
-                <button data-ears-pick="out" aria-pressed={me.ears === "out"} onClick={() => edit({ ears: "out" })} style={{ ...s.chip, ...chosen(me.ears === "out") }}>
-                  Out of the hat
-                </button>
-              </div>
-            </div>
-          )}
+          <Thumbs title="Hats" c={me} options={HAT_CHOICES} field="hat" label={cap} onPick={(hat) => edit({ hat })} />
           {me.hat !== "none" && <AccessoryColour what="hat" value={me.hatHue ?? null} onPick={(hatHue) => edit({ hatHue, hatTint: null })} tint={me.hatTint ?? null} onTint={(hatTint) => edit({ hatTint, hatHue: null })} from={wheelOf(me.hue)} />}
         </div>
       )}
@@ -1016,7 +993,7 @@ function SoundIcon({ on }: { on: boolean }) {
   );
 }
 
-const REACT: [keyof Character, Gesture][] = [["hat", "hop"], ["glasses", "nod"], ["personality", "hop"], ["shape", "jelly"], ["goo", "jelly"], ["eyes", "nod"], ["specialty", "nod"], ["hue", "wiggle"], ["hue2", "wiggle"], ["finish", "wiggle"], ["voice", "squish"], ["ears", "wiggle"]];
+const REACT: [keyof Character, Gesture][] = [["hat", "hop"], ["glasses", "nod"], ["personality", "hop"], ["shape", "jelly"], ["goo", "jelly"], ["eyes", "nod"], ["specialty", "nod"], ["hue", "wiggle"], ["hue2", "wiggle"], ["finish", "wiggle"], ["voice", "squish"]];
 
 // "floor": the office itself, everyone at work (owner, 10-05: "the office should be a whole office visual of
 // them working in an office"); "orb": one orb's profile, pressed on the floor or picked in the side menu
@@ -1214,10 +1191,7 @@ function App() {
   };
   const edit = (patch: Partial<Character>): void => {
     if (view.kind !== "new") return; // once he is in the office he is fixed
-    const next = { ...view.draft, ...patch };
-    // his ears out only under a hat that would take them in: another hat or shape, and they are as any orb's again
-    if (next.ears === "out" && !earsInside(next.hat, next.shape)) next.ears = null;
-    setView({ kind: "new", draft: next });
+    setView({ kind: "new", draft: { ...view.draft, ...patch } });
     // he reacts to what you choose for him (at most every 300 ms, for a slider dragged)
     const g = REACT.find(([k]) => k in patch && patch[k] !== view.draft[k])?.[1];
     const t = performance.now();
@@ -1354,27 +1328,26 @@ function App() {
     </button>
   );
   // `locked`: why it is not open yet (greyed, not pressable, its reason on hover)
-  // an orb's moods and its moves (owner, 10-07: the moods a little more square, the moves smaller and quieter under them):
-  // under it in its card on a narrower screen; on a wide one to the right, over its stats (owner, 10-10: "awake listening
-  // etc put that to the right over traits"), the orb in view beside them
-  const moves = (
+  // An orb's moods and moves. In the creator they stay with the preview; on an orb's own page they make one compact
+  // card in the left column, immediately above its DNA (owner, 10-10).
+  const moves = (compact = false): ReactNode => (
     <>
         {/* his moods a little more square, and his gestures as small, quieter boxes under them, not a row to scroll
             (owner, 10-07: "make the awake listening etc a little more square ... take out the wheel under it, put
             those as smaller containers under awake lisening etc with a dimmer font color") */}
-        <OneLine>
+        <OneLine gap={compact ? 6 : 8}>
           {MOODS.map(([m, label]) => (
-            <button key={m} data-mood-pick={m} onClick={() => (setState(m), setPicked(true))} aria-pressed={worn === m} style={{ ...s.chip, ...chosen(worn === m), borderRadius: 10 }}>
+            <button key={m} className={compact ? "orbs-small" : undefined} data-mood-pick={m} onClick={() => (setState(m), setPicked(true))} aria-pressed={worn === m} style={{ ...s.chip, ...chosen(worn === m), borderRadius: compact ? 8 : 10, ...(compact && { font: "600 12px/16px var(--font)", padding: "4px 9px", minHeight: 30 }) }}>
               {label}
             </button>
           ))}
         </OneLine>
-        <div role="group" aria-label={`What ${me.name || "your orb"} can do`} data-gestures style={{ display: "grid", gap: 8, justifyItems: "center", maxWidth: "100%" }}>
+        <div role="group" aria-label={`What ${me.name || "your orb"} can do`} data-gestures style={{ display: "grid", gap: compact ? 6 : 8, justifyItems: "center", maxWidth: "100%" }}>
           {(smallPhone ? [GESTURES.slice(0, 3), GESTURES.slice(3, 6), GESTURES.slice(6)] : [GESTURES.slice(0, 5), GESTURES.slice(5)]).map((row, r) => (
-            <div key={r} style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 6 }}>
+            <div key={r} style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: compact ? 5 : 6 }}>
               {row.map(([g, label]) => (
                 <button key={g} className="orbs-small" data-gesture-pick={g} data-flash={flash?.g === g ? flash.n : undefined}
-                  style={{ font: "600 12px/16px var(--font)", color: "var(--text-3)", background: "var(--fill)", boxShadow: "inset 0 0 0 .5px var(--hairline)", border: 0, borderRadius: 8, padding: "6px 11px", minHeight: 30, cursor: "pointer", whiteSpace: "nowrap", ...(flash?.g === g && { animation: `${flash.n % 2 ? "orbs-flash-a" : "orbs-flash-b"} 900ms ease-out` }) }}
+                  style={{ font: `600 ${compact ? 11 : 12}px/16px var(--font)`, color: "var(--text-3)", background: "var(--fill)", boxShadow: "inset 0 0 0 .5px var(--hairline)", border: 0, borderRadius: compact ? 7 : 8, padding: compact ? "4px 8px" : "6px 11px", minHeight: 30, cursor: "pointer", whiteSpace: "nowrap", ...(flash?.g === g && { animation: `${flash.n % 2 ? "orbs-flash-a" : "orbs-flash-b"} 900ms ease-out` }) }}
                   onClick={() => (play(g), setFlash((f) => ({ g, n: (f?.n ?? 0) + 1 })))}>
                   {label}
                 </button>
@@ -1566,12 +1539,42 @@ function App() {
               orb's card and its DNA's, each its own, in a column that stays in view on a wide screen while the editor and
               the card beside it scroll; on a narrower one they come first, and the editor carries a small one of each */}
           <div className="orbs-studio" style={{ display: "grid", gap: "var(--s4)", padding: "var(--s4) var(--s5) 0", gridTemplateColumns: "minmax(0, 1fr)", alignItems: "start" }}>
+          {!making && (
+            // Its personal page begins like its Career page: the whole orb and who it is share one hero card. Chat and
+            // Career stay immediately under the orb; on a phone the two halves stack and centre (owner, 10-10).
+            <div data-profile-hero data-orb={me.hue} data-cradle data-gesture={gesture?.name} style={{ ...s.panel, gridColumn: "1 / -1", display: "grid", gap: "var(--s3)", background: "linear-gradient(160deg, var(--accent-wash), var(--fill) 60%)" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto minmax(0, 1fr)", alignItems: "center", width: "100%" }}>
+                <span aria-hidden />
+                <span style={{ ...s.head }}>In the office</span>
+                <button aria-label={sounds ? "Sounds on" : "Sounds off"} aria-pressed={sounds} title={sounds ? "Sounds on" : "Sounds off"} data-sound="none" onClick={flipSounds} style={{ ...s.chip, justifySelf: "end", padding: 8, display: "grid", placeItems: "center", color: sounds ? "var(--text-1)" : "var(--text-3)" }}>
+                  <SoundIcon on={sounds} />
+                </button>
+              </div>
+              <div data-profile-head style={{ display: "flex", flexDirection: phone ? "column" : "row", gap: phone ? "var(--s3)" : "var(--s5)", alignItems: "center", justifyContent: "center", minWidth: 0 }}>
+                <div data-profile-portrait style={{ display: "grid", justifyItems: "center", gap: "var(--s2)", flex: "0 0 auto" }}>
+                  <Evolving me={me} from={evolve} size={phone ? 120 : 136} state={worn} gesture={gesture} onDone={setShown} />
+                  <div data-profile-actions style={{ display: "flex", justifyContent: "center", gap: 8, flexWrap: "wrap" }}>
+                    <button data-sound="pick" data-chat-with aria-label={`Chat with ${me.name}`} onClick={() => go({ room: "chat", orb: me.name })} style={{ ...s.chip, background: "var(--accent)", color: "var(--ground)", fontWeight: 800 }}>
+                      Chat
+                    </button>
+                    <button data-career-open aria-label={`${me.name}'s career`} onClick={() => go({ room: "career", orb: me.name })} style={{ ...s.chip, background: "var(--accent-wash)", boxShadow: "inset 0 0 0 1.5px var(--accent)", color: "var(--text-1)", fontWeight: 800 }}>
+                      Career
+                    </button>
+                  </div>
+                  {live && !picked && WORN[live.mood].words && <span data-mood={live.mood} style={{ font: "600 13px/18px var(--font)", color: "var(--text-2)" }}>{WORN[live.mood].words}</span>}
+                </div>
+                <Sheet bare centered={phone} part="head" c={before ?? me} key={before ? "was-head" : "now-head"} replies={replies} standing={standing} startsAs={startsAs} career={career} friends={friends} />
+              </div>
+              <p style={{ margin: 0, font: "400 13px/18px var(--font)", color: "var(--text-3)", textAlign: "center" }}>Give a click, or move your pointer: the eyes follow.</p>
+            </div>
+          )}
           <div className="orbs-stage" style={{ display: "grid", gap: "var(--s4)", alignContent: "start", minWidth: 0 }}>
+          {making && (
           <div data-orb={me.hue} data-cradle data-gesture={gesture?.name} style={{ ...s.panel, position: "relative", display: "grid", justifyItems: "center", gap: "var(--s2)", padding: "var(--s4) var(--s3)", background: "radial-gradient(60% 70% at 50% 28%, var(--accent-wash), transparent 70%), var(--fill)" }}>
             {/* its head: what it is, centred, and the sounds at its end (one row of the card, not an item beside it) */}
             <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto minmax(0, 1fr)", alignItems: "center", width: "100%" }}>
               <span aria-hidden />
-              <span style={{ ...s.head }}>{making ? "A new orb" : "In the office"}</span>
+              <span style={{ ...s.head }}>A new orb</span>
               <button aria-label={sounds ? "Sounds on" : "Sounds off"} aria-pressed={sounds} title={sounds ? "Sounds on" : "Sounds off"} data-sound="none" onClick={flipSounds} style={{ ...s.chip, justifySelf: "end", padding: 8, display: "grid", placeItems: "center", color: sounds ? "var(--text-1)" : "var(--text-3)" }}>
                 <SoundIcon on={sounds} />
               </button>
@@ -1582,9 +1585,8 @@ function App() {
                 {WORN[live.mood].words}
               </span>
             )}
-            {/* on a narrower screen its moods and moves under it, where pressing one shows him doing it */}
-            {!wide && moves}
-            {making && (
+            {/* on a narrower creator its moods and moves stay under the preview */}
+            {!wide && moves()}
               <OneLine gap={8} style={{ marginTop: "var(--s2)" }}>
                 <button
                   data-sound="roll"
@@ -1604,15 +1606,19 @@ function App() {
                   Create {name || "your orb"}
                 </button>
               </OneLine>
-            )}
             <p style={{ margin: 0, font: "400 13px/18px var(--font)", color: blocked ? "var(--alert)" : "var(--text-3)", textAlign: "center" }}>
               {/* its name and title are in its card below */}
               {before || !blocked ? "Give a click, or move your pointer: the eyes follow." : blocked}
             </p>
           </div>
+          )}
 
-          {/* its DNA, its own card under the orb (owner, 10-10): everything it is made of, changing as it is made; copy
-              it, or paste someone's to make theirs */}
+          {/* A fixed orb's Career-like hero is above; its compact controls sit immediately above its DNA. */}
+          {!making && (
+            <div data-moves data-orb={me.hue} style={{ ...s.panel, display: "grid", gap: 8, padding: "var(--s3)", justifyItems: "center" }}>
+              {moves(true)}
+            </div>
+          )}
           <div data-strand-card data-orb={me.hue} style={{ ...s.panel, display: "grid", gap: "var(--s3)" }}>
             <Strand key={(before ?? me).name + (before ?? me).seed} c={before ?? me} />
             {making && (
@@ -1626,7 +1632,9 @@ function App() {
                   setStrandSaid(null);
                   setStrandText("");
                   setEvolve((x) => ({ c: me, n: (x?.n ?? 0) + 1 }));
-                  edit(read.orb);
+                  // the four colours a strand names only when it has them, cleared first: an edit keeps what its patch
+                  // leaves out, and a strand without them kept the colours chosen before it
+                  edit({ tint: null, tint2: null, hatTint: null, glassesTint: null, ...sane(read.orb, ASH) });
                   window.setTimeout(() => play("hop"), calm() ? 0 : REVEAL);
                 }}
                 style={{ display: "flex", flexWrap: "wrap", gap: 8, minWidth: 0 }}
@@ -1638,14 +1646,9 @@ function App() {
               </form>
             )}
           </div>
-          {/* who it is, under its DNA (owner, 10-10: "put that part with the dna strand to the left"): its name, title, level and
-              what it does */}
-          {making ? (
+          {/* While making one, who it is follows the changing DNA. A fixed orb's name and description are above it. */}
+          {making && (
             <Sheet part="head" c={before ?? me} key={before ? "was-head" : "now-head"} onRename={(n) => edit({ name: n })} replies={replies} standing={null} startsAs={startsAs} career={null} friends={null} />
-          ) : (
-            // Chat and its career beside its name (owner, 10-07)
-            <Sheet part="head" c={before ?? me} key={before ? "was-head" : "now-head"} replies={replies} standing={standing} startsAs={startsAs} career={career} friends={friends}
-              onChat={() => go({ room: "chat", orb: me.name })} onCareer={() => go({ room: "career", orb: me.name })} />
           )}
           </div>
           <div className="orbs-work" style={{ display: "grid", gap: "var(--s4)", alignContent: "start", minWidth: 0 }}>
@@ -1653,9 +1656,9 @@ function App() {
                 the right over traits"); the editor first while it is being made; what it is made of over its stats (owner,
                 10-10: "put made of container over the stats container") */}
             {making && <Creator me={me} edit={edit} replies={replies} setReplies={setReplies} kinds={kinds} peek={!wide} />}
-            {wide && (
+            {making && wide && (
               <div data-moves data-orb={me.hue} style={{ ...s.panel, display: "grid", gap: "var(--s3)", justifyItems: "center" }}>
-                {moves}
+                {moves()}
               </div>
             )}
             {!making && <Card c={me} replies={replies} setReplies={setReplies} onDelete={(handTo, school) => remove(me.name, handTo, school)} others={office.filter((o) => o.name !== me.name)} />}

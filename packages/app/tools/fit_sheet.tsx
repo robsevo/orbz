@@ -3,7 +3,7 @@
 import { createRoot } from "react-dom/client";
 import { stylesheet } from "../src/design/tokens.ts";
 import { Orb } from "../src/orb/Orb.tsx";
-import { ASH, GLASSES, HATS, SHAPES, type Character, type GlassesName, type HatName, type ShapeName } from "../src/orb/spec.ts";
+import { ASH, GLASSES, HAT_CHOICES, SHAPES, type Character, type GlassesName, type HatName, type ShapeName } from "../src/orb/spec.ts";
 
 export function mount(kind: "hat" | "glasses", size = 72): void {
   const style = document.createElement("style");
@@ -12,7 +12,7 @@ export function mount(kind: "hat" | "glasses", size = 72): void {
   // a part of the sheet (shoot_fit.ts --shapes a,b --wears x,y): what is being changed, quickly
   const only = (k: string): string[] | null => new URLSearchParams(location.search).get(k)?.split(",") ?? null;
   const shapes = (Object.keys(SHAPES) as ShapeName[]).filter((x) => !only("shapes") || only("shapes")!.includes(x));
-  const wears = (kind === "hat" ? Object.keys(HATS).filter((h) => h !== "none") : Object.keys(GLASSES).filter((g) => g !== "none")).filter((x) => !only("wears") || only("wears")!.includes(x)) as string[];
+  const wears = (kind === "hat" ? HAT_CHOICES.filter((h) => h !== "none") : Object.keys(GLASSES).filter((g) => g !== "none")).filter((x) => !only("wears") || only("wears")!.includes(x)) as string[];
   const base: Character = { ...ASH, name: "Fit", finish: "glass" };
   const root = document.createElement("div");
   document.body.append(root);

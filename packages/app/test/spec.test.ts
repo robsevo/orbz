@@ -9,7 +9,7 @@ import { glassesMesh, GLASSES_MODELS } from "../src/orb/hats/glasses.ts";
 import { headOf } from "../src/orb/hats/heads.ts";
 import { hatMesh, MODELS } from "../src/orb/hats/models.ts";
 import {
-  ASH, type Character, earsOut, EYES, FAMILIES, FINISHES, GLASSES, GRADES, hatFit, HATS, inHarmony, isShades, lookOf, NOT_OURS, offered, outline, PEOPLE_NAMES, PERSONALITIES, sane, SHAPES, sheetOf, SPECIALTIES, surprise, voice, VOICES, wearing, wheelSteps, withPersonality,
+  ASH, EYES, FAMILIES, FINISHES, GLASSES, GRADES, hatFit, HAT_CHOICES, HATS, inHarmony, isShades, lookOf, NOT_OURS, offered, outline, PEOPLE_NAMES, PERSONALITIES, sane, SHAPES, sheetOf, SPECIALTIES, surprise, voice, VOICES, wearing, wheelSteps, withPersonality,
   type Family, type GlassesName, type HatName, type PersonalityName, type ShapeName, type SpecialtyName,
 } from "../src/orb/spec.ts";
 
@@ -245,6 +245,18 @@ test("white and black for a hat and frames (owner, 10-03); every hat and pair of
   assert.equal(new Set(ids(GLASSES)).size, ids(GLASSES).length, "no two glasses share a number");
 });
 
+test("the deerstalker is retired from new orbs without moving old DNA fields", () => {
+  assert.equal((HAT_CHOICES as readonly string[]).includes("deerstalker"), false, "not a creator choice or dice choice");
+  assert.equal((Object.keys(HATS) as HatName[]).indexOf("deerstalker"), 29, "its frozen field stays where old strands put it");
+  assert.equal(sane({ ...ASH, name: "Rex", hat: "deerstalker" }, ASH).hat, "none", "a stored retired hat comes off");
+  assert.equal(Object.values(SPECIALTIES).some((s) => (s.hat as string) === "deerstalker"), false, "no specialty puts it back");
+  for (let seed = 0; seed < 2_000; seed++) assert.notEqual(surprise(seed).hat, "deerstalker", `seed ${seed}`);
+  // the same seed, the same orb (an applicant is remade from its seed on every device): each roll keeps the hat it had on
+  // 10-10 before the retirement, and only one that rolled the deerstalker now has none (dice choosing from a list
+  // without its slot moved 266 of the first 2,000 seeds' hats, seed 0's straw hat to an apple)
+  for (const [seed, hat] of [[0, "straw hat"], [3, "sun visor"], [6, "viking helmet"], [38, "grad cap"], [52, "beret"], [64, "fedora"], [1, "none"]] as const) assert.equal(surprise(seed).hat, hat, `seed ${seed}`);
+});
+
 test("every shape is its own: no two outlines alike (owner, 10-03: \"more shapes\", each one new)", () => {
   const names = Object.keys(SHAPES) as ShapeName[];
   const at = (n: ShapeName) => Array.from({ length: 72 }, (_, i) => SHAPES[n].d[1] * (1 + outline(SHAPES[n], -Math.PI + (i / 72) * 2 * Math.PI))); // (-π..π: his ears sit either side of -π/2)
@@ -319,16 +331,4 @@ test("a roll for the first orb is always an assistant; the dice decide the rest 
     assert.equal(first.name, any.name, "and name");
   }
   assert.ok(new Set(Array.from({ length: 300 }, (_, s) => surprise(s).specialty)).size > 20, "control: without it, the dice pick from all of them");
-});
-
-// owner, 10-10: "make the ears come out of the hat". Out only under a hat that would take them in: there the shader keeps
-// his ears and draws them again over the hat; in, it is given him without them, as before.
-test("ears out of the hat: only under a hat that would take them in, his ears kept for the shader; in, taken away", () => {
-  const kit: Character = { ...ASH, shape: "kitty", hat: "beanie" };
-  assert.equal(lookOf({ ...kit, ears: "out" }).earsOut, true);
-  assert.notEqual(lookOf({ ...kit, ears: "out" }).shapeC[2], 0, "his ears kept");
-  assert.equal(lookOf(kit).earsOut, false);
-  assert.equal(lookOf(kit).shapeC[2], 0, "control: in the hat, the shader is given him without them");
-  assert.equal(earsOut({ ...kit, hat: "party hat", ears: "out" }), false, "beside a party hat they are out already: nothing to choose");
-  assert.equal(earsOut({ ...kit, shape: "bean", ears: "out" }), false, "and a bean has no ears");
 });
