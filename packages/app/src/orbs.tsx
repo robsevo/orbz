@@ -425,14 +425,14 @@ function Sheet({ c, onRename, replies, standing, startsAs, career, applying, fri
   const head = (
       <div style={{ display: "grid", gap: 4, ...(centered && { justifyItems: "center", textAlign: "center" }) }}>
         {onRename ? (
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, ...(centered && { width: "100%" }) }}>
             <input
               value={c.name}
               onChange={(e) => onRename(e.target.value.slice(0, 16))}
               aria-label="Name"
               placeholder="Name"
               size={1}
-              style={{ ...name, flex: "1 1 120px", minWidth: 0, background: "transparent", border: 0, outline: 0, padding: 0 }}
+              style={{ ...name, flex: "1 1 120px", minWidth: 0, background: "transparent", border: 0, outline: 0, padding: 0, ...(centered && { textAlign: "center" }) }}
             />
             <Die label="Name" said="Roll a name" onRoll={() => onRename(orbName(() => Math.random()))} />
           </div>
@@ -1345,26 +1345,25 @@ function App() {
     </button>
   );
   // `locked`: why it is not open yet (greyed, not pressable, its reason on hover)
-  // An orb's moods and moves. In the creator they stay with the preview; on an orb's own page they make one compact
-  // card in the left column, immediately above its DNA (owner, 10-10).
-  const moves = (compact = false): ReactNode => (
+  // An orb's moods and moves: one compact card immediately above its DNA, on its page and in the creator (owner, 10-10)
+  const moves = (
     <>
         {/* his moods a little more square, and his gestures as small, quieter boxes under them, not a row to scroll
             (owner, 10-07: "make the awake listening etc a little more square ... take out the wheel under it, put
             those as smaller containers under awake lisening etc with a dimmer font color") */}
-        <OneLine gap={compact ? 6 : 8}>
+        <OneLine gap={6}>
           {MOODS.map(([m, label]) => (
-            <button key={m} className={compact ? "orbs-small" : undefined} data-mood-pick={m} onClick={() => (setState(m), setPicked(true))} aria-pressed={worn === m} style={{ ...s.chip, ...chosen(worn === m), borderRadius: compact ? 8 : 10, ...(compact && { font: "600 12px/16px var(--font)", padding: "4px 9px", minHeight: 30 }) }}>
+            <button key={m} className="orbs-small" data-mood-pick={m} onClick={() => (setState(m), setPicked(true))} aria-pressed={worn === m} style={{ ...s.chip, ...chosen(worn === m), borderRadius: 8, font: "600 12px/16px var(--font)", padding: "4px 9px", minHeight: 30 }}>
               {label}
             </button>
           ))}
         </OneLine>
-        <div role="group" aria-label={`What ${me.name || "your orb"} can do`} data-gestures style={{ display: "grid", gap: compact ? 6 : 8, justifyItems: "center", maxWidth: "100%" }}>
+        <div role="group" aria-label={`What ${me.name || "your orb"} can do`} data-gestures style={{ display: "grid", gap: 6, justifyItems: "center", maxWidth: "100%" }}>
           {(smallPhone ? [GESTURES.slice(0, 3), GESTURES.slice(3, 6), GESTURES.slice(6)] : [GESTURES.slice(0, 5), GESTURES.slice(5)]).map((row, r) => (
-            <div key={r} style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: compact ? 5 : 6 }}>
+            <div key={r} style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 5 }}>
               {row.map(([g, label]) => (
                 <button key={g} className="orbs-small" data-gesture-pick={g} data-flash={flash?.g === g ? flash.n : undefined}
-                  style={{ font: `600 ${compact ? 11 : 12}px/16px var(--font)`, color: "var(--text-3)", background: "var(--fill)", boxShadow: "inset 0 0 0 .5px var(--hairline)", border: 0, borderRadius: compact ? 7 : 8, padding: compact ? "4px 8px" : "6px 11px", minHeight: 30, cursor: "pointer", whiteSpace: "nowrap", ...(flash?.g === g && { animation: `${flash.n % 2 ? "orbs-flash-a" : "orbs-flash-b"} 900ms ease-out` }) }}
+                  style={{ font: "600 11px/16px var(--font)", color: "var(--text-3)", background: "var(--fill)", boxShadow: "inset 0 0 0 .5px var(--hairline)", border: 0, borderRadius: 7, padding: "4px 8px", minHeight: 30, cursor: "pointer", whiteSpace: "nowrap", ...(flash?.g === g && { animation: `${flash.n % 2 ? "orbs-flash-a" : "orbs-flash-b"} 900ms ease-out` }) }}
                   onClick={() => (play(g), setFlash((f) => ({ g, n: (f?.n ?? 0) + 1 })))}>
                   {label}
                 </button>
@@ -1590,55 +1589,59 @@ function App() {
           )}
           <div className="orbs-stage" data-flow={making ? undefined : ""} style={{ display: "grid", gap: "var(--s4)", alignContent: "start", minWidth: 0 }}>
           {making && (
-          <div data-orb={me.hue} data-cradle data-gesture={gesture?.name} style={{ ...s.panel, position: "relative", display: "grid", justifyItems: "center", gap: "var(--s2)", padding: "var(--s4) var(--s3)", background: "radial-gradient(60% 70% at 50% 28%, var(--accent-wash), transparent 70%), var(--fill)" }}>
-            {/* its head: what it is, centred, and the sounds at its end (one row of the card, not an item beside it) */}
-            <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto minmax(0, 1fr)", alignItems: "center", width: "100%" }}>
-              <span aria-hidden />
-              <span style={{ ...s.head }}>A new orb</span>
-              <button aria-label={sounds ? "Sounds on" : "Sounds off"} aria-pressed={sounds} title={sounds ? "Sounds on" : "Sounds off"} data-sound="none" onClick={flipSounds} style={{ ...s.chip, justifySelf: "end", padding: 8, display: "grid", placeItems: "center", color: sounds ? "var(--text-1)" : "var(--text-3)" }}>
-                <SoundIcon on={sounds} />
-              </button>
+          // a new orb begins as an orb's own page does (owner, 10-10: "give the same flavour to the new orb section as we
+          // did for the orbs profile"): the orb and who it will be in one card, Roll and Create under the orb where Chat
+          // and Career are on its page; one centred column at every size (in the studio's column on a desk, it stays in
+          // view while the editor scrolls; side by side, Roll and Create left its words too little room at 768 px)
+          <div data-orb={me.hue} data-cradle data-maker-hero data-gesture={gesture?.name} style={{ ...s.panel, position: "relative", display: "grid", gap: "var(--s2)", background: "linear-gradient(160deg, var(--accent-wash), var(--fill) 60%)" }}>
+            {/* its label, and the sounds in the card's corner: the studio's column has to hold this card, its moods and its
+                DNA in a desk's height (the DNA in view while the editor scrolls, owner 10-10) */}
+            <span style={{ ...s.head, justifySelf: "center" }}>A new orb</span>
+            <button aria-label={sounds ? "Sounds on" : "Sounds off"} aria-pressed={sounds} title={sounds ? "Sounds on" : "Sounds off"} data-sound="none" onClick={flipSounds} style={{ ...s.chip, position: "absolute", top: "var(--s2)", right: "var(--s2)", padding: 8, display: "grid", placeItems: "center", color: sounds ? "var(--text-1)" : "var(--text-3)" }}>
+              <SoundIcon on={sounds} />
+            </button>
+            <div data-maker-head style={{ display: "flex", flexDirection: "column", gap: "var(--s2)", alignItems: "center", justifyContent: "center", minWidth: 0 }}>
+              <div data-maker-portrait style={{ display: "grid", justifyItems: "center", gap: "var(--s2)", flex: "0 0 auto" }}>
+                <Evolving me={me} from={evolve} size={phone || wide ? 120 : 136} state={worn} gesture={gesture} onDone={setShown} />
+                {live && !picked && WORN[live.mood].words && (
+                  <span data-mood={live.mood} style={{ font: "600 13px/18px var(--font)", color: "var(--text-2)" }}>
+                    {WORN[live.mood].words}
+                  </span>
+                )}
+                <OneLine gap={8}>
+                  <button
+                    data-sound="roll"
+                    style={{ ...s.btn, display: "inline-flex", alignItems: "center", gap: 8 }}
+                    onClick={() => {
+                      setEvolve((x) => ({ c: me, n: (x?.n ?? 0) + 1 }));
+                      edit(fresh());
+                      setRolls((n) => n + 1);
+                      // the hop as his colours come back (at once, with less motion)
+                      window.setTimeout(() => play("hop"), calm() ? 0 : REVEAL);
+                    }}
+                  >
+                    <DieIcon size={18} spins={rolls} />
+                    Roll everything
+                  </button>
+                  <button data-sound="create" disabled={Boolean(blocked)} onClick={create} style={{ ...s.btn, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)", fontWeight: 800, opacity: blocked ? 0.5 : 1, cursor: blocked ? "not-allowed" : "pointer" }}>
+                    Create {name || "your orb"}
+                  </button>
+                </OneLine>
+              </div>
+              <Sheet bare centered part="head" c={before ?? me} key={before ? "was-head" : "now-head"} onRename={(n) => edit({ name: n })} replies={replies} standing={null} startsAs={startsAs} career={null} friends={null} />
             </div>
-            <Evolving me={me} from={evolve} size={phone ? 128 : wide ? 156 : 176} state={worn} gesture={gesture} onDone={setShown} />
-            {live && !picked && WORN[live.mood].words && (
-              <span data-mood={live.mood} style={{ font: "600 13px/18px var(--font)", color: "var(--text-2)" }}>
-                {WORN[live.mood].words}
-              </span>
+            {(!wide || (blocked && !before)) && (
+              <p style={{ margin: 0, font: "400 13px/18px var(--font)", color: blocked ? "var(--alert)" : "var(--text-3)", textAlign: "center" }}>
+                {before || !blocked ? "Give a click, or move your pointer: the eyes follow." : blocked}
+              </p>
             )}
-            {/* on a narrower creator its moods and moves stay under the preview */}
-            {!wide && moves()}
-              <OneLine gap={8} style={{ marginTop: "var(--s2)" }}>
-                <button
-                  data-sound="roll"
-                  style={{ ...s.btn, display: "inline-flex", alignItems: "center", gap: 8 }}
-                  onClick={() => {
-                    setEvolve((x) => ({ c: me, n: (x?.n ?? 0) + 1 }));
-                    edit(fresh());
-                    setRolls((n) => n + 1);
-                    // the hop as his colours come back (at once, with less motion)
-                    window.setTimeout(() => play("hop"), calm() ? 0 : REVEAL);
-                  }}
-                >
-                  <DieIcon size={18} spins={rolls} />
-                  Roll everything
-                </button>
-                <button data-sound="create" disabled={Boolean(blocked)} onClick={create} style={{ ...s.btn, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)", fontWeight: 800, opacity: blocked ? 0.5 : 1, cursor: blocked ? "not-allowed" : "pointer" }}>
-                  Create {name || "your orb"}
-                </button>
-              </OneLine>
-            <p style={{ margin: 0, font: "400 13px/18px var(--font)", color: blocked ? "var(--alert)" : "var(--text-3)", textAlign: "center" }}>
-              {/* its name and title are in its card below */}
-              {before || !blocked ? "Give a click, or move your pointer: the eyes follow." : blocked}
-            </p>
           </div>
           )}
 
-          {/* A fixed orb's Career-like hero is above; its compact controls sit immediately above its DNA. */}
-          {!making && (
-            <div data-moves data-orb={me.hue} style={{ ...s.panel, display: "grid", gap: 8, padding: "var(--s3)", justifyItems: "center" }}>
-              {moves(true)}
-            </div>
-          )}
+          {/* its moods and moves, compact, immediately above its DNA, a new orb's as a fixed one's (owner, 10-10) */}
+          <div data-moves data-orb={me.hue} style={{ ...s.panel, display: "grid", gap: 8, padding: "var(--s3)", justifyItems: "center" }}>
+            {moves}
+          </div>
           <div data-strand-card data-orb={me.hue} style={{ ...s.panel, display: "grid", gap: "var(--s3)" }}>
             <Strand key={(before ?? me).name + (before ?? me).seed} c={before ?? me} />
             {making && (
@@ -1669,24 +1672,19 @@ function App() {
           {/* its skills and the office under its DNA on a desk, beside its traits (owner, 10-10: "theres a big open space
               there with nothing in it, can we split the stats container in two") */}
           {!making && wide && <Sheet part="skills" c={before ?? me} key={before ? "was-skills" : "now-skills"} replies={replies} standing={standing} startsAs={startsAs} career={career} friends={friends} strand={false} />}
-          {/* While making one, who it is follows the changing DNA. A fixed orb's name and description are above it. */}
-          {making && (
-            <Sheet part="head" c={before ?? me} key={before ? "was-head" : "now-head"} onRename={(n) => edit({ name: n })} replies={replies} standing={null} startsAs={startsAs} career={null} friends={null} />
-          )}
           </div>
           <div className="orbs-work" style={{ display: "grid", gap: "var(--s4)", alignContent: "start", minWidth: 0 }}>
             {/* on a wide screen its moods and moves at the top, beside the orb (owner, 10-10: "awake listening etc put that to
                 the right over traits"); the editor first while it is being made; what it is made of over its stats (owner,
                 10-10: "put made of container over the stats container") */}
             {making && <Creator me={me} edit={edit} replies={replies} setReplies={setReplies} kinds={kinds} peek={!wide} />}
-            {making && wide && (
-              <div data-moves data-orb={me.hue} style={{ ...s.panel, display: "grid", gap: "var(--s3)", justifyItems: "center" }}>
-                {moves()}
-              </div>
-            )}
             {!making && <Card c={me} replies={replies} setReplies={setReplies} onDelete={(handTo, school) => remove(me.name, handTo, school)} others={office.filter((o) => o.name !== me.name)} />}
             {making ? (
-              <Sheet part="body" c={before ?? me} key={before ? "was" : "now"} replies={replies} standing={null} startsAs={startsAs} career={null} friends={null} strand={false} />
+              // a new orb's stats as its page's two cards, under the editor
+              <>
+                <Sheet part="traits" c={before ?? me} key={before ? "was" : "now"} replies={replies} standing={null} startsAs={startsAs} career={null} friends={null} strand={false} />
+                <Sheet part="skills" c={before ?? me} key={before ? "was-skills" : "now-skills"} replies={replies} standing={null} startsAs={startsAs} career={null} friends={null} strand={false} />
+              </>
             ) : (
               // its traits; on a narrower screen its skills and the office under them, one column
               <>
@@ -1808,7 +1806,7 @@ main.orbs-main { padding: max(var(--s5), env(safe-area-inset-top)) max(var(--mar
    column, and the editor's header (Peek) holds the orb and its DNA small, at the top of the screen as its choices scroll */
 @media (min-width: 1100px) {
   .orbs-studio { grid-template-columns: minmax(300px, 360px) minmax(0, 1fr) !important; }
-  .orbs-stage { position: sticky; top: var(--s4); max-height: calc(100dvh - 2 * var(--s4)); overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; padding: 2px; margin: -2px; }
+  .orbs-stage { position: sticky; top: var(--s2); max-height: calc(100dvh - 2 * var(--s2)); overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; padding: 2px; margin: -2px; }
   /* an orb's page: its column (moods, DNA, its skills) is part of the page, beside its traits, not held in view */
   .orbs-stage[data-flow] { position: static; max-height: none; overflow: visible; }
 }

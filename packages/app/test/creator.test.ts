@@ -164,6 +164,28 @@ for (const size of ["desk", "phone"] as const) {
   });
 }
 
+// owner, 10-10: "how about we give the same flavour to the new orb section as we did for the orbs profile". The orb and
+// who it will be in one card (its name typed there), Roll and Create under the orb where Chat and Career are on an orb's
+// page, its moods compact and immediately above its DNA, its stats in two cards; the card, the moods and the DNA within
+// a desk's height (the test above holds them in view as the editor scrolls)
+for (const size of ["desk", "phone"] as const) {
+  test(`a new orb's page is laid out as an orb's own page, at ${size} size`, { skip }, async () => {
+    const page = await plainAt(size);
+    const hero = page.locator("[data-maker-hero]");
+    assert.equal(await hero.getByRole("textbox", { name: "Name" }).count(), 1, "its name in the orb's own card");
+    const [card, canvas, roll, create, moves, dna] = await Promise.all([
+      hero.boundingBox(), hero.locator("canvas").first().boundingBox(), hero.getByRole("button", { name: "Roll everything" }).boundingBox(),
+      hero.getByRole("button", { name: /^Create / }).boundingBox(), page.locator("[data-moves]").boundingBox(), page.locator("[data-strand-card]").boundingBox(),
+    ]);
+    assert.ok(card && canvas && roll && create && moves && dna);
+    assert.ok(roll.y >= canvas.y + canvas.height - 1 && create.y >= canvas.y + canvas.height - 1, "Roll and Create under the orb");
+    assert.ok(card.y + card.height <= moves.y + 1 && moves.y + moves.height <= dna.y + 1, "the orb's card, its moods, then its DNA");
+    assert.deepEqual([await page.locator("[data-sheet-body]").count(), await page.locator("[data-sheet-skills]").count()], [1, 1], "its stats in two cards");
+    if (size === "desk") assert.ok(dna.y + dna.height <= page.viewportSize()!.height, `the card, the moods and the DNA in a desk's height (the DNA ends at ${Math.round(dna.y + dna.height)})`);
+    assert.deepEqual(await measure(page), [], "the layout rule");
+  });
+}
+
 test("a covering hat keeps ears inside, with no ears choice; the deerstalker is not offered", { skip }, async () => {
   const page = await plainAt("desk");
   await page.getByRole("tab", { name: "Shape" }).click();

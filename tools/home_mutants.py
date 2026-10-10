@@ -2228,7 +2228,7 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ("    const t = setInterval(() => setNow(new Date()), 1000);", "    const t = setInterval(() => undefined, 1000);"),
     ], ["floor-view.test.ts"]),
     ("an orb's gestures are as loud as its moods", "src/orbs.tsx", [
-        ('style={{ font: `600 ${compact ? 11 : 12}px/16px var(--font)`, color: "var(--text-3)", background: "var(--fill)",', 'style={{ font: `600 ${compact ? 11 : 12}px/16px var(--font)`, color: "var(--text-2)", background: "var(--fill)",'),
+        ('style={{ font: "600 11px/16px var(--font)", color: "var(--text-3)", background: "var(--fill)",', 'style={{ font: "600 11px/16px var(--font)", color: "var(--text-2)", background: "var(--fill)",'),
     ], ["phones.test.ts"]),
     ("the lab's mark is a star again", "src/orbs.tsx", [
         ('{navItem("The lab", room === "lab", { room: "lab" }, <FlaskIcon />)}', '{navItem("The lab", room === "lab", { room: "lab" }, "✦")}'),
@@ -3024,7 +3024,7 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ], ['hats.test.ts']),
     # the containers organized (owner, 10-10): the studio, Settings' index, the CV, the bell
     ('the orb and its DNA scroll away while its colours are chosen (desk)', 'src/orbs.tsx', [
-        ('  .orbs-stage { position: sticky; top: var(--s4);', '  .orbs-stage { top: var(--s4);'),
+        ('  .orbs-stage { position: sticky; top: var(--s2);', '  .orbs-stage { top: var(--s2);'),
     ], ['creator.test.ts']),
     ('no small orb at the editor\'s head on a phone', 'src/orbs.tsx', [
         ('peek={!wide}', 'peek={false}'),
@@ -3050,7 +3050,7 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ], ['spec.test.ts']),
     # an orb's personal page, in the owner's order (10-10)
     ('the profile state controls disappear from above DNA', 'src/orbs.tsx', [
-        ('          {!making && (\n            <div data-moves', '          {false && !making && (\n            <div data-moves'),
+        ('          <div data-moves data-orb={me.hue} style={{ ...s.panel, display: "grid", gap: 8, padding: "var(--s3)", justifyItems: "center" }}>\n            {moves}\n          </div>', ''),
     ], ['profile-layout.test.ts']),
     ('Chat and Career float away from under the orb', 'src/orbs.tsx', [
         ('<div data-profile-actions style={{ display: "flex", justifyContent: "center",', '<div data-profile-actions style={{ display: "flex", position: "absolute", top: 0, justifyContent: "center",'),
@@ -3058,6 +3058,14 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("Who's in shrinks its orbs again", 'src/rooms/Sessions.tsx', [
         ('<Orb character={c} size={64} poke={false} still />', '<Orb character={c} size={44} poke={false} still />'),
     ], ['sessions.test.ts']),
+    # a new orb's page laid out as an orb's own (owner, 10-10: "the same flavour")
+    ("a new orb's name card stands apart from its orb again", 'src/orbs.tsx', [
+        ('              <Sheet bare centered part="head" c={before ?? me} key={before ? "was-head" : "now-head"} onRename={(n) => edit({ name: n })} replies={replies} standing={null} startsAs={startsAs} career={null} friends={null} />\n            </div>', '            </div>'),
+    ], ['creator.test.ts']),
+    ("a new orb's moods go back under its editor", 'src/orbs.tsx', [
+        ('          <div data-moves data-orb={me.hue} style={{ ...s.panel, display: "grid", gap: 8, padding: "var(--s3)", justifyItems: "center" }}>\n            {moves}\n          </div>', '          {!making && <div data-moves data-orb={me.hue} style={{ ...s.panel, display: "grid", gap: 8, padding: "var(--s3)", justifyItems: "center" }}>{moves}</div>}'),
+        ('            {making && <Creator me={me} edit={edit} replies={replies} setReplies={setReplies} kinds={kinds} peek={!wide} />}', '            {making && <Creator me={me} edit={edit} replies={replies} setReplies={setReplies} kinds={kinds} peek={!wide} />}{making && <div data-moves data-orb={me.hue} style={s.panel}>{moves}</div>}'),
+    ], ['creator.test.ts']),
     # the orb's page, 10-10 later: its stats in two, the orb apart from its words
     ("the orb page's skills stay under its traits on a desk", 'src/orbs.tsx', [
         ('{!making && wide && <Sheet part="skills"', '{false && <Sheet part="skills"'),
