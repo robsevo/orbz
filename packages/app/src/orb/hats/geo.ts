@@ -9,17 +9,19 @@
 // the head it sits on.
 //
 // Units: the hat's own, as the shader has always measured a hat (1.35 times his radius); +y is up, +z toward you, the
-// origin is the top of his head (the orb shader's, sunk a hair). His head is HEAD. Pure.
+// origin is the top of his head (the orb shader's, sunk a hair). His head is whichever shape's he has (Head). Pure.
 
 export type V3 = [number, number, number];
 export type P2 = [number, number];
 export type M3 = [V3, V3, V3]; // rows
 
-/** His head as the hats see it: Ash's bean's (the hats are fitted to it; spec.ts hatFit seats and sizes them on every
- * other shape), an ellipsoid round the axis, its centre `y` below the origin, `a` across and `b` up. Fitted 10-09 to
- * spec.ts outline from the bean's top past its widest (within 0.002 everywhere): a good deal narrower than the ball of
- * 1/1.35 a hat's units would make him. */
+/** Ash's bean's head as an ellipsoid round the axis, its centre `y` below the origin, `a` across and `b` up (fitted 10-09
+ * to spec.ts outline from his top past his widest). The hats were drawn on it, and their angles down his head are its own:
+ * a point at one of them is, on any head, the point in the same direction from his centre (headAt, onHead). */
 export const HEAD = { y: -0.7475, a: 0.5925, b: 0.77 } as const;
+/** The bean's centre, below the origin in a hat's units (his top 0.905 x 0.94 of his radius over it, the origin sunk
+ * 0.03 of it; hats.test.ts holds it to heads.ts). */
+export const BEAN_CY = -0.6079;
 /** The hats are seen a little from above (radians), so a brim shows its top and a crown its depth. The shaders take
  * the same number (glsl.ts). */
 export const PITCH = 0.2;
@@ -74,23 +76,163 @@ export const mm = (a: M3, b: M3): M3 => {
 };
 /** Rotations applied x, then y, then z. */
 export const rot = (x: number, y = 0, z = 0): M3 => mm(rotZ(z), mm(rotY(y), rotX(x)));
+// ── his head ───────────────────────────────────────────────────────────────────────────────────
+/** A head the hats are built on (owner, 10-09: "make sure the beanies are snug and tight over their heads, including
+ * squirqule"): every shape's own (heads.ts), round the hat's axis, read in its section as how far it is from his centre
+ * at each angle from straight up (NA + 1 of them, 0 to PI) and its outward normal there, across and up. `peak` is the
+ * highest of all of him, his ears too (what floats over him clears it). What goes over his head goes over this; `skin`
+ * is his outline itself, which what stands on him or goes round him is built on (models.ts ON_SKIN): on a star's point,
+ * in a flower's dip. */
+export type Head = { key: string; cy: number; r: Float64Array; nr: Float64Array; ny: Float64Array; peak: number; skin?: Head };
+export const NA = 1024;
+/** A head from how far it is from his centre at each angle (its normals from its own curve, over a little of it). */
+export function headFrom(key: string, cy: number, radius: (al: number) => number, peak: number): Head {
+  const r = new Float64Array(NA + 1);
+  for (let i = 0; i <= NA; i++) r[i] = radius((Math.PI * i) / NA);
+  // his section is the same on both sides of the axis: past the top or the bottom it carries on round the other side
+  const at = (i: number): P2 => {
+    const j = i < 0 ? -i : i > NA ? 2 * NA - i : i;
+    const al = (Math.PI * j) / NA;
+    return [(j === i ? 1 : -1) * r[j]! * Math.sin(al), r[j]! * Math.cos(al)];
+  };
+  const nr = new Float64Array(NA + 1);
+  const ny = new Float64Array(NA + 1);
+  const W = 12; // samples either side: a corner of the head (a star's point) turns its normal over 4 degrees, not at once
+  for (let i = 0; i <= NA; i++) {
+    const a = at(i - W), b = at(i + W);
+    const tx = b[0] - a[0], ty = b[1] - a[1];
+    const l = Math.hypot(tx, ty) || 1;
+    nr[i] = -ty / l;
+    ny[i] = tx / l;
+  }
+  return { key, cy, r, nr, ny, peak };
+}
+/** The bean's ellipsoid as a head: what the hats are built on until a shape's own is given (heads.ts). */
+const ELLIPSOID = headFrom("ellipsoid", BEAN_CY, (al) => {
+  // where the ray from his centre at `al` leaves the ellipsoid
+  const dx = Math.sin(al), dy = Math.cos(al), c = BEAN_CY - HEAD.y;
+  const A = (dx / HEAD.a) ** 2 + (dy / HEAD.b) ** 2, B = (2 * dy * c) / HEAD.b ** 2, C = (c / HEAD.b) ** 2 - 1;
+  return (-B + Math.sqrt(B * B - 4 * A * C)) / (2 * A);
+}, HEAD.y + HEAD.b);
+let H: Head = ELLIPSOID;
+/** Builds with `h` as his head: every point on his head a hat asks for (headAt, onHead, headNormal, headR, seatAt) is
+ * on it, and its light is baked against it. */
+export function onThe<T>(h: Head, f: () => T): T {
+  const was = H;
+  H = h;
+  try {
+    return f();
+  } finally {
+    H = was;
+  }
+}
+/** His head as it is being built on. */
+export const head = (): Head => H;
+// the table read between its samples
+const read = (t: Float64Array, al: number): number => {
+  const x = (clamp(al, 0, Math.PI) / Math.PI) * NA;
+  const i = Math.min(NA - 1, Math.floor(x));
+  return t[i]! + (t[i + 1]! - t[i]!) * (x - i);
+};
+/** How far his head is from his centre at angle `al` from straight up. */
+export const radiusAt = (al: number): number => read(H.r, al);
+/** A hat's angle down his head (HEAD's) as the angle from his centre that it points along. */
+const alphaOf = (th: number): number => Math.atan2(HEAD.a * Math.sin(th), HEAD.y + HEAD.b * Math.cos(th) - BEAN_CY);
+/** The point of his head straight out from his centre along `v` (from his centre), `out` beyond it along its normal. */
+function along(v: V3, out: number): V3 {
+  const al = Math.atan2(Math.hypot(v[0], v[2]), v[1]);
+  const ph = Math.atan2(v[0], v[2]);
+  const R = read(H.r, al), nr = read(H.nr, al), ny = read(H.ny, al);
+  const s = Math.sin(ph), c = Math.cos(ph);
+  return [(R * Math.sin(al) + out * nr) * s, H.cy + R * Math.cos(al) + out * ny, (R * Math.sin(al) + out * nr) * c];
+}
+/** A point drawn off the bean's head carried onto this one: in the same direction from his centre, as far out of his
+ * head (a headset's boom stays as far in front of his face). */
+export function fromBean(p: V3): V3 {
+  const v: V3 = [p[0], p[1] - BEAN_CY, p[2]];
+  const l = len(v);
+  const al = Math.atan2(Math.hypot(v[0], v[2]), v[1]);
+  const k = (read(H.r, al) + l - read(ELLIPSOID.r, al)) / (l || 1);
+  return [v[0] * k, H.cy + v[1] * k, v[2] * k];
+}
 /** His head's outward normal at a point on (or near) it. */
-export const headNormal = (p: V3): V3 => norm([p[0] / HEAD.a ** 2, (p[1] - HEAD.y) / HEAD.b ** 2, p[2] / HEAD.a ** 2]);
+export function headNormal(p: V3): V3 {
+  const v: V3 = [p[0], p[1] - H.cy, p[2]];
+  const al = Math.atan2(Math.hypot(v[0], v[2]), v[1]);
+  const ph = Math.atan2(v[0], v[2]);
+  const nr = read(H.nr, al);
+  return norm([nr * Math.sin(ph), read(H.ny, al), nr * Math.cos(ph)]);
+}
 /** A point on his head, `out` beyond it: `side` radians from its top toward his right (+x), `front` toward you. */
 export function onHead(side: number, front: number, out = 0): V3 {
   const d = norm([Math.sin(side), Math.cos(side) * Math.cos(front), Math.cos(side) * Math.sin(front)]);
-  const p: V3 = [d[0] * HEAD.a, HEAD.y + d[1] * HEAD.b, d[2] * HEAD.a];
-  return add(p, mul(headNormal(p), out));
+  return along([d[0] * HEAD.a, HEAD.y + d[1] * HEAD.b - BEAN_CY, d[2] * HEAD.a], out);
 }
 /** In a hat's section (r, y): the point at angle `th` from his head's top, `d` out from it along its normal. */
 export function headAt(th: number, d = 0): P2 {
-  const n = norm([Math.sin(th) / HEAD.a, Math.cos(th) / HEAD.b, 0]);
-  return [HEAD.a * Math.sin(th) + d * n[0], HEAD.y + HEAD.b * Math.cos(th) + d * n[1]];
+  const al = alphaOf(th);
+  const R = read(H.r, al);
+  return [R * Math.sin(al) + d * read(H.nr, al), H.cy + R * Math.cos(al) + d * read(H.ny, al)];
 }
-/** His head's half-width at a height (0 above and below it). */
-export const headR = (y: number): number => HEAD.a * Math.sqrt(Math.max(0, 1 - ((y - HEAD.y) / HEAD.b) ** 2));
+// his head's top half, from straight up to his widest, as (r, y) going down it: what headR and seatAt read
+const halves = new WeakMap<Head, { r: Float64Array; y: Float64Array }>();
+function half(): { r: Float64Array; y: Float64Array } {
+  let h = halves.get(H);
+  if (!h) {
+    const r: number[] = [], y: number[] = [];
+    for (let i = 0; i <= NA; i++) {
+      const al = (Math.PI * i) / NA;
+      const ri = H.r[i]! * Math.sin(al);
+      if (i > 0 && ri < r[r.length - 1]!) break; // past his widest
+      r.push(ri);
+      y.push(H.cy + H.r[i]! * Math.cos(al));
+    }
+    h = { r: new Float64Array(r), y: new Float64Array(y) };
+    halves.set(H, h);
+  }
+  return h;
+}
+/** His head's half-width at a height (0 above it; his widest below it). */
+export function headR(y: number): number {
+  const { r, y: ys } = half();
+  if (y >= ys[0]!) return 0;
+  for (let i = 1; i < r.length; i++) if (ys[i]! <= y) return mix(r[i - 1]!, r[i]!, (ys[i - 1]! - y) / (ys[i - 1]! - ys[i]!));
+  return r[r.length - 1]!;
+}
 /** The height on his head where it is `r` from the axis (a hat with an opening of radius r sits there). */
-export const seatAt = (r: number): number => HEAD.y + HEAD.b * Math.sqrt(Math.max(0, 1 - (r / HEAD.a) ** 2));
+export function seatAt(r: number): number {
+  const { r: rs, y } = half();
+  for (let i = 1; i < rs.length; i++) if (rs[i]! >= r) return mix(y[i - 1]!, y[i]!, (r - rs[i - 1]!) / (rs[i]! - rs[i - 1]! || 1));
+  return y[y.length - 1]!;
+}
+/** A point round behind his head, over his top, lowered if it must be until it is seen no more than `allow` over his
+ * outline as he is drawn: the hats are seen a little from above and his glass straight on, so the back of a ring round a
+ * flat head (a squircle's, a pebble's) would float over it. In front of him, and wherever it is not seen over him, it is
+ * left. */
+export function rest(p: V3, allow: number): V3 {
+  if (!floats(p, allow)) return p;
+  const cp = Math.cos(PITCH);
+  const over = p[1] * cp - p[2] * Math.sin(PITCH) - (seatAt(Math.abs(p[0])) + allow);
+  return [p[0], p[1] - over / cp, p[2]];
+}
+/** Whether a point round behind his head, over his top, is seen more than `allow` over his outline as he is drawn. */
+const floats = (p: V3, allow: number): boolean => p[2] < 0 && p[1] * Math.cos(PITCH) - p[2] * Math.sin(PITCH) > seatAt(Math.abs(p[0])) + allow;
+/** Where what stands on top of him has its foot: onHead at `front`, or as much further forward as it must be until it is
+ * seen inside his outline as he is drawn (round the axis, a heart's lobes stand higher in front of its dip than the dip is
+ * drawn, and a sprout set there would float over it). */
+export function standing(side: number, front: number, out = 0): V3 {
+  for (let f = front; f < front + 0.5; f += 0.01) {
+    const p = onHead(side, f, out);
+    if (p[1] * Math.cos(PITCH) - p[2] * Math.sin(PITCH) <= seatAt(Math.abs(p[0])) - 0.015) return p;
+  }
+  return onHead(side, front + 0.5, out);
+}
+/** How far out of his head a point is, as a share of his head's own radius there (1 on it). */
+export function outOfHead(p: V3): number {
+  const v: V3 = [p[0], p[1] - H.cy, p[2]];
+  const d = len(v);
+  return d / read(H.r, Math.atan2(Math.hypot(v[0], v[2]), v[1]));
+}
 
 // a small value noise, for fur, straw and knots: the same everywhere it is asked
 const hash3 = (x: number, y: number, z: number): number => {
@@ -562,7 +704,7 @@ export function blade(
 
 // ── light it ahead: what each point of the hat can see of the sky ──────────────────────────────
 /** Bakes each vertex's ambient occlusion: how much of the hat lies out along its normal, read from the hat's area
- * spread over a coarse grid, and how much of his head (an ellipsoid) it faces. A fold, a brim's underside, the foot
+ * spread over a coarse grid, and how much of his head it faces. A fold, a brim's underside, the foot
  * of a crown where it meets the brim come out darker; an open surface does not. Linear in the vertices. */
 export function bake(m: Mesh, o: { strength?: number; head?: boolean } = {}): void {
   const k = o.strength ?? 0.85;
@@ -633,11 +775,10 @@ export function bake(m: Mesh, o: { strength?: number; head?: boolean } = {}): vo
     occ += 0.16 * Math.min(1.2, sample(px + nx * 7.6 * h, py + ny * 7.6 * h, pz + nz * 7.6 * h) * 0.9);
     if (o.head !== false) {
       // his head, taken as a ball of its size where it is nearest
-      const sx = px / HEAD.a, sy = (py - HEAD.y) / HEAD.b, sz = pz / HEAD.a;
-      const kk = Math.sqrt(sx * sx + sy * sy + sz * sz); // 1 on his head
-      const hx = -px, hy = HEAD.y - py, hz = -pz;
+      const hx = -px, hy = H.cy - py, hz = -pz;
       const d = Math.sqrt(hx * hx + hy * hy + hz * hz) || 1;
-      const rad = d / (kk || 1);
+      const rad = read(H.r, Math.atan2(Math.hypot(hx, hz), -hy));
+      const kk = d / rad; // 1 on his head
       const ci = (nx * hx + ny * hy + nz * hz) / d;
       if (ci > 0) occ += kk > 1 ? (rad / d) ** 2 * ci * 0.9 : 1;
     }
@@ -654,7 +795,7 @@ export function lowestEdge(m: Mesh): Float32Array {
   for (let v = 0; v < m.count; v++) {
     if (m.mat[v * 4] === MAT.glow) continue;
     const x = m.pos[v * 3]!, y = m.pos[v * 3 + 1]!, z = m.pos[v * 3 + 2]!;
-    if ((x / HEAD.a) ** 2 + ((y - HEAD.y) / HEAD.b) ** 2 + (z / HEAD.a) ** 2 < 0.97) continue; // inside his head: never seen
+    if (outOfHead([x, y, z]) < 0.985) continue; // inside his head: never seen
     const i = Math.round(((x + 0.9) / 1.8) * 31);
     if (i < 0 || i > 31) continue;
     E[i] = Math.max(E[i]!, -(y * c - z * s));

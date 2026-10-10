@@ -6,6 +6,7 @@ import { test } from "node:test";
 import { type HueName, HUES, MATERIALS } from "../src/design/tokens.ts";
 import { HAT_FS, HAT_VS, ORB_FS } from "../src/orb/glsl.ts";
 import { glassesMesh, GLASSES_MODELS } from "../src/orb/hats/glasses.ts";
+import { headOf } from "../src/orb/hats/heads.ts";
 import { hatMesh, MODELS } from "../src/orb/hats/models.ts";
 import {
   ASH, EYES, FAMILIES, FINISHES, GLASSES, GRADES, hatFit, HATS, inHarmony, isShades, lookOf, NOT_OURS, offered, outline, PEOPLE_NAMES, PERSONALITIES, sane, SHAPES, sheetOf, SPECIALTIES, surprise, voice, VOICES, wearing, wheelSteps, withPersonality,
@@ -233,8 +234,8 @@ test("white and black for a hat and frames (owner, 10-03); every hat and pair of
   assert.equal(sane({ ...ASH, name: "Rex", hatHue: "silver" as never }, ASH).hatHue ?? null, ASH.hatHue ?? null, "a colour that is not one is not taken");
   // a hat's or glasses' number with no drawing draws nothing at all. Both are models now (hats/models.ts and
   // hats/glasses.ts, 10-09), each pair made for the eyes it sits over.
-  for (const [name, h] of Object.entries(HATS)) if (h.id) assert.ok((hatMesh(h.id)?.count ?? 0) > 0, `${name} (${h.id}) is drawn`);
-  assert.equal(hatMesh(0), null, "control: no hat is no model");
+  for (const [name, h] of Object.entries(HATS)) if (h.id) assert.ok((hatMesh(h.id, headOf("bean"))?.count ?? 0) > 0, `${name} (${h.id}) is drawn`);
+  assert.equal(hatMesh(0, headOf("bean")), null, "control: no hat is no model");
   assert.deepEqual(Object.keys(MODELS).map(Number).sort((a, b) => a - b), Object.values(HATS).map((h) => h.id).filter(Boolean).sort((a, b) => a - b), "a model for every hat, and none for a hat there is not");
   for (const [name, g] of Object.entries(GLASSES)) if (g.id) for (const e of Object.values(EYES)) assert.ok((glassesMesh(g.id, e.a, g.dark)?.count ?? 0) > 0, `${name} (${g.id}) is drawn for every eyes`);
   assert.equal(glassesMesh(0, EYES.classic.a, 0), null, "control: no glasses is no model");

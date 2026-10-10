@@ -2,18 +2,22 @@
 // design lol. even the party hat is huge ... dont cheap out on them. make them nice, to industry standards"). Every hat
 // is a sound model (finite numbers, unit normals, its light baked), sized for his head (none taller than his window
 // allows, the party hat no longer huge), sitting on his head (only the halo floats), inside his window; what gives off
-// light is where its glow is drawn; and the shaders share the hats' numbers. Pure: the rendered look is
+// light is where its glow is drawn; and the shaders share the hats' numbers. On every shape's own head (owner, 10-09: "make
+// sure the beanies are snug and tight over their heads, including squirqule ... Also watch out for ears, they should be
+// inside hat when on"): what goes on over his head covers it, and his ears go inside it. Pure: the rendered look is
 // characters.test.ts's.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { HAT_FS, HAT_VS, ORB_FS } from "../src/orb/glsl.ts";
-import { HEAD, MAT, PITCH, SLOT } from "../src/orb/hats/geo.ts";
+import { BEAN_CY, MAT, onThe, outOfHead, PITCH, SLOT } from "../src/orb/hats/geo.ts";
 import { FACE, glassesMesh } from "../src/orb/hats/glasses.ts";
+import { hasEars, hatCells, headCells, headOf, NX, NY } from "../src/orb/hats/heads.ts";
 import { glowOf, hatMesh, MODELS } from "../src/orb/hats/models.ts";
-import { EYES, GLASSES, HATS, isShades, type GlassesName, type HatName } from "../src/orb/spec.ts";
+import { ASH, COVERS, earsInside, EYES, GLASSES, HATS, isShades, lookOf, SHAPES, type GlassesName, type HatName, type ShapeName } from "../src/orb/spec.ts";
 
 const hats = (Object.keys(HATS) as HatName[]).filter((h) => h !== "none");
-const built = new Map(hats.map((h) => [h, hatMesh(HATS[h].id)!]));
+const bean = headOf("bean");
+const built = new Map(hats.map((h) => [h, hatMesh(HATS[h].id, bean)!]));
 /** How high on the screen a point of a hat is drawn (the hats are seen from a little above), in the hat's units. */
 const seenUp = (y: number, z: number): number => y * Math.cos(PITCH) - z * Math.sin(PITCH);
 
@@ -63,19 +67,27 @@ test("sized for his head: none taller than his window allows, the party hat no l
   assert.ok(tall.get("party hat")! > 0.35, "control: and it is still a party hat, not a cap");
 });
 
-test("every hat sits on his head (it reaches him), but the halo, which floats clear of him", () => {
-  for (const h of hats) {
-    const b = built.get(h)!;
-    let near = Infinity;
-    for (let v = 0; v < b.pos.length / 3; v++) {
-      const x = b.pos[v * 3]!, y = b.pos[v * 3 + 1]!, z = b.pos[v * 3 + 2]!;
-      // how far out from his head, in the hat's units (his head's own radius in that direction)
-      const k = Math.hypot(x / HEAD.a, (y - HEAD.y) / HEAD.b, z / HEAD.a);
-      near = Math.min(near, (k - 1) * Math.hypot(x, y - HEAD.y, z) / k);
+test("on any head every hat is sound and sits on it (it reaches him), but the halo, which floats clear of him", () => {
+  for (const shape of ["bean", "squircle", "star", "kitty", "pill", "heart"] as ShapeName[]) {
+    for (const h of hats) {
+      const on = headOf(shape, h === "halo");
+      const b = shape === "bean" ? built.get(h)! : hatMesh(HATS[h].id, on)!;
+      assert.ok([...b.pos, ...b.nrm, ...b.mat].every(Number.isFinite), `${shape} in a ${h}: every number finite`);
+      for (let v = 0; v < b.nrm.length / 3; v++) assert.ok(Math.abs(Math.hypot(b.nrm[v * 3]!, b.nrm[v * 3 + 1]!, b.nrm[v * 3 + 2]!) - 1) < 1e-3, `${shape} in a ${h}: normal ${v} unit length`);
+      let near = Infinity;
+      onThe(on, () => {
+        for (let v = 0; v < b.pos.length / 3; v++) {
+          const p: [number, number, number] = [b.pos[v * 3]!, b.pos[v * 3 + 1]!, b.pos[v * 3 + 2]!];
+          // how far out from his head, in the hat's units (his head's own radius in that direction)
+          const k = outOfHead(p);
+          near = Math.min(near, ((k - 1) * Math.hypot(p[0], p[1] - on.cy, p[2])) / k);
+        }
+      });
+      if (h === "halo") assert.ok(near > 0.05, `${shape}: the halo floats, ${near.toFixed(3)} clear of him`);
+      else assert.ok(near < 0.03, `${shape} in a ${h}: ${near.toFixed(3)} off his head at its nearest (it floats)`);
     }
-    if (h === "halo") assert.ok(near > 0.05, `the halo floats: ${near.toFixed(3)} clear of him`);
-    else assert.ok(near < 0.03, `${h}: ${near.toFixed(3)} off his head at its nearest (it floats)`);
   }
+  assert.ok(Math.abs(headOf("bean").cy - BEAN_CY) < 1e-3, `the bean's centre is where the hats' angles are taken from (${headOf("bean").cy.toFixed(4)})`);
 });
 
 test("what gives off light is where its glow is drawn: the antenna's bead and the halo, and nothing else glows", () => {
@@ -83,7 +95,7 @@ test("what gives off light is where its glow is drawn: the antenna's bead and th
     const b = built.get(h)!;
     const lit: [number, number, number][] = [];
     for (let v = 0; v < b.pos.length / 3; v++) if (b.mat[v * 4] === MAT.glow) lit.push([b.pos[v * 3]!, b.pos[v * 3 + 1]!, b.pos[v * 3 + 2]!]);
-    const g = glowOf(HATS[h].id);
+    const g = glowOf(HATS[h].id, bean);
     assert.equal(Boolean(g), lit.length > 0, `${h}: a glow drawn if and only if it gives off light`);
     if (!g || !lit.length) continue;
     const seen = lit.map(([x, y, z]) => [x, -seenUp(y, z)] as const);
@@ -94,7 +106,7 @@ test("what gives off light is where its glow is drawn: the antenna's bead and th
     assert.ok(Math.abs(cx - g.at[0]) < 0.01 && Math.abs((lo + hi) / 2 - g.at[1]) < 0.02, `${h}: its glow is centred on it (${g.at.map((v) => v.toFixed(3))} against ${cx.toFixed(3)}, ${((lo + hi) / 2).toFixed(3)})`);
     assert.ok(Math.abs(wx - g.a) < 0.04, `${h}: and as wide (${g.a.toFixed(3)} against ${wx.toFixed(3)})`);
   }
-  assert.deepEqual(hats.filter((h) => glowOf(HATS[h].id)), ["antenna", "halo"], "control: the two that glow");
+  assert.deepEqual(hats.filter((h) => glowOf(HATS[h].id, bean)), ["antenna", "halo"], "control: the two that glow");
 });
 
 test("a hat casts its shadow just under where it ends; a halo, all light, casts none", () => {
@@ -161,4 +173,65 @@ test("every pair of glasses is a sound model for every eyes, its lenses over his
     if (isShades(name as GlassesName)) assert.ok(tint >= 0.7, `${name}: sunglasses tinted dark (${tint})`);
     else if (g.dark === 0) assert.ok(tint < 0.05, `${name}: clear glass (${tint})`);
   }
+});
+
+// ── on every head (owner, 10-09: "make sure the beanies are snug and tight over their heads, including squirqule, or else
+// we get this [a squircle's corners out from under a beanie made for the bean] ... Also watch out for ears, they should
+// be inside hat when on") ──
+/** The hats made over his head, which hug it. */
+const HUGS: HatName[] = ["beanie", "cap", "hard hat", "deerstalker", "viking helmet", "propeller", "beret"];
+/** His head out from under a hat, as it is drawn: the cells of him above where the hat ends (in their own column, or as
+ * far out as it reaches) that it is not drawn over, as a share of all of him there. */
+function poking(hat: Uint8Array, head: Uint8Array): number {
+  const low = new Array<number>(NX).fill(-1);
+  for (let i = 0; i < NX; i++)
+    for (let j = 0; j < NY; j++)
+      if (hat[j * NX + i]) {
+        low[i] = j;
+        break;
+      }
+  const first = low.findIndex((v) => v >= 0);
+  const last = NX - 1 - [...low].reverse().findIndex((v) => v >= 0);
+  for (let i = 0; i < first; i++) low[i] = low[first]!;
+  for (let i = last + 1; i < NX; i++) low[i] = low[last]!;
+  let under = 0;
+  let out = 0;
+  for (let i = 0; i < NX; i++)
+    for (let j = low[i]! + 1; j < NY; j++) {
+      if (!head[j * NX + i]) continue;
+      under++;
+      if (!hat[j * NX + i]) out++;
+    }
+  return out / Math.max(1, under);
+}
+
+test("a hat made over his head covers it on every shape, a squircle's corners too: none of him out from under it", () => {
+  for (const shape of Object.keys(SHAPES) as ShapeName[]) {
+    const head = headCells(shape, false);
+    for (const h of HUGS) {
+      const look = lookOf({ ...ASH, shape, hat: h });
+      const out = poking(hatCells(hatMesh(look.acc, look.head)!, look.accTilt), head);
+      // measured 10-10: 0.5% at most (a cell at an edge)
+      assert.ok(out < 0.015, `${shape} in a ${h}: ${(out * 100).toFixed(1)}% of his head out from under it`);
+    }
+  }
+  // control: the bean's beanie on a squircle, as every shape wore one until 10-10 (7.3% of its head out, at its corners)
+  const bean = poking(hatCells(hatMesh(HATS.beanie.id, headOf("bean"))!, HATS.beanie.tilt), headCells("squircle", false));
+  assert.ok(bean > 0.05, `control: a beanie made for the bean leaves ${(bean * 100).toFixed(1)}% of a squircle out`);
+});
+
+test("his ears go inside a hat over his head that would be drawn over them; one between them, or no hat at all, leaves them", () => {
+  const eared = (Object.keys(SHAPES) as ShapeName[]).filter((n) => hasEars(SHAPES[n]));
+  assert.deepEqual(eared, ["teddy", "cub", "kitty", "bunny", "fox", "owl"], "control: the shapes with ears");
+  for (const shape of eared) {
+    for (const h of [...HUGS, "sombrero", "straw hat"] as HatName[]) assert.ok(earsInside(h, shape), `${shape} in a ${h}: his ears inside it`);
+    assert.ok(!earsInside("party hat", shape), `${shape} in a party hat: his ears beside it`);
+    for (const h of Object.keys(HATS) as HatName[]) if (!COVERS.has(h)) assert.ok(!earsInside(h, shape), `${shape} with ${h}: what does not go on over his head leaves his ears`);
+    // and the shader is told: drawn without them where they are inside
+    assert.equal(lookOf({ ...ASH, shape, hat: "beanie" }).shapeC[2], 0, `${shape} in a beanie: drawn without his ears`);
+    assert.equal(lookOf({ ...ASH, shape, hat: "party hat" }).shapeC[2], SHAPES[shape].c[2], `${shape} in a party hat: with them`);
+  }
+  for (const shape of Object.keys(SHAPES) as ShapeName[]) if (!eared.includes(shape)) assert.ok(!earsInside("beanie", shape), `${shape}: no ears to put away`);
+  // measured 10-10: a top hat's brim is over 6% of a kitty's ears (between them), 25% of a teddy's (over them)
+  assert.ok(!earsInside("top hat", "kitty") && earsInside("top hat", "teddy"), "a top hat: between a kitty's ears, over a teddy's");
 });

@@ -2967,7 +2967,7 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ('  const th = 0.016;\n  const y0 = seatAt(r0) - 0.012;', '  const th = 0.016;\n  const y0 = seatAt(r0) + 0.1;'),
     ], ['hats.test.ts']),
     ("the antenna's glow is drawn off its bead", 'src/orb/hats/models.ts', [
-        ('  if (id === 4) return { kind: 1, at: seen(BEAD.at), a: BEAD.r, b: BEAD.r, slot: "second" };', '  if (id === 4) return { kind: 1, at: seen(ANTENNA_TOP), a: BEAD.r, b: BEAD.r, slot: "second" };'),
+        ('    return { kind: 1, at: seen(BEAD.at), a: BEAD.r, b: BEAD.r, slot: "second" };', '    return { kind: 1, at: seen(onThe(on, antennaOn).TOP), a: BEAD.r, b: BEAD.r, slot: "second" };'),
     ], ['hats.test.ts']),
     ("the hats' shader numbers its materials its own way", 'src/orb/glsl.ts', [
         ('const int FELT = 0, KNIT = 1, FUR = 2,', 'const int FELT = 0, KNIT = 2, FUR = 1,'),
@@ -2976,11 +2976,19 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ('  float R = uR;\n  float Rg = R * breath * (1.0 + AWAKE_GROW*wakeEase + WAKE_POP*uWake);\n  float Rtop = uShapeD.y*Rg*(1.0 - 0.045*uMorph - 0.030*speak + uAccFit.x)*(1.0 - 0.5*uSquash) - 0.03*Rg;', '  float R = uR;\n  float Rg = R * breath * (1.0 + AWAKE_GROW*wakeEase + WAKE_POP*uWake);\n  float Rtop = uShapeD.y*Rg*(1.0 - 0.045*uMorph - 0.030*speak + uAccFit.x)*(1.0 - 0.5*uSquash) - 0.13*Rg;'),
     ], ['hats.test.ts']),
     ('nothing hides what goes round behind his head', 'src/orb/renderer.ts', [
-        ('    gl.drawElements(gl.TRIANGLES, this.#head.count, gl.UNSIGNED_INT, 0);\n', ''),
+        ('    gl.drawElements(gl.TRIANGLES, behind.count, gl.UNSIGNED_INT, 0);\n', '    if (onFace) gl.drawElements(gl.TRIANGLES, behind.count, gl.UNSIGNED_INT, 0);\n'),
     ], ['characters.test.ts']),
     ('his hat casts no shadow on him', 'src/orb/renderer.ts', [
         ('const SHADE = 0.4;', 'const SHADE = 0;'),
     ], ['characters.test.ts']),
+    # on every shape's own head (owner, 10-09: "make sure the beanies are snug and tight over their heads, including
+    # squirqule ... Also watch out for ears, they should be inside hat when on")
+    ('every shape wears a hat made for the bean again (a squircle out from under its beanie)', 'src/orb/spec.ts', [
+        ('    acc: w.id, head: headOf(c.shape, c.hat === "halo"),', '    acc: w.id, head: headOf("bean", c.hat === "halo"),'),
+    ], ['hats.test.ts']),
+    ('his ears poke out of his hat again', 'src/orb/spec.ts', [
+        ('    k = COVERS.has(hat) && hasEars(SHAPES[shape])', '    k = false && hasEars(SHAPES[shape])'),
+    ], ['hats.test.ts']),
     ('a hat with no model is worn as nothing', 'src/orb/hats/models.ts', [
         ('  37: sombrero, 38: tiara,', '  38: tiara,'),
     ], ['spec.test.ts']),

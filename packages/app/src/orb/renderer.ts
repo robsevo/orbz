@@ -5,7 +5,7 @@
 // glass composites onto a page exactly as it does onto the desktop.
 import { MATERIALS } from "../design/tokens.ts";
 import { HAT_FS, HAT_VS, ORB_FS, ORB_VS } from "./glsl.ts";
-import type { Built } from "./hats/geo.ts";
+import type { Built, Head } from "./hats/geo.ts";
 import { faceMesh, glassesMesh } from "./hats/glasses.ts";
 import { hatMesh, headMesh } from "./hats/models.ts";
 
@@ -52,6 +52,8 @@ export type OrbLook = {
   eyeA: [number, number, number, number];
   eyeB: [number, number, number, number];
   acc: number;
+  /** The head his hat is made on, his shape's (hats/heads.ts). */
+  head: Head;
   /** Where his hat sits and how big it is, for his shape (spec.ts hatFit). */
   accFit: [number, number];
   accCol: [number, number, number];
@@ -111,9 +113,9 @@ export class OrbRenderer {
   readonly #hat: WebGLProgram;
   readonly #hu: HatUniforms;
   readonly #empty: WebGLVertexArrayObject;
-  readonly #drawn = new Map<number, Drawn | null>();
+  readonly #drawn = new Map<string, Drawn | null>();
   readonly #pairs = new Map<string, Drawn | null>();
-  #head: Drawn | null = null;
+  readonly #heads = new Map<string, Drawn>();
   #faceProxy: Drawn | null = null;
 
   constructor() {
@@ -173,13 +175,14 @@ export class OrbRenderer {
     return this.#pairs.get(key)!;
   }
 
-  /** A hat's model, uploaded the first time it is worn (null: no hat). */
-  #model(id: number): Drawn | null {
-    if (!this.#drawn.has(id)) {
-      const b = id > 0 ? hatMesh(id) : null;
-      this.#drawn.set(id, b ? this.#upload(b) : null);
+  /** A hat's model, made on his head, uploaded the first time a shape wears it (null: no hat). */
+  #model(look: OrbLook): Drawn | null {
+    const key = `${look.acc}|${look.head.key}`;
+    if (!this.#drawn.has(key)) {
+      const b = look.acc > 0 ? hatMesh(look.acc, look.head) : null;
+      this.#drawn.set(key, b ? this.#upload(b) : null);
     }
-    return this.#drawn.get(id)!;
+    return this.#drawn.get(key)!;
   }
 
   /** Draws one orb into `target` (a 2D canvas), filling it the way his window holds him (or closer). */
@@ -198,7 +201,7 @@ export class OrbRenderer {
     gl.useProgram(this.#prog);
     gl.bindVertexArray(this.#empty);
     gl.disable(gl.DEPTH_TEST);
-    const hat = this.#model(look.acc);
+    const hat = this.#model(look);
     const scale = Math.min(w / framing.w, h / framing.h);
     const u = this.#u;
     gl.uniform2f(u.uRes, w, h);
@@ -290,9 +293,9 @@ export class OrbRenderer {
     gl.enable(gl.DEPTH_TEST);
     gl.depthFunc(gl.LESS);
     gl.colorMask(false, false, false, false);
-    this.#head ??= this.#upload(headMesh());
     this.#faceProxy ??= this.#upload(faceMesh());
-    const behind = onFace ? this.#faceProxy : this.#head;
+    if (!onFace && !this.#heads.has(look.head.key)) this.#heads.set(look.head.key, this.#upload(headMesh(look.head)));
+    const behind = onFace ? this.#faceProxy : this.#heads.get(look.head.key)!;
     gl.bindVertexArray(behind.vao);
     gl.drawElements(gl.TRIANGLES, behind.count, gl.UNSIGNED_INT, 0);
     gl.colorMask(true, true, true, true);

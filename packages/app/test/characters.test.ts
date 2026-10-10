@@ -16,7 +16,7 @@ import { build } from "vite";
 import type { Browser, Page } from "playwright-core";
 import { choose, findChrome, launch, plainNewOrb, serveDir } from "./harness.ts";
 import { DESIGN, PORTRAIT } from "../src/orb/renderer.ts";
-import { ASH, EYES, GLASSES, HATS, isShades, lookOf, outline, SHAPES, type GlassesName, type HatName, type ShapeName } from "../src/orb/spec.ts";
+import { ASH, COVERS, earsInside, EYES, GLASSES, HATS, isShades, lookOf, outline, SHAPES, type GlassesName, type HatName, type ShapeName } from "../src/orb/spec.ts";
 
 const APP = fileURLToPath(new URL("..", import.meta.url));
 const skip = findChrome() ? false : "no Chromium on this machine";
@@ -386,10 +386,8 @@ test("every finish can be told from every other, by the colour of his glass", { 
   assert.ok(closest.d > 0.025, `${closest.a} and ${closest.b} look alike (${closest.d.toFixed(3)} apart)`);
 });
 
-// Hats that go on over his head, with an opening (the rest sit on it, clip to it, or float).
-const COVERS = new Set<HatName>(["top hat", "beanie", "party hat", "cap", "wizard hat", "chef hat", "grad cap", "cowboy hat", "beret", "hard hat", "bucket hat", "straw hat", "fedora", "deerstalker", "viking helmet", "bowler", "fez", "tricorn", "Santa hat", "sombrero"]);
+// Hats that go on over his head, with an opening (the rest sit on it, clip to it, or float): spec.ts COVERS.
 const EARED = new Set<ShapeName>(["teddy", "cub", "kitty", "bunny", "fox", "owl"]);
-const WIDEST = new Set<HatName>(["straw hat", "sombrero", "deerstalker", "tricorn"]);
 
 // owner, 10-01: "some accessories arent fitting the heads of the orbs right. please fix per shape".
 // At twice the pixels (a hat's fit is a few pixels at the thumbnails' size), on one page
@@ -421,7 +419,9 @@ for (const shape of Object.keys(SHAPES) as ShapeName[]) {
     // where his head would end without his ears, at every degree (spec.ts outline): what lies beyond is ear
     const S = SHAPES[shape];
     const skull = Array.from({ length: 360 }, (_, i) => S.d[1] * (1 + outline({ ...S, c: [S.c[0], S.c[1], 0, S.c[3]] }, ((i - 180) * Math.PI) / 180)));
-    const rows = await p.evaluate(({ hats, Rfrac, cy, skull, eared }) => {
+    // and with them: an ear is between the two (not the glow round the CEO, which is out past all of him)
+    const whole = Array.from({ length: 360 }, (_, i) => S.d[1] * (1 + outline(S, ((i - 180) * Math.PI) / 180)));
+    const rows = await p.evaluate(({ hats, Rfrac, cy, skull, whole, eared }) => {
       const px = (pick: string) => {
         const c = document.querySelector<HTMLButtonElement>(`button[data-pick="${pick}"]`)!.querySelector("canvas")!;
         return { W: c.width, H: c.height, d: c.getContext("2d")!.getImageData(0, 0, c.width, c.height).data };
@@ -436,15 +436,18 @@ for (const shape of Object.keys(SHAPES) as ShapeName[]) {
       // the canvas is his frame's radius grown by being awake and his breath, so it is read off
       // him: the top of his head straight up, against his skull's outline there.
       const ears: number[] = [];
+      let earsDue = 0; // the pixels his outline has ears in, drawn or not
       if (eared) {
         let topC = 0;
         while (topC < H && none.d[(topC * W + Math.floor(W / 2)) * 4 + 3]! < 128) topC++;
         const k = (H * cy - topC) / (skull[90]! * R);
         for (let i = 0; i < W * H; i++) {
-          if (!head(i)) continue; // his glass is drawn at 80 to 100 percent: he is there from half
           const dx = (i % W) - W / 2, dy = Math.floor(i / W) - H * cy;
           const a = Math.round((Math.atan2(dy, dx) * 180) / Math.PI) + 180;
-          if (Math.hypot(dx, dy) > skull[a % 360]! * R * k + 3) ears.push(i);
+          const d = Math.hypot(dx, dy);
+          if (!(d > skull[a % 360]! * R * k + 3 && d < whole[a % 360]! * R * k - 1)) continue;
+          earsDue++;
+          if (head(i)) ears.push(i); // his glass is drawn at 80 to 100 percent: he is there from half
         }
       }
       return hats.map((hat) => {
@@ -474,22 +477,23 @@ for (const shape of Object.keys(SHAPES) as ShapeName[]) {
           }
           if (n >= 20) pieces++;
         }
-        // an ear the hat is drawn over takes the hat's own colour (measured 10-01: 150 to 430 apart
-        // from him without it); one in front of the hat is his glass, tinted by what is behind it
-        // (at most about 80)
-        const repainted = (i: number): boolean => Math.abs(h[i * 4]! - none.d[i * 4]!) + Math.abs(h[i * 4 + 1]! - none.d[i * 4 + 1]!) + Math.abs(h[i * 4 + 2]! - none.d[i * 4 + 2]!) > 120;
-        return { hat, width: width / R, below: (bottom - headTop) / R, pieces, ears: ears.length, earCovered: ears.length ? ears.filter(repainted).length / ears.length : 0 };
+        // an ear still there: his glass, drawn just as it was without the hat, to a few levels (where it went inside,
+        // nothing is drawn there, or the hat is, which a dark felt over his dark glass can come within 60 of)
+        const still = (i: number): boolean => h[i * 4 + 3]! >= 128 && Math.abs(h[i * 4]! - none.d[i * 4]!) + Math.abs(h[i * 4 + 1]! - none.d[i * 4 + 1]!) + Math.abs(h[i * 4 + 2]! - none.d[i * 4 + 2]!) <= 12;
+        return { hat, width: width / R, below: (bottom - headTop) / R, pieces, ears: ears.length, earsDue, earShown: ears.length ? ears.filter(still).length / ears.length : 0 };
       });
-    }, { hats: (Object.keys(HATS) as HatName[]).filter((h) => h !== "none"), Rfrac: DESIGN.radius / DESIGN.w, cy: DESIGN.cy, skull, eared: EARED.has(shape) });
+    }, { hats: (Object.keys(HATS) as HatName[]).filter((h) => h !== "none"), Rfrac: DESIGN.radius / DESIGN.w, cy: DESIGN.cy, skull, whole, eared: EARED.has(shape) });
     if (process.env.ORBS_PRINT) console.log(shape, rows.filter((r) => COVERS.has(r.hat as HatName)).map((r) => `${r.hat} ${r.width.toFixed(2)}`).join(", "));
-    if (process.env.ORBS_PRINT && EARED.has(shape)) console.log(shape, "ears", rows[0]?.ears, rows.filter((r) => COVERS.has(r.hat as HatName)).map((r) => `${r.hat} ${(r.earCovered * 100).toFixed(0)}%`).join(", "));
+    if (process.env.ORBS_PRINT && EARED.has(shape)) console.log(shape, "ears", rows[0]?.ears, rows.map((r) => `${r.hat} ${(r.earShown * 100).toFixed(0)}%`).join(", "));
     for (const r of rows) {
       if (r.pieces !== (r.hat === "halo" ? 2 : 1)) bad.push(`${shape} in a ${r.hat}: ${r.pieces} pieces (it floats off him, or sinks through)`);
       if (COVERS.has(r.hat as HatName) && r.width < 0.45) bad.push(`${shape} in a ${r.hat}: perched (his head is ${r.width.toFixed(2)} of his radius wide under it)`);
-      if (EARED.has(shape) && r.ears < 40) bad.push(`control: ${shape}'s ears are not found (${r.ears} pixels)`);
-      // a hat is in front of all of him, ears too (owner, 10-03: "we shouldnt see the orbs shape inside of it"):
-      // the widest cover at least 32% of every eared shape's ears (measured 10-03), drawn behind them about none
-      if (EARED.has(shape) && WIDEST.has(r.hat as HatName) && r.earCovered < 0.2) bad.push(`${shape} in a ${r.hat}: his ears show through it (it covers ${Math.round(r.earCovered * 100)}% of them)`);
+      // control: without a hat his ears are drawn where his outline has them (an owl's tufts are 8 pixels here, a bunny's 254)
+      if (EARED.has(shape) && (r.earsDue < 5 || r.ears < 0.8 * r.earsDue)) bad.push(`control: ${shape}'s ears are not found (${r.ears} of ${r.earsDue} pixels)`);
+      // his ears are inside a hat over his head that would be drawn over them (owner, 10-09: "watch out for ears, they
+      // should be inside hat when on"): none of them shows; what leaves them shows most of them (a party hat, a bow)
+      if (EARED.has(shape) && earsInside(r.hat as HatName, shape) && r.earShown > 0.05) bad.push(`${shape} in a ${r.hat}: ${Math.round(r.earShown * 100)}% of his ears out of it`);
+      if (EARED.has(shape) && (r.hat === "party hat" || r.hat === "antenna") && r.earShown < 0.6) bad.push(`control: ${shape} with ${r.hat}: his ears are gone (${Math.round(r.earShown * 100)}% of them show)`);
     }
     // and his close-up (eyes, glasses) holds all of him, a wide shape too
     await p.getByRole("tab", { name: "Glasses" }).click();

@@ -2,11 +2,13 @@
 // even the party hat is huge ... dont cheap out on them. make them nice, to industry standards"). Each of the 42 is
 // the hat it always was, built again in 3D at a size that suits his head, out of what such a hat is made of: felt
 // and silk, knit, straw, cotton twill with its seams and stitching, gold with cut stones, glossy plastic, horn,
-// feather, fur. Sizes are in the hat's units (geo.ts), on his head as geo.ts HEAD has it (Ash's bean's). Pure: the
-// renderer builds a hat the first time it is worn and keeps it on the GPU.
+// feather, fur. Sizes are in the hat's units (geo.ts), drawn on Ash's bean and built on the head of the shape that wears
+// it (heads.ts): what hugs his head hugs that one, what sits on it sits on that one. Pure: the renderer builds a hat the
+// first time a shape wears it and keeps it on the GPU.
 import {
-  add, apply, bake, blade, built, clamp, cross, ellipsoid, facet, gem, HEAD, headAt, headNormal, headR, MAT, mix, mm, Mesh, mul, noise3, norm,
-  onHead, PITCH, Profile, revolve, rotX, rotY, rotZ, seatAt, SLOT, spline, star, sub, tube, type Built, type Look, type M3, type P2, type V3,
+  add, apply, bake, blade, built, clamp, cross, ellipsoid, facet, fromBean, gem, grid, head, headAt, headNormal, headR, MAT, mix, mm,
+  Mesh, mul, noise3, norm, onHead, onThe, PITCH, Profile, radiusAt, rest, revolve, rotX, rotY, rotZ, seatAt, SLOT, smooth, spline, standing,
+  star, sub, tube, type Built, type Head, type Look, type M3, type P2, type V3,
 } from "./geo.ts";
 
 const felt = (extra = 0): Look => ({ kind: MAT.felt, slot: SLOT.main, extra });
@@ -133,8 +135,8 @@ function peak(m: Mesh, re: number, ye: number, L0: number, w: number, phc: numbe
 /** A top hat in silk plush: the crown's slight waist and flare, a brim rolled up at the sides (a D'Orsay curl), a
  * grosgrain band with its bow to his left. */
 function topHat(m: Mesh): void {
-  const y0 = -0.06;
   const rb = 0.238, rt = 0.262, H = 0.44;
+  const y0 = seatAt(rb) - 0.018;
   const rIn = 0.255, rOut = 0.42, th = 0.02;
   const yb = y0 + th + 0.022;
   const yt = y0 + H;
@@ -183,7 +185,7 @@ function beanie(m: Mesh): void {
   const dC = 0.066;
   const cuff = new Profile(t2, 0.02).corner(t2, dC, t1, dC, 0.03, 8).corner(t1, dC, t1, 0.02, 0.03, 8).line(t1, 0.03, 1);
   revolve(m, cuff.pts.map(([th, d]) => headAt(th, d)), { kind: MAT.knit, slot: SLOT.second, extra: -56 }, { segs: 112 });
-  pompom(m, [0, HEAD.y + HEAD.b + dBody(0) + 0.065, 0], 0.088, SLOT.second, 3);
+  pompom(m, [0, headAt(0, dBody(0) + 0.065)[1], 0], 0.088, SLOT.second, 3);
 }
 
 /** A party hat: a cone of glossy printed card, striped, a pompom on its tip; smaller than it was (owner, 10-09: "even
@@ -199,11 +201,14 @@ function partyHat(m: Mesh): void {
 
 /** An antenna: a domed foot, a coiled spring, a slim steel stalk with a little bend, and a bead of his own light in a
  * collar. */
-const FOOT = onHead(0.06, 0.32, 0); // where it stands on his head: on the front of his crown, near its middle (owner, 10-09:
-// "a tad better placement"), far enough forward that on a heart it stands below the dip between its lobes
-const ANTENNA_TOP: V3 = add(FOOT, [0.05, 0.085 + 0.31, 0]);
-const BEAD = { at: add(ANTENNA_TOP, [0.004, 0.076, 0]), r: 0.074 };
+const antennaOn = (): { FOOT: V3; TOP: V3; BEAD: { at: V3; r: number } } => {
+  const FOOT = standing(0.06, 0.32, 0); // where it stands on his head: on the front of his crown, near its middle (owner, 10-09:
+  // "a tad better placement"), far enough forward that on a heart it stands below the dip between its lobes
+  const TOP = add(FOOT, [0.05, 0.085 + 0.31, 0]);
+  return { FOOT, TOP, BEAD: { at: add(TOP, [0.004, 0.076, 0]), r: 0.074 } };
+};
 function antenna(m: Mesh): void {
+  const { FOOT, TOP: ANTENNA_TOP, BEAD } = antennaOn();
   const metal: Look = { kind: MAT.metal, slot: SLOT.main };
   const y0 = FOOT[1];
   revolve(m, new Profile(0, -0.035).line(0.058, -0.035, 2).corner(0.062, 0.0, 0, 0.024, 0.022, 8).line(0, 0.024, 3).pts, metal, { segs: 40, at: (q) => add(FOOT, q) });
@@ -221,7 +226,7 @@ function antenna(m: Mesh): void {
 function sprout(m: Mesh): void {
   const stem: Look = { kind: MAT.leaf, slot: SLOT.second };
   const leaf: Look = { kind: MAT.leaf, slot: SLOT.main, extra: 1 };
-  const f = onHead(-0.03, 0.36, -0.008); // on the front of his crown, centred (owner, 10-09: "sprout needs to be centered a bit more")
+  const f = standing(-0.03, 0.36, -0.008); // on the front of his crown, centred (owner, 10-09: "sprout needs to be centered a bit more")
   const path = spline([f, add(f, [0.004, 0.09, -0.02]), add(f, [-0.008, 0.18, -0.03]), add(f, [0.0, 0.27, -0.032])]);
   tube(m, path, (t) => mix(0.026, 0.02, t), stem, { n: 24, k: 12 });
   ellipsoid(m, add(f, mul(headNormal(f), 0.006)), [0.046, 0.046, 0.03], stem, { R: facing(headNormal(f), [0, 1, 0]), nu: 20, nv: 12 });
@@ -282,8 +287,8 @@ function headphones(m: Mesh): void {
   tube(m, overHead(1.32, 0.03, 0), () => 0.04, pad, { n: 64, k: 16, flat: 0.62, up: [0, 0, 1] });
   for (const s of [-1, 1]) {
     tube(m, spline([onHead(s * 1.12, 0, 0.055), onHead(s * 1.35, 0, 0.06), onHead(s * 1.5, 0, 0.07)]), () => 0.016, steel, { n: 20, k: 10, flat: 0.6, up: [0, 0, 1] });
-    const cx = s * (HEAD.a + 0.02);
-    const cy = HEAD.y + 0.06;
+    const [side, cy] = headAt(1.493, 0.02); // over his side, a little above his widest
+    const cx = s * side;
     const cup = (q: V3): V3 => add([cx, cy, 0], apply(rotZ((-s * Math.PI) / 2), q));
     const p = new Profile(0, 0.0).line(0.12, 0.0, 4).corner(0.135, 0.0, 0.135, 0.07, 0.02, 6).corner(0.13, 0.075, 0, 0.082, 0.035, 8).line(0, 0.082, 4);
     revolve(m, p.pts, shell, { segs: 64, at: (q) => cup(q) });
@@ -301,7 +306,7 @@ function cap(m: Mesh): void {
   const [re, ye] = headAt(thB, dCap(thB));
   const crown = new Profile(re - 0.02, ye - 0.004).line(re, ye, 2).fn(40, (t) => headAt(thB * (1 - t), dCap(thB * (1 - t))));
   revolve(m, crown.pts, { kind: MAT.cotton, slot: SLOT.main, extra: 6 }, { segs: 132 });
-  ellipsoid(m, [0, HEAD.y + HEAD.b + dCap(0) + 0.006, 0], [0.036, 0.018, 0.036], { kind: MAT.cotton, slot: SLOT.main }, { nu: 24, nv: 12 });
+  ellipsoid(m, [0, headAt(0, dCap(0) + 0.006)[1], 0], [0.036, 0.018, 0.036], { kind: MAT.cotton, slot: SLOT.main }, { nu: 24, nv: 12 });
   peak(m, re, ye, 0.3, 0.95, 0.62, { kind: MAT.cotton, slot: SLOT.second, extra: 2 });
 }
 
@@ -486,7 +491,7 @@ function propeller(m: Mesh): void {
   const thB = 0.95;
   const dome = new Profile(...headAt(thB, 0.01)).line(...headAt(thB, d(thB)), 1).fn(40, (t) => headAt(thB * (1 - t), d(thB * (1 - t))));
   revolve(m, dome.pts, { kind: MAT.cotton, slot: SLOT.main, extra: -6 }, { segs: 132 });
-  const top = HEAD.y + HEAD.b + d(0);
+  const top = headAt(0, d(0))[1];
   tube(m, (t) => [0, top - 0.01 + 0.07 * t, 0], () => 0.011, steel, { n: 6, k: 10 });
   const hub: V3 = [0, top + 0.075, 0];
   ellipsoid(m, hub, [0.024, 0.02, 0.024], steel, { nu: 18, nv: 10 });
@@ -505,11 +510,12 @@ function starClip(m: Mesh): void {
  * side, its little stalk on top. */
 function beret(m: Mesh): void {
   const [rb, yb] = headAt(0.74, 0.012);
+  const v = Math.max(1, (headAt(0)[1] + 0.022 - yb) / 0.215); // as tall as clears his head's top (a drop's point too)
   const p = new Profile(rb - 0.012, yb)
     .line(rb + 0.004, yb, 1)
-    .cubic([rb + 0.07, yb + 0.004], [rb + 0.12, yb + 0.03], rb + 0.125, yb + 0.07)
-    .cubic([rb + 0.13, yb + 0.115], [rb + 0.06, yb + 0.15], rb - 0.06, yb + 0.175)
-    .cubic([0.2, yb + 0.205], [0.08, yb + 0.215], 0, yb + 0.215, 12);
+    .cubic([rb + 0.07, yb + 0.004 * v], [rb + 0.12, yb + 0.03 * v], rb + 0.125, yb + 0.07 * v)
+    .cubic([rb + 0.13, yb + 0.115 * v], [rb + 0.06, yb + 0.15 * v], rb - 0.06, yb + 0.175 * v)
+    .cubic([0.2, yb + 0.205 * v], [0.08, yb + 0.215 * v], 0, yb + 0.215 * v, 12);
   // the slump: the crown sinks and slides toward his right, more the further out it is
   const slump = (q: V3): V3 => {
     const r = Math.hypot(q[0], q[2]);
@@ -520,42 +526,41 @@ function beret(m: Mesh): void {
   };
   revolve(m, p.pts, felt(), { segs: 144, at: (q) => slump(q) });
   headBand(m, 0.7, 0.78, 0.018, { kind: MAT.felt, slot: SLOT.main }, 144);
-  const top = slump([0, yb + 0.215, 0]);
+  const top = slump([0, yb + 0.215 * v, 0]);
   tube(m, (t) => add(top, [0.006 * t, -0.004 + 0.04 * t, 0]), (t) => mix(0.012, 0.009, t), { kind: MAT.felt, slot: SLOT.second }, { n: 6, k: 10 });
 }
 
-/** A hard hat in glossy plastic: one moulded shell, three ribs running over it front to back, a brim all round that runs
- * out into a peak. */
+/** A hard hat in glossy plastic: one moulded shell standing off his head on its harness, three ribs running over it
+ * front to back, a brim all round that runs out into a peak. Made over his head (a helmet covers it), so on a wide
+ * head it is as wide. */
 function hardHat(m: Mesh): void {
-  const a = 0.5;
-  const b = 0.42;
-  const y0 = seatAt(a - 0.01);
+  const dS = (t: number): number => 0.038 + 0.062 * (1 - smooth(0.3, 0.92, t)); // the shell's stand-off: the harness's room on top
+  const thR = 0.92;
+  const [re, ye] = headAt(thR, dS(thR));
   const rim = 0.055;
   const th = 0.017;
-  const yc = y0 + th;
-  const p = new Profile(a - 0.03, y0 - th)
-    .line(a + rim - th, y0 - th, 4)
-    .arc(a + rim - th, y0, Math.PI / 2, 8)
-    .line(a + 0.012, y0 + th, 3)
-    .curve(a, y0 + th, a - 0.001, yc + 0.03, 5)
-    .fn(48, (t) => {
-      const ps = mix(Math.asin(0.03 / b), Math.PI / 2, t);
-      return [a * Math.cos(ps), yc + b * Math.sin(ps)];
-    });
+  const y0 = ye - 0.03 - th;
+  const top = headAt(0, dS(0))[1];
+  const p = new Profile(re - 0.03, y0 - th)
+    .line(re + rim - th, y0 - th, 4)
+    .arc(re + rim - th, y0, Math.PI / 2, 8)
+    .line(re + 0.012, y0 + th, 3)
+    .curve(re, y0 + th, re - 0.001, ye, 5)
+    .fn(48, (t) => headAt(thR * (1 - t), dS(thR * (1 - t))));
   const rib = (x: number): number => 0.02 * Math.exp(-((x / 0.036) ** 2)) + 0.013 * (Math.exp(-(((x - 0.18) / 0.028) ** 2)) + Math.exp(-(((x + 0.18) / 0.028) ** 2)));
   revolve(m, p.pts, { kind: MAT.plastic, slot: SLOT.main }, {
     segs: 240,
     at: (q, phi) => {
       const r = Math.hypot(q[0], q[2]);
-      if (r > a + 0.001) {
+      if (r > re + 0.001 && q[1] < ye) {
         const f = Math.max(0, Math.cos(phi)) ** 2;
-        const r2 = a + (r - a) * (1 + 1.7 * f);
-        return around(r2, q[1] - 0.03 * f * ((r - a) / rim), phi);
+        const r2 = re + (r - re) * (1 + 1.7 * f);
+        return around(r2, q[1] - 0.03 * f * ((r - re) / rim), phi);
       }
       // the ribs, moulded in, fading into the brim and into the crown's top
-      const k = rib(q[0]) * clamp((q[1] - yc - 0.02) / 0.1) * (1 - 0.6 * clamp((q[1] - yc - b + 0.03) / 0.03));
-      const n = norm([q[0] / (a * a), (q[1] - yc) / (b * b), q[2] / (a * a)]);
-      return add(q, mul(n, k));
+      const up = (q[1] - ye) / (top - ye);
+      const k = rib(q[0]) * clamp((up - 0.06) / 0.3) * (1 - 0.6 * clamp((up - 0.93) / 0.07));
+      return add(q, mul(headNormal(q), k));
     },
   });
 }
@@ -609,13 +614,14 @@ function eyeshade(m: Mesh): void {
 function headset(m: Mesh): void {
   const shell: Look = { kind: MAT.plastic, slot: SLOT.main };
   tube(m, overHead(1.36, 0.04, 0), () => 0.026, shell, { n: 60, k: 12, flat: 0.75, up: [0, 0, 1] });
-  const cx = -(HEAD.a + 0.015);
-  const cy = HEAD.y + 0.05;
+  const [side, cy] = headAt(1.506, 0.015);
+  const cx = -side;
   const cup = (q: V3): V3 => add([cx, cy, 0], apply(rotZ(Math.PI / 2), q));
   const p = new Profile(0, 0).line(0.09, 0, 3).corner(0.1, 0, 0.1, 0.05, 0.016, 6).corner(0.095, 0.058, 0, 0.064, 0.025, 8).line(0, 0.064, 3);
   revolve(m, p.pts, shell, { segs: 56, at: cup });
   revolve(m, new Profile(0, -0.002).line(0.096, -0.002, 3).curve(0.104, -0.026, 0.08, -0.034, 6).line(0, -0.03, 4).pts, { kind: MAT.leather, slot: SLOT.main }, { segs: 56, at: cup, flip: true });
-  const boom = spline([[cx + 0.02, cy - 0.04, 0.06], [-0.6, -0.74, 0.25], [-0.5, -0.88, 0.38], [-0.3, -0.95, 0.47]]);
+  // the boom round in front of his face, as far off it as it is off the bean's
+  const boom = spline([[cx + 0.02, cy - 0.04, 0.06], fromBean([-0.6, -0.74, 0.25]), fromBean([-0.5, -0.88, 0.38]), fromBean([-0.3, -0.95, 0.47])]);
   tube(m, boom, (t) => mix(0.017, 0.014, t), shell, { n: 40, k: 10 });
   ellipsoid(m, add(boom(1), [0.028, -0.004, 0.006]), [0.04, 0.026, 0.028], { kind: MAT.fur, slot: SLOT.second }, { R: rotZ(-0.25), nu: 28, nv: 16, bump: fluff(11, 0.25) });
 }
@@ -646,8 +652,9 @@ function apple(m: Mesh): void {
   tube(m, stem, (t) => mix(0.016, 0.013, t), { kind: MAT.wood, slot: SLOT.wood }, { n: 16, k: 10 });
   blade(m, stem(0.45), [0.85, 0.32, 0.3], [-0.25, 0.9, 0.25], 0.12, 0.042, { kind: MAT.leaf, slot: SLOT.second, extra: 1 }, { shape: leafy, cup: 0.3, bend: -0.1, thick: 0.006 });
   grow(m, k0, 1.3, [0, 0.0, 0]);
+  const lift = seatAt(0.12) - 0.0066; // where his head is as wide as the apple's foot, against the bean's
   for (let v = k0; v < m.count; v++) {
-    m.pos[v * 3 + 1] = m.pos[v * 3 + 1]! - 0.03;
+    m.pos[v * 3 + 1] = m.pos[v * 3 + 1]! - 0.03 + lift;
     m.pos[v * 3 + 2] = m.pos[v * 3 + 2]! + 0.05;
   }
 }
@@ -734,7 +741,7 @@ function deerstalker(m: Mesh): void {
   revolve(m, crown.pts, tw, { segs: 132 });
   peak(m, re, ye, 0.14, 0.78, 0, tw, 0.011, 0.25);
   peak(m, re, ye, 0.13, 0.78, Math.PI, tw, 0.011, 0.25);
-  const yAt = (th: number): number => HEAD.y + HEAD.b * Math.cos(th);
+  const yAt = (th: number): number => headAt(th)[1];
   for (const s of [-1, 1]) {
     const phc = (s * Math.PI) / 2;
     const p = new Profile(1.26, -0.012).corner(1.26, 0.012, 0.84, 0.012, 0.01, 4).corner(0.84, 0.012, 0.84, -0.012, 0.01, 4).line(0.84, -0.008, 1);
@@ -748,7 +755,7 @@ function deerstalker(m: Mesh): void {
       },
     });
   }
-  bow(m, [0, HEAD.y + HEAD.b + d + 0.017, 0.01], [0, 1, 0.35], 0.03, { kind: MAT.satin, slot: SLOT.second });
+  bow(m, [0, headAt(0, d + 0.017)[1], 0.01], [0, 1, 0.35], 0.03, { kind: MAT.satin, slot: SLOT.second });
 }
 
 /** A sun visor: a band round his head and a wide peak with its edge piped in his second colour, no crown. */
@@ -774,12 +781,14 @@ function sunVisor(m: Mesh): void {
 }
 
 /** A crown of flowers round his head on a green vine: small flowers, their petals in his colour, gold centres, leaves
- * between. */
+ * between, round his front and sides. */
 function flowerCrown(m: Mesh): void {
   const [rv, yv] = headAt(0.62, 0.016);
-  tube(m, circle(rv, yv), () => 0.009, greenery, { closed: true, n: 120, k: 8 });
+  // the vine's back, round a flat head, lies on it; the flowers go round his front and sides, where they are seen (round
+  // behind him, their petals stood up over a flat head's top with nothing under them)
+  tube(m, (t) => rest(around(rv, yv, TAU * t), 0), () => 0.009, greenery, { closed: true, n: 120, k: 8 });
   const petal: Look = { kind: MAT.petal, slot: SLOT.main };
-  [-1.7, -1.13, -0.56, 0, 0.56, 1.13, 1.7, 2.4, 3.14, -2.4].forEach((phi, i) => {
+  [-1.7, -1.13, -0.56, 0, 0.56, 1.13, 1.7].forEach((phi, i) => {
     const sz = i % 2 ? 0.8 : 1;
     const c = around(rv + 0.012, yv + 0.006, phi);
     const out = norm(add(around(1, 0, phi), [0, 0.75, 0]));
@@ -817,7 +826,7 @@ function vikingHelmet(m: Mesh): void {
   }
   for (const t of [0.12, 0.3, 0.5, 0.7, 0.88]) {
     const p = strip(t);
-    rivet(add(p, mul(norm(sub(p, [0, HEAD.y, 0])), 0.008)));
+    rivet(add(p, mul(headNormal(p), 0.008)));
   }
   for (const s of [-1, 1]) {
     const base = onHead(s * 0.95, 0.12, d);
@@ -910,12 +919,14 @@ function tricorn(m: Mesh): void {
   }, () => 0.009, gold2, { closed: true, n: 240, k: 8 });
 }
 
-/** A Santa hat in red velvet: a soft cone flopping over to one side, a thick fur trim, a fur pompom on its tip. */
+/** A Santa hat in red velvet: a soft cone flopping over to one side, a thick fur trim, a fur pompom on its tip. Pulled on
+ * as a beanie is, as far down his head on any head as on the bean's, so a wide head has a wider one. */
 function santaHat(m: Mesh): void {
-  const r0 = 0.27;
-  const y0 = seatAt(r0) - 0.02;
-  const path = spline([[0, y0, 0], [0.0, y0 + 0.17, -0.005], [0.05, y0 + 0.31, -0.015], [0.18, y0 + 0.36, -0.02], [0.3, y0 + 0.3, -0.01], [0.36, y0 + 0.19, 0.01]]);
-  tube(m, path, (t) => mix(r0, 0.026, t ** 0.8) * (1 + 0.035 * Math.sin(t * 22)), felt(2), { n: 72, k: 40, caps: false, up: [0, 0, 1] });
+  const [r0, yh] = headAt(0.4733); // where the bean's head is 0.27 across
+  const y0 = yh - 0.02;
+  const k = Math.min(1.3, r0 / 0.27); // the cone as much bigger as its opening
+  const path = spline(([[0, 0, 0], [0.0, 0.17, -0.005], [0.05, 0.31, -0.015], [0.18, 0.36, -0.02], [0.3, 0.3, -0.01], [0.36, 0.19, 0.01]] as V3[]).map((q) => add([0, y0, 0], mul(q, k))));
+  tube(m, path, (t) => mix(r0, 0.026 * k, t ** 0.8) * (1 + 0.035 * Math.sin(t * 22)), felt(2), { n: 72, k: 40, caps: false, up: [0, 0, 1] });
   const end = path(1);
   ellipsoid(m, end, [0.03, 0.03, 0.03], felt(2), { nu: 16, nv: 10 });
   tube(m, circle(headR(y0 + 0.01) + 0.03, y0 + 0.012), () => 0.06, { kind: MAT.fur, slot: SLOT.second }, {
@@ -997,7 +1008,7 @@ function antlers(m: Mesh): void {
 /** A unicorn's horn: a slim spiral horn with a pearly sheen, its groove winding up it, on a gold ring at its foot. */
 const UNICORN = { lean: 0.34, len: 0.36 };
 function unicornHorn(m: Mesh): void {
-  const base = onHead(0, 0.3, -0.008);
+  const base = standing(0, 0.3, -0.008);
   const R = rotX(UNICORN.lean);
   const p = new Profile(0, 0)
     .line(0.058, 0, 2)
@@ -1023,7 +1034,7 @@ function laurel(m: Mesh): void {
   const [r, y] = headAt(0.48, 0.018);
   for (const s of [-1, 1]) {
     const angle = (t: number): number => s * mix(Math.PI - 0.15, 0.14, t);
-    const branch = (t: number): V3 => around(r, y, angle(t));
+    const branch = (t: number): V3 => rest(around(r, y, angle(t)), 0.03); // round the back of a flat head, down onto it
     tube(m, branch, () => 0.01, gold, { n: 64, k: 8 });
     for (let k = 0; k < 9; k++) {
       const t = (k + 0.5) / 9;
@@ -1077,33 +1088,60 @@ export const MODELS: Record<number, (m: Mesh) => void> = {
   37: sombrero, 38: tiara, 39: antlers, 40: unicornHorn, 41: laurel, 42: quill,
 };
 
-/** A hat ready for the GPU, built and lit (null: none, or not modelled). The renderer keeps what it uploads. */
-export function hatMesh(id: number): Built | null {
-  const make = MODELS[id];
-  if (!make) return null;
-  const m = new Mesh();
-  make(m);
-  bake(m);
-  return built(m);
+/** What stands on him, clips to him or goes round him, built on his skin (his outline itself), not on the dome a hat goes
+ * over: the antenna, the sprout, the bow, headphones, the flower, the horns, bunny ears, the star clip, the eyeshade, a
+ * headset, the sweatband, the apple, the sun visor, the flower crown, the tiara, antlers, the unicorn's horn, the laurel,
+ * the quill. A band over his head lies on him (a cup on his side and the band it hangs from on one head, so they meet). */
+const ON_SKIN = new Set([4, 5, 6, 8, 12, 13, 14, 19, 23, 24, 25, 26, 30, 31, 38, 39, 40, 41, 42]);
+const surface = (id: number, on: Head): Head => (ON_SKIN.has(id) ? (on.skin ?? on) : on);
+/** Every hat built, by its number and the head it was built on. */
+const made = new Map<string, Built | null>();
+/** A hat ready for the GPU, built on `on` (a shape's head, heads.ts) and lit (null: none, or not modelled). The renderer
+ * keeps what it uploads. */
+export function hatMesh(id: number, on: Head): Built | null {
+  const key = `${id}|${on.key}`;
+  if (!made.has(key)) {
+    const make = MODELS[id];
+    made.set(key, make ? onThe(surface(id, on), () => {
+      const m = new Mesh();
+      make(m);
+      bake(m);
+      return built(m);
+    }) : null);
+  }
+  return made.get(key)!;
 }
 
 /** What on a hat gives off light, as the orb's shader draws its glow round it: in the hat's flat units (x right, y down
  * from the top of his head, seen as the hat is, from a little above), a bead's centre and radius, or a ring's centre and
  * its two radii. */
-export function glowOf(id: number): { kind: 1 | 2; at: [number, number]; a: number; b: number; slot: "main" | "second" } | null {
+export function glowOf(id: number, on: Head): { kind: 1 | 2; at: [number, number]; a: number; b: number; slot: "main" | "second" } | null {
   const seen = (p: V3): [number, number] => [p[0], -(p[1] * Math.cos(PITCH) - p[2] * Math.sin(PITCH))];
-  if (id === 4) return { kind: 1, at: seen(BEAD.at), a: BEAD.r, b: BEAD.r, slot: "second" };
+  if (id === 4) {
+    const { BEAD } = onThe(surface(id, on), antennaOn);
+    return { kind: 1, at: seen(BEAD.at), a: BEAD.r, b: BEAD.r, slot: "second" };
+  }
   if (id === 11) return { kind: 2, at: seen([0, HALO.y, 0]), a: HALO.R, b: HALO.R * Math.sin(HALO.tilt + PITCH), slot: "main" };
   return null;
 }
 
-let head: Built | null = null;
-/** His head as the hat sees it: what hides the parts of a hat that go round behind him (drawn into depth only). */
-export function headMesh(): Built {
-  if (!head) {
+const heads = new Map<string, Built>();
+/** His head as the hat sees it: what hides the parts of a hat that go round behind him (drawn into depth only), a hair
+ * inside his skin (the dome over a drop's point would hide a horn's foot that is drawn standing on him). */
+export function headMesh(on: Head): Built {
+  let b = heads.get(on.key);
+  if (!b) {
     const m = new Mesh();
-    ellipsoid(m, [0, HEAD.y, 0], [HEAD.a * 0.985, HEAD.b * 0.985, HEAD.a * 0.985], { kind: 0, slot: 0 }, { nu: 48, nv: 32 });
-    head = built(m);
+    onThe(on.skin ?? on, () =>
+      grid(m, 48, 40, (u, v) => {
+        const al = Math.PI * v;
+        const ph = 2 * Math.PI * u;
+        const R = radiusAt(al) - 0.01;
+        return [R * Math.sin(al) * Math.sin(ph), head().cy + R * Math.cos(al), R * Math.sin(al) * Math.cos(ph)];
+      }, { kind: 0, slot: 0 }),
+    );
+    b = built(m);
+    heads.set(on.key, b);
   }
-  return head;
+  return b;
 }
