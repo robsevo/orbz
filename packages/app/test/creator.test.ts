@@ -494,3 +494,30 @@ test("any colour: Dark and a typed colour reach the orb and its DNA strand, a sl
   assert.deepEqual(await measure(phone), [], "the picker open, at phone size");
   await phone.close();
 });
+
+test("Roll everything: the menu's colour and the rest wait for the orb to be shown, then change with it, all at once (owner, 10-11: \"wait for the orb to show before changing menu color and everything else, its very telling\")", { skip, timeout: 180_000 }, async () => {
+  const page = await open("desk");
+  try {
+    await page.getByRole("button", { name: "New orb" }).first().click();
+    await page.locator("[data-maker-hero]").waitFor();
+    // what wears his colour besides him: the menu's dot and its New orb, his card, his DNA's card
+    const hues = (): Promise<Record<string, string | null>> => page.evaluate(() => {
+      const of = (sel: string): string | null => document.querySelector(sel)?.getAttribute("data-orb") ?? null;
+      return { menu: of("aside.orbs-side > div:first-child > i[data-orb]"), tile: of("[data-new-orb]"), hero: of("[data-maker-hero]"), strand: of("[data-strand-card]") };
+    });
+    for (let i = 0; i < 12; i++) {
+      const was = await hues();
+      assert.ok(Object.values(was).every(Boolean), `each found: ${JSON.stringify(was)}`);
+      await page.getByRole("button", { name: /Roll everything/ }).click();
+      await page.locator('[data-evolve="changing"]').waitFor();
+      assert.deepEqual(await hues(), was, "while he changes, all of it is still who he was");
+      await page.locator('[data-evolve="changing"]').waitFor({ state: "detached", timeout: 10_000 });
+      const now = await hues();
+      assert.equal(new Set(Object.values(now)).size, 1, `shown, all of it at once, his: ${JSON.stringify(now)}`);
+      if (now.hero !== was.hero) return; // the colour seen to change with him
+    }
+    assert.fail("twelve rolls kept one colour");
+  } finally {
+    await page.close();
+  }
+});

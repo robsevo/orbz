@@ -117,7 +117,9 @@ export function DeskRoom({ home, office, moods, go, tab: opening = null }: { hom
     return (
       <div style={{ display: "grid", placeItems: "center", alignContent: "center", gap: "var(--s3)", padding: "var(--s7) var(--s5)", textAlign: "center" }}>
         <span style={{ font: "700 20px/26px var(--font)", color: "var(--text-1)" }}>{NAMES.home}</span>
-        <span style={{ font: "400 15px/21px var(--font)", color: "var(--text-3)", maxWidth: 440 }}>Its prices, strategies and books are kept there. Open the app from your home to trade.</span>
+        {/* a phone not signed in to its home is a preview with no home behind it (owner, 10-11: "why cant we view the
+            charts on mobile?"): how to sign it in, said plainly */}
+        <span data-desk-sign-in style={{ font: "400 15px/21px var(--font)", color: "var(--text-3)", maxWidth: 440 }}>Its prices, charts and books are kept on your home, and this device is not signed in to it yet. On your computer, open Settings, then Devices, then Add a phone, and scan its code with this device's camera.</span>
       </div>
     );
   }

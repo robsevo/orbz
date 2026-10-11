@@ -1248,6 +1248,10 @@ function App() {
   const before = making && evolve && evolve.n !== shown ? evolve.c : null;
   const at = view.kind === "orb" ? Math.max(0, office.findIndex((c) => c.name === view.name)) : -1;
   const me = view.kind === "new" ? view.draft : (view.kind === "floor" ? office[0] : office[at]) ?? NEWBORN;
+  // and what the rest of the page wears meanwhile, the menu's colour too (owner, 10-11: "when we roll everything, wait for
+  // the orb to show before changing menu color and everything else, its very telling"): all of it at once, when he has
+  // been shown whole
+  const seen = before ?? me;
   // his real mood, on a home (PLAN 2.3): what happens to him, worn by the face
   const moodNow = useMood(home, view.kind === "new" ? null : idOf(me.name));
   const live = home && view.kind !== "new" ? moodNow : null;
@@ -1583,7 +1587,7 @@ function App() {
         {menu && phone && <div className="orbs-scrim" aria-hidden onClick={() => setMenu(false)} />}
         <aside className="orbs-side" data-open={menu} style={s.side}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 var(--s2)", font: "700 12px/20px var(--font)", letterSpacing: ".12em", color: "var(--text-3)" }}>
-            <i aria-hidden data-orb={me.hue} style={{ width: 9, height: 9, borderRadius: "50%", background: "radial-gradient(circle at 35% 30%, var(--text-1) 0%, var(--accent) 60%)", boxShadow: "0 0 8px var(--accent-glow)" }} />
+            <i aria-hidden data-orb={seen.hue} style={{ width: 9, height: 9, borderRadius: "50%", background: "radial-gradient(circle at 35% 30%, var(--text-1) 0%, var(--accent) 60%)", boxShadow: "0 0 8px var(--accent-glow)" }} />
             ORBZ
           </div>
           {person && (
@@ -1608,13 +1612,13 @@ function App() {
             {navItem("Recruiter", room === "recruiter" && !founding, { room: "recruiter" }, "✚", 0, false, founding ? (founding === "ceo" ? "Appoint your CEO first" : "Appoint your personal assistant first") : "")}
             {navItem("Settings", room === "settings", { room: "settings" }, "⚙")}
             {!open && kept.includes(CARRIED.stick) && (
-              <Carried label={NAMES.stick} icon={<span data-orb={me.hue} style={{ width: 18, display: "grid", placeItems: "center", color: "var(--accent)" }}><StickIcon /></span>}
+              <Carried label={NAMES.stick} icon={<span data-orb={seen.hue} style={{ width: 18, display: "grid", placeItems: "center", color: "var(--accent)" }}><StickIcon /></span>}
                 take={() => (setHolding(true), go({ room: "office", orb: null }))}
                 style={{ ...s.btn, display: "flex", alignItems: "center", gap: 10, textAlign: "left", background: holding ? "var(--accent-wash)" : "transparent", boxShadow: holding ? "inset 0 0 0 1px var(--accent)" : "none" }} />
             )}
             {!open && pieces > 0 && (
               <button data-paper onClick={() => (setMenu(false), setReading(true))} style={{ ...s.btn, display: "flex", alignItems: "center", gap: 10, textAlign: "left", background: "transparent", boxShadow: "none" }}>
-                <span aria-hidden data-orb={me.hue} style={{ width: 18, display: "grid", placeItems: "center", color: "var(--accent)" }}><PaperIcon /></span>
+                <span aria-hidden data-orb={seen.hue} style={{ width: 18, display: "grid", placeItems: "center", color: "var(--accent)" }}><PaperIcon /></span>
                 {NAMES.paper}
                 <span className="num" style={{ marginLeft: "auto", font: "700 12px/16px var(--font)", color: "var(--text-3)" }}>{`${pieces}/3`}</span>
               </button>
@@ -1743,7 +1747,7 @@ function App() {
           // did for the orbs profile"): the orb and who it will be in one card, Roll and Create under the orb where Chat
           // and Career are on its page; one centred column at every size (in the studio's column on a desk, it stays in
           // view while the editor scrolls; side by side, Roll and Create left its words too little room at 768 px)
-          <div data-orb={me.hue} data-cradle data-maker-hero data-gesture={gesture?.name} style={{ ...s.panel, position: "relative", display: "grid", gap: "var(--s2)", background: "linear-gradient(160deg, var(--accent-wash), var(--fill) 60%)" }}>
+          <div data-orb={seen.hue} data-cradle data-maker-hero data-gesture={gesture?.name} style={{ ...s.panel, position: "relative", display: "grid", gap: "var(--s2)", background: "linear-gradient(160deg, var(--accent-wash), var(--fill) 60%)" }}>
             {/* its label, and the sounds in the card's corner: the studio's column has to hold this card, its moods and its
                 DNA in a desk's height (the DNA in view while the editor scrolls, owner 10-10) */}
             <span style={{ ...s.head, justifySelf: "center" }}>A new orb</span>
@@ -1770,10 +1774,10 @@ function App() {
           )}
 
           {/* its moods and moves, compact, immediately above its DNA, a new orb's as a fixed one's (owner, 10-10) */}
-          <div data-moves data-orb={me.hue} style={{ ...s.panel, display: "grid", gap: 8, padding: "var(--s3)", justifyItems: "center" }}>
+          <div data-moves data-orb={seen.hue} style={{ ...s.panel, display: "grid", gap: 8, padding: "var(--s3)", justifyItems: "center" }}>
             {moves}
           </div>
-          <div data-strand-card data-orb={me.hue} style={{ ...s.panel, display: "grid", gap: "var(--s3)" }}>
+          <div data-strand-card data-orb={seen.hue} style={{ ...s.panel, display: "grid", gap: "var(--s3)" }}>
             {/* in the creator its paste field says how a strand is used; the column must fit a desk's height (owner, 10-10) */}
             <Strand key={(before ?? me).name + (before ?? me).seed} c={before ?? me} quiet={making} />
             {making && (
@@ -1809,7 +1813,7 @@ function App() {
             {/* on a wide screen its moods and moves at the top, beside the orb (owner, 10-10: "awake listening etc put that to
                 the right over traits"); the editor first while it is being made; what it is made of over its stats (owner,
                 10-10: "put made of container over the stats container") */}
-            {making && <Creator me={me} edit={edit} replies={replies} setReplies={setReplies} kinds={kinds} peek={!wide} hide={hide} />}
+            {making && <Creator me={seen} edit={before ? () => undefined : edit} replies={replies} setReplies={setReplies} kinds={kinds} peek={!wide} hide={hide} />}
             {!making && <Card c={me} replies={replies} setReplies={setReplies} onDelete={(handTo, school) => remove(me.name, handTo, school)} others={office.filter((o) => o.name !== me.name)} />}
             {making ? (
               // a new orb's stats as its page's two cards, under the editor
@@ -1844,13 +1848,13 @@ function App() {
                   aria-pressed={making}
                   aria-label="New orb"
                   data-new-orb
-                  data-orb={making ? me.hue : NEWBORN.hue}
+                  data-orb={making ? seen.hue : NEWBORN.hue}
                   onClick={() => go({ room: "new" })}
                   onPointerEnter={() => setSeatHop((n) => n + 1)}
                   style={{ display: "grid", justifyItems: "center", alignContent: "center", gap: 2, minHeight: 72, padding: "var(--s3) var(--s2)", border: 0, cursor: "pointer", borderRadius: 18, minWidth: 0, background: "radial-gradient(80% 70% at 50% 30%, var(--accent-fill), var(--accent-wash) 75%)", boxShadow: `inset 0 0 0 ${making ? 2 : 1.5}px var(--accent)` }}
                 >
                   <span style={{ position: "relative", display: "grid", marginBottom: -11 }}>
-                    <Orb character={making ? me : NEWBORN} size={80} poke={false} gesture={seatHop ? { name: "hop", n: seatHop } : null} />
+                    <Orb character={making ? seen : NEWBORN} size={80} poke={false} gesture={seatHop ? { name: "hop", n: seatHop } : null} />
                     <span aria-hidden data-plus style={{ position: "absolute", right: 6, bottom: 16, width: 26, height: 26, borderRadius: 13, display: "grid", placeItems: "center", background: "var(--accent)", color: "var(--ground)", font: "800 20px/20px var(--font)", boxShadow: "0 2px 10px var(--accent-glow)" }}>+</span>
                   </span>
                   <span style={{ font: "700 15px/20px var(--font)", color: "var(--accent)" }}>New orb</span>

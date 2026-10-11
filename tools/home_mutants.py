@@ -3418,6 +3418,13 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("the swap form's any coin is ignored", "src/desk/Trade.tsx", [
         ("  const to = buy === ANY ? buyAt.trim() : buy;", "  const to = buy;"),
     ], ["desk-view.test.ts"]),
+    # Roll everything waits for the orb (owner, 10-11: "wait for the orb to show before changing menu color and everything else")
+    ("the menu's colour changes before the rolled orb is shown", "src/orbs.tsx", [
+        ('            <i aria-hidden data-orb={seen.hue} style={{ width: 9, height: 9,', '            <i aria-hidden data-orb={me.hue} style={{ width: 9, height: 9,'),
+    ], ["creator.test.ts"]),
+    ("the new orb's card colours before it is shown", "src/orbs.tsx", [
+        ("          <div data-orb={seen.hue} data-cradle data-maker-hero", "          <div data-orb={me.hue} data-cradle data-maker-hero"),
+    ], ["creator.test.ts"]),
     # an orb's account, yours to set (PLAN 5.34)
     ("the account switch sets nothing", "src/desk/Account.tsx", [
         ("      await home.setDeskAccount(orb, m, b);\n", ""),
@@ -3447,6 +3454,9 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("the tape's finger areas spill past a phone's page", "src/desk/Room.tsx", [
         ('style={{ position: "relative", display: "inline-flex", gap: 8,', 'style={{ display: "inline-flex", gap: 8,'),
     ], ["desk-view.test.ts"]),
+    ("the chart clipped at its latest bar", "src/ui/Candles.tsx", [
+        ("  const fit = (e: number, s: number): number => Math.max(-Math.floor(s / 2), Math.min(all.length - s, e));", "  const fit = (e: number, s: number): number => Math.max(0, Math.min(all.length - s, e));"),
+    ], ["chart-view.test.ts"]),
     ("the majors under what trends", "src/desk/TokenDesk.tsx", [
         ('      <div data-majors style={{ display: "grid", gap: 6, minWidth: 0 }}>', '      <div data-majors style={{ display: "grid", gap: 6, minWidth: 0, order: 2 }}>'),
     ], ["chart-view.test.ts"]),

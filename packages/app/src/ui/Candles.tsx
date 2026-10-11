@@ -62,9 +62,11 @@ export function Candles({ candles: all, tf, layers = [], height = 300, paneHeigh
   const press = useRef<{ x: number; y: number; timer: number } | null>(null);
   const [w, setW] = useState(600);
   const [hover, setHover] = useState<{ i: number; y: number } | null>(null);
-  // the bars in view (owner, 10-11: "be able to zoom in and out of chart"): how many (null: as many as fit, 5 px a bar)
-  // and how far back from the latest; a drag, the wheel, two fingers, the buttons
-  const [view, setView] = useState<{ span: number | null; end: number }>({ span: null, end: 0 });
+  // the bars in view (owner, 10-11: "be able to zoom in and out of chart"; "let the user drag on the chart, we dont want
+  // it to be clipped to the right"): how many slots across (null: as many as fit, 5 px a bar) and where the latest bar
+  // is: `end` slots back from the right edge when looking back, or, below nothing, that many empty slots after it (null:
+  // a little room after it, following it as it forms); a drag, the wheel, two fingers, the buttons
+  const [view, setView] = useState<{ span: number | null; end: number | null }>({ span: null, end: null });
   const drag = useRef<{ x: number; end: number; moved: boolean } | null>(null);
   const fingers = useRef(new Map<number, number>());
   const pinch = useRef<{ d: number; span: number; end: number } | null>(null);
@@ -82,24 +84,28 @@ export function Candles({ candles: all, tf, layers = [], height = 300, paneHeigh
   useEffect(() => {
     const k = all.length - grew.current;
     grew.current = all.length;
-    if (k > 0) setView((v) => (v.end > 0 ? { ...v, end: v.end + k } : v));
+    if (k > 0) setView((v) => (v.end !== null && v.end > 0 ? { ...v, end: v.end + k } : v));
   }, [all.length]);
   const plotW = w - AXIS;
-  // as many of the latest bars as fit at 5 px a bar or more (a phone's chart is fewer bars, each one readable), or as
-  // zoomed; looking back, `end` bars from the latest
+  // as many slots as fit at 5 px a bar or more (a phone's chart is fewer bars, each one readable), or as zoomed; the
+  // latest bar `end` slots in from the right edge (below nothing, empty slots after it: half the chart at most)
   const fitSpan = Math.max(30, Math.floor(plotW / 5));
   const span = Math.min(all.length, Math.max(Math.min(MIN_SPAN, all.length), view.span ?? fitSpan));
-  const end = Math.max(0, Math.min(all.length - span, view.end));
+  const room = Math.max(2, Math.round(span * 0.06)); // the room after the latest bar, as a chart opens
+  const fit = (e: number, s: number): number => Math.max(-Math.floor(s / 2), Math.min(all.length - s, e));
+  const end = fit(view.end ?? -room, span);
   const off = all.length - span - end;
-  const candles = all.slice(off, off + span);
+  const candles = all.slice(Math.max(0, off), all.length - Math.max(0, end));
   const n = candles.length;
   const zoom = (factor: number, fx = 1): void => {
     const next = Math.round(Math.min(all.length, Math.max(Math.min(MIN_SPAN, all.length), span * factor)));
-    // the bar under the pointer (`fx` of the way across) stays where it is
-    setView({ span: next, end: Math.round(Math.min(all.length - next, Math.max(0, end + (1 - fx) * (span - next)))) });
+    // at the latest bar it stays in view, its room after it kept; looking back, the bar under the pointer (`fx` of the
+    // way across) stays where it is
+    if (end <= 0) return setView({ span: next, end: view.end === null ? null : fit(Math.round((end * next) / span), next) });
+    setView({ span: next, end: fit(Math.round(end + (1 - fx) * (span - next)), next) });
   };
-  const numbers = useRef({ span, end, all: all.length, plotW, w });
-  numbers.current = { span, end, all: all.length, plotW, w };
+  const numbers = useRef({ span, end, all: all.length, plotW, w, following: view.end === null });
+  numbers.current = { span, end, all: all.length, plotW, w, following: view.end === null };
   useEffect(() => {
     // the wheel zooms where the pointer is (and a sideways wheel pans): a listener of our own, so the page does not scroll
     const el = svg.current;
@@ -108,14 +114,17 @@ export function Candles({ candles: all, tf, layers = [], height = 300, paneHeigh
       e.preventDefault();
       const v = numbers.current;
       const r = el.getBoundingClientRect();
+      const clamp = (x: number, s: number): number => Math.max(-Math.floor(s / 2), Math.min(v.all - s, x));
       if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
         const bars = Math.round(((e.deltaX * (v.w / r.width)) / v.plotW) * v.span);
-        return setView({ span: v.span, end: Math.max(0, Math.min(v.all - v.span, v.end - bars)) });
+        return setView({ span: v.span, end: clamp(v.end - bars, v.span) });
       }
-      // at the latest bar it stays in view (a live chart); looking back, the bar under the pointer stays where it is
-      const fx = v.end === 0 ? 1 : Math.min(1, Math.max(0, (((e.clientX - r.left) / r.width) * v.w) / v.plotW));
       const next = Math.round(Math.min(v.all, Math.max(Math.min(MIN_SPAN, v.all), v.span * (e.deltaY < 0 ? 0.85 : 1 / 0.85))));
-      setView({ span: next, end: Math.round(Math.min(v.all - next, Math.max(0, v.end + (1 - fx) * (v.span - next)))) });
+      // at the latest bar it stays in view (a live chart), its room after it kept; looking back, the bar under the
+      // pointer stays where it is
+      if (v.end <= 0) return setView({ span: next, end: v.following ? null : clamp(Math.round((v.end * next) / v.span), next) });
+      const fx = Math.min(1, Math.max(0, (((e.clientX - r.left) / r.width) * v.w) / v.plotW));
+      setView({ span: next, end: clamp(Math.round(v.end + (1 - fx) * (v.span - next)), next) });
     };
     el.addEventListener("wheel", wheel, { passive: false });
     return () => el.removeEventListener("wheel", wheel);
@@ -136,7 +145,7 @@ export function Candles({ candles: all, tf, layers = [], height = 300, paneHeigh
     ...layers.flatMap((l) => [...(l.lines ?? []).flatMap((x) => shownOf(x.values)), ...(l.band ? [...shownOf(l.band[0]), ...shownOf(l.band[1])] : [])]),
   ]);
   const y = (p: number): number => ((hi - p) / (hi - lo)) * priceH;
-  const slot = n ? plotW / n : plotW;
+  const slot = plotW / Math.max(1, span); // a slot for each bar in view, and for the room after the latest
   const x = (i: number): number => slot * (i + 0.5);
   const body = Math.max(1, Math.min(14, slot * 0.62));
   const vmax = Math.max(1e-12, ...candles.map((c) => c.v));
@@ -246,16 +255,17 @@ export function Candles({ candles: all, tf, layers = [], height = 300, paneHeigh
             const [a, b] = [...fingers.current.values()] as [number, number];
             const d = Math.max(8, Math.abs(a - b));
             const next = Math.round(Math.min(all.length, Math.max(Math.min(MIN_SPAN, all.length), (pinch.current.span * pinch.current.d) / d)));
-            const fx = pinch.current.end === 0 ? 1 : Math.min(1, Math.max(0, ((((a + b) / 2 - r.left) / r.width) * w) / plotW));
-            return setView({ span: next, end: Math.round(Math.min(all.length - next, Math.max(0, pinch.current.end + (1 - fx) * (pinch.current.span - next)))) });
+            if (pinch.current.end <= 0) return setView({ span: next, end: view.end === null ? null : fit(Math.round((pinch.current.end * next) / pinch.current.span), next) });
+            const fx = Math.min(1, Math.max(0, ((((a + b) / 2 - r.left) / r.width) * w) / plotW));
+            return setView({ span: next, end: fit(Math.round(pinch.current.end + (1 - fx) * (pinch.current.span - next)), next) });
           }
           const g = drag.current;
           if (!g) return;
           const dx = e.clientX - g.x;
           if (!g.moved && Math.abs(dx) < 4) return;
           g.moved = true;
-          // dragged right, back in time
-          setView({ span, end: Math.max(0, Math.min(all.length - span, g.end + Math.round((dx * (w / r.width)) / slot))) });
+          // dragged right, back in time; left, room after the latest bar (half the chart at most)
+          setView({ span, end: fit(g.end + Math.round((dx * (w / r.width)) / slot), span) });
         }}
         onPointerDown={(e) => {
           if (e.pointerType === "mouse" && e.button !== 0) return;
@@ -287,7 +297,7 @@ export function Candles({ candles: all, tf, layers = [], height = 300, paneHeigh
           fingers.current.delete(e.pointerId);
           pinch.current = null;
         }}
-        onDoubleClick={() => setView({ span: null, end: 0 })}
+        onDoubleClick={() => setView({ span: null, end: null })}
         onPointerLeave={() => (setHover(null), unpress())}
         onContextMenu={(e) => {
           if (!menu) return;
@@ -445,7 +455,7 @@ export function Candles({ candles: all, tf, layers = [], height = 300, paneHeigh
       </svg>
       {/* zoom, and back to the latest bar when looking back (a double-click puts the view back too) */}
       <div style={{ position: "absolute", left: 6, top: Math.max(0, priceH - 36), display: "flex", gap: 4 }}>
-        {end > 0 && <button type="button" className="orbs-small" data-zoom="latest" aria-label="Back to the latest bar" title="Back to the latest bar" onClick={() => setView({ span: view.span, end: 0 })} style={zoomButton}>⇥</button>}
+        {end > 0 && <button type="button" className="orbs-small" data-zoom="latest" aria-label="Back to the latest bar" title="Back to the latest bar" onClick={() => setView({ span: view.span, end: null })} style={zoomButton}>⇥</button>}
         <button type="button" className="orbs-small" data-zoom="out" aria-label="Zoom out" title="Zoom out (or the wheel)" disabled={span >= all.length} onClick={() => zoom(1 / 0.7)} style={zoomButton}>−</button>
         <button type="button" className="orbs-small" data-zoom="in" aria-label="Zoom in" title="Zoom in (or the wheel)" disabled={span <= Math.min(MIN_SPAN, all.length)} onClick={() => zoom(0.7)} style={zoomButton}>+</button>
       </div>

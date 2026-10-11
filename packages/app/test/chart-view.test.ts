@@ -118,9 +118,8 @@ test("the desk's chart: the bar's clock; indicators from its right-click menu, k
   await page.locator("[data-tick]").first().waitFor({ timeout: 20_000 });
   assert.deepEqual(await page.locator("[data-tick]").evaluateAll((els) => els.map((e) => e.getAttribute("data-tick"))), ["ETH", "BTC", "SOL", "XRP", "BNB", "DOGE", "TRX", "ADA", "LINK", "ZEC"]);
   assert.ok(SYMBOLS.includes("HYPE"), "the eleventh by market cap is a major too, and left off");
-  // a pointer over the tape holds it still (its frame does not move, so it is there for sure), then a coin is pressed
-  await page.locator("[data-tape]").hover();
-  await page.locator('[data-tick="ETH"]').click();
+  // a coin on it pressed (pressed as a button is, not aimed at: the tape moves, and a coin may be under the menu's edge)
+  await page.locator('[data-tick="ETH"]').dispatchEvent("click");
   await page.locator('[data-major-page="ETH"] [data-candles]').waitFor({ timeout: 20_000 });
   await page.locator("[data-token-close]").click();
   await page.locator("[data-token-desk]").waitFor({ state: "detached" });
@@ -152,7 +151,8 @@ test("the desk's chart: the bar's clock; indicators from its right-click menu, k
   // zoom (owner: "be able to zoom in and out of chart"): the wheel where the pointer is, the buttons, a drag back in
   // time and back to the latest bar, a double-click as it was
   const view = async (): Promise<[number, number]> => (await svg.getAttribute("data-view"))!.split(":").map(Number) as [number, number];
-  const [fit] = await view();
+  const [fit, start] = await view();
+  assert.ok(start < 0, `a little room after the latest bar as it opens (${start}), not clipped at the right (owner, 10-11: "we dont want it to be clipped to the right")`);
   await page.mouse.move(at.x, at.y);
   await page.mouse.wheel(0, -500);
   await page.waitForFunction((f) => Number(document.querySelector("svg[data-panes]")!.getAttribute("data-view")!.split(":")[0]) < f, fit);
@@ -169,9 +169,18 @@ test("the desk's chart: the bar's clock; indicators from its right-click menu, k
   await page.mouse.up();
   assert.ok((await view())[1] > 0, "dragged right: back in time");
   await page.locator('[data-zoom="latest"]').click();
-  assert.equal((await view())[1], 0, "back to the latest bar");
+  const [zoomed, back] = await view();
+  assert.ok(back < 0 && back >= -Math.ceil(zoomed * 0.1), `back to the latest bar, a little room after it (${back} of ${zoomed})`);
+  assert.equal(await page.locator('[data-zoom="latest"]').count(), 0);
+  // dragged left: room after the latest bar, half the chart at most
+  await page.mouse.move(at.x, at.y);
+  await page.mouse.down();
+  await page.mouse.move(at.x - 2_000, at.y, { steps: 10 });
+  await page.mouse.up();
+  const [span, room] = await view();
+  assert.equal(room, -Math.floor(span / 2), "dragged left as far as it goes: half the chart is room after the latest bar");
   await page.mouse.dblclick(at.x, at.y);
-  assert.deepEqual(await view(), [fit, 0], "a double-click: as it was");
+  assert.deepEqual(await view(), [fit, start], "a double-click: as it was");
   await page.mouse.click(at.x, at.y, { button: "right" });
   const dialog = page.locator("[data-chart-menu] [role=dialog]");
   await dialog.waitFor();
