@@ -334,13 +334,13 @@ function hueRules(t: Theme, scope: string): string {
 /** The light behind an orb (owner, 10-11: "the orbs need a bit of a shadow ... so they glow. even in the app tbh. like a
  * background light"): its own colour, soft, stronger on the dark ground than on the light one. Named on the orb's canvas
  * (`data-light`), not with `data-orb`, which names a whole room's accent. */
-export const BACKLIGHT = { dark: 0.26, light: 0.16 } as const; // half the first try (owner, 10-11: "too much glow, less")
+export const BACKLIGHT = { dark: 0.38, light: 0.24 } as const; // three quarters of the first try (owner, 10-11: "too much glow, less", then of half: "more than that")
 function lightRules(t: Theme, scope: string): string {
   const a = BACKLIGHT[t];
   return [...HUES, DARK_ORB]
     .map((h) => {
       const [r, g, b] = h[t];
-      return `${scope}.orb-light[data-light="${h.name}"] { --orb-light: rgba(${r}, ${g}, ${b}, ${a}); --orb-light-edge: rgba(${r}, ${g}, ${b}, ${+(a * 0.5).toFixed(3)}); --orb-light-none: rgba(${r}, ${g}, ${b}, 0); }`;
+      return `${scope}.orb-light[data-light="${h.name}"] { --orb-light: rgba(${r}, ${g}, ${b}, ${a}); --orb-light-edge: rgba(${r}, ${g}, ${b}, ${+(a * 0.55).toFixed(3)}); --orb-light-none: rgba(${r}, ${g}, ${b}, 0); }`;
     })
     .join(" ");
 }
@@ -408,7 +408,7 @@ export function stylesheet(fontUrl = "fonts/Nunito.ttf"): string {
     `@media (prefers-reduced-motion: reduce) { .orb-rank { animation: none; } }`,
     // the light behind every orb (owner, 10-11): its colour, round its body (the canvas's --orb-cy, its middle), strongest
     // just past its edge and gone before the canvas's own edge, so it never shows a square (orb/Orb.tsx)
-    `.orb-light { background: radial-gradient(closest-side at 50% var(--orb-cy, 59%), var(--orb-light) 0%, var(--orb-light) 44%, var(--orb-light-edge) 58%, var(--orb-light-none) 88%); }`,
+    `.orb-light { background: radial-gradient(closest-side at 50% var(--orb-cy, 59%), var(--orb-light) 0%, var(--orb-light) 46%, var(--orb-light-edge) 60%, var(--orb-light-none) 94%); }`,
     `.num { font-variant-numeric: tabular-nums; }`,
     // a press you can feel (owner, 10-01): down it squishes at once, up it springs back past where
     // it was; a thing just chosen bounces. The press is `translate` and `scale`, the bounce is
