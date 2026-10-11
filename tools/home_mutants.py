@@ -3062,7 +3062,7 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ], ['sessions.test.ts']),
     # a new orb's page laid out as an orb's own (owner, 10-10: "the same flavour")
     ("a new orb's name card stands apart from its orb again", 'src/orbs.tsx', [
-        ('              <Sheet bare centered part="head" c={before ?? me} key={before ? "was-head" : "now-head"} onRename={(n) => edit({ name: n })} replies={replies} standing={null} startsAs={startsAs} career={null} friends={null} between={phone ? rollCreate : undefined} />\n            </div>', '            </div>'),
+        ('              <Sheet bare centered part="head" c={before ?? me} key={before ? "was-head" : "now-head"} onRename={(n) => edit({ name: n })} replies={replies} standing={null} startsAs={startsAs} career={null} friends={null} between={rollCreate} />\n            </div>', '            </div>'),
     ], ['creator.test.ts']),
     ("a new orb's moods go back under its editor", 'src/orbs.tsx', [
         ('          <div data-moves data-orb={me.hue} style={{ ...s.panel, display: "grid", gap: 8, padding: "var(--s3)", justifyItems: "center" }}>\n            {moves}\n          </div>', '          {!making && <div data-moves data-orb={me.hue} style={{ ...s.panel, display: "grid", gap: 8, padding: "var(--s3)", justifyItems: "center" }}>{moves}</div>}'),
@@ -3073,10 +3073,20 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ('                  {!phone && profileActions}', '                  {profileActions}'),
         ('between={phone ? profileActions : undefined}', 'between={undefined}'),
     ], ['profile-layout.test.ts']),
-    ("on a phone a new orb's Roll and Create stay under the orb", 'src/orbs.tsx', [
-        ('                {!phone && rollCreate}', '                {rollCreate}'),
-        ('between={phone ? rollCreate : undefined}', 'between={undefined}'),
+    ("a new orb's Roll and Create go back under the orb", 'src/orbs.tsx', [
+        ('between={rollCreate} />', ' />'),
+        ('<Evolving me={me} from={evolve} size={phone || wide ? 120 : 136} state={worn} gesture={gesture} onDone={setShown} />', '<Evolving me={me} from={evolve} size={phone || wide ? 120 : 136} state={worn} gesture={gesture} onDone={setShown} />{rollCreate}'),
     ], ['creator.test.ts']),
+    ("the name's dice far from its name again", 'src/orbs.tsx', [
+        ('flex: centered ? "0 1 auto" : "1 1 120px", width: centered && width ? width : undefined,', 'flex: "1 1 120px", width: undefined,'),
+    ], ['creator.test.ts']),
+    ("the dice a pill again", 'src/orbs.tsx', [
+        ('style={{ ...s.btn, ...s.small, display: "inline-flex", alignItems: "center", gap: 6, color: "var(--text-1)" }}', 'style={{ ...s.chip, display: "inline-flex", alignItems: "center", gap: 6, color: "var(--text-1)" }}'),
+    ], ['creator.test.ts']),
+    ("an orb's level goes back under its age", 'src/orbs.tsx', [
+        ('        {grown && <LevelUp c={c} g={grown} />}\n', ''),
+        ('  const lede = (\n    <>\n', '  const lede = (\n    <>\n      {grown && <LevelUp c={c} g={grown} />}\n'),
+    ], ['profile-layout.test.ts']),
     ("the composer's text box narrow again", 'src/rooms/Talk.tsx', [
         ('style={{ display: "block", width: "100%", minWidth: 0, resize: "none",', 'style={{ display: "block", width: "100%", maxWidth: 170, minWidth: 0, resize: "none",'),
     ], ['attach.test.ts']),

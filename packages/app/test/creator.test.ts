@@ -179,14 +179,25 @@ for (const size of ["desk", "phone"] as const) {
     ]);
     assert.ok(card && canvas && roll && create && moves && dna);
     assert.ok(roll.y >= canvas.y + canvas.height - 1 && create.y >= canvas.y + canvas.height - 1, "Roll and Create under the orb");
-    if (size === "phone") {
-      // under its title and level, over what it does, and a little smaller (owner, 10-10: "put roll everything button and
-      // create "orbname" buttons right in between the description of the orb and "starts as the senior: your first" ...
-      // make the rectangles and font a bit smaller too")
-      const [title, bio] = await Promise.all([hero.locator("[data-title]").boundingBox(), hero.locator("[data-bio]").boundingBox()]);
-      assert.ok(title && bio && roll.y >= title.y + title.height - 1 && roll.y + roll.height <= bio.y + 1, "Roll and Create under its level, over what it does");
-      assert.ok(roll.height <= 32 && create.height <= 32, `smaller (${Math.round(roll.height)} and ${Math.round(create.height)} px)`);
-    }
+    // under its title and level, over what it does, and a little smaller, on a desk as on a phone (owner, 10-10: "put roll
+    // everything button and create "orbname" buttons right in between the description of the orb and "starts as the
+    // senior: your first" ... make the rectangles and font a bit smaller too"; then "even on desktop")
+    const [title, bio] = await Promise.all([hero.locator("[data-title]").boundingBox(), hero.locator("[data-bio]").boundingBox()]);
+    assert.ok(title && bio && roll.y >= title.y + title.height - 1 && roll.y + roll.height <= bio.y + 1, "Roll and Create under its level, over what it does");
+    assert.ok(roll.height <= 32 && create.height <= 32, `smaller (${Math.round(roll.height)} and ${Math.round(create.height)} px)`);
+    // the name's dice a rectangle, right beside the name (owner, 10-10: "fix the roll name icon, make it a rectangle like
+    // the others and put it closer to name"): the field as wide as the name, not the card
+    const [field, dice] = await Promise.all([hero.getByRole("textbox", { name: "Name" }).boundingBox(), hero.getByRole("button", { name: "Roll a name" }).boundingBox()]);
+    // (the name's own width, in the field's type: a field as wide as the card holds its name in the middle, far from the
+    // dice, though its box touches them; 44 px at least, a finger's width, for a short name)
+    const words = await hero.getByRole("textbox", { name: "Name" }).evaluate((el) => {
+      const input = el as HTMLInputElement;
+      const ctx = document.createElement("canvas").getContext("2d")!;
+      ctx.font = getComputedStyle(input).font;
+      return ctx.measureText(input.value || input.placeholder).width;
+    });
+    assert.ok(field && dice && field.width <= Math.max(44, words + 24) && dice.x - (field.x + field.width) <= 16, `the dice beside the name (the field ${field ? Math.round(field.width) : "?"} px for ${Math.round(words)} px of name; ${field && dice ? Math.round(dice.x - field.x - field.width) : "?"} px to the dice)`);
+    assert.ok(parseFloat(await hero.getByRole("button", { name: "Roll a name" }).evaluate((el) => getComputedStyle(el).borderTopLeftRadius)) <= 10, "the dice a rectangle");
     assert.ok(card.y + card.height <= moves.y + 1 && moves.y + moves.height <= dna.y + 1, "the orb's card, its moods, then its DNA");
     assert.deepEqual([await page.locator("[data-sheet-body]").count(), await page.locator("[data-sheet-skills]").count()], [1, 1], "its stats in two cards");
     if (size === "desk") assert.ok(dna.y + dna.height <= page.viewportSize()!.height, `the card, the moods and the DNA in a desk's height (the DNA ends at ${Math.round(dna.y + dna.height)})`);

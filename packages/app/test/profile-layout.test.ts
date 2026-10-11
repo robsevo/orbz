@@ -87,6 +87,12 @@ test("the profile uses one Career-like hero, then compact controls and DNA", { s
         const [lv, bio] = await Promise.all([page.locator("[data-sheet-head] [data-level]").boundingBox(), page.locator("[data-sheet-head] [data-bio]").boundingBox()]);
         assert.ok(lv && bio && actions.y >= lv.y + lv.height - 1 && actions.y + actions.height <= bio.y + 1, "on a phone Chat and Career under its level, over what it does");
       }
+      // its level right under what it is, small, its bar showing (owner, 10-10: "put lv 1 4 cp to lv. smaller and right under
+      // where it says lets say the techy personal assistant"): it stood under its age, and centred on a phone its bar was 0 px
+      const [titleBox, levelBox, bar] = await Promise.all([page.locator("[data-sheet-head] [data-title]").boundingBox(), page.locator("[data-sheet-head] [data-level]").boundingBox(), page.locator("[data-sheet-head] [data-level] [role=progressbar]").boundingBox()]);
+      assert.ok(titleBox && levelBox && bar);
+      assert.ok(levelBox.y >= titleBox.y + titleBox.height - 1 && levelBox.y - (titleBox.y + titleBox.height) <= 10, `its level right under its title (${Math.round(levelBox.y - titleBox.y - titleBox.height)} px below)`);
+      assert.ok(levelBox.height <= 20 && bar.width >= 60, `small, its bar showing (${Math.round(levelBox.height)} px tall, the bar ${Math.round(bar.width)} px)`);
       // small and square, as a new orb's are (owner, 10-10: "make the chat and career buttons smaller, and square like the new
       // orb page buttons"): a pill's corners were half its height
       const chat = await page.locator("[data-chat-with]").evaluate((el) => ({ r: parseFloat(getComputedStyle(el).borderTopLeftRadius), h: el.getBoundingClientRect().height }));

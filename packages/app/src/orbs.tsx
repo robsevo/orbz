@@ -120,9 +120,12 @@ function Die({ onRoll, label, said = label }: { onRoll: () => void; label: strin
       }}
       aria-label={said}
       title={said}
-      style={{ ...s.chip, display: "inline-flex", alignItems: "center", gap: 6, color: "var(--text-1)" }}
+      className="orbs-small"
+      // a small rectangle, as the page's other buttons (owner, 10-10: "fix the roll name icon, make it a rectangle like the
+      // others"); orbs-small keeps a finger's reach
+      style={{ ...s.btn, ...s.small, display: "inline-flex", alignItems: "center", gap: 6, color: "var(--text-1)" }}
     >
-      <DieIcon spins={spins} />
+      <DieIcon spins={spins} size={15} />
       {label}
     </button>
   );
@@ -393,13 +396,15 @@ function LevelUp({ c, g }: { c: Character; g: Growth }) {
   const into = g.level.next === null ? 1 : (g.level.xp - g.level.at) / span;
   const gave = [...Object.entries(g.last.traits).map(([k, n]) => `+${n} ${k}`), ...Object.entries(g.last.skills).map(([k, n]) => `+${n} ${k}`)];
   return (
-    <div data-level={g.level.level} style={{ display: "grid", gap: 6 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <span style={{ padding: "2px 10px", borderRadius: 999, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1px var(--accent)", font: "800 13px/20px var(--font)", color: "var(--text-1)" }}>Lv. {g.level.level}</span>
-        <span role="progressbar" aria-label={`Level ${g.level.level}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(into * 100)} style={{ position: "relative", flex: "1 1 auto", height: 6, borderRadius: 3, background: "var(--fill-2)" }}>
+    // small, under its title (owner, 10-10), and as wide as it may be: centred, a grid item shrinks to its words, and the
+    // bar between them shrank to nothing on a phone
+    <div data-level={g.level.level} style={{ display: "grid", gap: 6, width: "min(100%, 280px)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{ padding: "1px 8px", borderRadius: 999, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1px var(--accent)", font: "800 12px/16px var(--font)", color: "var(--text-1)" }}>Lv. {g.level.level}</span>
+        <span role="progressbar" aria-label={`Level ${g.level.level}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(into * 100)} style={{ position: "relative", flex: "1 1 auto", height: 5, borderRadius: 3, background: "var(--fill-2)" }}>
           <i style={{ position: "absolute", inset: 0, width: `${Math.round(into * 100)}%`, borderRadius: 3, background: "var(--accent)" }} />
         </span>
-        <span className="num" style={{ font: "600 12px/16px var(--font)", color: "var(--text-3)", whiteSpace: "nowrap" }}>{g.level.next === null ? "top level" : `${(g.level.next - g.level.xp).toLocaleString("en-GB")} XP to Lv. ${g.level.level + 1}`}</span>
+        <span className="num" style={{ font: "600 11px/14px var(--font)", color: "var(--text-3)", whiteSpace: "nowrap" }}>{g.level.next === null ? "top level" : `${(g.level.next - g.level.xp).toLocaleString("en-GB")} XP to Lv. ${g.level.level + 1}`}</span>
       </div>
       {open && (
         <div role="status" data-level-up style={{ display: "grid", gap: 4, padding: "10px 14px", borderRadius: 14, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)", animation: "orbs-stamp 520ms var(--m-spring)" }}>
@@ -407,6 +412,49 @@ function LevelUp({ c, g }: { c: Character; g: Growth }) {
           {gave.length > 0 && <span style={{ font: "600 13px/18px var(--font)", color: "var(--text-2)" }}>{gave.join(" · ")}</span>}
         </div>
       )}
+    </div>
+  );
+}
+
+/** A new orb's name, typed where it shows. Centred, the field is as wide as the name and its dice right beside it (owner,
+ * 10-10: "put it closer to name on mobile"): a field is as wide as its box whatever it holds, so the name is measured in
+ * the field's own type as it is drawn (a phone's fields are held to 16 px, smaller than the name's own 26), again when
+ * the font arrives. */
+function NameField({ value, onRename, centered, font }: { value: string; onRename: (name: string) => void; centered: boolean; font: CSSProperties }) {
+  const field = useRef<HTMLInputElement>(null);
+  const [width, setWidth] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const el = field.current;
+    if (!el || !centered) return;
+    let live = true;
+    const fit = (): void => {
+      const ctx = document.createElement("canvas").getContext("2d");
+      if (!ctx || !live) return;
+      const cs = getComputedStyle(el);
+      ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+      setWidth(Math.max(44, Math.ceil(ctx.measureText(value || el.placeholder).width) + 6)); // 44: a finger's width for "Ed"
+    };
+    fit();
+    // and once its font has arrived: `ready` alone can settle before the font has even begun to load
+    void document.fonts?.ready.then(fit);
+    document.fonts?.addEventListener?.("loadingdone", fit);
+    return () => {
+      live = false;
+      document.fonts?.removeEventListener?.("loadingdone", fit);
+    };
+  }, [value, centered]);
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, ...(centered && { width: "100%", justifyContent: "center" }) }}>
+      <input
+        ref={field}
+        value={value}
+        onChange={(e) => onRename(e.target.value.slice(0, 16))}
+        aria-label="Name"
+        placeholder="Name"
+        size={1}
+        style={{ ...font, flex: centered ? "0 1 auto" : "1 1 120px", width: centered && width ? width : undefined, minWidth: 0, maxWidth: "100%", background: "transparent", border: 0, outline: 0, padding: 0, ...(centered && { textAlign: "center" }) }}
+      />
+      <Die label="Name" said="Roll a name" onRoll={() => onRename(orbName(() => Math.random()))} />
     </div>
   );
 }
@@ -429,19 +477,12 @@ function Sheet({ c, onRename, replies, standing, startsAs, career, applying, fri
   const head = (
       <div style={{ display: "grid", gap: 4, ...(centered && { justifyItems: "center", textAlign: "center" }) }}>
         {onRename ? (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, ...(centered && { width: "100%" }) }}>
-            <input
-              value={c.name}
-              onChange={(e) => onRename(e.target.value.slice(0, 16))}
-              aria-label="Name"
-              placeholder="Name"
-              size={1}
-              style={{ ...name, flex: "1 1 120px", minWidth: 0, background: "transparent", border: 0, outline: 0, padding: 0, ...(centered && { textAlign: "center" }) }}
-            />
-            <Die label="Name" said="Roll a name" onRoll={() => onRename(orbName(() => Math.random()))} />
-          </div>
+          <NameField value={c.name} onRename={onRename} centered={centered} font={name} />
         ) : <h2 style={{ ...name, margin: 0, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</h2>}
         <span data-title style={{ font: "600 15px/20px var(--font)", color: "var(--text-1)" }}>{cap(sh.title)}</span>
+        {/* its level right under what it is, small (owner, 10-10: "put lv 1 4 cp to lv. smaller and right under where it
+            says lets say the techy personal assistant") */}
+        {grown && <LevelUp c={c} g={grown} />}
         <span style={{ font: "400 13px/18px var(--font)", color: "var(--text-3)" }}>
           {onRename
             ? "Not in the office yet · fixed once created"
@@ -466,7 +507,6 @@ function Sheet({ c, onRename, replies, standing, startsAs, career, applying, fri
   );
   const lede = (
     <>
-      {grown && <LevelUp c={c} g={grown} />}
       {/* on a phone, its buttons: under its level, over what it does (owner, 10-10) */}
       {between}
       <p data-bio style={{ margin: 0, font: "400 15px/21px var(--font)", color: "var(--text-2)", textWrap: "pretty" }}>{grew && grownSays(grew) ? `${sh.bio} ${grownSays(grew)}` : sh.bio}</p>
@@ -1364,15 +1404,15 @@ function App() {
       </button>
     </div>
   );
-  // a new orb's Roll and Create: under the orb on a desk; on a phone a little smaller, under its level, over what it does
-  // (owner, 10-10: "put roll everything button and create "orbname" buttons right in between the description of the orb
-  // and "starts as the senior: your first" ... make the rectangles and font a bit smaller too")
+  // a new orb's Roll and Create, small and square, under its level and over what it does (owner, 10-10: "put roll
+  // everything button and create "orbname" buttons right in between the description of the orb and "starts as the senior:
+  // your first" ... make the rectangles and font a bit smaller too"; then "even on desktop")
   const rollCreate = (
     <OneLine gap={8}>
       <button
         data-sound="roll"
-        className={phone ? "orbs-small" : undefined}
-        style={{ ...s.btn, ...(phone && s.small), display: "inline-flex", alignItems: "center", gap: phone ? 6 : 8 }}
+        className="orbs-small"
+        style={{ ...s.btn, ...s.small, display: "inline-flex", alignItems: "center", gap: 6 }}
         onClick={() => {
           setEvolve((x) => ({ c: me, n: (x?.n ?? 0) + 1 }));
           edit(fresh());
@@ -1381,10 +1421,10 @@ function App() {
           window.setTimeout(() => play("hop"), calm() ? 0 : REVEAL);
         }}
       >
-        <DieIcon size={phone ? 15 : 18} spins={rolls} />
+        <DieIcon size={15} spins={rolls} />
         Roll everything
       </button>
-      <button data-sound="create" disabled={Boolean(blocked)} onClick={create} className={phone ? "orbs-small" : undefined} style={{ ...s.btn, ...(phone && s.small), background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)", fontWeight: 800, opacity: blocked ? 0.5 : 1, cursor: blocked ? "not-allowed" : "pointer" }}>
+      <button data-sound="create" disabled={Boolean(blocked)} onClick={create} className="orbs-small" style={{ ...s.btn, ...s.small, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)", fontWeight: 800, opacity: blocked ? 0.5 : 1, cursor: blocked ? "not-allowed" : "pointer" }}>
         Create {name || "your orb"}
       </button>
     </OneLine>
@@ -1645,9 +1685,8 @@ function App() {
                     {WORN[live.mood].words}
                   </span>
                 )}
-                {!phone && rollCreate}
               </div>
-              <Sheet bare centered part="head" c={before ?? me} key={before ? "was-head" : "now-head"} onRename={(n) => edit({ name: n })} replies={replies} standing={null} startsAs={startsAs} career={null} friends={null} between={phone ? rollCreate : undefined} />
+              <Sheet bare centered part="head" c={before ?? me} key={before ? "was-head" : "now-head"} onRename={(n) => edit({ name: n })} replies={replies} standing={null} startsAs={startsAs} career={null} friends={null} between={rollCreate} />
             </div>
             {(!wide || (blocked && !before)) && (
               <p style={{ margin: 0, font: "400 13px/18px var(--font)", color: blocked ? "var(--alert)" : "var(--text-3)", textAlign: "center" }}>
