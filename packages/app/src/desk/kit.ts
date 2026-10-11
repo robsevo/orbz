@@ -1,6 +1,6 @@
 // The desk's shared look and small arithmetic (PLAN 5.22-5.27): the cards, labels and buttons every panel uses,
-// in the app's own manner; dollars and percents as a desk writes them; an address shortened; an EMA for the chart's
-// lines; the strategies a builder starts from. Pure, so a test can read it.
+// in the app's own manner; dollars and percents as a desk writes them; an address shortened; the strategies a builder
+// starts from (the chart's indicators are ui/studies.ts). Pure, so a test can read it.
 import type { CSSProperties } from "react";
 import type { DeskSpec } from "../home/link.ts";
 
@@ -34,16 +34,6 @@ export const ago = (at: number, now = Date.now()): string => {
   const s = Math.max(0, Math.round((now - at) / 1000));
   return s < 60 ? `${s}s ago` : s < 3600 ? `${Math.round(s / 60)}m ago` : s < 86_400 ? `${Math.round(s / 3600)}h ago` : `${Math.round(s / 86_400)}d ago`;
 };
-
-/** An exponential average for the chart's lines (the home's strategies read their own: desk/indicators.ts). */
-export function ema(xs: readonly number[], n: number): number[] {
-  const out = new Array<number>(xs.length).fill(NaN);
-  if (xs.length < n) return out;
-  let prev = xs.slice(0, n).reduce((a, b) => a + b, 0) / n;
-  out[n - 1] = prev;
-  for (let i = n; i < xs.length; i++) out[i] = prev = xs[i]! * (2 / (n + 1)) + prev * (1 - 2 / (n + 1));
-  return out;
-}
 
 export const SYMBOLS = ["BTC", "ETH", "SOL", "BNB", "LINK", "DOGE", "AVAX", "UNI", "AAVE"] as const;
 export const TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "1d"] as const;

@@ -14,7 +14,8 @@ import { CHAINS } from "./desk/chains.ts";
 import { DEX_CHAINS, isDexChain, isTokenAddress, readTokenKey, tokenKey } from "./desk/dex.ts";
 import { DeskError, type Settings } from "./desk/desk.ts";
 import { SwapError } from "./desk/swaps.ts";
-import { SYMBOLS, TIMEFRAMES, type Strategy, type Timeframe } from "./desk/strategy.ts";
+import { barsProblem, drawn, marksOn } from "./desk/chart.ts";
+import { problemOf, SYMBOLS, TIMEFRAMES, type Strategy, type Timeframe } from "./desk/strategy.ts";
 import { WalletError } from "./desk/wallets.ts";
 import { recentWork } from "./worklog.ts";
 import { spawn } from "node:child_process";
@@ -673,6 +674,12 @@ async function handle(
           chains: CHAINS.map((c) => ({ id: c.id, name: c.name, kind: c.kind, ...(c.kind === "evm" && { chainId: c.chainId }), explorer: c.explorer, tokens: c.tokens.map((t) => ({ symbol: t.symbol, decimals: t.decimals })) })),
         };
       }
+      // what was done on a market (PLAN 5.32): each orb's paper fills, the real trades that went, the strategies run on it
+      if (method === "GET" && parts[1] === "marks" && parts.length === 2) {
+        const market = url.searchParams.get("market") ?? "";
+        if (!((SYMBOLS as readonly string[]).includes(market) || readTokenKey(market))) no(400, "a market the desk knows: a major by its symbol, or a coin as chain:address");
+        return marksOn(market, { fills: home.events.ofType("desk.fill"), swaps: home.swaps.list(1000), books: home.desk.books() });
+      }
       if (method === "GET" && parts[1] === "candles") {
         const symbol = url.searchParams.get("symbol") ?? "BTC";
         const tf = (url.searchParams.get("tf") ?? "1h") as Timeframe;
@@ -738,6 +745,13 @@ async function handle(
       }
       if (method === "POST" && parts[1] === "backtest" && parts.length === 2) {
         const b = await body(req);
+        // a strategy over the bars a chart shows (PLAN 5.32): what its rules read there and the trades they make
+        if (b.bars !== undefined) {
+          const problem = problemOf(b.strategy) ?? barsProblem(b.bars);
+          if (problem) no(400, problem);
+          const d = drawn(b.strategy as Strategy, b.bars as Parameters<typeof drawn>[1], home.clock.now());
+          return { backtest: { metrics: d.metrics, trades: d.trades, series: d.series, bars: d.bars } };
+        }
         const bt = await home.desk.backtest(b.strategy as Strategy);
         return { backtest: { metrics: bt.metrics, trades: bt.trades.slice(-200), equity: bt.equity.filter((_, i, all) => all.length <= 400 || i % Math.ceil(all.length / 400) === 0 || i === all.length - 1) } };
       }

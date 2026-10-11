@@ -196,7 +196,7 @@ export function DeskRoom({ home, office, moods, go, tab: opening = null }: { hom
       ) : (
         <Limits home={home} settings={s.settings} reload={load} />
       )}
-      {screen && s && <TokenDesk home={home} prices={prices} chains={s.chains} crew={crew} wallet={wallet} openWallet={openWallet} start={screenAt} close={() => setScreen(false)} />}
+      {screen && s && <TokenDesk home={home} prices={prices} chains={s.chains} crew={crew} strategies={s.strategies} wallet={wallet} openWallet={openWallet} start={screenAt} close={() => setScreen(false)} />}
       {sheet && <WalletSheet home={home} wallet={wallet} close={() => setSheet(false)} />}
     </div>
   );

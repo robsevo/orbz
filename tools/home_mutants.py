@@ -462,6 +462,19 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("a losing trade counted as a win", "src/desk/desk.ts", [
         ("      if (pnl > 0) p.wins++;", "      if (pnl !== 0) p.wins++;"),
     ], ["dex.test.ts"]),
+    # what a chart draws (PLAN 5.32): a strategy on the chart's own closed bars; what was really done on a market
+    ("a strategy drawn on the bar still forming", "src/desk/chart.ts", [
+        ("  const closed = bars.filter((b) => b.t + TIMEFRAME_MS[s.timeframe] <= now);", "  const closed = bars.filter(() => now > 0);"),
+    ], ["chart.test.ts"]),
+    ("bars handed in out of order are read", "src/desk/chart.ts", [
+        ("    if (!Number.isInteger(k.t) || k.t <= last) return", "    if (!Number.isInteger(k.t)) return"),
+    ], ["chart.test.ts"]),
+    ("a real trade that never went is drawn", "src/desk/chart.ts", [
+        ('.filter((s) => (s.state === "sent" || s.state === "confirmed") && (isIt(s.chain, s.buy) || isIt(s.chain, s.sell)))', ".filter((s) => isIt(s.chain, s.buy) || isIt(s.chain, s.sell))"),
+    ], ["chart.test.ts"]),
+    ("a coin's address on another chain is taken for it", "src/desk/chart.ts", [
+        ("    if (chainId !== key.chain) return false;\n", ""),
+    ], ["chart.test.ts"]),
     # the app opened in this machine's own browser, for a wallet (owner, 10-11)
     ("a browser opens here for another device", "src/api.ts", [
         ('    if (door.remote) throw new HttpError(403, "a browser is opened only on the machine the home runs on");\n', ""),
@@ -3324,6 +3337,41 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("the swap form's any coin is ignored", "src/desk/Trade.tsx", [
         ("  const to = buy === ANY ? buyAt.trim() : buy;", "  const to = buy;"),
     ], ["desk-view.test.ts"]),
+    # the chart for pros (PLAN 5.32; owner, 10-11): indicators the home's, the bar's clock, a strategy on paper or live,
+    # its menu by a right-click, a long press or ƒx, kept in this browser
+    ("the chart's RSI smoothed its own way", "src/ui/studies.ts", [
+        ("    gain = (gain * (n - 1) + Math.max(0, d)) / n;", "    gain = (gain * (n - 2) + Math.max(0, d)) / (n - 1);"),
+    ], ["studies.test.ts"]),
+    ("a study's colour worn twice", "src/ui/studies.ts", [
+        ("  const hue = PALETTE.find((h) => !worn.has(h)) ?? PALETTE[list.length % PALETTE.length]!;", "  const hue = PALETTE[0]!;"),
+    ], ["studies.test.ts"]),
+    ("the bar's clock counts to its open", "src/ui/candles.ts", [
+        ("  return ms ? Math.floor(now / ms) * ms + ms : null;", "  return ms ? Math.floor(now / ms) * ms : null;"),
+    ], ["studies.test.ts", "chart-view.test.ts"]),
+    ("live shows an orb's paper trades", "src/desk/layers.ts", [
+        ('.filter((f) => f.kind === "real" && f.orb === (s.by ?? null));', ".filter((f) => f.orb === (s.by ?? null));"),
+    ], ["layers.test.ts"]),
+    ("a strategy's series drawn by place, not time", "src/desk/layers.ts", [
+        ("    const values = byTime(o.candles, o.drawn!.sent, x.values);", "    const values = [...x.values];"),
+    ], ["layers.test.ts"]),
+    ("a right-click opens nothing", "src/ui/Candles.tsx", [
+        ("          unpress();\n          menu({ x: e.clientX, y: e.clientY });\n", "          unpress();\n"),
+    ], ["chart-view.test.ts"]),
+    ("a long press opens nothing", "src/ui/Candles.tsx", [
+        ("timer: window.setTimeout(() => (unpress(), menu(p)), LONG_PRESS)", "timer: window.setTimeout(() => unpress(), LONG_PRESS)"),
+    ], ["chart-view.test.ts"]),
+    ("the chart's menu opens away from where it was pressed", "src/desk/ChartMenu.tsx", [
+        ("setPlace({ left: Math.max(8, Math.min(at.x, window.innerWidth - r.width - 8)),", "setPlace({ left: 8,"),
+    ], ["chart-view.test.ts"]),
+    ("Escape closes the screen under the chart's menu", "src/desk/ChartMenu.tsx", [
+        ("      e.stopPropagation();\n", ""),
+    ], ["chart-view.test.ts"]),
+    ("the chart forgets what it wore", "src/ui/studies.ts", [
+        ("    globalThis.localStorage?.setItem(KEY, JSON.stringify(k));", "    void k;"),
+    ], ["chart-view.test.ts"]),
+    ("a strategy drawn on paper shows no trades", "src/desk/layers.ts", [
+        ("  for (const t of d?.trades ?? []) {", "  for (const t of (d?.trades ?? []).slice(0, 0)) {"),
+    ], ["layers.test.ts", "chart-view.test.ts"]),
     # the war room's screen (owner, 10-11): pressed it opens; an address pasted opens its coin; Connect wallet connects
     ("the war room's screen opens nothing", "src/desk/Room.tsx", [
         ("onScreen={() => setScreen(true)}", "onScreen={() => undefined}"),

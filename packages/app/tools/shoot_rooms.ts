@@ -28,11 +28,13 @@ const ROOMS: [string, string][] = [
   ["org", "#/org"], ["recruiter", "#/recruiter"], ["cv", "#/recruiter"], ["career", "#/career/Max"], ["settings", "#/settings"],
 ];
 // the desk as it opens, each tab, and the war room's screen: open on what is trending, then a pump.fun coin's page
-const DESK_ROOMS: [string, string][] = [["desk", "#/desk"], ...["trade", "books", "strategies", "desk", "limits"].map((tab) => [`desk-${tab}`, "#/desk"] as [string, string]), ["desk-screen", "#/desk"], ["desk-coin", "#/desk"]];
+// and its chart for pros (PLAN 5.32): studies over the price and in panes, a strategy drawn on paper, its menu open
+const DESK_ROOMS: [string, string][] = [["desk", "#/desk"], ...["trade", "books", "strategies", "desk", "limits"].map((tab) => [`desk-${tab}`, "#/desk"] as [string, string]), ["desk-screen", "#/desk"], ["desk-coin", "#/desk"], ["desk-chart", "#/desk"], ["desk-chart-menu", "#/desk"]];
 const COIN = "9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump";
 const only = arg("--rooms")?.split(",");
 const sizes = (arg("--sizes") ?? "desk,phone").split(",");
 const cleanups: (() => unknown)[] = [];
+let drawnStrategy = 0; // the strategy the chart's shots draw
 const t = { after: (f: () => unknown) => void cleanups.push(f) } as unknown as Parameters<typeof fakeModel>[0];
 
 const out = mkdtempSync(join(tmpdir(), "orbs-shoot-rooms-"));
@@ -85,6 +87,7 @@ const desk = async (): Promise<void> => {
   const ema = (a: number, b: number, op: string) => ({ all: [{ left: { kind: "ema", period: a }, op, right: { kind: "ema", period: b } }] }) as never;
   const spec = { name: "EMA cross · BTC 1h", symbol: "BTC", timeframe: "1h", entry: ema(9, 21, "crosses_above"), exit: ema(9, 21, "crosses_below"), stopLossPct: 3, takeProfitPct: 6, sizePct: 50 } as never;
   const row = h.desk.save(spec, "quinn", await h.desk.backtest(spec));
+  drawnStrategy = row.id;
   await h.desk.run(row.id, "kit");
   await h.desk.paperTrade("vic", "ETH", "buy", 1_500);
   h.desk.note("oz", "SOL", "Unlocks this month", "About 2% of the supply unlocks on the 28th; the last two unlocks were sold into within a week.");
@@ -103,19 +106,29 @@ for (const size of sizes) {
     await page.evaluate((x) => (location.hash = x), hash);
     await page.waitForTimeout(1800);
     // a tab of the desk's own; the war room's screen, pressed (on a phone, from the floor's own tab)
-    if (room === "desk-screen" || room === "desk-coin") {
+    if (room === "desk-screen" || room === "desk-coin" || room.startsWith("desk-chart")) {
       if (await page.locator('[data-desk-tab="floor"]').count()) await page.locator('[data-desk-tab="floor"]').click();
+      const chart = room.startsWith("desk-chart")
+        ? { studies: [{ id: "bb1", kind: "bb", n: [20, 2], hue: "violet" }, { id: "ema1", kind: "ema", n: [50], hue: "amber" }, { id: "rsi1", kind: "rsi", n: [14], hue: "cyan" }, { id: "macd1", kind: "macd", n: [12, 26, 9], hue: "pink" }], strategies: [{ id: drawnStrategy, mode: "paper" }] }
+        : null;
+      await page.evaluate((c) => (c ? localStorage.setItem("orbs.chart", JSON.stringify(c)) : localStorage.removeItem("orbs.chart")), chart);
       await page.locator("[data-war-screen]").click();
       await page.locator("[data-token-desk]").waitFor({ timeout: 20_000 });
-      if (room === "desk-coin") {
-        await page.locator("[data-token-search]").fill(COIN);
+      if (room !== "desk-screen") {
+        if (!(await page.locator("[data-token-page] [data-candles]").count())) await page.locator("[data-token-search]").fill(COIN);
         await page.locator("[data-token-page] [data-candles]").waitFor({ timeout: 60_000 }).catch(() => undefined);
+        if (room === "desk-chart-menu") {
+          await page.waitForTimeout(1500);
+          const b = await page.locator("[data-token-page] [data-candles] svg[data-panes]").boundingBox();
+          if (b) await page.mouse.click(b.x + b.width * 0.3, b.y + 40, { button: "right" });
+        }
       } else {
         await page.locator("[data-token-row]").first().waitFor({ timeout: 30_000 }).catch(() => undefined);
       }
       await page.waitForTimeout(2500);
       console.log(room, size, "findings:", JSON.stringify(await measure(page)).slice(0, 300));
       await page.screenshot({ path: join(dir, `${room}-${size}.png`) });
+      if (await page.locator("[data-chart-menu]").count()) await page.keyboard.press("Escape");
       await page.locator("[data-token-close]").click();
       continue;
     }

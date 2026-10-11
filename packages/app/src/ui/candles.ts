@@ -85,3 +85,28 @@ export function timeTicks(times: readonly number[], count = 5): { i: number; tex
   }
   return out;
 }
+
+/** A timeframe's bar, in milliseconds. */
+export const TF_MS: Record<string, number> = { "1m": MIN, "5m": 5 * MIN, "15m": 15 * MIN, "1h": HOUR, "4h": 4 * HOUR, "1d": DAY };
+
+/** When the bar forming at `now` closes (owner, 10-11: "time before a bar closes too"): bars begin on whole steps of
+ * their timeframe from the epoch, in UTC, as the feeds count them, so a 4-hour bar closes at 00:00, 04:00, 08:00 UTC. */
+export function closesAt(tf: string, now: number): number | null {
+  const ms = TF_MS[tf];
+  return ms ? Math.floor(now / ms) * ms + ms : null;
+}
+
+/** Time left as a screen of numbers counts it down: 04:32 under an hour, 3:14:32 from an hour up. */
+export function leftText(ms: number): string {
+  const s = Math.max(0, Math.ceil(ms / 1000));
+  const two = (n: number): string => String(n).padStart(2, "0");
+  const h = Math.floor(s / 3600);
+  return h ? `${h}:${two(Math.floor((s % 3600) / 60))}:${two(s % 60)}` : `${two(Math.floor(s / 60))}:${two(s % 60)}`;
+}
+
+/** A pane's number (an RSI, a MACD of a coin worth a millionth of a dollar): two places from 1 up, three figures under. */
+export function paneText(v: number): string {
+  if (!Number.isFinite(v)) return "–";
+  const a = Math.abs(v);
+  return a >= 1 || a === 0 ? v.toFixed(2) : v.toPrecision(3);
+}

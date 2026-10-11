@@ -260,6 +260,15 @@ export type DexPair = {
   image: string | null; links: { label: string; url: string }[];
 };
 export type DexTrade = { at: number; side: "buy" | "sell"; usd: number; amount: number; priceUsd: number; tx: string; from: string | null };
+/** A strategy over the bars a chart shows (PLAN 5.32): the series its rules read, one value to each closed bar, and the
+ * trades its rules make there as the paper desk makes them. */
+export type DeskDrawn = { metrics: DeskMetrics; trades: DeskTrade[]; series: { series: DeskSeries; words: string; values: number[] }[]; bars: number };
+/** A fill on a market: an orb's on paper, or a real trade that went (an orb's, or yours: `orb` null). */
+export type DeskFill = {
+  kind: "paper" | "real"; orb: string | null; at: number; side: "buy" | "sell"; px: number | null; qty: number | null; usd: number | null;
+  book?: number; strategy?: number | null; swap?: number; state?: string; tx?: string | null; why?: string;
+};
+export type DeskMarks = { fills: DeskFill[]; runs: { book: number; orb: string; strategy: number; startedAt: number; stoppedAt: number | null; state: "live" | "stopped" }[] };
 export type TokenSafety = { checked: string[]; flags: { level: "warn" | "note"; words: string }[] };
 export type DeskBuilt = { kind: "evm"; chainId: number; approve: { to: string; data: string } | null; tx: { to: string; data: string; value: string; gas: string | null } } | { kind: "solana"; transaction: string };
 
@@ -309,6 +318,10 @@ export interface Office {
    * of you): told in its chat, it walks to the war room's screen. */
   sendOrb(o: { orb: string; market: string; mode: "paper" | "real"; budget?: number | null; note?: string }): Promise<{ orb: string; market: string; label: string; mode: string; budget: number | null }>;
   backtest(spec: DeskSpec): Promise<{ metrics: DeskMetrics; trades: DeskTrade[]; equity: { t: number; equity: number }[] }>;
+  /** A strategy over a chart's own bars (the bar still forming left out by the home), and what was done on a market:
+   * each orb's paper fills, the real trades that went, the strategies run on it (PLAN 5.32). */
+  drawStrategy(spec: DeskSpec, bars: DeskCandle[]): Promise<DeskDrawn>;
+  deskMarks(market: string): Promise<DeskMarks>;
   saveStrategy(spec: DeskSpec): Promise<DeskStrategy>;
   archiveStrategy(id: number): Promise<void>;
   runStrategy(id: number, orb: string): Promise<DeskBook>;
@@ -664,6 +677,12 @@ export function doorOffice(base: Character): Office {
     },
     async backtest(spec) {
       return (await call<{ backtest: { metrics: DeskMetrics; trades: DeskTrade[]; equity: { t: number; equity: number }[] } }>("../desk/backtest", { method: "POST", body: JSON.stringify({ strategy: spec }) })).backtest;
+    },
+    async drawStrategy(spec, bars) {
+      return (await call<{ backtest: DeskDrawn }>("../desk/backtest", { method: "POST", body: JSON.stringify({ strategy: spec, bars }) })).backtest;
+    },
+    async deskMarks(market) {
+      return call<DeskMarks>(`../desk/marks?market=${encodeURIComponent(market)}`);
     },
     async saveStrategy(spec) {
       return (await call<{ strategy: DeskStrategy }>("../desk/strategies", { method: "POST", body: JSON.stringify({ strategy: spec }) })).strategy;

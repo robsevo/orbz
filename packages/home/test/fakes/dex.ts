@@ -20,7 +20,7 @@ export const screener = (o: { chain?: string; dex?: string; pair: string; base: 
 });
 
 /** DexScreener's and GeckoTerminal's public APIs as a test sets them, routed by path; every URL asked for kept. */
-export function standInDexFetch(o: { price?: () => string; fail?: () => boolean } = {}): typeof fetch & { urls: string[] } {
+export function standInDexFetch(o: { price?: () => string; fail?: () => boolean; chart?: () => number } = {}): typeof fetch & { urls: string[] } {
   const urls: string[] = [];
   const f = (async (input: string | URL | Request) => {
     const url = new URL(String(input));
@@ -53,6 +53,19 @@ export function standInDexFetch(o: { price?: () => string; fail?: () => boolean 
       return json(out);
     }
     const ohlcv = /^\/networks\/([a-z_]+)\/pools\/([^/]+)\/ohlcv\/(minute|hour|day)$/.exec(url.pathname);
+    if (ohlcv && o.chart) {
+      // a chart's worth (PLAN 5.32): as many bars as asked, up to the one forming on this clock, a slow wave and a quick
+      // one on it, so averages cross and a strategy goes in and out
+      const step = { minute: 60, hour: 3600, day: 86_400 }[ohlcv[3] as "minute" | "hour" | "day"] * Number(url.searchParams.get("aggregate") ?? 1);
+      const last = Math.floor(o.chart() / 1000 / step) * step;
+      const n = Math.min(1000, Number(url.searchParams.get("limit") ?? 100));
+      const px = (k: number): number => 0.16 * (1 + 0.08 * Math.sin(k / 6) + 0.03 * Math.sin(k / 1.7));
+      return json({ data: { attributes: { ohlcv_list: Array.from({ length: n }, (_, i) => {
+        const k = 10_000 + Math.round(last / step) - i; // the wave keyed to the bar's time: the same bar, the same prices
+        const [op, cl] = [px(k - 1), px(k)];
+        return [last - i * step, op, Math.max(op, cl) * 1.004, Math.min(op, cl) * 0.996, cl, 1000 + (k % 17) * 40];
+      }) } } });
+    }
     if (ohlcv) {
       const step = url.searchParams.get("aggregate") === "5" ? 300 : 60;
       const at = Math.floor(START / 1000);

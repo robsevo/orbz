@@ -6,12 +6,15 @@
 // home's, from the public DEX data; nothing here is advice.
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import type { Character } from "../orb/spec.ts";
-import { idOf, type DeskCandle, type DeskChain, type DeskQuote, type DeskTicker, type DexChain, type DexPair, type DexTrade, type Office, type TokenSafety } from "../home/link.ts";
-import { Candles } from "../ui/Candles.tsx";
-import { changeText, priceText } from "../ui/candles.ts";
+import { idOf, type DeskCandle, type DeskChain, type DeskDrawn, type DeskMarks, type DeskQuote, type DeskStrategy, type DeskTicker, type DexChain, type DexPair, type DexTrade, type Office, type TokenSafety } from "../home/link.ts";
+import { Candles, type Layer } from "../ui/Candles.tsx";
+import { changeText, priceText, TF_MS } from "../ui/candles.ts";
+import { keep, loadKept, withStudy, type Kept } from "../ui/studies.ts";
+import { ChartMenu } from "./ChartMenu.tsx";
+import { orbLayer, strategyLayer, studyLayer, whoTradedHere, type Mode, type Who } from "./layers.ts";
 import { Balanced, OneLine } from "../ui/Balanced.tsx";
 import { Pick } from "../ui/Pick.tsx";
-import { button, card, chip, compact, ema, field, head, picture, shortAddress, small, strong, TIMEFRAMES, well } from "./kit.ts";
+import { button, card, chip, compact, field, head, picture, shortAddress, small, strong, TIMEFRAMES, well } from "./kit.ts";
 import type { WalletHere } from "./useWallet.ts";
 
 export const CHAIN_NAMES: Record<DexChain, string> = { solana: "Solana", ethereum: "Ethereum", base: "Base", arbitrum: "Arbitrum", optimism: "Optimism", polygon: "Polygon", bsc: "BNB Chain" };
@@ -39,15 +42,31 @@ function Stat({ name, value, sub, data }: { name: string; value: ReactNode; sub?
   );
 }
 
-/** The timeframes, and the chart at the one chosen, with its 20 and 50-bar EMAs. */
-function Chart({ load, tfKey, label, phone }: { load: (tf: string) => Promise<DeskCandle[]>; tfKey: string; label: string; phone: boolean }) {
+/** The timeframes and the chart at the one chosen, with what its menu put on it (PLAN 5.32; owner, 10-11: "right click
+ * and add lets say indicators, or an orbs strategy so we can see it visually. paper or live"): the studies kept in this
+ * browser, the desk's strategies on paper or live, each orb's trades here; a right-click, a long press or ƒx opens it. */
+function Chart({ home, load, tfKey, market, label, phone, strategies, crew }: {
+  home: Office; load: (tf: string) => Promise<DeskCandle[]>; tfKey: string; market: string; label: string; phone: boolean; strategies: DeskStrategy[]; crew: Character[];
+}) {
   const [tf, setTf] = useState("15m");
   const [candles, setCandles] = useState<DeskCandle[] | null>(null);
   const [said, setSaid] = useState<string | null>(null);
+  const [kept, setKept] = useState<Kept>(loadKept);
+  const [orbsOn, setOrbsOn] = useState<{ orb: string | null; mode: Mode }[]>([]);
+  const [marks, setMarks] = useState<DeskMarks | null>(null);
+  const [drawn, setDrawn] = useState<Record<number, { key: string; result: DeskDrawn; sent: DeskCandle[] } | { key: string; error: string }>>({});
+  const [menu, setMenu] = useState<{ at: { x: number; y: number }; editing: string | null } | null>(null);
+  const change = (k: Kept): void => {
+    setKept(k);
+    keep(k);
+  };
   useEffect(() => {
     let live = true;
     setCandles(null);
-    const get = (): void => void load(tf).then((c) => live && (setCandles(c), setSaid(null)), (e: Error) => live && setSaid(e.message));
+    const get = (): void => {
+      void load(tf).then((c) => live && (setCandles(c), setSaid(null)), (e: Error) => live && setSaid(e.message));
+      void home.deskMarks(market).then((m) => live && setMarks(m), () => undefined);
+    };
     get();
     const t = window.setInterval(get, tf === "1m" ? 15_000 : 30_000);
     return () => {
@@ -55,21 +74,90 @@ function Chart({ load, tfKey, label, phone }: { load: (tf: string) => Promise<De
       window.clearInterval(t);
     };
   }, [tfKey, tf]);
-  const closes = (candles ?? []).map((c) => c.c);
+  // each strategy on the chart, read over the chart's own bars again when one closes
+  const on = kept.strategies.filter((x) => strategies.some((s) => s.id === x.id));
+  useEffect(() => {
+    if (!candles || candles.length < 2) return;
+    const closed = candles.filter((c) => c.t + (TF_MS[tf] ?? 60_000) <= Date.now()).at(-1)?.t ?? 0;
+    const key = `${market}|${tf}|${closed}|${candles[0]!.t}`;
+    let live = true;
+    for (const x of on) {
+      const s = strategies.find((y) => y.id === x.id)!;
+      if (drawn[s.id]?.key === key) continue;
+      const sent = candles.slice(-400); // the most the home reads (its door takes 64 KB): drawn by time, so any tail of them
+      void home.drawStrategy({ ...s.spec, symbol: market, timeframe: tf }, sent).then(
+        (result) => live && setDrawn((d) => ({ ...d, [s.id]: { key, result, sent } })),
+        (e: Error) => live && setDrawn((d) => ({ ...d, [s.id]: { key, error: e.message } })),
+      );
+    }
+    return () => {
+      live = false;
+    };
+  }, [candles, tf, on.map((x) => x.id).join(",")]);
+  const whoOf = (orb: string | null): Who => {
+    if (orb === null) return { name: "You", hue: "azure" };
+    const c = crew.find((x) => idOf(x.name) === orb);
+    return { name: c?.name ?? orb, hue: c?.hue ?? "azure" };
+  };
+  const layers: Layer[] = candles
+    ? [
+        ...kept.studies.map((s) => studyLayer(s, candles)),
+        ...on.map((x) => {
+          const s = strategies.find((y) => y.id === x.id)!;
+          const d = drawn[s.id];
+          const layer = strategyLayer({ s, mode: x.mode, drawn: d && "result" in d ? d : null, marks, candles, who: whoOf(s.by), tf });
+          return d && "error" in d && x.mode === "paper" ? { ...layer, note: `paper · not read: ${d.error}` } : layer;
+        }),
+        ...orbsOn.map((x) => orbLayer({ orb: x.orb, mode: x.mode, marks, who: whoOf(x.orb) })),
+      ]
+    : [];
+  const remove = (id: string): void => {
+    const [kind, what, mode] = id.split(":");
+    if (kind === "strategy") change({ ...kept, strategies: kept.strategies.filter((x) => !(String(x.id) === what && x.mode === mode)) });
+    else if (kind === "orb") setOrbsOn((o) => o.filter((x) => !((x.orb ?? "you") === what && x.mode === mode)));
+    else change({ ...kept, studies: kept.studies.filter((x) => x.id !== id) });
+  };
+  const near = (id: string): { x: number; y: number } => {
+    const r = document.querySelector(`[data-layer="${CSS.escape(id)}"]`)?.getBoundingClientRect();
+    return r ? { x: r.left, y: r.bottom + 6 } : { x: 16, y: 120 };
+  };
+  const editing = menu?.editing ? kept.studies.find((s) => s.id === menu.editing) ?? null : null;
   return (
     <div data-token-chart style={{ display: "grid", gap: 8, minWidth: 0 }}>
-      <OneLine gap={4} style={{ justifyContent: "flex-start" }}>
-        {TIMEFRAMES.map((x) => (
-          <button key={x} type="button" className="orbs-small" data-tf={x} aria-pressed={tf === x} onClick={() => setTf(x)} style={chip(tf === x)}>{x}</button>
-        ))}
-      </OneLine>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+        <OneLine gap={4} style={{ justifyContent: "flex-start", flex: "1 1 auto", minWidth: 0 }}>
+          {TIMEFRAMES.map((x) => (
+            <button key={x} type="button" className="orbs-small" data-tf={x} aria-pressed={tf === x} onClick={() => setTf(x)} style={chip(tf === x)}>{x}</button>
+          ))}
+        </OneLine>
+        <button type="button" className="orbs-small" data-chart-menu-open aria-haspopup="dialog" aria-label="Indicators and strategies on the chart" title="Indicators and strategies (or right-click the chart)"
+          onClick={(e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            setMenu({ at: { x: r.right - 340, y: r.bottom + 6 }, editing: null });
+          }}
+          style={{ ...chip(false), flex: "0 0 auto" }}>
+          {phone ? "ƒx" : "ƒx Indicators"}
+        </button>
+      </div>
       {candles && candles.length > 1 ? (
-        <Candles candles={candles} tf={tf} height={phone ? 280 : 380} label={`${label} on ${tf} bars: the last ${candles.length}`}
-          lines={[{ label: "EMA 20", values: ema(closes, 20), hue: "amber" }, { label: "EMA 50", values: ema(closes, 50), hue: "violet" }]} />
+        <Candles candles={candles} tf={tf} height={phone ? 280 : 380} paneHeight={phone ? 80 : 96} label={`${label} on ${tf} bars: the last ${candles.length}`} layers={layers}
+          menu={(at) => setMenu({ at, editing: null })} onEdit={(id) => setMenu({ at: near(id), editing: id })} onRemove={remove} />
       ) : (
         <div style={{ ...well, height: phone ? 280 : 380, placeItems: "center", alignContent: "center" }}>
           <span role="status" style={small}>{said ? `No chart now: ${said}` : candles ? "Too few trades for a chart yet." : "Drawing the chart…"}</span>
         </div>
+      )}
+      {menu && (
+        <ChartMenu at={menu.at} phone={phone} editing={editing}
+          strategies={strategies.map((s) => ({ id: s.id, name: s.name, who: whoOf(s.by).name, hue: whoOf(s.by).hue, words: s.words, mode: kept.strategies.find((x) => x.id === s.id)?.mode ?? null }))}
+          orbs={whoTradedHere(marks).map((r) => ({ ...r, ...whoOf(r.orb), mode: orbsOn.find((x) => x.orb === r.orb)?.mode ?? null }))}
+          addStudy={(k) => (change({ ...kept, studies: withStudy(kept.studies, k) }), setMenu(null))}
+          setNumbers={(id, n) => change({ ...kept, studies: kept.studies.map((s) => (s.id === id ? { ...s, n } : s)) })}
+          removeStudy={(id) => change({ ...kept, studies: kept.studies.filter((s) => s.id !== id) })}
+          drawStrategy={(id, mode) => (change({ ...kept, strategies: [...kept.strategies.filter((x) => x.id !== id), ...(mode ? [{ id, mode }] : [])] }), setMenu(null))}
+          drawOrb={(orb, mode) => (setOrbsOn((o) => [...o.filter((x) => x.orb !== orb), ...(mode ? [{ orb, mode }] : [])]), setMenu(null))}
+          clear={() => (change({ studies: [], strategies: [] }), setOrbsOn([]))}
+          close={() => setMenu(null)} />
       )}
     </div>
   );
@@ -275,8 +363,8 @@ function Recent({ trades, symbol, now }: { trades: DexTrade[] | null; symbol: st
 }
 
 /** A coin on a DEX: its pairs read every 20 s, its safety once, its last trades every 20 s. */
-export function TokenPage({ home, chain, address, chains, crew, wallet, openWallet, phone, back }: {
-  home: Office; chain: DexChain; address: string; chains: DeskChain[]; crew: Character[]; wallet: WalletHere; openWallet: (kind: "evm" | "solana") => void; phone: boolean; back: () => void;
+export function TokenPage({ home, chain, address, chains, crew, strategies, wallet, openWallet, phone, back }: {
+  home: Office; chain: DexChain; address: string; chains: DeskChain[]; crew: Character[]; strategies: DeskStrategy[]; wallet: WalletHere; openWallet: (kind: "evm" | "solana") => void; phone: boolean; back: () => void;
 }) {
   const [pairs, setPairs] = useState<DexPair[] | null>(null);
   const [at, setAt] = useState(0);
@@ -381,7 +469,7 @@ export function TokenPage({ home, chain, address, chains, crew, wallet, openWall
       <Stat name="Pair age" value={age(p.createdAt, now)} data="age" />
     </Balanced>
   );
-  const chart = <Chart load={(tf) => home.dexCandles(chain, p.pair, address, tf, 300)} tfKey={`${p.pair}`} label={sym} phone={phone} />;
+  const chart = <Chart home={home} load={(tf) => home.dexCandles(chain, p.pair, address, tf, 300)} tfKey={`${p.pair}`} market={market} label={sym} phone={phone} strategies={strategies} crew={crew} />;
   const trade = <TradeBox home={home} chain={chain} token={address} symbol={sym} chains={chains} wallet={wallet} openWallet={openWallet} />;
   const send = <SendOrb home={home} crew={crew} market={market} label={sym} />;
   if (phone) {
@@ -417,7 +505,7 @@ export function TokenPage({ home, chain, address, chains, crew, wallet, openWall
 }
 
 /** A major (BTC, ETH, SOL and the rest): its chart from the market, its day, an orb sent to it on paper. */
-export function MajorPage({ home, symbol, ticker, crew, phone, back }: { home: Office; symbol: string; ticker: DeskTicker | null; crew: Character[]; phone: boolean; back: () => void }) {
+export function MajorPage({ home, symbol, ticker, crew, strategies, phone, back }: { home: Office; symbol: string; ticker: DeskTicker | null; crew: Character[]; strategies: DeskStrategy[]; phone: boolean; back: () => void }) {
   const head1 = (
     <div style={{ display: "grid", gap: 6, minWidth: 0 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -429,7 +517,7 @@ export function MajorPage({ home, symbol, ticker, crew, phone, back }: { home: O
       {ticker && <span className="num" style={{ ...small, ...tone(ticker.changePct) }}>{`${changeText(ticker.changePct)} today · from ${money(ticker.low)} to ${money(ticker.high)}${ticker.stale ? " · stale" : ""}`}</span>}
     </div>
   );
-  const chart = <Chart load={(tf) => home.candles(symbol, tf, 200)} tfKey={symbol} label={symbol} phone={phone} />;
+  const chart = <Chart home={home} load={(tf) => home.candles(symbol, tf, 200)} tfKey={symbol} market={symbol} label={symbol} phone={phone} strategies={strategies} crew={crew} />;
   const send = <SendOrb home={home} crew={crew} market={symbol} label={symbol} />;
   return phone ? (
     <div data-major-page={symbol} style={{ display: "grid", gap: "var(--s3)", minWidth: 0 }}>{head1}{chart}{send}</div>
