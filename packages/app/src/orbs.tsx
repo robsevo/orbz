@@ -1183,6 +1183,7 @@ function App() {
     return r === "home" || r === "settings" || r === "chat" || r === "sessions" || r === "notices" || r === "calendar" || r === "lab" || r === "org" || r === "career" || r === "recruiter" || r === "report" || r === "stats" || r === "desk" ? r : "office";
   });
   // which chart the stats show (PLAN 2.19): the brains' tokens or the XP
+  const [deskTab, setDeskTab] = useState<string | null>(null); // a tab the address opens the desk on (#/desk/trade)
   const [statsTab, setStatsTab] = useState<"brain" | "xp">(() => {
     const r = parseRoute(location.hash);
     return r.room === "stats" ? r.tab : "brain";
@@ -1363,7 +1364,7 @@ function App() {
     room === "home" ? { room: "home" } : room === "desk" ? { room: "desk" } : room === "stats" ? { room: "stats", tab: statsTab } : room === "settings" ? { room: "settings" } : room === "notices" ? { room: "notices" } : room === "calendar" ? { room: "calendar" } : room === "lab" ? { room: "lab" } : room === "report" ? { room: "report" } : room === "org" ? { room: "org", school: schoolFor } : room === "recruiter" ? { room: "recruiter", family: hiringFor } : room === "career" && careerOf ? { room: "career", orb: careerOf } : room === "sessions" ? { room: "sessions", ...inSession } : room === "chat" && talking ? { room: "chat", orb: talking } : view.kind === "new" ? { room: "new" } : { room: "office", orb: view.kind === "orb" ? view.name : null };
   const show = (r: Route): void => {
     if (r.room === "home") setRoom("home"); // the home page (owner, 10-07): what the app opens on
-    else if (r.room === "desk") setRoom("desk"); // the desk's own floor
+    else if (r.room === "desk") (setRoom("desk"), setDeskTab(r.tab ?? null)); // the desk's own floor, on a tab when it says
     else if (r.room === "settings") setRoom("settings");
     else if (r.room === "notices") setRoom("notices");
     else if (r.room === "calendar") setRoom("calendar");
@@ -1651,7 +1652,7 @@ function App() {
         {room === "home" && office.length ? (
           <HomeRoom home={home} office={office} person={person?.name ?? null} moods={moods} go={go} />
         ) : room === "desk" && open ? (
-          <DeskRoom home={home} office={office} moods={moods} go={go} />
+          <DeskRoom home={home} office={office} moods={moods} go={go} tab={deskTab} />
         ) : room === "recruiter" && !founding ? (
           <RecruiterRoom home={home} office={office} hide={hide} family={hiringFor} pick={(family) => go({ room: "recruiter", family })} hired={() => void home?.orbs().then((o) => o && setOffice(o))} profile={(c, startsAs) => <Sheet c={c} replies={replies} startsAs={startsAs} applying />} />
         ) : room === "org" ? (

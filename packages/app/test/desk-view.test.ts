@@ -133,7 +133,8 @@ test("the desk: the floor and its tabs at desk and phone sizes; a strategy kept 
     h.inbox.addOrb(id, name, sp, { shape: "bean", eyes: "classic", hue });
   }
   for (const turn of TURNS) h.about.keep(keptBy(turn)); // the floor open, as its turns leave it
-  const d = await serve(h, { port: 0, appDir: dist });
+  const opened: string[] = []; // the links the home opened in "this machine's browser"
+  const d = await serve(h, { port: 0, appDir: dist, opener: async (url) => void opened.push(url) });
   t.after(() => d.close());
   const open = async (size: { width: number; height: number }): Promise<Page> => {
     const ctx = await browser.newContext({ viewport: size, colorScheme: "dark" });
@@ -174,6 +175,44 @@ test("the desk: the floor and its tabs at desk and phone sizes; a strategy kept 
   await page.locator(`[data-run="${id}"]`).click();
   await page.locator("[data-running]").waitFor();
   assert.ok(h.desk.books().some((b) => b.strategy === id && b.orb === "kit" && b.state === "live"), "Kit runs it, on paper");
+
+  // no wallet kept yet: the desk's own button says so and takes you to your wallets (owner, 10-11: "how does the user
+  // connect their wallet? i dont see any way?")
+  await tab(page, "market");
+  assert.equal((await page.locator("[data-connect-wallet]").innerText()).trim(), "Connect wallet");
+  await page.locator("[data-connect-wallet]").click();
+  await page.locator('[data-desk-tab="trade"][aria-selected="true"]').waitFor();
+  await page.waitForFunction(() => {
+    const r = document.querySelector("[data-wallets]")?.getBoundingClientRect();
+    return !!r && r.top >= 0 && r.top < innerHeight;
+  }, null, { timeout: 5_000 });
+  // a window with no wallet in it (Orbz's own is a browser profile of its own): your browser opened by the home, signed
+  // in and on the Trade tab, where your wallet is; a link to copy for a wallet app's browser
+  const bare = await browser.newContext({ viewport: { width: 1280, height: 1000 }, colorScheme: "dark" });
+  t.after(() => bare.close());
+  const win = await bare.newPage();
+  await win.goto(d.pairLink().replace("orbs.html#", "orbs.html?splash=0&intro=0#"));
+  await win.locator(".orbs-window").waitFor({ timeout: 30_000 });
+  await win.evaluate(() => (location.hash = "#/desk/trade"));
+  await win.locator("[data-no-wallet]").waitFor({ timeout: 30_000 });
+  await win.locator("[data-open-browser]").click();
+  await win.locator("[data-elsewhere]", { hasText: "Opened in your browser" }).waitFor();
+  assert.equal(opened.length, 1, "one browser opened, by the home");
+  assert.match(opened[0]!, /^http:\/\/127\.0\.0\.1:\d+\/app\/orbs\.html#pair=[\w-]+&to=%2Fdesk%2Ftrade$/);
+  await win.locator("[data-copy-link]").click();
+  assert.match(await win.locator("[data-elsewhere-link]").innerText(), /#pair=[\w-]+&to=%2Fdesk%2Ftrade$/, "a link to open where the wallet is");
+  const yours = await browser.newContext({ viewport: { width: 1280, height: 1000 }, colorScheme: "dark" });
+  t.after(() => yours.close());
+  await yours.addInitScript(wallets, { evm: EVM, sol: SOL });
+  const there = await yours.newPage();
+  await there.goto(opened[0]!.replace("orbs.html#", "orbs.html?splash=0&intro=0#"));
+  await there.locator('[data-desk-tab="trade"][aria-selected="true"]').waitFor({ timeout: 30_000 });
+  await there.locator('[data-wallet-found="Test Wallet"]').waitFor();
+  assert.equal(await there.evaluate(() => location.hash), "#/desk/trade", "signed in by the link, at the place it was made for");
+  // the control: a link made for no place opens on the home page, as it always has
+  const plain = await yours.newPage();
+  await plain.goto(d.pairLink().replace("orbs.html#", "orbs.html?splash=0&intro=0#"));
+  await plain.waitForFunction(() => location.hash === "#/home", null, { timeout: 30_000 });
 
   // the wallets in this browser, each connected for its address only
   await tab(page, "trade");

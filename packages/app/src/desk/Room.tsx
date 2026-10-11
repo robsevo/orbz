@@ -13,7 +13,7 @@ import { Balanced, OneLine } from "../ui/Balanced.tsx";
 import { changeText, priceText } from "../ui/candles.ts";
 import { NAMES } from "../floor/props.ts";
 import { DeskFloor } from "./Floor.tsx";
-import { button, card, chip, field, head, pct, small, strong, usd, well, ago } from "./kit.ts";
+import { button, card, chip, field, head, pct, shortAddress, small, strong, usd, well, ago } from "./kit.ts";
 import { MarketPanel } from "./Market.tsx";
 import { StrategiesPanel } from "./Strategies.tsx";
 import { TradePanel } from "./Trade.tsx";
@@ -22,7 +22,7 @@ const TABS = [["market", "Market"], ["strategies", "Strategies"], ["trade", "Tra
 type Tab = (typeof TABS)[number][0];
 const TAB_KEY = "orbs.desk.tab";
 
-export function DeskRoom({ home, office, moods, go }: { home: Office | null; office: Character[]; moods: Record<string, Mood>; go: (r: Route) => void }) {
+export function DeskRoom({ home, office, moods, go, tab: opening = null }: { home: Office | null; office: Character[]; moods: Record<string, Mood>; go: (r: Route) => void; tab?: string | null }) {
   const [s, setS] = useState<DeskState | null>(null);
   const [events, setEvents] = useState<DeskEvent[]>([]);
   const [said, setSaid] = useState<string | null>(null);
@@ -43,6 +43,15 @@ export function DeskRoom({ home, office, moods, go }: { home: Office | null; off
     } catch {
       // a private window: for as long as the page is open
     }
+  };
+  // the address's tab (#/desk/trade: a link made to connect a wallet opens there)
+  useEffect(() => {
+    if (opening && TABS.some(([k]) => k === opening)) setTab(opening as Tab);
+  }, [opening]);
+  /** To your wallets: the Trade tab, its wallets in view (owner, 10-11: "how does the user connect their wallet?"). */
+  const toWallets = (): void => {
+    setTab("trade");
+    setTimeout(() => document.querySelector("[data-wallets]")?.scrollIntoView({ block: "start", behavior: "smooth" }), 60);
   };
   const loading = useRef(0);
   const heard = useRef(0);
@@ -93,9 +102,15 @@ export function DeskRoom({ home, office, moods, go }: { home: Office | null; off
           <span style={head}>Crypto never closes</span>
           <h2 style={{ margin: 0, font: "800 26px/32px var(--font)", color: "var(--text-1)" }}>{NAMES.room}</h2>
         </div>
+        <span style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end", gap: "var(--s3)", minWidth: 0 }}>
+        <button type="button" data-connect-wallet onClick={toWallets} style={{ ...(s?.wallets.length ? button : strong), display: "inline-flex", alignItems: "center", gap: 8 }}>
+          <i aria-hidden style={{ width: 8, height: 8, borderRadius: "50%", background: s?.wallets.length ? "var(--ok)" : "var(--text-3)" }} />
+          {s?.wallets.length ? `${shortAddress(s.wallets[0]!.address)}${s.wallets.length > 1 ? ` +${s.wallets.length - 1}` : ""}` : "Connect wallet"}
+        </button>
         <span data-market-status={s?.market.ok ? "live" : "down"} style={{ display: "inline-flex", alignItems: "center", gap: 8, font: "700 12px/16px var(--font)", color: "var(--text-2)" }}>
           <i aria-hidden style={{ width: 8, height: 8, borderRadius: "50%", background: s?.market.ok ? "var(--ok)" : "var(--off)" }} />
           {s ? (s.market.ok ? `Live · ${s.market.source}` : `The market is not answering${s.market.error ? `: ${s.market.error}` : ""}`) : said ?? "Opening the desk…"}
+        </span>
         </span>
       </div>
       {/* the tape: every market, its price and its day, going by */}

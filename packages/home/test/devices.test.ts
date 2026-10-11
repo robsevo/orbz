@@ -105,6 +105,58 @@ test("the second door: HTTPS on its own names only; a rebound name, plain HTTP a
   assert.equal((await local(door)("GET", "/status", { token: true })).status, 200, "the loopback door is as it was");
 });
 
+// the app opened in this machine's own browser, for a wallet that lives there (owner, 10-11: "how does the user connect
+// their wallet? i dont see any way?"): a link paired for it, to the place asked, from this machine only
+test("opened in this machine's browser: a link paired for it, to the place asked; a link back when none opens; never through the second door", async (t) => {
+  const dir = tempDir(t);
+  execFileSync("openssl", ["req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:prime256v1", "-nodes", "-days", "1", "-subj", "/CN=orbs.test", "-keyout", join(dir, "key.pem"), "-out", join(dir, "cert.pem")], { stdio: "ignore" });
+  const h = home(t);
+  const opened: string[] = [];
+  let fails = false;
+  const door = await serve(h, {
+    port: 0, opener: async (url) => {
+      if (fails) throw new Error("no browser here");
+      opened.push(url);
+    },
+    remote: { names: ["orbs.test"], cert: readFileSync(join(dir, "cert.pem")), key: readFileSync(join(dir, "key.pem")), host: "127.0.0.1" },
+  });
+  t.after(() => door.close());
+  const call = local(door);
+  const { cookie } = await call("POST", "/session", { body: { code: new URL(door.pairLink()).hash.replace("#pair=", "") } });
+  const r = await call("POST", "/devices/open-browser", { cookie, body: { to: "/desk/trade" } });
+  assert.deepEqual(r.json, { opened: true, link: null });
+  assert.equal(opened.length, 1);
+  assert.match(opened[0]!, new RegExp(`^http://127\\.0\\.0\\.1:${door.port}/app/orbs\\.html#pair=[\\w-]+&to=%2Fdesk%2Ftrade$`), "a link for this machine, to the place asked");
+  const code = /#pair=([\w-]+)&/.exec(opened[0]!)![1]!;
+  assert.equal((await call("POST", "/session", { body: { code } })).status, 200, "the browser it opens in is signed in by it");
+  assert.equal((await call("POST", "/session", { body: { code } })).status, 401, "once");
+  for (const to of ["https://evil.example/", '/desk/trade" && rm -rf ~', "desk/trade", ""]) {
+    assert.equal((await call("POST", "/devices/open-browser", { cookie, body: { to } })).status, 400, `not a place in the app: ${to}`);
+  }
+  assert.equal(opened.length, 1, "and no browser opened for one");
+  fails = true;
+  const by = await call("POST", "/devices/open-browser", { cookie, body: { to: "/desk/trade" } });
+  assert.equal(by.json.opened, false, "no browser could be opened");
+  assert.match(String(by.json.link), /#pair=[\w-]+&to=%2Fdesk%2Ftrade$/, "the link, to open by hand");
+  fails = false;
+  // never through the second door, even signed in there
+  const port = door.remote!.port;
+  const https = (path: string, o: { body?: unknown; headers?: Record<string, string> } = {}) =>
+    new Promise<{ status: number; setCookie: string }>((ok, fail) => {
+      const q = httpsRequest({ host: "127.0.0.1", port, path, method: "POST", rejectUnauthorized: false, servername: "orbs.test", headers: { host: `orbs.test:${port}`, "content-type": "application/json", "user-agent": UA, ...o.headers } }, (res) => {
+        res.resume();
+        res.on("end", () => ok({ status: res.statusCode ?? 0, setCookie: String(res.headers["set-cookie"] ?? "") }));
+      });
+      q.on("error", fail);
+      q.end(o.body === undefined ? undefined : JSON.stringify(o.body));
+    });
+  const phone = (await https("/session", { body: { code: new URL(door.remote!.pairLink()).hash.replace("#pair=", "") } })).setCookie.split(";")[0]!;
+  assert.equal((await https("/devices/open-browser", { body: { to: "/desk/trade" }, headers: { cookie: phone, "x-orbs": "1" } })).status, 403, "from another device, no browser opens here");
+  assert.equal(opened.length, 1);
+  // the control: no session, nothing opened
+  assert.equal((await call("POST", "/devices/open-browser", { body: { to: "/desk/trade" } })).status, 401);
+});
+
 test("a passkey: made from a signed-in device, then any device signs in with it; every bent sign-in is refused", async (t) => {
   const h = home(t);
   h.about.setName("Robin");

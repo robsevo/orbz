@@ -54,6 +54,9 @@ test("every place is an address, and back again", () => {
   assert.equal(routeHash({ room: "recruiter", family: "think" }), "#/recruiter/think", "who applied to one department is a place of its own");
   // the org chart with one orb's school sheet open (owner, 10-06: "we dont see the send to school option")
   for (const r of [{ room: "org" }, { room: "org", school: "zoë" }] as Route[]) assert.deepEqual(parseRoute(routeHash(r)), r);
+  // the desk, and the desk on one of its tabs (a link made to connect a wallet opens on Trade, 10-11)
+  for (const r of [{ room: "desk" }, { room: "desk", tab: "trade" }] as Route[]) assert.deepEqual(parseRoute(routeHash(r)), r);
+  assert.equal(routeHash({ room: "desk", tab: "trade" }), "#/desk/trade");
   assert.equal(routeHash({ room: "org", school: "cy" }), "#/org/school/cy");
   assert.deepEqual(parseRoute(""), { room: "home" }, "nothing: the home page (owner, 10-07: what the app opens on)");
   assert.deepEqual(parseRoute("#/home"), { room: "home" });

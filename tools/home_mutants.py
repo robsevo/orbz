@@ -419,6 +419,13 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ], ["reverse.test.ts"]),
     # the desk (PLAN 5.22-5.27; owner, 10-10): honest backtests, paper XP graded by the market, and a real trade
     # only ever built after your yes, at the price you approved, inside the desk's limits, its hash taken once
+    # the app opened in this machine's own browser, for a wallet (owner, 10-11)
+    ("a browser opens here for another device", "src/api.ts", [
+        ('    if (door.remote) throw new HttpError(403, "a browser is opened only on the machine the home runs on");\n', ""),
+    ], ["devices.test.ts"]),
+    ("a browser opens on any link", "src/api.ts", [
+        ('    if (!/^\\/[a-z0-9/_-]{1,60}$/i.test(to)) throw new HttpError(400, "a place in the app, as /desk/trade");\n', ""),
+    ], ["devices.test.ts"]),
     ("a swap is built before your yes", "src/desk/swaps.ts", [
         ('    if (s.state !== "approved" && s.state !== "built") throw new SwapError(s.state === "asked" ? "it waits for your yes first" : `swap ${id} is ${s.state}`);', '    if (s.state === "denied") throw new SwapError(`swap ${id} is ${s.state}`);'),
     ], ["desk.test.ts"]),
@@ -3267,6 +3274,19 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("the names in Lately not underlined", "src/rooms/Home.tsx", [
         ('fontWeight: 800, textDecoration: "underline", textDecorationThickness: 1.5, textUnderlineOffset: 3 }}>{w.name}</b>', "fontWeight: 800 }}>{w.name}</b>"),
     ], ["home-view.test.ts"]),
+    # a wallet connected from where it lives (owner, 10-11: "how does the user connect their wallet? i dont see any way?")
+    ("a pairing link's place is dropped once paired", "src/home/link.ts", [
+        ('history.replaceState(null, "", there ? `#${place}` : "#/home");', 'history.replaceState(null, "", "#/home");'),
+    ], ["desk-view.test.ts"]),
+    ("the desk opens on its own tab, whatever the address says", "src/desk/Room.tsx", [
+        ("    if (opening && TABS.some(([k]) => k === opening)) setTab(opening as Tab);\n", ""),
+    ], ["desk-view.test.ts"]),
+    ("the desk's wallet button goes nowhere", "src/desk/Room.tsx", [
+        ("<button type=\"button\" data-connect-wallet onClick={toWallets}", "<button type=\"button\" data-connect-wallet"),
+    ], ["desk-view.test.ts"]),
+    ("the desk's tab is not in its address", "src/ui/nav.ts", [
+        ('  if (parts[0] === "desk") return parts[1] ? { room: "desk", tab: parts[1] } : { room: "desk" };', '  if (parts[0] === "desk") return { room: "desk" };'),
+    ], ["nav.test.ts"]),
 ]
 
 # the `orbs` terminal (PLAN 1.9): paths are inside packages/terminal

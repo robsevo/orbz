@@ -334,6 +334,9 @@ export interface Office {
   devices(): Promise<Device[]>;
   signOut(id: number): Promise<void>;
   pairPhone(): Promise<string>;
+  /** The app opened in this machine's own browser, paired, at `to` (a place in it, as /desk/trade): from the machine
+   * the home runs on only. A link to open by hand when no browser could be. */
+  openInBrowser(to: string): Promise<{ opened: boolean; link: string | null }>;
   passkeys(): Promise<Passkey[]>;
   /** Makes a passkey here and keeps it on the home (named from this browser unless named). */
   addPasskey(name?: string): Promise<void>;
@@ -790,6 +793,9 @@ export function doorOffice(base: Character): Office {
     async pairPhone() {
       return (await call<{ link: string }>("../devices/pair", { method: "POST" })).link;
     },
+    async openInBrowser(to) {
+      return await call<{ opened: boolean; link: string | null }>("../devices/open-browser", { method: "POST", body: JSON.stringify({ to }) });
+    },
     async passkeys() {
       return (await call<{ passkeys: Passkey[] }>("../passkeys")).passkeys;
     },
@@ -1013,8 +1019,14 @@ export async function connect(base: Character): Promise<Link | null> {
       history.replaceState(null, "", "#/home");
       return { trouble: (e as Error).message };
     } finally {
-      // the code is spent: off the address, which is the home page's (what the app opens on, owner 10-07)
-      if (location.hash.includes("pair=")) history.replaceState(null, "", "#/home");
+      // the code is spent: off the address, which is the home page's (what the app opens on, owner 10-07), or the place
+      // the link was made for (`to`, a place in the app: the desk's Trade tab for a wallet, owner 10-11)
+      const to = /[#&]to=([^&]+)/.exec(location.hash)?.[1];
+      const place = to ? decodeURIComponent(to) : "";
+      const there = /^\/[a-z0-9/_-]{1,60}$/i.test(place);
+      if (location.hash.includes("pair=")) history.replaceState(null, "", there ? `#${place}` : "#/home");
+      // the app read its room before the code was spent: told, as Back and Forward tell it
+      if (there) globalThis.dispatchEvent?.(new PopStateEvent("popstate", { state: null }));
     }
   }
   let res: Response;

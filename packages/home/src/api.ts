@@ -16,6 +16,7 @@ import { SwapError } from "./desk/swaps.ts";
 import { SYMBOLS, TIMEFRAMES, type Strategy, type Timeframe } from "./desk/strategy.ts";
 import { WalletError } from "./desk/wallets.ts";
 import { recentWork } from "./worklog.ts";
+import { spawn } from "node:child_process";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { existsSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
@@ -87,7 +88,18 @@ class HttpError extends Error {
 /** Where the built app is (`pnpm -C packages/app build`), served at /app/. */
 export const APP_DIR = fileURLToPath(new URL("../../app/dist/", import.meta.url));
 
-export async function serve(home: Home, opts: { port?: number; portFallback?: boolean; appDir?: string; remote?: Remote } = {}): Promise<HomeDoor> {
+/** Opens a link in this machine's own browser, the one it opens links in: xdg-open on Linux, open on a Mac, the URL
+ * handler on Windows (no shell between: a link's `&` stays the link's). */
+export function openHere(url: string): Promise<void> {
+  const [cmd, args] = process.platform === "darwin" ? ["open", [url]] : process.platform === "win32" ? ["rundll32", ["url.dll,FileProtocolHandler", url]] : ["xdg-open", [url]];
+  return new Promise((resolve, reject) => {
+    const p = spawn(cmd as string, args as string[], { stdio: "ignore", detached: true });
+    p.once("error", reject);
+    p.once("spawn", () => (p.unref(), resolve()));
+  });
+}
+
+export async function serve(home: Home, opts: { port?: number; portFallback?: boolean; appDir?: string; remote?: Remote; opener?: (url: string) => Promise<void> } = {}): Promise<HomeDoor> {
   const token = randomBytes(24).toString("base64url");
   const want = Buffer.from(`Bearer ${token}`);
   const sessions = home.sessions;
@@ -96,7 +108,7 @@ export async function serve(home: Home, opts: { port?: number; portFallback?: bo
   let remotePort = -1;
   const remoteLink = (): string => `https://${names![0]}${remotePort === 443 ? "" : `:${remotePort}`}/app/orbs.html#pair=${sessions.code()}`;
   const handler = (which: () => Server, remote: boolean) => (req: IncomingMessage, res: ServerResponse) => {
-    const door = { sessions, appDir, remote: remote ? names : null, pairLink: () => (names ? remoteLink() : localLink()) };
+    const door = { sessions, appDir, remote: remote ? names : null, pairLink: () => (names ? remoteLink() : localLink()), localLink: () => localLink(), open: opts.opener ?? openHere };
     handle(home, req, want, which().address(), res, door)
       .then((body) => {
         if (body !== STREAMING) send(res, 200, body);
@@ -164,7 +176,7 @@ async function handle(
   want: Buffer,
   addr: ReturnType<ReturnType<typeof createServer>["address"]>,
   res?: ServerResponse,
-  door?: { sessions: Sessions; appDir: string; remote: string[] | null; pairLink: () => string },
+  door?: { sessions: Sessions; appDir: string; remote: string[] | null; pairLink: () => string; localLink: () => string; open: (url: string) => Promise<void> },
 ): Promise<unknown> {
   const port = addr && typeof addr !== "string" ? addr.port : -1;
   const host = (req.headers.host ?? "").toLowerCase();
@@ -222,6 +234,21 @@ async function handle(
   // the devices signed in, and the owner's passkeys (PLAN 2.7)
   if (method === "GET" && url.pathname === "/devices") return { devices: home.sessions.list().map((d) => ({ ...d, current: d.id === me?.id })) };
   if (method === "POST" && url.pathname === "/devices/pair" && door) return { link: door.pairLink(), lapsesInMs: 5 * 60_000 };
+  // the app opened in this machine's own browser (owner, 10-11: "how does the user connect their wallet? i dont see any
+  // way?"): Orbz's window is a browser profile of its own, so a wallet lives in the browser beside it. A link paired for
+  // it, to a place in the app, opened there; from this machine only, never through the door for other devices
+  if (method === "POST" && url.pathname === "/devices/open-browser" && door) {
+    if (door.remote) throw new HttpError(403, "a browser is opened only on the machine the home runs on");
+    const to = text(await body(req), "to");
+    if (!/^\/[a-z0-9/_-]{1,60}$/i.test(to)) throw new HttpError(400, "a place in the app, as /desk/trade");
+    const link = `${door.localLink()}&to=${encodeURIComponent(to)}`;
+    try {
+      await door.open(link);
+      return { opened: true, link: null };
+    } catch {
+      return { opened: false, link };
+    }
+  }
   if (method === "POST" && parts[0] === "devices" && parts.length === 3 && parts[2] === "revoke") {
     try {
       home.sessions.revoke(Number(parts[1]));

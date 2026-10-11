@@ -21,6 +21,11 @@ export function TradePanel({ home, crew, wallets, swaps, chains, reload }: { hom
   const [said, setSaid] = useState<string | null>(null);
   const [step, setStep] = useState<string | null>(null);
   useEffect(() => discover(setFound), []);
+  // no wallet in this browser (owner, 10-11: "how does the user connect their wallet? i dont see any way?"): Orbz's own
+  // window is a browser profile of its own, so a wallet lives in the browser beside it, or in a phone's wallet app
+  const here = ["127.0.0.1", "localhost", "[::1]"].includes(globalThis.location?.hostname ?? "");
+  const [elsewhere, setElsewhere] = useState<{ link: string | null; words: string } | null>(null);
+  const PLACE = "/desk/trade";
   const chainList = chains.length ? chains : [{ id: "base", name: "Base", kind: "evm" as const, explorer: "", tokens: [] }];
   const [chain, setChain] = useState("base");
   const c = chainList.find((x) => x.id === chain) ?? chainList[0]!;
@@ -86,7 +91,7 @@ export function TradePanel({ home, crew, wallets, swaps, chains, reload }: { hom
           ))}
         </section>
       )}
-      <section aria-label="Your wallets" style={card}>
+      <section aria-label="Your wallets" data-wallets style={card}>
         <span style={head}>Your wallets</span>
         <span style={small}>Connected here for their address only: Orbz never sees a key or a seed phrase, and only your wallet can sign.</span>
         {found.length > 0 ? (
@@ -99,7 +104,27 @@ export function TradePanel({ home, crew, wallets, swaps, chains, reload }: { hom
             ))}
           </Balanced>
         ) : (
-          <span data-no-wallet style={small}>No wallet in this browser. Add MetaMask, Phantom or another wallet here, or open Orbz in the browser (or the wallet app's own browser) where yours is. You can also add an address to watch:</span>
+          <div data-no-wallet style={{ display: "grid", gap: 8, minWidth: 0 }}>
+            <span style={small}>{here
+              ? "No wallet in this window: it is Orbz's own, so the wallet in your browser cannot reach it. Open Orbz in your browser, signed in, and connect it there."
+              : "No wallet in this browser. On a phone, open Orbz inside your wallet app (MetaMask, Phantom and the rest have a browser of their own): copy a link and open it there."}</span>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {here && (
+                <button type="button" data-open-browser style={strong} onClick={() => void act(async () => {
+                  const r = await home.openInBrowser(PLACE);
+                  setElsewhere(r.opened ? { link: null, words: "Opened in your browser: connect your wallet there." } : { link: r.link, words: "No browser could be opened from here: open this link in yours (good for five minutes)." });
+                })}>Open in my browser</button>
+              )}
+              <button type="button" data-copy-link style={here ? button : strong} onClick={() => void act(async () => {
+                const link = `${await home.pairPhone()}&to=${encodeURIComponent(PLACE)}`;
+                const copied = await globalThis.navigator?.clipboard?.writeText(link).then(() => true, () => false);
+                setElsewhere({ link, words: copied ? "Copied: open it in your wallet app's browser, or any browser with your wallet (good for five minutes)." : "Open this link in your wallet app's browser, or any browser with your wallet (good for five minutes)." });
+              })}>Copy a link</button>
+            </div>
+            {elsewhere && <span data-elsewhere style={small}>{elsewhere.words}</span>}
+            {elsewhere?.link && <code data-elsewhere-link style={{ ...small, overflowWrap: "anywhere", userSelect: "all" }}>{elsewhere.link}</code>}
+            <span style={small}>Or watch an address, to see what it holds:</span>
+          </div>
         )}
         <form onSubmit={(e) => { e.preventDefault(); void act(async () => (await home.addWallet(paste.trim()), setPaste(""), reload())); }} style={{ display: "flex", gap: 8, minWidth: 0 }}>
           <input aria-label="A wallet's public address" value={paste} onChange={(e) => setPaste(e.target.value)} placeholder="0x…, a Solana or a Bitcoin address" size={1} style={{ ...field, flex: "1 1 auto" }} />
