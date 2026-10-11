@@ -4,11 +4,11 @@
 // liquidity, volume, buys and sells, its pair's age), what it can do to whoever holds it, its last trades; a swap from
 // your wallet, and an orb sent to it, on paper or for real (each real trade still asked of you). Every number is the
 // home's, from the public DEX data; nothing here is advice.
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { Character } from "../orb/spec.ts";
-import { idOf, type DeskCandle, type DeskChain, type DeskDrawn, type DeskMarks, type DeskQuote, type DeskStrategy, type DeskTicker, type DexChain, type DexPair, type DexTrade, type Office, type TokenSafety } from "../home/link.ts";
+import { idOf, type DeskCandle, type DeskChain, type DeskDrawn, type DeskLive, type DeskMarks, type DeskQuote, type DeskStrategy, type DeskTicker, type DexChain, type DexPair, type DexTrade, type Office, type TokenSafety } from "../home/link.ts";
 import { Candles, type Layer } from "../ui/Candles.tsx";
-import { changeText, priceText, TF_MS } from "../ui/candles.ts";
+import { changeText, priceText, TF_MS, withLive } from "../ui/candles.ts";
 import { keep, loadKept, withStudy, type Kept } from "../ui/studies.ts";
 import { ChartMenu } from "./ChartMenu.tsx";
 import { orbLayer, strategyLayer, studyLayer, whoTradedHere, type Mode, type Who } from "./layers.ts";
@@ -31,6 +31,23 @@ export const age = (at: number | null, now: number): string => {
 const tone = (n: number | null): CSSProperties => ({ color: n === null ? "var(--text-3)" : n >= 0 ? "var(--ok)" : "var(--off)" });
 const money = (n: number | null): string => (n === null ? "–" : `$${priceText(n)}`);
 
+/** How often a chart asks for the market now. */
+const LIVE_MS = 4_000;
+
+/** A price that flashes green when it rises and red when it falls (owner, 10-11: "maybe see the state change too"). */
+function Price({ value, style }: { value: number | null; style: CSSProperties }) {
+  const el = useRef<HTMLSpanElement>(null);
+  const was = useRef(value);
+  useEffect(() => {
+    const before = was.current;
+    was.current = value;
+    if (before === null || value === null || before === value || !el.current) return;
+    const ink = getComputedStyle(el.current).getPropertyValue(value > before ? "--ok" : "--off").trim();
+    if (ink) el.current.animate([{ color: ink }, { color: getComputedStyle(el.current).color }], { duration: 900, easing: "ease-out" });
+  }, [value]);
+  return <span ref={el} className="num" data-token-price style={style}>{money(value)}</span>;
+}
+
 /** A number with its name over it, as a desk's stats read. */
 function Stat({ name, value, sub, data }: { name: string; value: ReactNode; sub?: ReactNode; data?: string }) {
   return (
@@ -45,8 +62,10 @@ function Stat({ name, value, sub, data }: { name: string; value: ReactNode; sub?
 /** The timeframes and the chart at the one chosen, with what its menu put on it (PLAN 5.32; owner, 10-11: "right click
  * and add lets say indicators, or an orbs strategy so we can see it visually. paper or live"): the studies kept in this
  * browser, the desk's strategies on paper or live, each orb's trades here; a right-click, a long press or ƒx opens it. */
-function Chart({ home, load, tfKey, market, label, phone, strategies, crew }: {
+function Chart({ home, load, tfKey, market, label, phone, strategies, crew, onPrice }: {
   home: Office; load: (tf: string) => Promise<DeskCandle[]>; tfKey: string; market: string; label: string; phone: boolean; strategies: DeskStrategy[]; crew: Character[];
+  /** the market's price now, as the chart hears it */
+  onPrice?: (price: number) => void;
 }) {
   const [tf, setTf] = useState("15m");
   const [candles, setCandles] = useState<DeskCandle[] | null>(null);
@@ -60,11 +79,14 @@ function Chart({ home, load, tfKey, market, label, phone, strategies, crew }: {
     setKept(k);
     keep(k);
   };
+  const heard = useRef<DeskLive | null>(null);
   useEffect(() => {
     let live = true;
     setCandles(null);
+    heard.current = null;
     const get = (): void => {
-      void load(tf).then((c) => live && (setCandles(c), setSaid(null)), (e: Error) => live && setSaid(e.message));
+      // the bars as read, with the market now in them still
+      void load(tf).then((c) => live && (setCandles(heard.current ? withLive(c, heard.current, tf) : c), setSaid(null)), (e: Error) => live && setSaid(e.message));
       void home.deskMarks(market).then((m) => live && setMarks(m), () => undefined);
     };
     get();
@@ -74,6 +96,24 @@ function Chart({ home, load, tfKey, market, label, phone, strategies, crew }: {
       window.clearInterval(t);
     };
   }, [tfKey, tf]);
+  // the market now, every few seconds (owner, 10-11: "the candlestick freezes at what we started the chart on, price
+  // too"): the forming bar moves between the bars' reads, and the page's price with it
+  useEffect(() => {
+    let live = true;
+    const tick = (): void =>
+      void home.deskLive(market, tf).then((l) => {
+        if (!live) return;
+        heard.current = l;
+        setCandles((c) => (c && c.length ? withLive(c, l, tf) : c));
+        if (l.price !== null) onPrice?.(l.price);
+      }, () => undefined);
+    tick();
+    const t = window.setInterval(tick, LIVE_MS);
+    return () => {
+      live = false;
+      window.clearInterval(t);
+    };
+  }, [market, tf]);
   // each strategy on the chart, read over the chart's own bars again when one closes
   const on = kept.strategies.filter((x) => strategies.some((s) => s.id === x.id));
   useEffect(() => {
@@ -140,7 +180,7 @@ function Chart({ home, load, tfKey, market, label, phone, strategies, crew }: {
         </button>
       </div>
       {candles && candles.length > 1 ? (
-        <Candles candles={candles} tf={tf} height={phone ? 280 : 380} paneHeight={phone ? 80 : 96} label={`${label} on ${tf} bars: the last ${candles.length}`} layers={layers}
+        <Candles key={`${market}:${tf}`} candles={candles} tf={tf} height={phone ? 280 : 380} paneHeight={phone ? 80 : 96} label={`${label} on ${tf} bars: the last ${candles.length}`} layers={layers}
           menu={(at) => setMenu({ at, editing: null })} onEdit={(id) => setMenu({ at: near(id), editing: id })} onRemove={remove} />
       ) : (
         <div style={{ ...well, height: phone ? 280 : 380, placeItems: "center", alignContent: "center" }}>
@@ -368,6 +408,10 @@ export function TokenPage({ home, chain, address, chains, crew, strategies, wall
 }) {
   const [pairs, setPairs] = useState<DexPair[] | null>(null);
   const [at, setAt] = useState(0);
+  const [livePrice, setLivePrice] = useState<number | null>(null);
+  useEffect(() => {
+    setLivePrice(null);
+  }, [chain, address]);
   const [safety, setSafety] = useState<TokenSafety | null>(null);
   const [trades, setTrades] = useState<DexTrade[] | null>(null);
   const [said, setSaid] = useState<string | null>(null);
@@ -449,7 +493,7 @@ export function TokenPage({ home, chain, address, chains, crew, strategies, wall
   const price = (
     <div style={{ display: "grid", gap: 6, minWidth: 0 }}>
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", columnGap: 14, rowGap: 2, minWidth: 0 }}>
-        <span className="num" data-token-price style={{ font: "900 32px/38px var(--font)", color: "var(--text-1)", overflowWrap: "anywhere" }}>{money(p.priceUsd)}</span>
+        <Price value={livePrice ?? p.priceUsd} style={{ font: "900 32px/38px var(--font)", color: "var(--text-1)", overflowWrap: "anywhere" }} />
         <span className="num" data-token-quick style={{ ...small, color: "var(--text-2)" }}>{`MC ${compact(p.marketCap ?? p.fdv)} · Liq ${compact(p.liquidityUsd)} · Vol ${compact(p.volume24h)}`}</span>
       </div>
       <OneLine gap={6} style={{ justifyContent: "flex-start" }}>
@@ -469,7 +513,7 @@ export function TokenPage({ home, chain, address, chains, crew, strategies, wall
       <Stat name="Pair age" value={age(p.createdAt, now)} data="age" />
     </Balanced>
   );
-  const chart = <Chart home={home} load={(tf) => home.dexCandles(chain, p.pair, address, tf, 300)} tfKey={`${p.pair}`} market={market} label={sym} phone={phone} strategies={strategies} crew={crew} />;
+  const chart = <Chart home={home} load={(tf) => home.dexCandles(chain, p.pair, address, tf, 300)} tfKey={`${p.pair}`} market={market} label={sym} phone={phone} strategies={strategies} crew={crew} onPrice={setLivePrice} />;
   const trade = <TradeBox home={home} chain={chain} token={address} symbol={sym} chains={chains} wallet={wallet} openWallet={openWallet} />;
   const send = <SendOrb home={home} crew={crew} market={market} label={sym} />;
   if (phone) {
@@ -506,6 +550,10 @@ export function TokenPage({ home, chain, address, chains, crew, strategies, wall
 
 /** A major (BTC, ETH, SOL and the rest): its chart from the market, its day, an orb sent to it on paper. */
 export function MajorPage({ home, symbol, ticker, crew, strategies, phone, back }: { home: Office; symbol: string; ticker: DeskTicker | null; crew: Character[]; strategies: DeskStrategy[]; phone: boolean; back: () => void }) {
+  const [livePrice, setLivePrice] = useState<number | null>(null);
+  useEffect(() => {
+    setLivePrice(null);
+  }, [symbol]);
   const head1 = (
     <div style={{ display: "grid", gap: 6, minWidth: 0 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -513,11 +561,11 @@ export function MajorPage({ home, symbol, ticker, crew, strategies, phone, back 
         <span style={{ font: "900 22px/28px var(--font)", color: "var(--text-1)" }}>{symbol}</span>
         <span style={small}>US dollars · the majors' market</span>
       </div>
-      <span className="num" data-token-price style={{ font: "900 32px/38px var(--font)", color: "var(--text-1)" }}>{ticker ? money(ticker.price) : "–"}</span>
+      <Price value={livePrice ?? ticker?.price ?? null} style={{ font: "900 32px/38px var(--font)", color: "var(--text-1)" }} />
       {ticker && <span className="num" style={{ ...small, ...tone(ticker.changePct) }}>{`${changeText(ticker.changePct)} today · from ${money(ticker.low)} to ${money(ticker.high)}${ticker.stale ? " · stale" : ""}`}</span>}
     </div>
   );
-  const chart = <Chart home={home} load={(tf) => home.candles(symbol, tf, 200)} tfKey={symbol} market={symbol} label={symbol} phone={phone} strategies={strategies} crew={crew} />;
+  const chart = <Chart home={home} load={(tf) => home.candles(symbol, tf, 200)} tfKey={symbol} market={symbol} label={symbol} phone={phone} strategies={strategies} crew={crew} onPrice={setLivePrice} />;
   const send = <SendOrb home={home} crew={crew} market={symbol} label={symbol} />;
   return phone ? (
     <div data-major-page={symbol} style={{ display: "grid", gap: "var(--s3)", minWidth: 0 }}>{head1}{chart}{send}</div>

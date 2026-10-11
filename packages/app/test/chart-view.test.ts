@@ -28,6 +28,7 @@ import { standInChains, standInMarket, standInRouters } from "../../home/test/fa
 import { MINT, POOL, standInDexFetch } from "../../home/test/fakes/dex.ts";
 import { keptBy, TURNS } from "../src/floor/props.ts";
 import { closesAt } from "../src/ui/candles.ts";
+import { SYMBOLS } from "../src/desk/kit.ts";
 
 const APP = fileURLToPath(new URL("..", import.meta.url));
 const skip = findChrome() ? false : "no Chromium on this machine";
@@ -46,6 +47,9 @@ after(async () => {
 });
 
 const COIN = `solana:${MINT}`;
+const LIVE = 0.1777; // the stand-in Jupiter's price now
+// the coins by market cap, as the stand-in CoinGecko says: stablecoins among them, ETH over BTC
+const RANKED = ["ETH", "BTC", "USDT", "SOL", "XRP", "USDC", "BNB", "DOGE", "TRX", "ADA", "LINK", "ZEC", "HYPE"];
 const ema = (a: number, b: number, op: "crosses_above" | "crosses_below") => ({ all: [{ left: { kind: "ema" as const, period: a }, op, right: { kind: "ema" as const, period: b } }] });
 const WAVE: Strategy = { name: "Wave cross", symbol: COIN, timeframe: "15m", sizePct: 50, entry: ema(5, 13, "crosses_above"), exit: ema(5, 13, "crosses_below") };
 
@@ -63,7 +67,7 @@ test("the desk's chart: the bar's clock; indicators from its right-click menu, k
   const h = Home.open({
     dataDir: data, protect: [], spendCapUsd: null,
     brain: { preset: { id: "t", title: "t", own: null, big: { name: "big", baseUrl: model.url, model: "m", retries: 0 }, teacher: null } },
-    desk: { on: true, source: standInMarket(() => Date.now()), routers: standInRouters({ outPer: () => 680 }), fetch: chains, dex: publicDex({ fetch: standInDexFetch({ chart: () => Date.now() }) }) },
+    desk: { on: true, source: standInMarket(() => Date.now(), { ranks: () => RANKED }), routers: standInRouters({ outPer: () => 680 }), fetch: chains, dex: publicDex({ fetch: standInDexFetch({ chart: () => Date.now(), jupiter: () => LIVE }) }) },
   });
   t.after(() => h.close());
   h.start();
@@ -108,6 +112,23 @@ test("the desk's chart: the bar's clock; indicators from its right-click menu, k
   };
 
   const page = await open({ width: 1280, height: 1000 });
+  // the tape: the top 10 by market cap, the largest first (no stablecoin), each
+  // pressed opening its chart on the war room's screen; a pointer over the tape holds it still (owner, 10-11: "have top
+  // 10 cryptos clickable on the top there where you see the up and down")
+  await page.locator("[data-tick]").first().waitFor({ timeout: 20_000 });
+  assert.deepEqual(await page.locator("[data-tick]").evaluateAll((els) => els.map((e) => e.getAttribute("data-tick"))), ["ETH", "BTC", "SOL", "XRP", "BNB", "DOGE", "TRX", "ADA", "LINK", "ZEC"]);
+  assert.ok(SYMBOLS.includes("HYPE"), "the eleventh by market cap is a major too, and left off");
+  await page.locator('[data-tick="ETH"]').hover({ force: true });
+  await page.locator('[data-tick="ETH"]').click();
+  await page.locator('[data-major-page="ETH"] [data-candles]').waitFor({ timeout: 20_000 });
+  await page.locator("[data-token-close]").click();
+  await page.locator("[data-token-desk]").waitFor({ state: "detached" });
+  // the screen's list: the majors first, then what trends (owner: "put the majors on top")
+  await page.locator("[data-war-screen]").click();
+  await page.locator("[data-majors]").waitFor();
+  assert.ok(await page.evaluate(() => document.querySelector("[data-majors]")!.getBoundingClientRect().bottom <= document.querySelector("[data-trending]")!.getBoundingClientRect().top), "the majors above what trends, on the screen");
+  await page.locator("[data-token-close]").click();
+  await page.locator("[data-token-desk]").waitFor({ state: "detached" });
   await coin(page);
   // the time left on the bar forming now (15-minute bars), under the last price, counting down
   const clock = page.locator("[data-bar-clock]");
@@ -123,6 +144,33 @@ test("the desk's chart: the bar's clock; indicators from its right-click menu, k
   const svg = page.locator("[data-token-page] [data-candles] svg[data-panes]");
   const box = (await svg.boundingBox())!;
   const at = { x: box.x + box.width / 2, y: box.y + 80 };
+  // the market now (owner, 10-11: "the candlestick freezes at what we started the chart on, price too"): within seconds
+  // the forming bar closes at Jupiter's price, and the page's price says it
+  await page.locator(`svg[data-panes] [data-last="${LIVE}"]`).waitFor({ timeout: 15_000 });
+  await page.locator("[data-token-price]", { hasText: `$${LIVE}` }).waitFor({ timeout: 15_000 });
+  // zoom (owner: "be able to zoom in and out of chart"): the wheel where the pointer is, the buttons, a drag back in
+  // time and back to the latest bar, a double-click as it was
+  const view = async (): Promise<[number, number]> => (await svg.getAttribute("data-view"))!.split(":").map(Number) as [number, number];
+  const [fit] = await view();
+  await page.mouse.move(at.x, at.y);
+  await page.mouse.wheel(0, -500);
+  await page.waitForFunction((f) => Number(document.querySelector("svg[data-panes]")!.getAttribute("data-view")!.split(":")[0]) < f, fit);
+  const [closer] = await view();
+  await page.locator('[data-zoom="in"]').click();
+  assert.ok((await view())[0] < closer, "zoomed in again");
+  await page.locator('[data-zoom="out"]').click();
+  await page.locator('[data-zoom="out"]').click();
+  assert.ok((await view())[0] > closer, "and out");
+  assert.equal(await page.locator('[data-zoom="latest"]').count(), 0, "at the latest bar, nothing to go back to");
+  await page.mouse.move(at.x, at.y);
+  await page.mouse.down();
+  await page.mouse.move(at.x + 240, at.y, { steps: 8 });
+  await page.mouse.up();
+  assert.ok((await view())[1] > 0, "dragged right: back in time");
+  await page.locator('[data-zoom="latest"]').click();
+  assert.equal((await view())[1], 0, "back to the latest bar");
+  await page.mouse.dblclick(at.x, at.y);
+  assert.deepEqual(await view(), [fit, 0], "a double-click: as it was");
   await page.mouse.click(at.x, at.y, { button: "right" });
   const dialog = page.locator("[data-chart-menu] [role=dialog]");
   await dialog.waitFor();

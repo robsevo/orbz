@@ -241,6 +241,8 @@ export type DeskSettings = { perTradeUsd: number; perDayUsd: number; slippageBps
 export type DeskEvent = { seq: number; at: number; orb: string | null } & Record<string, unknown>;
 export type DeskState = {
   now: number; market: { source: string; ok: boolean; lastOk: number | null; error: string | null; restingUntil: number | null }; prices: DeskTicker[];
+  /** The top 10 majors by market cap, the largest first (owner, 10-11: "have top 10 cryptos clickable on the top"). */
+  top?: string[];
   strategies: DeskStrategy[]; books: DeskBook[]; notes: { id: number; orb: string; symbol: string; title: string; text: string; at: number }[]; settings: DeskSettings;
   fills: DeskEvent[]; trades: DeskEvent[]; wallets: DeskWallet[]; swaps: DeskSwap[]; chains: DeskChain[];
   /** Any token a book holds or a swap names, by its key ("solana:<mint>"), and how the DEX data is (PLAN 5.28). */
@@ -268,6 +270,7 @@ export type DeskFill = {
   kind: "paper" | "real"; orb: string | null; at: number; side: "buy" | "sell"; px: number | null; qty: number | null; usd: number | null;
   book?: number; strategy?: number | null; swap?: number; state?: string; tx?: string | null; why?: string;
 };
+export type DeskLive = { market: string; at: number; price: number | null; bar: DeskCandle | null };
 export type DeskMarks = { fills: DeskFill[]; runs: { book: number; orb: string; strategy: number; startedAt: number; stoppedAt: number | null; state: "live" | "stopped" }[] };
 export type TokenSafety = { checked: string[]; flags: { level: "warn" | "note"; words: string }[] };
 export type DeskBuilt = { kind: "evm"; chainId: number; approve: { to: string; data: string } | null; tx: { to: string; data: string; value: string; gas: string | null } } | { kind: "solana"; transaction: string };
@@ -322,6 +325,8 @@ export interface Office {
    * each orb's paper fills, the real trades that went, the strategies run on it (PLAN 5.32). */
   drawStrategy(spec: DeskSpec, bars: DeskCandle[]): Promise<DeskDrawn>;
   deskMarks(market: string): Promise<DeskMarks>;
+  /** A market now, for a chart's forming bar (PLAN 5.33): a major's own forming bar, any coin's live price. */
+  deskLive(market: string, tf: string): Promise<DeskLive>;
   saveStrategy(spec: DeskSpec): Promise<DeskStrategy>;
   archiveStrategy(id: number): Promise<void>;
   runStrategy(id: number, orb: string): Promise<DeskBook>;
@@ -683,6 +688,9 @@ export function doorOffice(base: Character): Office {
     },
     async deskMarks(market) {
       return call<DeskMarks>(`../desk/marks?market=${encodeURIComponent(market)}`);
+    },
+    async deskLive(market, tf) {
+      return call<DeskLive>(`../desk/live?market=${encodeURIComponent(market)}&tf=${encodeURIComponent(tf)}`);
     },
     async saveStrategy(spec) {
       return (await call<{ strategy: DeskStrategy }>("../desk/strategies", { method: "POST", body: JSON.stringify({ strategy: spec }) })).strategy;

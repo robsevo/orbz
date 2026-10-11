@@ -13,11 +13,14 @@ export interface MarketSource {
   readonly name: string;
   candles(symbol: string, tf: Timeframe, limit: number): Promise<Candle[]>;
   tickers(symbols: readonly string[]): Promise<Ticker[]>;
+  /** Coins' symbols by market cap, the largest first (CoinGecko's free markets list). */
+  ranks?(): Promise<string[]>;
 }
 
 /** Binance's public market data (USDT pairs, read as dollars). */
-export function binanceSource(o: { base?: string; fetch?: typeof fetch } = {}): MarketSource {
+export function binanceSource(o: { base?: string; fetch?: typeof fetch; gecko?: string } = {}): MarketSource {
   const base = o.base ?? "https://data-api.binance.vision";
+  const coingecko = o.gecko ?? "https://api.coingecko.com/api/v3";
   const get = o.fetch ?? fetch;
   const json = async (path: string): Promise<unknown> => {
     const r = await get(`${base}${path}`, { signal: AbortSignal.timeout(10_000), headers: { accept: "application/json" } });
@@ -29,6 +32,12 @@ export function binanceSource(o: { base?: string; fetch?: typeof fetch } = {}): 
     async candles(symbol, tf, limit) {
       const rows = (await json(`/api/v3/klines?symbol=${encodeURIComponent(`${symbol}USDT`)}&interval=${tf}&limit=${Math.min(1000, Math.max(1, limit))}`)) as unknown[][];
       return rows.map((r) => ({ t: Number(r[0]), o: Number(r[1]), h: Number(r[2]), l: Number(r[3]), c: Number(r[4]), v: Number(r[5]) }));
+    },
+    async ranks() {
+      const r = await get(`${coingecko}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=60&page=1`, { signal: AbortSignal.timeout(10_000), headers: { accept: "application/json" } });
+      if (!r.ok) throw new Error(`CoinGecko answered ${r.status}`);
+      const rows = (await r.json()) as { symbol?: unknown }[];
+      return (Array.isArray(rows) ? rows : []).map((x) => String(x.symbol ?? "").toUpperCase()).filter(Boolean);
     },
     async tickers(symbols) {
       const list = encodeURIComponent(JSON.stringify(symbols.map((s) => `${s}USDT`)));
@@ -58,6 +67,10 @@ export class Market {
   static readonly PRICES_MS = 5_000;
   /** A price older than this is stale. */
   static readonly STALE_MS = 60_000;
+  /** How long the forming bar is kept for a chart. */
+  static readonly FORMING_MS = 2_000;
+  /** How long the coins' order by market cap is kept. */
+  static readonly RANKS_MS = 60 * 60_000;
 
   constructor(source: MarketSource, now: () => number, dex: Dex | null = null) {
     this.#source = source;
@@ -104,6 +117,38 @@ export class Market {
       .sort((a, b) => a.t - b.t);
     this.#candles.set(key, { at: this.#now(), bars });
     return bars.slice(-limit);
+  }
+
+  readonly #forming = new Map<string, { at: number; bar: Candle }>();
+  /** The bar forming now, kept two seconds: a chart's live bar between its bars (PLAN 5.33; owner, 10-11: "the
+   * candlestick freezes at what we started the chart on, price too"). */
+  async forming(symbol: string, tf: Timeframe): Promise<Candle | null> {
+    const key = `${symbol}:${tf}`;
+    const have = this.#forming.get(key);
+    if (have && this.#now() - have.at < Market.FORMING_MS) return have.bar;
+    const bar = (await this.#ask(() => this.#source.candles(symbol, tf, 1))).filter((b) => [b.t, b.o, b.h, b.l, b.c, b.v].every(Number.isFinite)).at(-1) ?? null;
+    if (bar) this.#forming.set(key, { at: this.#now(), bar });
+    return bar;
+  }
+
+  #ranks: { at: number; top: string[] } | null = null;
+  #ranksFailedAt = 0;
+  /** The top `n` majors by market cap (owner, 10-11: "have top 10 cryptos clickable on the top"): CoinGecko's order of
+   * the coins, the majors' among them (no stablecoin is a major), read once an hour; when it cannot say, its last order,
+   * or the majors' own (the largest first, as kept). Asked again no sooner than five minutes after failing. */
+  async top(n = 10): Promise<string[]> {
+    const now = this.#now();
+    if (this.#source.ranks && (!this.#ranks || now - this.#ranks.at >= Market.RANKS_MS) && now - this.#ranksFailedAt >= 5 * 60_000) {
+      try {
+        const ranked = await this.#source.ranks();
+        const majors = [...new Set(ranked.filter((s) => (SYMBOLS as readonly string[]).includes(s)))];
+        if (majors.length >= n) this.#ranks = { at: now, top: majors };
+        else throw new Error("too few of the majors ranked");
+      } catch {
+        this.#ranksFailedAt = now;
+      }
+    }
+    return (this.#ranks?.top ?? [...SYMBOLS]).slice(0, n);
   }
 
   /** The bars that have closed by now (a strategy reads only these). */

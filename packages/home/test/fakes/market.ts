@@ -15,10 +15,11 @@ export function made(symbol: string, i: number): number {
   return base * (1 + 0.00001 * i + 0.03 * Math.sin(i / 7) + 0.006 * Math.sin(i * 1.7));
 }
 
-export function standInMarket(now: () => number, o: { fail?: () => boolean; price?: (symbol: string) => number | null } = {}): MarketSource & { asks: number } {
+export function standInMarket(now: () => number, o: { fail?: () => boolean; price?: (symbol: string) => number | null; ranks?: () => string[] } = {}): MarketSource & { asks: number } {
   const src = {
     name: "stand-in market",
     asks: 0,
+    ...(o.ranks && { ranks: async (): Promise<string[]> => (src.asks++, o.ranks!()) }),
     async candles(symbol: string, tf: Timeframe, limit: number): Promise<Candle[]> {
       src.asks++;
       if (o.fail?.()) throw new Error("the stand-in market is down");

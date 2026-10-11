@@ -45,8 +45,9 @@ export type Strategy = {
   slippageBps?: number;
 };
 
-/** The symbols a strategy can trade, as the market feed names them. */
-export const SYMBOLS = ["BTC", "ETH", "SOL", "BNB", "LINK", "DOGE", "AVAX", "UNI", "AAVE"] as const;
+/** The majors: the symbols a strategy can trade, as the market feed names them; the largest coins by market cap with a
+ * dollar market there (10-11, the owner: "have top 10 cryptos ... on the top": the top 10 of them, ranked, is `Market.top`). */
+export const SYMBOLS = ["BTC", "ETH", "BNB", "XRP", "SOL", "TRX", "DOGE", "ZEC", "HYPE", "XMR", "LINK", "ADA", "NEAR", "XLM", "BCH", "LTC", "UNI", "AVAX", "SUI", "TON", "DOT", "HBAR", "AAVE", "SHIB", "PEPE"] as const;
 
 // ── checking ──────────────────────────────────────────────────────────────────────────────────────
 const int = (v: unknown, lo: number, hi: number): boolean => Number.isInteger(v) && (v as number) >= lo && (v as number) <= hi;

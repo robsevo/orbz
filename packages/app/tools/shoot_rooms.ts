@@ -17,6 +17,7 @@ import { fakeModel } from "../../home/test/fakes/model.ts";
 import { standInMarket, standInRouters } from "../../home/test/fakes/market.ts";
 import { keptBy, TURNS } from "../src/floor/props.ts";
 import { publicDex } from "../../home/src/desk/dex.ts";
+import { standInDexFetch } from "../../home/test/fakes/dex.ts";
 
 const APP = new URL("..", import.meta.url).pathname;
 const dir = process.argv[2]!;
@@ -46,7 +47,9 @@ const h = Home.open({
   brain: { preset: { id: "t", title: "t", own: null, big: { name: "big", baseUrl: model.url, model: "m", retries: 0 }, teacher: null } },
   // the war room's screen reads the public DEX data and the chains for real (a coin's page as it is); the majors and
   // the routers stay stand-ins
-  desk: { on: true, source: standInMarket(() => Date.now()), routers: standInRouters({ outPer: () => 0.0004 }), dex: publicDex() },
+  // --stand-in-dex: the DEX's answers made here (a chart's worth of bars, a live price), so a shoot never spends the
+  // public APIs' minute that a running home shares on this machine (10-11: "api.geckoterminal.com answered 429")
+  desk: { on: true, source: standInMarket(() => Date.now()), routers: standInRouters({ outPer: () => 0.0004 }), dex: process.argv.includes("--stand-in-dex") ? publicDex({ fetch: standInDexFetch({ chart: () => Date.now(), jupiter: () => 0.1777 }) }) : publicDex() },
 });
 h.start();
 h.about.setName("Robin");

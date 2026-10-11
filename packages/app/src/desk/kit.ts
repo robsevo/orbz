@@ -35,7 +35,8 @@ export const ago = (at: number, now = Date.now()): string => {
   return s < 60 ? `${s}s ago` : s < 3600 ? `${Math.round(s / 60)}m ago` : s < 86_400 ? `${Math.round(s / 3600)}h ago` : `${Math.round(s / 86_400)}d ago`;
 };
 
-export const SYMBOLS = ["BTC", "ETH", "SOL", "BNB", "LINK", "DOGE", "AVAX", "UNI", "AAVE"] as const;
+/** The majors, as the home keeps them (home desk/strategy.ts; held alike by test/majors.test.ts). */
+export const SYMBOLS = ["BTC", "ETH", "BNB", "XRP", "SOL", "TRX", "DOGE", "ZEC", "HYPE", "XMR", "LINK", "ADA", "NEAR", "XLM", "BCH", "LTC", "UNI", "AVAX", "SUI", "TON", "DOT", "HBAR", "AAVE", "SHIB", "PEPE"] as const;
 export const TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "1d"] as const;
 
 /** The strategies a builder starts from, each a known setup with its two numbers to tune. */

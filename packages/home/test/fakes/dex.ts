@@ -20,7 +20,7 @@ export const screener = (o: { chain?: string; dex?: string; pair: string; base: 
 });
 
 /** DexScreener's and GeckoTerminal's public APIs as a test sets them, routed by path; every URL asked for kept. */
-export function standInDexFetch(o: { price?: () => string; fail?: () => boolean; chart?: () => number } = {}): typeof fetch & { urls: string[] } {
+export function standInDexFetch(o: { price?: () => string; fail?: () => boolean; chart?: () => number; jupiter?: () => number | null } = {}): typeof fetch & { urls: string[] } {
   const urls: string[] = [];
   const f = (async (input: string | URL | Request) => {
     const url = new URL(String(input));
@@ -28,6 +28,12 @@ export function standInDexFetch(o: { price?: () => string; fail?: () => boolean;
     urls.push(url.pathname + url.search);
     if (o.fail?.()) return new Response("{}", { status: 503 });
     const json = (v: unknown): Response => new Response(JSON.stringify(v), { headers: { "content-type": "application/json" } });
+    // Jupiter's price API (PLAN 5.33): each mint asked at the stand-in's price; none answers, 503
+    if (url.hostname === "lite-api.jup.ag" && url.pathname === "/price/v3") {
+      const px = o.jupiter?.() ?? null;
+      if (px === null) return new Response("{}", { status: 503 });
+      return json(Object.fromEntries((url.searchParams.get("ids") ?? "").split(",").map((m) => [m, { usdPrice: px, blockId: 1, decimals: 6 }])));
+    }
     // a coin's picture, on an image host: a few bytes of PNG, or an SVG and a picture too big, to be refused
     if (url.hostname === "dd.dexscreener.com") {
       if (url.pathname.endsWith(".svg")) return new Response("<svg xmlns='http://www.w3.org/2000/svg'/>", { headers: { "content-type": "image/svg+xml" } });

@@ -84,7 +84,7 @@ test("a strategy is checked, saying why when it cannot run, and said back in pla
   assert.equal(problemOf(crossing), null);
   assert.equal(words(crossing), "Buy ETH on 1h bars when the 5-bar EMA crosses above the 20-bar EMA; sell when the 5-bar EMA crosses below the 20-bar EMA, or at a 4% stop, or at a 8% target. Each trade takes 50% of the account.");
   const bad: [Partial<Strategy>, RegExp][] = [
-    [{ symbol: "SHIB" }, /trades one of BTC, ETH/],
+    [{ symbol: "NOPE" }, /trades one of BTC, ETH/],
     [{ timeframe: "2m" as never }, /bars are 1m, 5m/],
     [{ sizePct: 0 }, /1 to 100 percent/],
     [{ stopLossPct: 80 }, /stopLossPct is 0.1 to 50/],

@@ -110,3 +110,22 @@ export function paneText(v: number): string {
   const a = Math.abs(v);
   return a >= 1 || a === 0 ? v.toFixed(2) : v.toPrecision(3);
 }
+
+/** A chart's bars with the market now in them (PLAN 5.33; owner, 10-11: "the candlestick freezes at what we started the
+ * chart on, price too"): a feed's own forming bar where the last is, or after it; else a price now, in the bar forming
+ * at its time (its high and low stretched to it, its close it), or as the first of a new one. Older news changes nothing. */
+export function withLive(bars: readonly DeskBar[], live: { at: number; price: number | null; bar: DeskBar | null }, tf: string): DeskBar[] {
+  const last = bars.at(-1);
+  if (!last) return [...bars];
+  if (live.bar) {
+    if (live.bar.t === last.t) return [...bars.slice(0, -1), live.bar];
+    return live.bar.t > last.t ? [...bars, live.bar] : [...bars];
+  }
+  const p = live.price;
+  const ms = TF_MS[tf];
+  if (p === null || !(p > 0) || !ms) return [...bars];
+  const start = Math.floor(live.at / ms) * ms;
+  if (start === last.t) return [...bars.slice(0, -1), { ...last, h: Math.max(last.h, p), l: Math.min(last.l, p), c: p }];
+  return start > last.t ? [...bars, { t: start, o: last.c, h: Math.max(last.c, p), l: Math.min(last.c, p), c: p, v: 0 }] : [...bars];
+}
+type DeskBar = { t: number; o: number; h: number; l: number; c: number; v: number };

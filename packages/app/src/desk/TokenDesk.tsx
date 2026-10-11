@@ -126,6 +126,17 @@ function Finder({ home, q, prices, pick, wide }: { home: Office; q: string; pric
   }
   return (
     <div style={{ display: "grid", gap: "var(--s3)", minWidth: 0 }}>
+      <div data-majors style={{ display: "grid", gap: 6, minWidth: 0 }}>
+        <span style={head}>The majors · top 10 by market cap</span>
+        <OneLine gap={6} style={{ justifyContent: "flex-start" }}>
+          {prices.map((t) => (
+            <button key={t.symbol} type="button" className="orbs-small" data-major={t.symbol} onClick={() => pick({ kind: "major", symbol: t.symbol })} style={chip(false)}>
+              {t.symbol}
+              <span className="num" style={{ marginLeft: 6, color: t.changePct >= 0 ? "var(--ok)" : "var(--off)" }}>{changeText(t.changePct)}</span>
+            </button>
+          ))}
+        </OneLine>
+      </div>
       <div data-trending style={{ display: "grid", gap: 6, minWidth: 0 }}>
         <span style={head}>Trending now</span>
         <OneLine gap={6} style={{ justifyContent: "flex-start" }}>
@@ -139,17 +150,6 @@ function Finder({ home, q, prices, pick, wide }: { home: Office; q: string; pric
           {wide && !!trending?.length && <Heads />}
           {trending?.slice(0, 20).map((p) => <Row key={`${p.chain}:${p.base.address}:${p.pair}`} p={p} now={now} wide={wide} pick={() => pick({ kind: "token", chain: p.chain, address: p.base.address })} />)}
         </div>
-      </div>
-      <div data-majors style={{ display: "grid", gap: 6, minWidth: 0 }}>
-        <span style={head}>The majors</span>
-        <OneLine gap={6} style={{ justifyContent: "flex-start" }}>
-          {prices.map((t) => (
-            <button key={t.symbol} type="button" className="orbs-small" data-major={t.symbol} onClick={() => pick({ kind: "major", symbol: t.symbol })} style={chip(false)}>
-              {t.symbol}
-              <span className="num" style={{ marginLeft: 6, color: t.changePct >= 0 ? "var(--ok)" : "var(--off)" }}>{changeText(t.changePct)}</span>
-            </button>
-          ))}
-        </OneLine>
       </div>
     </div>
   );

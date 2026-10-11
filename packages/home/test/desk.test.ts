@@ -144,6 +144,30 @@ function bech32(hrp: string, version: number, program: Uint8Array): string {
 }
 const bytes = (n: number, seed: number): Uint8Array => Uint8Array.from({ length: n }, (_, i) => (seed * 31 + i * 17) % 256);
 
+test("the top 10 majors by market cap (owner, 10-11: \"have top 10 cryptos clickable on the top\"): CoinGecko's order, no stablecoin or coin the market has not; kept an hour; its last order, or the majors' own, when it cannot say", async () => {
+  let now = Date.parse("2026-10-11T12:00:00Z");
+  let ranks: () => string[] = () => ["BTC", "ETH", "USDT", "BNB", "XRP", "USDC", "SOL", "TRX", "FIGR_HELOC", "ZEC", "HYPE", "DOGE", "USDS", "XMR", "LINK", "WBT", "ADA"];
+  const src = standInMarket(() => now, { ranks: () => ranks() });
+  const market = new Market(src, () => now);
+  const ten = ["BTC", "ETH", "BNB", "XRP", "SOL", "TRX", "ZEC", "HYPE", "DOGE", "XMR"];
+  assert.deepEqual(await market.top(10), ten, "stablecoins and coins with no market here left out, the order kept");
+  ranks = () => ["ETH", "BTC", "SOL", "BNB", "XRP", "TRX", "ZEC", "HYPE", "DOGE", "XMR", "ADA"];
+  const asks = src.asks;
+  assert.deepEqual(await market.top(10), ten, "kept an hour");
+  assert.equal(src.asks, asks, "not asked again");
+  now += 61 * 60_000;
+  assert.deepEqual((await market.top(3)), ["ETH", "BTC", "SOL"], "an hour on: the order now");
+  ranks = () => {
+    throw new Error("CoinGecko answered 429");
+  };
+  now += 61 * 60_000;
+  assert.deepEqual(await market.top(3), ["ETH", "BTC", "SOL"], "it cannot say: its last order stands");
+  const fresh = new Market(standInMarket(() => now, { ranks: () => ranks() }), () => now);
+  assert.deepEqual(await fresh.top(4), ["BTC", "ETH", "BNB", "XRP"], "never read: the majors' own order");
+  const few = new Market(standInMarket(() => now, { ranks: () => ["BTC", "USDT"] }), () => now);
+  assert.deepEqual(await few.top(2), ["BTC", "ETH"], "too few majors in its list is no order");
+});
+
 test("addresses are read by their own chain's rules, and a typo is refused", () => {
   const evm = checksummed(`0x${Buffer.from(bytes(20, 3)).toString("hex")}`);
   assert.deepEqual(readAddress(evm), { chain: "evm", address: evm });
@@ -264,7 +288,7 @@ test("through the door: the desk's snapshot, a strategy kept and run, your own s
   assert.equal((await call("GET", "/desk/candles?symbol=NOPE&tf=1h")).status, 400);
   const bt = await call("POST", "/desk/backtest", { strategy: crossing });
   assert.ok(typeof (bt.json.backtest as { metrics: { returnPct: number } }).metrics.returnPct === "number");
-  assert.equal((await call("POST", "/desk/backtest", { strategy: { ...crossing, symbol: "SHIB" } })).status, 409, "a strategy that cannot run says why");
+  assert.equal((await call("POST", "/desk/backtest", { strategy: { ...crossing, symbol: "NOPE" } })).status, 409, "a strategy that cannot run says why");
   const kept = (await call("POST", "/desk/strategies", { strategy: crossing })).json.strategy as { id: number; words: string };
   assert.match(kept.words, /^Buy ETH on 1m bars/);
   const run = await call("POST", "/desk/runs", { strategy: kept.id, orb: "tess" });

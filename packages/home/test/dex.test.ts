@@ -112,6 +112,33 @@ test("GeckoTerminal held to its minute (owner, 10-11: \"api.geckoterminal.com an
   await assert.rejects(() => dex.candles("solana", "p8", MINT, "15m"), /429/, "an answer half an hour old does not stand in");
 });
 
+test("a market now, for a chart's forming bar (owner, 10-11: \"the candlestick freezes at what we started the chart on, price too\"): a Solana coin at Jupiter's price, kept seconds; its pair's when Jupiter cannot say, and on another chain; a major's own forming bar; never GeckoTerminal", async (t) => {
+  let jup: number | null = 0.171;
+  const clock = new FakeClock(START);
+  const dexFetch = standInDexFetch({ jupiter: () => jup });
+  const { home } = await agentHome(t, [], { clock, desk: { source: standInMarket(() => clock.now()), routers: standInRouters({ outPer: () => 680 }), fetch: standInChains({}), dex: publicDex({ fetch: dexFetch }) } });
+  const door = await serve(home, { port: 0 });
+  t.after(() => door.close());
+  const live = async (market: string, tf = "15m") => {
+    const r = await fetch(`http://127.0.0.1:${door.port}/desk/live?market=${encodeURIComponent(market)}&tf=${tf}`, { headers: { authorization: `Bearer ${door.token}` } });
+    return { status: r.status, body: (await r.json()) as { price: number | null; bar: { t: number; c: number } | null } };
+  };
+  assert.equal((await live(`solana:${MINT}`)).body.price, 0.171, "Jupiter's price");
+  jup = 0.18;
+  assert.equal((await live(`solana:${MINT}`)).body.price, 0.171, "kept a few seconds");
+  clock.suspend(3_500);
+  assert.equal((await live(`solana:${MINT}`)).body.price, 0.18, "asked again after them");
+  jup = null;
+  clock.suspend(3_500);
+  assert.equal((await live(`solana:${MINT}`)).body.price, 0.16, "Jupiter not answering: its most liquid pair's price");
+  assert.equal((await live(`base:${EVM_TOKEN}`)).body.price, 2, "another chain: its pair's");
+  const sol = (await live("SOL", "1m")).body;
+  assert.ok(sol.bar && sol.price === sol.bar.c && sol.bar.t <= clock.now() && clock.now() < sol.bar.t + 60_000, "a major: its own forming bar, now");
+  assert.ok(!dexFetch.urls.some((u) => u.includes("/ohlcv/") || u.includes("/trades") || u.includes("trending")), "never GeckoTerminal");
+  assert.equal((await live("NOPE")).status, 400);
+  assert.equal((await live("SOL", "3m")).status, 400);
+});
+
 test("a token's key and address: a pump.fun mint, a Solana token, an EVM token; what is not one", () => {
   assert.ok(isTokenAddress("solana", MINT), "a pump.fun mint is a Solana address like any other");
   assert.ok(isTokenAddress("solana", BONK));
@@ -286,7 +313,7 @@ test("an orb sent to a coin: told in its chat, on paper or for real (each real t
   assert.deepEqual(home.events.ofType("desk.sent").map((e) => [e.orb, e.data.label, e.data.mode]), [["tess", "Fartcoin", "paper"], ["tess", "Fartcoin", "real"]], "its moment on the floor: to the war room's screen");
   assert.equal((await post({ orb: "tess", market: "BTC" })).status, 200, "a major too");
   assert.equal((await post({ orb: "nobody", market: key })).status, 404);
-  assert.equal((await post({ orb: "tess", market: "SHIB" })).status, 400, "not a market");
+  assert.equal((await post({ orb: "tess", market: "NOPE" })).status, 400, "not a market");
   assert.equal((await post({ orb: "tess", market: key, budget: 0 })).status, 400, "a budget of nothing");
 });
 

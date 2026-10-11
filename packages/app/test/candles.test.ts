@@ -4,7 +4,7 @@
 process.env.TZ = "America/Toronto"; // a clock with a summer: its change on 1 November is crossed below
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { changeText, priceText, rangeOf, ticksOf, timeText, timeTicks } from "../src/ui/candles.ts";
+import { changeText, priceText, rangeOf, ticksOf, timeText, timeTicks, withLive } from "../src/ui/candles.ts";
 
 const MIN = 60_000;
 const HOUR = 60 * MIN;
@@ -64,4 +64,21 @@ test("the time axis: round times, forward, about as many as asked; a day's start
   }
   assert.deepEqual(timeTicks([], 5), []);
   assert.deepEqual(timeTicks([Date.now()], 5), []);
+});
+
+test("the market now in a chart's bars (owner, 10-11: \"the candlestick freezes at what we started the chart on, price too\"): a feed's forming bar where the last is or after it; a price stretching the bar forming at its time, or opening the next; older news changing nothing", () => {
+  const M = 15 * 60_000;
+  const T = Date.UTC(2026, 9, 11, 10, 0);
+  const bars = [{ t: T - M, o: 1, h: 1.2, l: 0.9, c: 1.1, v: 5 }, { t: T, o: 1.1, h: 1.15, l: 1.05, c: 1.1, v: 2 }];
+  const at = T + 7 * 60_000;
+  assert.deepEqual(withLive(bars, { at, price: 1.3, bar: null }, "15m").at(-1), { t: T, o: 1.1, h: 1.3, l: 1.05, c: 1.3, v: 2 }, "the forming bar's high and close stretched to it");
+  assert.deepEqual(withLive(bars, { at, price: 1.0, bar: null }, "15m").at(-1), { t: T, o: 1.1, h: 1.15, l: 1.0, c: 1.0, v: 2 }, "and its low");
+  const next = withLive(bars, { at: T + M + 1000, price: 1.2, bar: null }, "15m");
+  assert.deepEqual([next.length, next.at(-1)], [3, { t: T + M, o: 1.1, h: 1.2, l: 1.1, c: 1.2, v: 0 }], "a new bar opens at the last close");
+  assert.deepEqual(withLive(bars, { at: T - 1000, price: 9, bar: null }, "15m"), bars, "a price from a bar gone by changes nothing");
+  assert.deepEqual(withLive(bars, { at, price: null, bar: null }, "15m"), bars, "no price, nothing");
+  const fed = { t: T, o: 1.1, h: 1.4, l: 1.0, c: 1.35, v: 9 };
+  assert.deepEqual(withLive(bars, { at, price: 1.35, bar: fed }, "15m").at(-1), fed, "a feed's own forming bar stands for the last");
+  assert.equal(withLive(bars, { at, price: 1.35, bar: { ...fed, t: T + M } }, "15m").length, 3, "or follows it");
+  assert.deepEqual(withLive(bars, { at, price: 1.35, bar: { ...fed, t: T - 2 * M } }, "15m"), bars, "an old one changes nothing");
 });

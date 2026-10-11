@@ -462,9 +462,22 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("a losing trade counted as a win", "src/desk/desk.ts", [
         ("      if (pnl > 0) p.wins++;", "      if (pnl !== 0) p.wins++;"),
     ], ["dex.test.ts"]),
+    # a chart live, the top 10 (PLAN 5.33; owner, 10-11: "the candlestick freezes"; "have top 10 cryptos clickable")
+    ("a Solana coin's live price never asks Jupiter", "src/desk/dex.ts", [
+        ('    if (chain === "solana" && this.#source.prices) {', '    if (chain === "solana" && this.#source.prices && false) {'),
+    ], ["dex.test.ts"]),
+    ("a live price stands in hours old", "src/desk/dex.ts", [
+        ("() => this.#source.prices!([address]), { stale: 0 })", "() => this.#source.prices!([address]))"),
+    ], ["dex.test.ts"]),
+    ("the top 10 in the majors' own order", "src/desk/market.ts", [
+        ("        if (majors.length >= n) this.#ranks = { at: now, top: majors };", "        if (majors.length >= n) this.#ranks = { at: now, top: [...SYMBOLS] };"),
+    ], ["desk.test.ts"]),
+    ("a stablecoin among the top 10", "src/desk/market.ts", [
+        ("        const majors = [...new Set(ranked.filter((s) => (SYMBOLS as readonly string[]).includes(s)))];", "        const majors = [...new Set(ranked)];"),
+    ], ["desk.test.ts"]),
     # GeckoTerminal held to its minute (10-11: "api.geckoterminal.com answered 429")
     ("a busy source blanks the chart", "src/desk/dex.ts", [
-        ("      if (have && this.#now() - have.at < Dex.STALE_MS) return have.v as T;\n      throw e;", "      throw e;"),
+        ("      if (have && this.#now() - have.at < (o.stale ?? Dex.STALE_MS)) return have.v as T;\n      throw e;", "      throw e;"),
     ], ["dex.test.ts"]),
     ("GeckoTerminal asked past its minute", "src/desk/dex.ts", [
         ('      if (o.budget && rest.resting === null && !o.budget.take(o.low)) throw new Error("its asks for this minute are spent: again in a moment");\n', ""),
@@ -3364,6 +3377,34 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("the swap form's any coin is ignored", "src/desk/Trade.tsx", [
         ("  const to = buy === ANY ? buyAt.trim() : buy;", "  const to = buy;"),
     ], ["desk-view.test.ts"]),
+    # the chart live and zoomed; the top 10 on the tape; the majors first (PLAN 5.33, owner 10-11)
+    ("a price now never reaches the forming bar", "src/desk/TokenPage.tsx", [
+        ("        setCandles((c) => (c && c.length ? withLive(c, l, tf) : c));\n", ""),
+    ], ["chart-view.test.ts"]),
+    ("a live price stretches the bar before the one forming", "src/ui/candles.ts", [
+        ("  const start = Math.floor(live.at / ms) * ms;", "  const start = Math.floor(live.at / ms) * ms - ms;"),
+    ], ["candles.test.ts"]),
+    ("the wheel zooms nothing", "src/ui/Candles.tsx", [
+        ("      setView({ span: next, end: Math.round(Math.min(v.all - next, Math.max(0, v.end + (1 - fx) * (v.span - next)))) });\n    };", "    };"),
+    ], ["chart-view.test.ts"]),
+    ("zooming leaves the latest bar", "src/ui/Candles.tsx", [
+        ("      const fx = v.end === 0 ? 1 : Math.min(1,", "      const fx = v.end === -1 ? 1 : Math.min(1,"),
+    ], ["chart-view.test.ts"]),
+    ("a drag does not look back", "src/ui/Candles.tsx", [
+        ("          setView({ span, end: Math.max(0, Math.min(all.length - span, g.end + Math.round((dx * (w / r.width)) / slot))) });", "          void dx;"),
+    ], ["chart-view.test.ts"]),
+    ("the tape opens nothing", "src/desk/Room.tsx", [
+        ("onClick={() => openMajor(p.symbol)}", "onClick={() => undefined}"),
+    ], ["chart-view.test.ts"]),
+    ("the tape not by market cap", "src/desk/Room.tsx", [
+        ("  const top = (s?.top ?? prices.map((p) => p.symbol)).slice(0, 10);", "  const top = prices.map((p) => p.symbol).slice(0, 10);"),
+    ], ["chart-view.test.ts"]),
+    ("the tape's finger areas spill past a phone's page", "src/desk/Room.tsx", [
+        ('style={{ position: "relative", display: "inline-flex", gap: 8,', 'style={{ display: "inline-flex", gap: 8,'),
+    ], ["desk-view.test.ts"]),
+    ("the majors under what trends", "src/desk/TokenDesk.tsx", [
+        ('      <div data-majors style={{ display: "grid", gap: 6, minWidth: 0 }}>', '      <div data-majors style={{ display: "grid", gap: 6, minWidth: 0, order: 2 }}>'),
+    ], ["chart-view.test.ts"]),
     # the chart for pros (PLAN 5.32; owner, 10-11): indicators the home's, the bar's clock, a strategy on paper or live,
     # its menu by a right-click, a long press or ƒx, kept in this browser
     ("the chart's RSI smoothed its own way", "src/ui/studies.ts", [

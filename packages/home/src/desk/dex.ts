@@ -52,6 +52,8 @@ export interface DexSource {
   candles(chain: DexChain, pool: string, token: string, tf: Timeframe, limit: number): Promise<Candle[]>;
   trades(chain: DexChain, pool: string, token: string): Promise<DexTrade[]>;
   trending(chain: DexChain): Promise<DexPair[]>;
+  /** Solana coins' prices now (Jupiter's, by their mints): a chart's forming bar between its bars (PLAN 5.33). */
+  prices?(mints: readonly string[]): Promise<Map<string, number>>;
 }
 
 // ── a token's key and address ───────────────────────────────────────────────────────────────────────
@@ -123,9 +125,10 @@ function fromGecko(chain: DexChain, p: { attributes?: Record<string, unknown>; r
 const GECKO_TF: Record<Timeframe, [string, number]> = { "1m": ["minute", 1], "5m": ["minute", 5], "15m": ["minute", 15], "1h": ["hour", 1], "4h": ["hour", 4], "1d": ["day", 1] };
 
 /** DexScreener's and GeckoTerminal's public APIs. */
-export function publicDex(o: { fetch?: typeof fetch; screener?: string; gecko?: string } = {}): DexSource {
+export function publicDex(o: { fetch?: typeof fetch; screener?: string; gecko?: string; jupiter?: string } = {}): DexSource {
   const screener = o.screener ?? "https://api.dexscreener.com";
   const gecko = o.gecko ?? "https://api.geckoterminal.com/api/v2";
+  const jupiter = o.jupiter ?? "https://lite-api.jup.ag";
   const get = o.fetch ?? fetch;
   const json = async (url: string): Promise<unknown> => {
     const r = await get(url, { signal: AbortSignal.timeout(10_000), headers: { accept: "application/json" } });
@@ -139,6 +142,16 @@ export function publicDex(o: { fetch?: typeof fetch; screener?: string; gecko?: 
   };
   return {
     name: "DexScreener and GeckoTerminal public data",
+    async prices(mints) {
+      // Jupiter's free price API (no key): a coin's last price, from its last trade
+      const d = (await json(`${jupiter}/price/v3?ids=${mints.map(encodeURIComponent).join(",")}`)) as Record<string, { usdPrice?: unknown } | null>;
+      const out = new Map<string, number>();
+      for (const m of mints) {
+        const v = Number(d?.[m]?.usdPrice);
+        if (Number.isFinite(v) && v > 0) out.set(m, v);
+      }
+      return out;
+    },
     async image(url) {
       if (!imageAllowed(url)) throw new Error("not one of the image hosts");
       const r = await get(url, { signal: AbortSignal.timeout(10_000), redirect: "error" });
@@ -247,10 +260,12 @@ export class Dex {
   readonly #gecko: Rest;
   readonly #kept = new Map<string, { at: number; v: unknown }>();
   readonly #geckoBudget: Budget;
+  /** Jupiter's price API's own rest (a chart's live price, PLAN 5.33). */
+  readonly #jupiter: Rest;
   /** How long each kind of answer is kept: a search and a token's pairs move fast; a minute's bars (a chart of 1-minute
    * bars) for 20 seconds, any other bars a minute; what is trending, five. GeckoTerminal's (bars, trades, trending) are
    * also held to its budget. */
-  static readonly KEEP_MS = { search: 20_000, pairs: 15_000, candles: 60_000, minuteCandles: 20_000, trades: 30_000, trending: 300_000 } as const;
+  static readonly KEEP_MS = { search: 20_000, pairs: 15_000, candles: 60_000, minuteCandles: 20_000, trades: 30_000, trending: 300_000, live: 3_000 } as const;
   /** How old an answer may be and still stand in while its source rests or its minute is spent. */
   static readonly STALE_MS = 30 * 60_000;
   /** GeckoTerminal's asks a minute, under its 30. */
@@ -262,6 +277,7 @@ export class Dex {
     this.#screener = new Rest(now);
     this.#gecko = new Rest(now);
     this.#geckoBudget = new Budget(Dex.GECKO_PER_MINUTE, now);
+    this.#jupiter = new Rest(now);
   }
 
   status(): DexStatus {
@@ -269,7 +285,7 @@ export class Dex {
     return { source: this.#source.name, ok: error === null, error, restingUntil: this.#screener.resting ?? this.#gecko.resting };
   }
 
-  async #keep<T>(key: string, ms: number, rest: Rest, what: () => Promise<T>, o: { budget?: Budget; low?: boolean } = {}): Promise<T> {
+  async #keep<T>(key: string, ms: number, rest: Rest, what: () => Promise<T>, o: { budget?: Budget; low?: boolean; stale?: number } = {}): Promise<T> {
     const have = this.#kept.get(key);
     if (have && this.#now() - have.at < ms) return have.v as T;
     try {
@@ -280,7 +296,7 @@ export class Dex {
       return v;
     } catch (e) {
       // what it said last, while it rests or its minute is spent: a chart never goes blank for a busy source
-      if (have && this.#now() - have.at < Dex.STALE_MS) return have.v as T;
+      if (have && this.#now() - have.at < (o.stale ?? Dex.STALE_MS)) return have.v as T;
       throw e;
     }
   }
@@ -323,6 +339,19 @@ export class Dex {
       }
     }
     return out;
+  }
+
+  /** A coin's price now, for a chart's forming bar (PLAN 5.33; owner, 10-11: "the candlestick freezes at what we started
+   * the chart on, price too"): on Solana Jupiter's (kept 3 seconds; its own rest), else, or when Jupiter cannot say, its
+   * most liquid pair's. Never GeckoTerminal's minute. */
+  async livePrice(chain: DexChain, address: string): Promise<number | null> {
+    if (chain === "solana" && this.#source.prices) {
+      // a live price is never an old one standing in: when Jupiter cannot say, the pair's
+      const got = await this.#keep(`live:${address}`, Dex.KEEP_MS.live, this.#jupiter, () => this.#source.prices!([address]), { stale: 0 }).catch(() => null);
+      const p = got?.get(address);
+      if (p !== undefined) return p;
+    }
+    return this.price(chain, address);
   }
 
   /** A token's price in dollars on its most liquid pair, or null when no pair says one. */

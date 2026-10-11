@@ -669,10 +669,22 @@ async function handle(
           }).sort((a, b) => b.pnl - a.pnl);
         };
         return {
-          now, market: home.market.status(), prices, strategies: home.desk.strategies(), books, notes: home.desk.notes(), settings: home.desk.settings(),
+          now, market: home.market.status(), prices, top: await home.market.top(10), strategies: home.desk.strategies(), books, notes: home.desk.notes(), settings: home.desk.settings(),
           fills: recent("desk.fill", 40), trades: recent("desk.trade_closed", 40), wallets: home.wallets.list(), swaps: home.swaps.list(30), tokens, dex: home.dex.status(), orbs: pnlOf(books),
           chains: CHAINS.map((c) => ({ id: c.id, name: c.name, kind: c.kind, ...(c.kind === "evm" && { chainId: c.chainId }), explorer: c.explorer, tokens: c.tokens.map((t) => ({ symbol: t.symbol, decimals: t.decimals })) })),
         };
+      }
+      // a market now, for a chart's forming bar (PLAN 5.33): a major's own forming bar from its market; any coin's price
+      // (Jupiter's on Solana, else its pair's), never GeckoTerminal's minute
+      if (method === "GET" && parts[1] === "live" && parts.length === 2) {
+        const market = url.searchParams.get("market") ?? "";
+        const tf = (url.searchParams.get("tf") ?? "15m") as Timeframe;
+        if (!TIMEFRAMES.includes(tf)) no(400, "a timeframe the desk knows");
+        const token = readTokenKey(market);
+        if (token) return { market, at: home.clock.now(), price: await home.dex.livePrice(token.chain, token.address), bar: null };
+        if (!(SYMBOLS as readonly string[]).includes(market)) no(400, "a market the desk knows: a major by its symbol, or a coin as chain:address");
+        const bar = await home.market.forming(market, tf);
+        return { market, at: home.clock.now(), price: bar?.c ?? null, bar };
       }
       // what was done on a market (PLAN 5.32): each orb's paper fills, the real trades that went, the strategies run on it
       if (method === "GET" && parts[1] === "marks" && parts.length === 2) {

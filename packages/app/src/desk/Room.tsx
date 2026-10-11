@@ -55,6 +55,11 @@ export function DeskRoom({ home, office, moods, go, tab: opening = null }: { hom
     setScreenAt({ kind: "token", chain: key.slice(0, at) as Extract<Picked, { kind: "token" }>["chain"], address: key.slice(at + 1) });
     setScreen(true);
   };
+  /** A major's page on the war room's screen: from the tape. */
+  const openMajor = (symbol: string): void => {
+    setScreenAt({ kind: "major", symbol });
+    setScreen(true);
+  };
   const [sheet, setSheet] = useState(false);
   const wallet = useWallet(home, () => load());
   const setTab = (t: Tab): void => {
@@ -122,6 +127,9 @@ export function DeskRoom({ home, office, moods, go, tab: opening = null }: { hom
   const board = crew.map((c) => ({ c, pnl: pnlToday.get(idOf(c.name)) ?? 0 })).sort((a, b) => b.pnl - a.pnl);
   const most = Math.max(1, ...board.map((b) => Math.abs(b.pnl)));
   const prices = s?.prices ?? [];
+  // the top 10 by market cap, in its order (the home's; until it has said, the first ten majors as kept)
+  const top = (s?.top ?? prices.map((p) => p.symbol)).slice(0, 10);
+  const tape = top.flatMap((sym) => prices.filter((p) => p.symbol === sym));
   const floor = (
     <DeskFloor crew={crew} moods={moods} events={events} prices={prices.map((p) => ({ symbol: p.symbol, up: p.changePct >= 0 }))} spark={spark.length ? spark : [1, 1]}
       notes={s?.notes.length ?? 0} strategies={s?.strategies.length ?? 0} riskOn={!(s?.settings.off ?? false)} go={go} onScreen={() => (setScreenAt(null), setScreen(true))}
@@ -151,16 +159,19 @@ export function DeskRoom({ home, office, moods, go, tab: opening = null }: { hom
         </span>
         </span>
       </div>
-      {/* the tape: every market, its price and its day, going by */}
-      {prices.length > 0 && (
-        <div data-tape data-viewport aria-label="The market's prices" style={{ overflow: "hidden", borderRadius: 12, background: "var(--card)", boxShadow: "inset 0 0 0 1px var(--hairline)", maskImage: "linear-gradient(90deg, transparent, black 24px, black calc(100% - 24px), transparent)" }}>
+      {/* the tape: the top 10 by market cap, the largest first, going by; each pressed opens its chart on the war room's
+          screen, and a pointer over it holds it still (owner, 10-11: "have top 10 cryptos clickable on the top") */}
+      {tape.length > 0 && (
+        <div data-tape data-viewport aria-label="The top 10 by market cap" style={{ overflow: "hidden", borderRadius: 12, background: "var(--card)", boxShadow: "inset 0 0 0 1px var(--hairline)", maskImage: "linear-gradient(90deg, transparent, black 24px, black calc(100% - 24px), transparent)" }}>
           <div className="orbs-trade-tape" style={{ display: "flex", width: "max-content", gap: 28, padding: "8px 14px" }}>
-            {[...prices, ...prices].map((p, i) => (
-              <span key={i} data-tick={i < prices.length ? p.symbol : undefined} className="num" style={{ display: "inline-flex", gap: 8, font: "700 13px/18px var(--font)", color: "var(--text-1)", whiteSpace: "nowrap" }}>
+            {[...tape, ...tape].map((p, i) => (
+              <button key={i} type="button" className="orbs-tag" data-tick={i < tape.length ? p.symbol : undefined} aria-hidden={i >= tape.length || undefined} tabIndex={i < tape.length ? 0 : -1}
+                aria-label={`${p.symbol}: $${priceText(p.price)}, ${changeText(p.changePct)} today. Open its chart`} onClick={() => openMajor(p.symbol)}
+                style={{ position: "relative", display: "inline-flex", gap: 8, font: "700 13px/18px var(--font)", color: "var(--text-1)", whiteSpace: "nowrap", border: 0, background: "none", padding: 0, cursor: "pointer" }}>
                 <b>{p.symbol}</b>
-                <span>{`$${priceText(p.price)}`}</span>
-                <span style={{ color: p.changePct >= 0 ? "var(--ok)" : "var(--off)" }}>{`${p.changePct >= 0 ? "▲" : "▼"} ${changeText(p.changePct)}`}</span>
-              </span>
+                <span className="num">{`$${priceText(p.price)}`}</span>
+                <span className="num" style={{ color: p.changePct >= 0 ? "var(--ok)" : "var(--off)" }}>{`${p.changePct >= 0 ? "▲" : "▼"} ${changeText(p.changePct)}`}</span>
+              </button>
             ))}
           </div>
         </div>
@@ -196,7 +207,7 @@ export function DeskRoom({ home, office, moods, go, tab: opening = null }: { hom
       ) : (
         <Limits home={home} settings={s.settings} reload={load} />
       )}
-      {screen && s && <TokenDesk home={home} prices={prices} chains={s.chains} crew={crew} strategies={s.strategies} wallet={wallet} openWallet={openWallet} start={screenAt} close={() => setScreen(false)} />}
+      {screen && s && <TokenDesk home={home} prices={tape} chains={s.chains} crew={crew} strategies={s.strategies} wallet={wallet} openWallet={openWallet} start={screenAt} close={() => setScreen(false)} />}
       {sheet && <WalletSheet home={home} wallet={wallet} close={() => setSheet(false)} />}
     </div>
   );

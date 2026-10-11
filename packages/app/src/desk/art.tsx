@@ -352,6 +352,7 @@ export const TRADE_CSS = `
 @keyframes orbs-trade-ring { 0%, 100% { transform: rotate(0deg) } 25% { transform: rotate(18deg) } 75% { transform: rotate(-18deg) } }
 @keyframes orbs-trade-tape { from { transform: translateX(0) } to { transform: translateX(-50%) } }
 .orbs-trade-tape { animation: orbs-trade-tape 40s linear infinite; }
+.orbs-trade-tape:hover, .orbs-trade-tape:focus-within { animation-play-state: paused; }
 .orbs-floor-float { animation: orbs-floor-float 2.4s ease-out infinite; transform-box: fill-box; }
 .orbs-floor-float:nth-child(2) { animation-delay: .8s } .orbs-floor-float:nth-child(3) { animation-delay: 1.6s }
 @media (prefers-reduced-motion: reduce) { [class^="orbs-trade-"], [data-bell] { animation: none !important; } }
