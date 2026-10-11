@@ -16,7 +16,7 @@ import { FLOOR_CSS, skyAt } from "../floor/art.tsx";
 import { route, speed, type Spot } from "../floor/plan.ts";
 import { NAMES } from "../floor/props.ts";
 import { Backdrop, Bell, Station, TRADE_CSS, type WallPrice } from "./art.tsx";
-import { AREAS, H, momentOf, nextT, TDESKS, TGRID, TPOIS, deskSeats, W, type TMoment, type TPlan, type TPoiId } from "./plan.ts";
+import { AREAS, H, momentOf, nextT, TDESKS, TGRID, TPIECES, TPOIS, deskSeats, W, type TMoment, type TPlan, type TPoiId } from "./plan.ts";
 
 const ORB = 80;
 const tag: CSSProperties = { display: "inline-block", padding: "1px 8px", borderRadius: 999, font: "800 11px/16px var(--font)", whiteSpace: "nowrap" };
@@ -31,9 +31,11 @@ const seeded = (s: string): (() => number) => {
   return () => ((h = Math.imul(h ^ (h >>> 15), 2246822507) >>> 0) % 1_000_000) / 1_000_000;
 };
 
-export function DeskFloor({ crew, moods, events, prices, spark, notes, strategies, riskOn, board, go }: {
+export function DeskFloor({ crew, moods, events, prices, spark, notes, strategies, riskOn, board, go, onScreen }: {
   crew: Character[]; moods: Record<string, Mood>; events: DeskEvent[]; prices: WallPrice[]; spark: number[]; notes: number; strategies: number; riskOn: boolean;
   board: { name: string; hue: Character["hue"]; bar: number; up: boolean }[]; go: (r: Route) => void;
+  /** The war room's screen pressed: any token, its chart and a trade, over the floor (owner, 10-11). */
+  onScreen?: () => void;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
@@ -46,6 +48,12 @@ export function DeskFloor({ crew, moods, events, prices, spark, notes, strategie
     return () => ro.disconnect();
   }, []);
   const phone = width > 0 && width < 640;
+  // on a phone the floor opens on the war room, its screen in view (it is what is pressed)
+  const view = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const v = view.current;
+    if (phone && v) v.scrollLeft = Math.max(0, (TPIECES.whiteboard.x + TPIECES.whiteboard.w / 2) * 0.62 - v.clientWidth / 2);
+  }, [phone]);
   const scale = !width ? 0.75 : phone ? 0.62 : Math.min(1.05, width / W);
   const px = (v: number): number => v * scale;
   const size = Math.round(ORB * scale);
@@ -232,9 +240,18 @@ export function DeskFloor({ crew, moods, events, prices, spark, notes, strategie
   return (
     <div ref={box} data-desk-floor style={{ minWidth: 0 }}>
       <style>{FLOOR_CSS + TRADE_CSS}</style>
-      <div data-floor-view style={{ overflowX: phone ? "auto" : "visible", overflowY: "hidden", borderRadius: 20, boxShadow: "inset 0 0 0 1px var(--hairline)", overscrollBehaviorX: "contain", scrollbarWidth: "thin" }}>
+      <div ref={view} data-floor-view style={{ overflowX: phone ? "auto" : "visible", overflowY: "hidden", borderRadius: 20, boxShadow: "inset 0 0 0 1px var(--hairline)", overscrollBehaviorX: "contain", scrollbarWidth: "thin" }}>
         <div data-floor-plan style={{ position: "relative", width: px(W), height: px(H), borderRadius: 20, overflow: "hidden", isolation: "isolate" }}>
           <Backdrop now={now} sky={skyAt(now.getHours())} prices={prices} spark={spark} notes={notes} strategies={strategies} riskOn={riskOn} board={board} />
+          {/* the war room's screen (owner, 10-11: "user can press the chart in war room (electronic one) and a chart opens
+              over"): under any orb in front of it, so an orb is still pressed for its profile */}
+          {onScreen && (
+            <button type="button" data-war-screen data-orb="amber" className="orbs-war-screen" onClick={onScreen} aria-label="The war room's screen: look up any token, its chart, and trade it"
+              style={{ position: "absolute", left: px(TPIECES.whiteboard.x), top: px(TPIECES.whiteboard.y - 34), width: px(TPIECES.whiteboard.w), height: px(TPIECES.whiteboard.h + 30), zIndex: TPIECES.whiteboard.y + 6, padding: 0, border: 0, borderRadius: px(4), background: "transparent", cursor: "pointer" }} />
+          )}
+          {onScreen && (
+            <span aria-hidden data-orb="amber" style={{ ...sign, left: px(TPIECES.whiteboard.x + TPIECES.whiteboard.w / 2), top: px(TPIECES.whiteboard.y + TPIECES.whiteboard.h - 14), translate: "-50% 0", zIndex: TPIECES.whiteboard.y + 7, pointerEvents: "none", color: "var(--accent)" }}>Any token ›</span>
+          )}
           {TDESKS.map((d) => {
             const a = seatOf(d.n, 0);
             const b = seatOf(d.n, 1);

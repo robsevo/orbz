@@ -13,29 +13,41 @@ import { Balanced, OneLine } from "../ui/Balanced.tsx";
 import { changeText, priceText } from "../ui/candles.ts";
 import { NAMES } from "../floor/props.ts";
 import { DeskFloor } from "./Floor.tsx";
-import { button, card, chip, field, head, pct, shortAddress, small, strong, usd, well, ago } from "./kit.ts";
-import { MarketPanel } from "./Market.tsx";
+import { button, card, chip, field, head, marketName, pct, shortAddress, small, strong, usd, well, ago } from "./kit.ts";
+import { TokenDesk } from "./TokenDesk.tsx";
+import { useWallet } from "./useWallet.ts";
+import { WalletSheet } from "./WalletSheet.tsx";
+import { useCramped } from "../ui/fill.ts";
 import { StrategiesPanel } from "./Strategies.tsx";
 import { TradePanel } from "./Trade.tsx";
 
-const TABS = [["market", "Market"], ["strategies", "Strategies"], ["trade", "Trade"], ["books", "Books"], ["desk", "The desk"], ["limits", "Limits"]] as const;
-type Tab = (typeof TABS)[number][0];
+// no chart under the floor (owner, 10-11: "no chart on bottom of page, only if user presses the electronic chart in war
+// room"): any coin's chart is the war room's screen, over the floor (TokenDesk.tsx). On a phone the floor is a tab of its
+// own, first, so each tab is one thing on its screen
+const TABS = [["trade", "Trade"], ["books", "Books"], ["strategies", "Strategies"], ["desk", "The desk"], ["limits", "Limits"]] as const;
+type Tab = (typeof TABS)[number][0] | "floor";
 const TAB_KEY = "orbs.desk.tab";
 
 export function DeskRoom({ home, office, moods, go, tab: opening = null }: { home: Office | null; office: Character[]; moods: Record<string, Mood>; go: (r: Route) => void; tab?: string | null }) {
   const [s, setS] = useState<DeskState | null>(null);
   const [events, setEvents] = useState<DeskEvent[]>([]);
   const [said, setSaid] = useState<string | null>(null);
-  const [symbol, setSymbol] = useState("BTC");
   const [spark, setSpark] = useState<number[]>([]);
-  const [tab, setTabState] = useState<Tab>(() => {
+  const phone = useCramped("(max-width: 760px)");
+  const [tab, setTabState] = useState<Tab | null>(() => {
     try {
       const t = globalThis.localStorage?.getItem(TAB_KEY);
-      return TABS.some(([k]) => k === t) ? (t as Tab) : "market";
+      return t === "floor" || TABS.some(([k]) => k === t) ? (t as Tab) : null;
     } catch {
-      return "market";
+      return null;
     }
   });
+  const shown: Tab = tab === "floor" && !phone ? "trade" : tab ?? (phone ? "floor" : "trade");
+  const tabs: readonly (readonly [Tab, string])[] = phone ? [["floor", "Floor"], ...TABS] : TABS;
+  // the war room's screen open over the floor; the wallet sheet open over it all
+  const [screen, setScreen] = useState(false);
+  const [sheet, setSheet] = useState(false);
+  const wallet = useWallet(home, () => load());
   const setTab = (t: Tab): void => {
     setTabState(t);
     try {
@@ -46,12 +58,18 @@ export function DeskRoom({ home, office, moods, go, tab: opening = null }: { hom
   };
   // the address's tab (#/desk/trade: a link made to connect a wallet opens there)
   useEffect(() => {
-    if (opening && TABS.some(([k]) => k === opening)) setTab(opening as Tab);
+    if (opening && (opening === "floor" || TABS.some(([k]) => k === opening))) setTab(opening as Tab);
   }, [opening]);
-  /** To your wallets: the Trade tab, its wallets in view (owner, 10-11: "how does the user connect their wallet?"). */
-  const toWallets = (): void => {
-    setTab("trade");
-    setTimeout(() => document.querySelector("[data-wallets]")?.scrollIntoView({ block: "start", behavior: "smooth" }), 60);
+  /** Connect wallet (owner, 10-11: "I dont see the wallet trying to connect at all when we say connect wallet"): the
+   * wallet's own window at once when this browser has one (of the kind asked for), else the sheet: several to choose
+   * from, the one connected, or none here and how to open Orbz where yours is. */
+  const openWallet = (kind?: "evm" | "solana"): void => {
+    const fit = wallet.found.filter((f) => !kind || f.kind === kind);
+    if (fit.length === 1 && (!wallet.linked || (kind !== undefined && wallet.linked.f.kind !== kind))) {
+      void wallet.connect(fit[0]!).catch(() => setSheet(true));
+      return;
+    }
+    setSheet(true);
   };
   const loading = useRef(0);
   const heard = useRef(0);
@@ -95,6 +113,17 @@ export function DeskRoom({ home, office, moods, go, tab: opening = null }: { hom
   const board = crew.map((c) => ({ c, pnl: pnlToday.get(idOf(c.name)) ?? 0 })).sort((a, b) => b.pnl - a.pnl);
   const most = Math.max(1, ...board.map((b) => Math.abs(b.pnl)));
   const prices = s?.prices ?? [];
+  const floor = (
+    <DeskFloor crew={crew} moods={moods} events={events} prices={prices.map((p) => ({ symbol: p.symbol, up: p.changePct >= 0 }))} spark={spark.length ? spark : [1, 1]}
+      notes={s?.notes.length ?? 0} strategies={s?.strategies.length ?? 0} riskOn={!(s?.settings.off ?? false)} go={go} onScreen={() => setScreen(true)}
+      board={board.map((b) => ({ name: b.c.name, hue: b.c.hue, bar: (Math.abs(b.pnl) / most) * 110, up: b.pnl >= 0 }))} />
+  );
+  const noCrew = !crew.length && (
+    <div data-no-crew style={{ ...card, display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+      <span style={{ ...small, flex: "1 1 260px" }}>{NAMES.empty}</span>
+      <button type="button" onClick={() => go({ room: "recruiter", family: "desk" })} style={strong}>Hire for the desk</button>
+    </div>
+  );
   return (
     <div data-desk-room style={{ display: "grid", gap: "var(--s4)", padding: "var(--s5)", alignContent: "start", minWidth: 0 }}>
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "end", justifyContent: "space-between", gap: "var(--s3)", minWidth: 0 }}>
@@ -103,9 +132,9 @@ export function DeskRoom({ home, office, moods, go, tab: opening = null }: { hom
           <h2 style={{ margin: 0, font: "800 26px/32px var(--font)", color: "var(--text-1)" }}>{NAMES.room}</h2>
         </div>
         <span style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end", gap: "var(--s3)", minWidth: 0 }}>
-        <button type="button" data-connect-wallet onClick={toWallets} style={{ ...(s?.wallets.length ? button : strong), display: "inline-flex", alignItems: "center", gap: 8 }}>
-          <i aria-hidden style={{ width: 8, height: 8, borderRadius: "50%", background: s?.wallets.length ? "var(--ok)" : "var(--text-3)" }} />
-          {s?.wallets.length ? `${shortAddress(s.wallets[0]!.address)}${s.wallets.length > 1 ? ` +${s.wallets.length - 1}` : ""}` : "Connect wallet"}
+        <button type="button" data-connect-wallet onClick={() => openWallet()} disabled={wallet.busy} style={{ ...(wallet.linked ? button : strong), display: "inline-flex", alignItems: "center", gap: 8 }}>
+          {wallet.linked?.f.icon ? <img src={wallet.linked.f.icon} alt="" width={16} height={16} style={{ borderRadius: 4 }} /> : <i aria-hidden style={{ width: 8, height: 8, borderRadius: "50%", background: wallet.linked ? "var(--ok)" : "var(--text-3)" }} />}
+          {wallet.busy ? "Asking your wallet…" : wallet.linked ? shortAddress(wallet.linked.address) : "Connect wallet"}
         </button>
         <span data-market-status={s?.market.ok ? "live" : "down"} style={{ display: "inline-flex", alignItems: "center", gap: 8, font: "700 12px/16px var(--font)", color: "var(--text-2)" }}>
           <i aria-hidden style={{ width: 8, height: 8, borderRadius: "50%", background: s?.market.ok ? "var(--ok)" : "var(--off)" }} />
@@ -127,38 +156,39 @@ export function DeskRoom({ home, office, moods, go, tab: opening = null }: { hom
           </div>
         </div>
       )}
-      <DeskFloor crew={crew} moods={moods} events={events} prices={prices.map((p) => ({ symbol: p.symbol, up: p.changePct >= 0 }))} spark={spark.length ? spark : [1, 1]}
-        notes={s?.notes.length ?? 0} strategies={s?.strategies.length ?? 0} riskOn={!(s?.settings.off ?? false)} go={go}
-        board={board.map((b) => ({ name: b.c.name, hue: b.c.hue, bar: (Math.abs(b.pnl) / most) * 110, up: b.pnl >= 0 }))} />
-      {!crew.length && (
-        <div data-no-crew style={{ ...card, display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-          <span style={{ ...small, flex: "1 1 260px" }}>{NAMES.empty}</span>
-          <button type="button" onClick={() => go({ room: "recruiter", family: "desk" })} style={strong}>Hire for the desk</button>
+      {!phone && floor}
+      {!phone && noCrew}
+      <div data-desk-tabs style={{ minWidth: 0, ...(phone && { position: "sticky", top: 0, zIndex: 20, background: "var(--ground)", padding: "6px 0", margin: "-6px 0" }) }}>
+        <OneLine gap={6}>
+          {tabs.map(([k, label]) => (
+            <button key={k} type="button" role="tab" aria-selected={shown === k} data-desk-tab={k} onClick={() => setTab(k)} style={chip(shown === k)}>
+              {label}
+              {k === "trade" && (s?.swaps.filter((x) => x.state === "asked").length ?? 0) > 0 && <span style={{ marginLeft: 6, color: "var(--alert)" }}>●</span>}
+            </button>
+          ))}
+        </OneLine>
+      </div>
+      {shown === "floor" ? (
+        <div style={{ display: "grid", gap: "var(--s3)", minWidth: 0 }}>
+          {floor}
+          <span style={{ ...small, textAlign: "center" }}>Tap the war room's screen for any coin: its chart, a swap, or an orb sent to it.</span>
+          {noCrew}
         </div>
-      )}
-      <OneLine gap={6}>
-        {TABS.map(([k, label]) => (
-          <button key={k} type="button" role="tab" aria-selected={tab === k} data-desk-tab={k} onClick={() => setTab(k)} style={chip(tab === k)}>
-            {label}
-            {k === "trade" && (s?.swaps.filter((x) => x.state === "asked").length ?? 0) > 0 && <span style={{ marginLeft: 6, color: "var(--alert)" }}>●</span>}
-          </button>
-        ))}
-      </OneLine>
-      {!s ? (
+      ) : !s ? (
         <span role="status" style={small}>{said ?? "Opening the desk…"}</span>
-      ) : tab === "market" ? (
-        <MarketPanel home={home} prices={prices} fills={s.fills} symbol={symbol} setSymbol={setSymbol} />
-      ) : tab === "strategies" ? (
+      ) : shown === "strategies" ? (
         <StrategiesPanel home={home} crew={crew} strategies={s.strategies} books={s.books} reload={load} />
-      ) : tab === "trade" ? (
-        <TradePanel home={home} crew={crew} wallets={s.wallets} swaps={s.swaps} chains={s.chains} reload={load} />
-      ) : tab === "books" ? (
+      ) : shown === "trade" ? (
+        <TradePanel home={home} crew={crew} wallets={s.wallets} swaps={s.swaps} chains={s.chains} reload={load} wallet={wallet} labels={s.tokens} />
+      ) : shown === "books" ? (
         <Books s={s} crew={crew} />
-      ) : tab === "desk" ? (
+      ) : shown === "desk" ? (
         <Desk s={s} crew={crew} pnl={pnlToday} go={go} />
       ) : (
         <Limits home={home} settings={s.settings} reload={load} />
       )}
+      {screen && s && <TokenDesk home={home} prices={prices} chains={s.chains} crew={crew} wallet={wallet} openWallet={openWallet} close={() => setScreen(false)} />}
+      {sheet && <WalletSheet home={home} wallet={wallet} close={() => setSheet(false)} />}
     </div>
   );
 }
@@ -180,7 +210,7 @@ function Books({ s, crew }: { s: DeskState; crew: Character[] }) {
               <article key={b.id} data-book={b.id} style={well}>
                 <span style={{ font: "800 14px/19px var(--font)", color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{`${nameOf(b.orb)} · ${name}`}</span>
                 <span className="num" style={{ font: "800 20px/26px var(--font)", color: ch >= 0 ? "var(--ok)" : "var(--off)" }}>{`${usd(b.equity)} · ${pct(ch)}`}</span>
-                <span className="num" style={small}>{b.qty > 0 ? `Holding ${b.qty.toPrecision(4)} ${b.symbol}, paid ${usd(b.entryPx)} each` : b.holdings.length ? `Holding ${b.holdings.map((h) => `${h.qty.toPrecision(4)} ${h.symbol}`).join(", ")}` : `All cash: ${usd(b.cash)}`}</span>
+                <span className="num" style={small}>{b.qty > 0 ? `Holding ${b.qty.toPrecision(4)} ${marketName(b.symbol ?? "", s.tokens)}, paid ${usd(b.entryPx)} each` : b.holdings.length ? `Holding ${b.holdings.map((h) => `${h.qty.toPrecision(4)} ${marketName(h.symbol, s.tokens)}`).join(", ")}` : `All cash: ${usd(b.cash)}`}</span>
               </article>
             );
           })}
@@ -191,7 +221,7 @@ function Books({ s, crew }: { s: DeskState; crew: Character[] }) {
         {!s.trades.length && <span style={small}>None yet.</span>}
         {s.trades.slice(0, 20).map((t) => (
           <div key={t.seq} data-trade-closed={t.seq} style={row} className="num">
-            <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{`${nameOf(t.orb)} · ${String(t.symbol)}${t.timeframe ? ` ${String(t.timeframe)}` : ""} · ${String(t.why)} · ${ago(t.at, s.now)}`}</span>
+            <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{`${nameOf(t.orb)} · ${marketName(String(t.symbol), s.tokens)}${t.timeframe ? ` ${String(t.timeframe)}` : ""} · ${String(t.why)} · ${ago(t.at, s.now)}`}</span>
             <b style={{ color: Number(t.pnl) > 0 ? "var(--ok)" : "var(--off)", whiteSpace: "nowrap" }}>{`${pct(Number(t.pnlPct))} (${usd(Number(t.pnl))})`}</b>
           </div>
         ))}

@@ -419,6 +419,32 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ], ["reverse.test.ts"]),
     # the desk (PLAN 5.22-5.27; owner, 10-10): honest backtests, paper XP graded by the market, and a real trade
     # only ever built after your yes, at the price you approved, inside the desk's limits, its hash taken once
+    # any coin on a DEX (PLAN 5.28; owner, 10-11): found by its address, each once, its picture from an image host only,
+    # what it can do read from its chain, a swap keeping it by its address, a real send asked of you
+    ("a pasted mint is searched for as words", "src/desk/dex.ts", [
+        ('    const pairs = isTokenAddress("solana", query)', "    const pairs = false"),
+    ], ["dex.test.ts"]),
+    ("a coin on two pools trends twice", "src/desk/dex.ts", [
+        ("      return seen.has(k) ? false : (seen.add(k), true);", "      return true;"),
+    ], ["dex.test.ts"]),
+    ("a picture from any host", "src/desk/dex.ts", [
+        ('    return x.protocol === "https:" && IMAGE_HOSTS.has(x.hostname);', "    return true;"),
+    ], ["dex.test.ts"]),
+    ("an SVG shown as a picture", "src/desk/dex.ts", [
+        ('const IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);', 'const IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "image/svg+xml"]);'),
+    ], ["dex.test.ts"]),
+    ("a mint that can freeze what you hold said clean", "src/desk/safety.ts", [
+        ('      if (i.freezeAuthority) flags.push', "      if (false) flags.push"),
+    ], ["dex.test.ts"]),
+    ("a coin the desk does not know kept by its symbol", "src/desk/swaps.ts", [
+        ("  #kept = (chain: Chain, t: Token): string => (tokenOf(chain, t.symbol)?.address === t.address ? t.symbol : t.address);", "  #kept = (_chain: Chain, t: Token): string => t.symbol;"),
+    ], ["dex.test.ts"]),
+    ("a coin's decimals asked of its chain every time", "src/desk/swaps.ts", [
+        ("      this.#decimals.set(k, decimals);\n", ""),
+    ], ["dex.test.ts"]),
+    ("an orb sent for real is not told to ask you", "src/api.ts", [
+        ("            : `When you see an entry, ask me for it with propose_swap", "            : `When you see an entry, buy it with paper_trade"),
+    ], ["dex.test.ts"]),
     # the app opened in this machine's own browser, for a wallet (owner, 10-11)
     ("a browser opens here for another device", "src/api.ts", [
         ('    if (door.remote) throw new HttpError(403, "a browser is opened only on the machine the home runs on");\n', ""),
@@ -2384,7 +2410,7 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ('  if (parts[0] === "office") return { room: "office", orb: parts[1] ?? null };\n  return { room: "home" };', '  if (parts[0] === "office") return { room: "office", orb: parts[1] ?? null };\n  return { room: "office", orb: null };'),
     ], ["nav.test.ts", "home-view.test.ts"]),
     ("a pairing link lands on the office", "src/home/link.ts", [
-        ('      if (location.hash.includes("pair=")) history.replaceState(null, "", "#/home");', '      if (location.hash.includes("pair=")) history.replaceState(null, "", "#/office");'),
+        ('history.replaceState(null, "", there ? `#${place}` : "#/home");', 'history.replaceState(null, "", there ? `#${place}` : "#/office");'),
     ], ["home-view.test.ts"]),
     # every side scroll, in a track with arrows (owner, 10-07)
     ("a side scroll has no arrows", "src/ui/Balanced.tsx", [
@@ -2511,7 +2537,7 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ("  if (!res.ok || !(res.headers.get(\"content-type\") ?? \"\").includes(\"json\")) return null;\n  return { office: doorOffice(base) };", "  return null;"),
     ], ["link.test.ts"]),
     ("a spent pairing code stays on the address", "src/home/link.ts", [
-        ('      if (location.hash.includes("pair=")) history.replaceState(null, "", "#/home");\n', ""),
+        ('      if (location.hash.includes("pair=")) history.replaceState(null, "", there ? `#${place}` : "#/home");\n', ""),
     ], ["link.test.ts"]),
     ("a reply never shows as it streams", "src/rooms/Talk.tsx", [
         ('        setLive((l) => ({ ...l, [d.orb]: (l[d.orb] ?? "") + d.delta }));', "        void d;"),
@@ -3258,8 +3284,8 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("Deny approves an orb's trade", "src/desk/Trade.tsx", [
         ("onClick={() => void act(async () => (await home.answerSwap(s.id, false), reload()))}", "onClick={() => void act(async () => (await home.answerSwap(s.id, true), reload()))}"),
     ], ["desk-view.test.ts"]),
-    ("a swap the wallet refused is left built", "src/desk/Trade.tsx", [
-        ("      await home.unsentSwap(s.id, (e as Error).message).catch(() => undefined);\n", ""),
+    ("a swap the wallet refused is left built", "src/desk/useWallet.ts", [
+        ("      await home.unsentSwap(id, (e as Error).message).catch(() => undefined);\n", ""),
     ], ["desk-view.test.ts"]),
     ("a phone's chart draws every bar", "src/ui/Candles.tsx", [
         ("  const candles = all.slice(-Math.max(30, Math.floor(plotW / 5)));", "  const candles = all;"),
@@ -3274,15 +3300,22 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("the names in Lately not underlined", "src/rooms/Home.tsx", [
         ('fontWeight: 800, textDecoration: "underline", textDecorationThickness: 1.5, textUnderlineOffset: 3 }}>{w.name}</b>', "fontWeight: 800 }}>{w.name}</b>"),
     ], ["home-view.test.ts"]),
+    # the war room's screen (owner, 10-11): pressed it opens; an address pasted opens its coin; Connect wallet connects
+    ("the war room's screen opens nothing", "src/desk/Room.tsx", [
+        ("onScreen={() => setScreen(true)}", "onScreen={() => undefined}"),
+    ], ["desk-view.test.ts"]),
+    ("an address pasted is searched for, never opened", "src/desk/TokenDesk.tsx", [
+        ("if (isAddress(query) && top && top.base.address.toLowerCase() === query.toLowerCase()) pick(", "if (false && top) pick("),
+    ], ["desk-view.test.ts"]),
+    ("Connect wallet does nothing", "src/desk/Room.tsx", [
+        ("onClick={() => openWallet()}", "onClick={() => undefined}"),
+    ], ["desk-view.test.ts"]),
     # a wallet connected from where it lives (owner, 10-11: "how does the user connect their wallet? i dont see any way?")
     ("a pairing link's place is dropped once paired", "src/home/link.ts", [
         ('history.replaceState(null, "", there ? `#${place}` : "#/home");', 'history.replaceState(null, "", "#/home");'),
     ], ["desk-view.test.ts"]),
     ("the desk opens on its own tab, whatever the address says", "src/desk/Room.tsx", [
-        ("    if (opening && TABS.some(([k]) => k === opening)) setTab(opening as Tab);\n", ""),
-    ], ["desk-view.test.ts"]),
-    ("the desk's wallet button goes nowhere", "src/desk/Room.tsx", [
-        ("<button type=\"button\" data-connect-wallet onClick={toWallets}", "<button type=\"button\" data-connect-wallet"),
+        ('    if (opening && (opening === "floor" || TABS.some(([k]) => k === opening))) setTab(opening as Tab);\n', ""),
     ], ["desk-view.test.ts"]),
     ("the desk's tab is not in its address", "src/ui/nav.ts", [
         ('  if (parts[0] === "desk") return parts[1] ? { room: "desk", tab: parts[1] } : { room: "desk" };', '  if (parts[0] === "desk") return { room: "desk" };'),

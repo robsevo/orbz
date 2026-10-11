@@ -16,6 +16,7 @@ import { MemoryStore } from "../../home/src/chatgpt/store.ts";
 import { fakeModel } from "../../home/test/fakes/model.ts";
 import { standInMarket, standInRouters } from "../../home/test/fakes/market.ts";
 import { keptBy, TURNS } from "../src/floor/props.ts";
+import { publicDex } from "../../home/src/desk/dex.ts";
 
 const APP = new URL("..", import.meta.url).pathname;
 const dir = process.argv[2]!;
@@ -26,7 +27,9 @@ const ROOMS: [string, string][] = [
   ["calendar", "#/calendar"], ["lab", "#/lab"], ["report", "#/report"], ["stats", "#/stats/brain"], ["xp", "#/stats/xp"],
   ["org", "#/org"], ["recruiter", "#/recruiter"], ["cv", "#/recruiter"], ["career", "#/career/Max"], ["settings", "#/settings"],
 ];
-const DESK_ROOMS: [string, string][] = ["market", "strategies", "trade", "books", "desk", "limits"].map((tab) => [tab === "market" ? "desk" : `desk-${tab}`, "#/desk"]);
+// the desk as it opens, each tab, and the war room's screen: open on what is trending, then a pump.fun coin's page
+const DESK_ROOMS: [string, string][] = [["desk", "#/desk"], ...["trade", "books", "strategies", "desk", "limits"].map((tab) => [`desk-${tab}`, "#/desk"] as [string, string]), ["desk-screen", "#/desk"], ["desk-coin", "#/desk"]];
+const COIN = "9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump";
 const only = arg("--rooms")?.split(",");
 const sizes = (arg("--sizes") ?? "desk,phone").split(",");
 const cleanups: (() => unknown)[] = [];
@@ -39,7 +42,9 @@ const data = mkdtempSync(join(tmpdir(), "orbs-shoot-rooms-data-"));
 const h = Home.open({
   dataDir: data, protect: [], spendCapUsd: null, chatgpt: { store: new MemoryStore() }, brains: { store: new MemoryStore() },
   brain: { preset: { id: "t", title: "t", own: null, big: { name: "big", baseUrl: model.url, model: "m", retries: 0 }, teacher: null } },
-  desk: { on: true, source: standInMarket(() => Date.now()), routers: standInRouters({ outPer: () => 0.0004 }), fetch: (async () => new Response("{}", { status: 503 })) as typeof fetch },
+  // the war room's screen reads the public DEX data and the chains for real (a coin's page as it is); the majors and
+  // the routers stay stand-ins
+  desk: { on: true, source: standInMarket(() => Date.now()), routers: standInRouters({ outPer: () => 0.0004 }), dex: publicDex() },
 });
 h.start();
 h.about.setName("Robin");
@@ -97,9 +102,25 @@ for (const size of sizes) {
     if (only && !only.includes(room)) continue;
     await page.evaluate((x) => (location.hash = x), hash);
     await page.waitForTimeout(1800);
-    // a tab of the desk's own
-    if (room.startsWith("desk")) {
-      await page.locator(`[data-desk-tab="${room.split("-")[1] ?? "market"}"]`).click();
+    // a tab of the desk's own; the war room's screen, pressed (on a phone, from the floor's own tab)
+    if (room === "desk-screen" || room === "desk-coin") {
+      if (await page.locator('[data-desk-tab="floor"]').count()) await page.locator('[data-desk-tab="floor"]').click();
+      await page.locator("[data-war-screen]").click();
+      await page.locator("[data-token-desk]").waitFor({ timeout: 20_000 });
+      if (room === "desk-coin") {
+        await page.locator("[data-token-search]").fill(COIN);
+        await page.locator("[data-token-page] [data-candles]").waitFor({ timeout: 60_000 }).catch(() => undefined);
+      } else {
+        await page.locator("[data-token-row]").first().waitFor({ timeout: 30_000 }).catch(() => undefined);
+      }
+      await page.waitForTimeout(2500);
+      console.log(room, size, "findings:", JSON.stringify(await measure(page)).slice(0, 300));
+      await page.screenshot({ path: join(dir, `${room}-${size}.png`) });
+      await page.locator("[data-token-close]").click();
+      continue;
+    }
+    if (room.startsWith("desk-")) {
+      await page.locator(`[data-desk-tab="${room.split("-")[1]}"]`).click();
       await page.waitForTimeout(1500);
     }
     // an applicant's profile (its CV), opened from its card: the screen as it shows, the dialog over the room

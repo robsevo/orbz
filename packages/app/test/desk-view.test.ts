@@ -22,6 +22,8 @@ import { Home } from "../../home/src/home.ts";
 import { serve } from "../../home/src/api.ts";
 import { fakeModel } from "../../home/test/fakes/model.ts";
 import { standInChains, standInMarket, standInRouters } from "../../home/test/fakes/market.ts";
+import { MINT, standInDexFetch } from "../../home/test/fakes/dex.ts";
+import { publicDex } from "../../home/src/desk/dex.ts";
 import { keptBy, TURNS } from "../src/floor/props.ts";
 
 const APP = fileURLToPath(new URL("..", import.meta.url));
@@ -97,7 +99,8 @@ function wallets(o: { evm: string; sol: string }): void {
         supportedTransactionVersions: ["legacy", 0],
         signAndSendTransaction: async (...inputs: { account: { address: string }; transaction: Uint8Array; chain: string }[]) => {
           w.__wallet.sol.push({ from: inputs[0]!.account.address, bytes: [...inputs[0]!.transaction], chain: inputs[0]!.chain });
-          return inputs.map(() => ({ signature: new Uint8Array(64).fill(7) }));
+          // a signature of its own for every transaction, as a wallet's is (the home keeps each hash once)
+          return inputs.map(() => ({ signature: new Uint8Array(64).fill(7 + w.__wallet.sol.length) }));
         },
       },
     },
@@ -118,11 +121,14 @@ test("the desk: the floor and its tabs at desk and phone sizes; a strategy kept 
     getSignatureStatuses: () => ({ value: [{ confirmationStatus: "confirmed", err: null }] }),
     getBalance: () => ({ value: 2_000_000_000 }),
     getTokenAccountsByOwner: () => ({ value: [] }),
+    // any coin (PLAN 5.28): the pump.fun mint's decimals, and its mint with no authority left
+    getTokenSupply: (p) => (p[0] === MINT ? { value: { decimals: 6, amount: "1", uiAmountString: "1" } } : null),
+    getAccountInfo: () => ({ value: { data: { parsed: { type: "mint", info: { decimals: 6, mintAuthority: null, freezeAuthority: null } } } } }),
   });
   const h = Home.open({
     dataDir: data, protect: [], spendCapUsd: null,
     brain: { preset: { id: "t", title: "t", own: null, big: { name: "big", baseUrl: model.url, model: "m", retries: 0 }, teacher: null } },
-    desk: { on: true, source: standInMarket(() => Date.now()), routers: standInRouters({ outPer: () => 0.0004 }), fetch: chains },
+    desk: { on: true, source: standInMarket(() => Date.now()), routers: standInRouters({ outPer: () => 0.0004 }), fetch: chains, dex: publicDex({ fetch: standInDexFetch() }) },
   });
   t.after(() => h.close());
   h.start();
@@ -154,14 +160,15 @@ test("the desk: the floor and its tabs at desk and phone sizes; a strategy kept 
   };
 
   const page = await open({ width: 1280, height: 1000 });
-  // the floor: its crew on it (and only its crew), the tape going by, the chart drawn
+  // the floor: its crew on it (and only its crew), the tape going by, the war room's screen; no chart under it (owner,
+  // 10-11: "no chart on bottom of page, only if user presses the electronic chart in war room")
   await page.waitForFunction(() => document.querySelectorAll("[data-desk-orb]").length === 5, null, { timeout: 20_000 });
   assert.deepEqual((await page.locator("[data-desk-orb]").evaluateAll((els) => els.map((e) => e.getAttribute("data-desk-orb")))).sort(), ["Kit", "Oz", "Quinn", "Rae", "Vic"]);
-  await page.locator("[data-candles]").waitFor({ timeout: 20_000 });
-  assert.ok(Number(await page.locator("[data-candles]").getAttribute("data-candles")) >= 100, "a desk's chart holds its bars");
+  await page.locator("[data-war-screen]").waitFor();
+  assert.equal(await page.locator("[data-candles]").count(), 0, "no chart on the page");
   assert.ok((await page.locator("[data-tick]").count()) >= 5, "the tape");
   await page.evaluate(() => document.fonts.ready);
-  assert.deepEqual(await measure(page), [], "the floor and the market, at desk size");
+  assert.deepEqual(await measure(page), [], "the floor, at desk size");
 
   // a strategy: backtested, kept, run on paper by Kit
   await tab(page, "strategies");
@@ -176,16 +183,16 @@ test("the desk: the floor and its tabs at desk and phone sizes; a strategy kept 
   await page.locator("[data-running]").waitFor();
   assert.ok(h.desk.books().some((b) => b.strategy === id && b.orb === "kit" && b.state === "live"), "Kit runs it, on paper");
 
-  // no wallet kept yet: the desk's own button says so and takes you to your wallets (owner, 10-11: "how does the user
-  // connect their wallet? i dont see any way?")
-  await tab(page, "market");
+  // Connect wallet (owner, 10-11: "how does the user connect their wallet? i dont see any way?"; "I dont see the wallet
+  // trying to connect at all when we say connect wallet"): this browser has two, so its sheet lists both; one picked,
+  // its own window asks, and the header says its address
   assert.equal((await page.locator("[data-connect-wallet]").innerText()).trim(), "Connect wallet");
   await page.locator("[data-connect-wallet]").click();
-  await page.locator('[data-desk-tab="trade"][aria-selected="true"]').waitFor();
-  await page.waitForFunction(() => {
-    const r = document.querySelector("[data-wallets]")?.getBoundingClientRect();
-    return !!r && r.top >= 0 && r.top < innerHeight;
-  }, null, { timeout: 5_000 });
+  await page.locator("[data-wallet-sheet]").waitFor();
+  assert.deepEqual(await page.locator("[data-wallet-pick]").evaluateAll((els) => els.map((e) => e.getAttribute("data-wallet-pick"))), ["Test Wallet", "Test Sol"]);
+  await page.locator('[data-wallet-pick="Test Wallet"]').click();
+  await page.locator("[data-wallet-sheet]").waitFor({ state: "detached" });
+  await page.locator("[data-connect-wallet]", { hasText: "0x5a5a" }).waitFor();
   // a window with no wallet in it (Orbz's own is a browser profile of its own): your browser opened by the home, signed
   // in and on the Trade tab, where your wallet is; a link to copy for a wallet app's browser
   const bare = await browser.newContext({ viewport: { width: 1280, height: 1000 }, colorScheme: "dark" });
@@ -201,9 +208,16 @@ test("the desk: the floor and its tabs at desk and phone sizes; a strategy kept 
   assert.match(opened[0]!, /^http:\/\/127\.0\.0\.1:\d+\/app\/orbs\.html#pair=[\w-]+&to=%2Fdesk%2Ftrade$/);
   await win.locator("[data-copy-link]").click();
   assert.match(await win.locator("[data-elsewhere-link]").innerText(), /#pair=[\w-]+&to=%2Fdesk%2Ftrade$/, "a link to open where the wallet is");
+  // its Connect wallet: the sheet says the same, as there is no wallet here to open
+  await win.locator("[data-connect-wallet]").click();
+  await win.locator("[data-wallet-sheet] [data-no-wallet]").waitFor();
+  await win.keyboard.press("Escape");
+  await win.locator("[data-wallet-sheet]").waitFor({ state: "detached" });
   const yours = await browser.newContext({ viewport: { width: 1280, height: 1000 }, colorScheme: "dark" });
   t.after(() => yours.close());
   await yours.addInitScript(wallets, { evm: EVM, sol: SOL });
+  // this browser remembers another tab of the desk: the link's place is still the one it opens on
+  await yours.addInitScript(() => globalThis.localStorage.setItem("orbs.desk.tab", "books"));
   const there = await yours.newPage();
   await there.goto(opened[0]!.replace("orbs.html#", "orbs.html?splash=0&intro=0#"));
   await there.locator('[data-desk-tab="trade"][aria-selected="true"]').waitFor({ timeout: 30_000 });
@@ -214,11 +228,9 @@ test("the desk: the floor and its tabs at desk and phone sizes; a strategy kept 
   await plain.goto(d.pairLink().replace("orbs.html#", "orbs.html?splash=0&intro=0#"));
   await plain.waitForFunction(() => location.hash === "#/home", null, { timeout: 30_000 });
 
-  // the wallets in this browser, each connected for its address only
+  // the wallets in this browser, each connected for its address only: the one the header connected, said so here too
   await tab(page, "trade");
-  await page.locator('[data-wallet-found="Test Wallet"]').waitFor();
   await page.locator('[data-wallet-found="Test Sol"]').waitFor();
-  await page.locator('[data-wallet-found="Test Wallet"]').click();
   await page.locator('[data-wallet-found="Test Wallet"]', { hasText: "0x5a5a" }).waitFor();
   const asked = async (): Promise<{ method: string; params?: unknown[] }[]> => page.evaluate(() => (window as unknown as { __wallet: { evm: { method: string; params?: unknown[] }[] } }).__wallet.evm);
   assert.deepEqual((await asked()).map((a) => a.method), ["eth_requestAccounts"], "connecting asks for the address, and nothing else");
@@ -282,11 +294,59 @@ test("the desk: the floor and its tabs at desk and phone sizes; a strategy kept 
   await page.locator(`[data-swap="${onSol.id}"][data-state="confirmed"]`).waitFor({ timeout: 20_000 });
   assert.deepEqual(await measure(page), [], "the trades, at desk size");
 
+  // the war room's screen (owner, 10-11: "user can press the chart in war room (electronic one) and a chart opens over
+  // (modal i guess) with a search bar on top of it ... user can input the contract address and view the coin + trade
+  // manually or send a certain orb to trade it"): what trends, a pump.fun coin by its address, its chart and numbers, a
+  // swap signed by the Solana wallet, and Kit sent to it on paper, walking to the screen
+  await page.locator("[data-war-screen]").click();
+  await page.locator("[data-token-desk]").waitFor();
+  await page.locator("[data-trending] [data-token-row]").first().waitFor({ timeout: 20_000 });
+  assert.deepEqual(await page.locator("[data-trending] [data-token-row]").evaluateAll((els) => els.map((e) => e.getAttribute("data-token-row"))), [`solana:${MINT}`], "what trends on Solana, each coin once");
+  await page.locator("[data-token-search]").fill(MINT);
+  await page.locator(`[data-token-page="solana:${MINT}"]`).waitFor({ timeout: 20_000 });
+  assert.equal(await page.locator("[data-token-search]").inputValue(), "", "the address opened its coin; the search is ready again");
+  await page.locator("[data-token-page] [data-candles]").waitFor({ timeout: 20_000 });
+  assert.match(await page.locator("[data-token-price]").innerText(), /^\$0\.16/);
+  assert.match(await page.locator("[data-token-quick]").innerText(), /^MC \$164\.00M · Liq \$8\.00M · Vol \$2\.00M$/);
+  await page.locator("[data-safety]", { hasText: "Nothing found against it" }).waitFor({ timeout: 20_000 });
+  await page.locator("[data-trade-row]").first().waitFor({ timeout: 20_000 });
+  assert.deepEqual(await measure(page), [], "a coin's page, at desk size");
+  await page.locator("[data-swap-token]", { hasText: "Test Sol" }).waitFor({ timeout: 10_000 });
+  await page.locator('[data-preset="0.5"]').click();
+  await page.locator("[data-token-quote]", { hasText: "≈" }).waitFor({ timeout: 20_000 });
+  const signs = await page.evaluate(() => (window as unknown as { __wallet: { sol: unknown[] } }).__wallet.sol.length);
+  await page.locator("[data-swap-token]").click();
+  await page.waitForFunction((n) => (window as unknown as { __wallet: { sol: unknown[] } }).__wallet.sol.length > n, signs, { timeout: 20_000 });
+  await page.locator("[data-token-trade] [role=status]", { hasText: "Sent:" }).waitFor({ timeout: 20_000 });
+  const coin = h.swaps.list().find((x) => x.buy === MINT)!;
+  assert.deepEqual([coin.chain, coin.sell, coin.amount], ["solana", "SOL", "0.5"], "the coin kept by its address, your own swap signed by your wallet");
+  await page.locator("select[data-send-who]").selectOption("Kit");
+  await page.locator('[data-send-mode="paper"]').click();
+  await page.locator("[data-send-go]").click();
+  await page.locator("[data-sent]", { hasText: "Kit has Fartcoin, on paper" }).waitFor({ timeout: 10_000 });
+  assert.ok(h.events.ofType("desk.sent").some((e) => e.orb === "kit" && e.data.mode === "paper" && e.data.label === "Fartcoin"), "Kit sent, on paper");
+  await page.locator("[data-token-close]").click();
+  await page.locator("[data-token-desk]").waitFor({ state: "detached" });
+  await page.locator('[data-desk-orb="Kit"][data-at="poi:whiteboard"]').waitFor({ timeout: 20_000 });
+
   // every tab at phone size
   const phone = await open({ width: 390, height: 844 });
-  await phone.locator("[data-candles]").waitFor({ timeout: 20_000 });
+  // a phone: the floor a tab of its own, first and open; no chart under it
+  await phone.locator('[data-desk-tab="floor"][aria-selected="true"]').waitFor();
+  assert.equal(await phone.locator("[data-desk-tab]").first().getAttribute("data-desk-tab"), "floor");
+  assert.equal(await phone.locator("[data-candles]").count(), 0);
+  assert.deepEqual(await measure(phone), [], "the floor, at phone size");
+  // the screen, the whole phone: a coin by its address, its chart, its swap asking for a Solana wallet and connecting it
+  await phone.locator("[data-war-screen]").click();
+  await phone.locator("[data-token-search]").fill(MINT);
+  await phone.locator("[data-token-page] [data-candles]").waitFor({ timeout: 20_000 });
   assert.ok(Number(await phone.locator("[data-candles]").getAttribute("data-candles")) < 100, "a phone's chart: fewer bars, each readable");
-  for (const k of ["market", "strategies", "trade", "books", "desk", "limits"]) {
+  await phone.waitForTimeout(400);
+  assert.deepEqual(await measure(phone), [], "a coin's page, at phone size");
+  await phone.locator("[data-swap-connect]", { hasText: "Connect a Solana wallet" }).click();
+  await phone.locator("[data-swap-token]", { hasText: "Test Sol" }).waitFor({ timeout: 10_000 });
+  await phone.locator("[data-token-close]").click();
+  for (const k of ["trade", "books", "strategies", "desk", "limits"]) {
     await tab(phone, k);
     await phone.evaluate(() => document.fonts.ready);
     assert.deepEqual(await measure(phone), [], `${k}, at phone size`);

@@ -237,7 +237,23 @@ export type DeskState = {
   now: number; market: { source: string; ok: boolean; lastOk: number | null; error: string | null; restingUntil: number | null }; prices: DeskTicker[];
   strategies: DeskStrategy[]; books: DeskBook[]; notes: { id: number; orb: string; symbol: string; title: string; text: string; at: number }[]; settings: DeskSettings;
   fills: DeskEvent[]; trades: DeskEvent[]; wallets: DeskWallet[]; swaps: DeskSwap[]; chains: DeskChain[];
+  /** Any token a book holds or a swap names, by its key ("solana:<mint>"), and how the DEX data is (PLAN 5.28). */
+  tokens?: Record<string, { symbol: string; name: string; image: string | null; priceUsd: number | null }>;
+  dex?: { source: string; ok: boolean; error: string | null; restingUntil: number | null };
 };
+// ── any token on a DEX (PLAN 5.28), as the home's door gives it ─────────────────────────────────────
+export type DexChain = "solana" | "ethereum" | "base" | "arbitrum" | "optimism" | "polygon" | "bsc";
+export type DexPair = {
+  chain: DexChain; dex: string; pair: string; url: string | null;
+  base: { address: string; name: string; symbol: string }; quote: { address: string; name: string; symbol: string };
+  priceUsd: number | null; priceNative: number | null;
+  change: { m5: number | null; h1: number | null; h6: number | null; h24: number | null };
+  volume24h: number | null; liquidityUsd: number | null; fdv: number | null; marketCap: number | null;
+  buys24h: number | null; sells24h: number | null; createdAt: number | null;
+  image: string | null; links: { label: string; url: string }[];
+};
+export type DexTrade = { at: number; side: "buy" | "sell"; usd: number; amount: number; priceUsd: number; tx: string; from: string | null };
+export type TokenSafety = { checked: string[]; flags: { level: "warn" | "note"; words: string }[] };
 export type DeskBuilt = { kind: "evm"; chainId: number; approve: { to: string; data: string } | null; tx: { to: string; data: string; value: string; gas: string | null } } | { kind: "solana"; transaction: string };
 
 export interface Office {
@@ -274,6 +290,17 @@ export interface Office {
    * of yours, your answer to an orb's, its transaction built for your wallet, and what your wallet did with it. */
   desk(): Promise<DeskState>;
   candles(symbol: string, tf: string, n?: number): Promise<DeskCandle[]>;
+  /** Any token on a DEX (PLAN 5.28): a search by name, symbol or address, a token's pairs and what it can do to whoever
+   * holds it, a pool's bars and last trades for a token, what is trending on a chain. */
+  dexSearch(q: string): Promise<DexPair[]>;
+  dexToken(chain: DexChain, address: string): Promise<DexPair[]>;
+  dexSafety(chain: DexChain, address: string): Promise<TokenSafety>;
+  dexCandles(chain: DexChain, pool: string, token: string, tf: string, n?: number): Promise<DeskCandle[]>;
+  dexTrades(chain: DexChain, pool: string, token: string): Promise<DexTrade[]>;
+  dexTrending(chain: DexChain): Promise<DexPair[]>;
+  /** An orb sent to a market (a major, or a token as "solana:<mint>"), on paper or for real (each real trade still asked
+   * of you): told in its chat, it walks to the war room's screen. */
+  sendOrb(o: { orb: string; market: string; mode: "paper" | "real"; budget?: number | null; note?: string }): Promise<{ orb: string; market: string; label: string; mode: string; budget: number | null }>;
   backtest(spec: DeskSpec): Promise<{ metrics: DeskMetrics; trades: DeskTrade[]; equity: { t: number; equity: number }[] }>;
   saveStrategy(spec: DeskSpec): Promise<DeskStrategy>;
   archiveStrategy(id: number): Promise<void>;
@@ -603,6 +630,27 @@ export function doorOffice(base: Character): Office {
     },
     async desk() {
       return call<DeskState>("../desk");
+    },
+    async dexSearch(q) {
+      return (await call<{ pairs: DexPair[] }>(`../desk/dex/search?q=${encodeURIComponent(q)}`)).pairs;
+    },
+    async dexToken(chain, address) {
+      return (await call<{ pairs: DexPair[] }>(`../desk/dex/token/${chain}/${encodeURIComponent(address)}`)).pairs;
+    },
+    async dexSafety(chain, address) {
+      return (await call<{ safety: TokenSafety }>(`../desk/dex/safety/${chain}/${encodeURIComponent(address)}`)).safety;
+    },
+    async dexCandles(chain, pool, token, tf, n = 300) {
+      return (await call<{ candles: DeskCandle[] }>(`../desk/dex/candles/${chain}/${encodeURIComponent(pool)}?token=${encodeURIComponent(token)}&tf=${encodeURIComponent(tf)}&n=${n}`)).candles;
+    },
+    async dexTrades(chain, pool, token) {
+      return (await call<{ trades: DexTrade[] }>(`../desk/dex/trades/${chain}/${encodeURIComponent(pool)}?token=${encodeURIComponent(token)}`)).trades;
+    },
+    async sendOrb(o) {
+      return (await call<{ sent: { orb: string; market: string; label: string; mode: string; budget: number | null } }>("../desk/send", { method: "POST", body: JSON.stringify(o) })).sent;
+    },
+    async dexTrending(chain) {
+      return (await call<{ pairs: DexPair[] }>(`../desk/dex/trending?chain=${chain}`)).pairs;
     },
     async candles(symbol, tf, n = 200) {
       return (await call<{ candles: DeskCandle[] }>(`../desk/candles?symbol=${encodeURIComponent(symbol)}&tf=${encodeURIComponent(tf)}&n=${n}`)).candles;

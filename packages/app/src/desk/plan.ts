@@ -165,7 +165,7 @@ export const lineOf = (kind: keyof typeof LINES, seed: number): string => LINES[
 export type TMoment = { poi: TPoiId | null; line: string; ring?: boolean; flash?: "ok" | "off" };
 /** What a desk event makes its orb do on the floor: where it goes (null: it stays where it is), what it says, the bell
  * rung for a trade won, its screens flashing for a fill; null for an event that is not a moment. */
-export function momentOf(e: { type: string; pnl?: unknown; side?: unknown; seq: number }): TMoment | null {
+export function momentOf(e: { type: string; pnl?: unknown; side?: unknown; label?: unknown; seq: number }): TMoment | null {
   const won = Number(e.pnl) > 0;
   switch (e.type) {
     case "desk.trade_closed":
@@ -178,6 +178,9 @@ export function momentOf(e: { type: string; pnl?: unknown; side?: unknown; seq: 
       return { poi: "whiteboard", line: lineOf("strategy", e.seq) };
     case "desk.swap_asked":
       return { poi: "head", line: lineOf("ask", e.seq) };
+    // sent to a token from the war room's screen (owner, 10-11): to the screen, its name said
+    case "desk.sent":
+      return { poi: "whiteboard", line: `${["On it:", "Pulling up", "Looking at"][Math.abs(e.seq) % 3]} ${String(e.label ?? "it").slice(0, 16)}` };
     default:
       return null;
   }

@@ -16,6 +16,20 @@ export const chip = (on: boolean): CSSProperties => ({ ...(on ? strong : button)
 export const usd = (n: number, places = 2): string => `${n < 0 ? "−" : ""}$${Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: places, maximumFractionDigits: places })}`;
 export const pct = (n: number | null | undefined, places = 2): string => (n === null || n === undefined || !Number.isFinite(n) ? "–" : `${n >= 0 ? "+" : "−"}${Math.abs(n).toFixed(places)}%`);
 export const shortAddress = (a: string): string => (a.length > 14 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a);
+/** A market as the screen names it: a major as it is, a token ("solana:<mint>", or an address a swap keeps on its chain) by
+ * its symbol when the desk knows it, else its address shortened. */
+export const marketName = (m: string, tokens?: Record<string, { symbol: string }>, chain?: string): string => {
+  const key = chain && !m.includes(":") && (/^0x[0-9a-fA-F]{40}$/.test(m) || /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(m)) ? `${chain}:${m}` : m;
+  return tokens?.[key]?.symbol ?? (key.includes(":") ? shortAddress(key.slice(key.indexOf(":") + 1)) : m);
+};
+/** A coin's picture, through the home (the page shows pictures from its own address only). */
+export const picture = (u: string | null): string | undefined => (u ? `../desk/dex/image?u=${encodeURIComponent(u)}` : undefined);
+/** Dollars as a screen of numbers writes them: $164.7M, $8.19M, $5.0K, $312. */
+export const compact = (n: number | null | undefined): string => {
+  if (n === null || n === undefined || !Number.isFinite(n)) return "–";
+  const a = Math.abs(n);
+  return a >= 1e9 ? `$${(n / 1e9).toFixed(2)}B` : a >= 1e6 ? `$${(n / 1e6).toFixed(2)}M` : a >= 1e3 ? `$${(n / 1e3).toFixed(1)}K` : `$${n.toFixed(0)}`;
+};
 export const ago = (at: number, now = Date.now()): string => {
   const s = Math.max(0, Math.round((now - at) / 1000));
   return s < 60 ? `${s}s ago` : s < 3600 ? `${Math.round(s / 60)}m ago` : s < 86_400 ? `${Math.round(s / 3600)}h ago` : `${Math.round(s / 86_400)}d ago`;

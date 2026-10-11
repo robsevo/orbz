@@ -6,6 +6,7 @@
 // (2 s doubling to 5 minutes), and a price older than a minute is said to be stale, never shown as live.
 import type { Candle } from "./indicators.ts";
 import { SYMBOLS, TIMEFRAME_MS, type Timeframe } from "./strategy.ts";
+import { readTokenKey, type Dex } from "./dex.ts";
 
 export type Ticker = { symbol: string; price: number; changePct: number; high: number; low: number; volume: number; at: number };
 export interface MarketSource {
@@ -45,6 +46,8 @@ export type MarketStatus = { source: string; ok: boolean; lastOk: number | null;
 export class Market {
   readonly #source: MarketSource;
   readonly #now: () => number;
+  /** Any token on a DEX, by its key ("solana:9BB6…pump"), where a symbol would be (dex.ts). */
+  readonly #dex: Dex | null;
   readonly #candles = new Map<string, { at: number; bars: Candle[] }>();
   #tickers: { at: number; list: Ticker[] } | null = null;
   #lastOk: number | null = null;
@@ -56,9 +59,10 @@ export class Market {
   /** A price older than this is stale. */
   static readonly STALE_MS = 60_000;
 
-  constructor(source: MarketSource, now: () => number) {
+  constructor(source: MarketSource, now: () => number, dex: Dex | null = null) {
     this.#source = source;
     this.#now = now;
+    this.#dex = dex;
   }
 
   status(): MarketStatus {
@@ -84,6 +88,11 @@ export class Market {
   /** The last `limit` bars of a symbol, the forming one last: kept for half a minute at most (the forming bar moves),
    * and asked again at once when the bar that was forming has closed. */
   async candles(symbol: string, tf: Timeframe, limit = 300): Promise<Candle[]> {
+    const token = readTokenKey(symbol);
+    if (token) {
+      if (!this.#dex) throw new Error("no DEX data in this home");
+      return this.#dex.tokenCandles(token.chain, token.address, tf, limit);
+    }
     const key = `${symbol}:${tf}`;
     const have = this.#candles.get(key);
     const ms = TIMEFRAME_MS[tf];
@@ -119,6 +128,8 @@ export class Market {
 
   /** A price now, or null when the market cannot say. */
   async price(symbol: string): Promise<number | null> {
+    const token = readTokenKey(symbol);
+    if (token) return this.#dex ? this.#dex.price(token.chain, token.address).catch(() => null) : null;
     const t = (await this.tickers([symbol])).find((x) => x.symbol === symbol);
     return t && !t.stale ? t.price : null;
   }

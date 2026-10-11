@@ -81,6 +81,8 @@ import { TOOLS } from "./agent/tools.ts";
 import { reverseTools } from "./reverse/tools.ts";
 import { Desk } from "./desk/desk.ts";
 import { binanceSource, Market, offlineFetch, offlineSource, type MarketSource } from "./desk/market.ts";
+import { Dex, offlineDex, publicDex, type DexChain, type DexSource } from "./desk/dex.ts";
+import { safetyOf, type Safety } from "./desk/safety.ts";
 import { publicRouters, Swaps, type Routers } from "./desk/swaps.ts";
 import { deskTools } from "./desk/tools.ts";
 import { Wallets } from "./desk/wallets.ts";
@@ -116,8 +118,8 @@ export type HomeOptions = {
   reports?: { on?: boolean };
   /** The desk (PLAN 5.22-5.27): its market (public market data), the DEX routers and the chains' RPCs. `on`
    * steps live strategies and follows sent swaps by the tick: the real home (main.ts); a test home is off and has no
-   * network unless it hands in stand-ins (`source`, `routers`, `fetch`). */
-  desk?: { on?: boolean; source?: MarketSource; routers?: Routers; fetch?: typeof fetch };
+   * network unless it hands in stand-ins (`source`, `routers`, `fetch`, `dex`: any token's data, PLAN 5.28). */
+  desk?: { on?: boolean; source?: MarketSource; routers?: Routers; fetch?: typeof fetch; dex?: DexSource };
   /** How long a stopped run may take to wind down (default 5 s). */
   graceMs?: number;
   /** School (PLAN 5.7): tonight's share of the brain (tests set less). */
@@ -251,6 +253,9 @@ export class Home {
   readonly #reportsOn: boolean;
   /** The desk (PLAN 5.22-5.27): the market, the strategies and paper books, your wallets, real swaps. */
   readonly market: Market;
+  /** Any token on a DEX (PLAN 5.28): a search, a token's pairs, its candles and last trades, what is trending. */
+  readonly dex: Dex;
+  readonly #deskFetch: typeof fetch | undefined;
   readonly desk: Desk;
   readonly wallets: Wallets;
   readonly swaps: Swaps;
@@ -296,11 +301,13 @@ export class Home {
     // the desk: off (and offline) in a test home unless it hands in its stand-ins
     this.#deskOn = opts.desk?.on ?? false;
     const now = (): number => this.clock.now();
-    this.market = new Market(opts.desk?.source ?? (this.#deskOn ? binanceSource() : offlineSource()), now);
-    this.desk = new Desk(db, this.events, this.market, now);
     const deskFetch = opts.desk?.fetch ?? (this.#deskOn ? undefined : offlineFetch);
+    this.#deskFetch = deskFetch;
+    this.dex = new Dex(opts.desk?.dex ?? (this.#deskOn ? publicDex({ fetch: deskFetch }) : offlineDex()), now);
+    this.market = new Market(opts.desk?.source ?? (this.#deskOn ? binanceSource() : offlineSource()), now, this.dex);
+    this.desk = new Desk(db, this.events, this.market, now);
     this.wallets = new Wallets(db, this.events, this.market, now, { fetch: deskFetch });
-    this.swaps = new Swaps(db, this.events, this.market, this.desk, opts.desk?.routers ?? publicRouters({ fetch: deskFetch }), now, { fetch: deskFetch });
+    this.swaps = new Swaps(db, this.events, this.market, this.desk, opts.desk?.routers ?? publicRouters({ fetch: deskFetch }), now, { fetch: deskFetch, dex: this.dex });
     const big = opts.brain?.preset.big ?? null;
     this.chatgpt = new ChatGPT({ dataDir: this.dataDir, events: this.events, clock: this.clock, ...opts.chatgpt });
     const chatgptReady = this.chatgpt.load().then(() => {}, () => {}); // a home never signed in does not touch the keychain
@@ -406,7 +413,7 @@ export class Home {
       // reverse engineering (PLAN 4.8): read what it is handed, statically, on a thread with a ceiling
       ...reverseTools(),
       // the desk (PLAN 5.25): prices, strategies on paper, notes, your wallets read, a real swap only asked
-      ...deskTools({ desk: this.desk, wallets: this.wallets, swaps: this.swaps, nameOf: (orb) => this.inbox.orb(orb)?.name ?? orb }),
+      ...deskTools({ desk: this.desk, wallets: this.wallets, swaps: this.swaps, dex: this.dex, safety: (c, a) => this.tokenSafety(c, a), now: () => this.clock.now(), nameOf: (orb) => this.inbox.orb(orb)?.name ?? orb }),
       // the reading library (PLAN 3.12): the sites the office follows, beside web search
       ...readingTools(this.reading, (orb) => this.inbox.orb(orb)?.name ?? orb),
       // how the org works (PLAN 5.4): who fits a row, and a Senior passing a habit on (your yes first)
@@ -817,6 +824,12 @@ export class Home {
     });
     linked.catch(() => {}); // a caller that never awaits it must not crash the home
     return { url, done: linked };
+  }
+
+  /** What a token can do to whoever holds it (PLAN 5.28, desk/safety.ts): read from its chain and its top pair. */
+  async tokenSafety(chain: DexChain, address: string): Promise<Safety> {
+    const top = (await this.dex.token(chain, address).catch(() => []))[0] ?? null;
+    return safetyOf(chain, address, top, { now: this.clock.now(), fetch: this.#deskFetch });
   }
 
   /** Disconnects an account: its sign-in, its mail and its calendar, all at once. */

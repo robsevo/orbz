@@ -6,6 +6,7 @@
 // each side; a stop and a target are checked against each later bar's low and high, the stop first when a bar reaches
 // both. Long only: what a wallet can do with a swap is buy and sell, not short.
 import { atr, bollinger, change, ema, highestBefore, lowestBefore, macd, rsi, sma, type Candle } from "./indicators.ts";
+import { readTokenKey } from "./dex.ts";
 
 export const TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "1d"] as const;
 export type Timeframe = (typeof TIMEFRAMES)[number];
@@ -91,7 +92,7 @@ export function problemOf(s: unknown): string | null {
   if (!s || typeof s !== "object") return "a strategy is an object";
   const x = s as Strategy;
   if (typeof x.name !== "string" || !x.name.trim() || x.name.length > 60) return "a strategy needs a name, 60 letters at most";
-  if (!(SYMBOLS as readonly string[]).includes(x.symbol)) return `it trades one of ${SYMBOLS.join(", ")}`;
+  if (!(SYMBOLS as readonly string[]).includes(x.symbol) && !readTokenKey(String(x.symbol))) return `it trades one of ${SYMBOLS.join(", ")}, or any token by its chain and address ("solana:<mint>")`;
   if (!TIMEFRAMES.includes(x.timeframe)) return `its bars are ${TIMEFRAMES.join(", ")}`;
   const e = rulesProblem(x.entry, "when to buy") ?? (x.exit === undefined ? null : rulesProblem(x.exit, "when to sell"));
   if (e) return e;

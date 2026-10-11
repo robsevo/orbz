@@ -12,6 +12,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import type { EventLog } from "../events.ts";
 import { call, chainOf, fromUnits, NATIVE, rpc, toUnits, tokenOf, type Chain, type Token } from "./chains.ts";
+import { isDexChain, isTokenAddress, tokenKey, type Dex } from "./dex.ts";
 import type { Desk } from "./desk.ts";
 import type { Market } from "./market.ts";
 
@@ -90,9 +91,13 @@ export class Swaps {
   readonly #now: () => number;
   readonly #fetch: typeof fetch | undefined;
   readonly #raw = new Map<number, unknown>(); // each swap's latest route, as the router gave it
+  /** Any token by its address (owner, 10-11: "shitcoins, anything"): its symbol from the DEX data, its decimals from its
+   * own chain, read once (they never change). */
+  readonly #dex: Dex | null;
+  readonly #decimals = new Map<string, number>();
   #following: Promise<void> | null = null;
 
-  constructor(db: DatabaseSync, events: EventLog, market: Market, desk: Desk, routers: Routers, now: () => number, o: { fetch?: typeof fetch } = {}) {
+  constructor(db: DatabaseSync, events: EventLog, market: Market, desk: Desk, routers: Routers, now: () => number, o: { fetch?: typeof fetch; dex?: Dex | null } = {}) {
     this.#db = db;
     this.#events = events;
     this.#market = market;
@@ -100,6 +105,7 @@ export class Swaps {
     this.#routers = routers;
     this.#now = now;
     this.#fetch = o.fetch;
+    this.#dex = o.dex ?? null;
   }
 
   #of(r: Row): Swap {
@@ -137,12 +143,38 @@ export class Swaps {
     if (today + usd > s.perDayUsd) throw new SwapError(`it would take today's trades to $${(today + usd).toFixed(2)}, over the desk's $${s.perDayUsd} a day`);
   }
 
+  /** A token the desk knows by name, or any token on the chain by its address: kept as its symbol when known, its
+   * address when not (a symbol is not one token's own). */
+  async #tokenOf(chain: Chain, x: string): Promise<Token | null> {
+    const known = tokenOf(chain, x);
+    if (known) return known;
+    const on = chain.kind === "solana" ? "solana" : chain.id;
+    if (!isDexChain(on) || !isTokenAddress(on, x)) return null;
+    const k = `${chain.id}:${x}`;
+    let decimals = this.#decimals.get(k);
+    if (decimals === undefined) {
+      try {
+        decimals = chain.kind === "evm"
+          ? Number(BigInt(String(await rpc(chain.rpcs, "eth_call", [{ to: x, data: call("decimals()") }, "latest"], { fetch: this.#fetch }))))
+          : Number(((await rpc(chain.rpcs, "getTokenSupply", [x], { fetch: this.#fetch })) as { value?: { decimals?: unknown } }).value?.decimals);
+      } catch (e) {
+        throw new SwapError(`${x} on ${chain.name} answered no decimals: ${(e as Error).message}`);
+      }
+      if (!Number.isInteger(decimals) || decimals < 0 || decimals > 36) throw new SwapError(`${x} is not a token on ${chain.name}`);
+      this.#decimals.set(k, decimals);
+    }
+    const symbol = (await this.#dex?.token(on, x).catch(() => []))?.[0]?.base.symbol || `${x.slice(0, 4)}…${x.slice(-4)}`;
+    return { symbol, address: x, decimals, market: tokenKey(on, x) };
+  }
+  /** How a swap keeps a token: its symbol when the desk knows it, else its address. */
+  #kept = (chain: Chain, t: Token): string => (tokenOf(chain, t.symbol)?.address === t.address ? t.symbol : t.address);
+
   /** A quote alone, kept nowhere: what the Trade panel shows before you press Swap. */
   async quote(o: { chain: string; sell: string; buy: string; amount: string }): Promise<Quote & { usd: number | null }> {
     const chain = chainOf(o.chain);
-    const sell = chain && tokenOf(chain, o.sell);
-    const buy = chain && tokenOf(chain, o.buy);
-    if (!chain || !sell || !buy || sell === buy) throw new SwapError("a chain the desk knows, and two of its tokens");
+    const sell = chain && (await this.#tokenOf(chain, o.sell));
+    const buy = chain && (await this.#tokenOf(chain, o.buy));
+    if (!chain || !sell || !buy || sell.address.toLowerCase() === buy.address.toLowerCase()) throw new SwapError("a chain the desk knows, and two tokens on it: by name, or any token by its address");
     let units: bigint;
     try {
       units = toUnits(o.amount, sell.decimals);
@@ -158,10 +190,10 @@ export class Swaps {
   async ask(o: { by: string | null; chain: string; sell: string; buy: string; amount: string; why?: string }): Promise<Swap> {
     const chain = chainOf(o.chain);
     if (!chain) throw new SwapError(`no chain "${o.chain}": ${["base", "ethereum", "arbitrum", "optimism", "polygon", "solana"].join(", ")}`);
-    const sell = tokenOf(chain, o.sell);
-    const buy = tokenOf(chain, o.buy);
-    if (!sell || !buy) throw new SwapError(`on ${chain.name} the desk trades ${chain.tokens.map((t) => t.symbol).join(", ")}`);
-    if (sell === buy) throw new SwapError("a swap is from one token to another");
+    const sell = await this.#tokenOf(chain, o.sell);
+    const buy = await this.#tokenOf(chain, o.buy);
+    if (!sell || !buy) throw new SwapError(`on ${chain.name} the desk swaps ${chain.tokens.map((t) => t.symbol).join(", ")}, or any token by its address`);
+    if (sell.address.toLowerCase() === buy.address.toLowerCase()) throw new SwapError("a swap is from one token to another");
     let units: bigint;
     try {
       units = toUnits(o.amount, sell.decimals);
@@ -176,7 +208,7 @@ export class Swaps {
     const { raw, ...quote } = q;
     const state: SwapState = o.by === null ? "approved" : "asked";
     const { lastInsertRowid } = this.#db.prepare("INSERT INTO desk_swaps (orb, chain, sell, buy, amount, usd, why, quote, state, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-      .run(o.by, chain.id, sell.symbol, buy.symbol, o.amount, usd, (o.why ?? "").slice(0, 400), JSON.stringify(quote), state, this.#now());
+      .run(o.by, chain.id, this.#kept(chain, sell), this.#kept(chain, buy), o.amount, usd, (o.why ?? "").slice(0, 400), JSON.stringify(quote), state, this.#now());
     const id = Number(lastInsertRowid);
     this.#raw.set(id, raw);
     this.#events.append(o.by === null ? "desk.swap_approved" : "desk.swap_asked", { swap: id, chain: chain.id, sell: sell.symbol, buy: buy.symbol, amount: o.amount, usd, out: quote.out, why: o.why ?? "" }, { orb: o.by });
@@ -204,8 +236,8 @@ export class Swaps {
     if (s.state !== "approved" && s.state !== "built") throw new SwapError(s.state === "asked" ? "it waits for your yes first" : `swap ${id} is ${s.state}`);
     this.#limits(s.usd, s.usd);
     const chain = chainOf(s.chain)!;
-    const sell = tokenOf(chain, s.sell)!;
-    const buy = tokenOf(chain, s.buy)!;
+    const sell = (await this.#tokenOf(chain, s.sell))!;
+    const buy = (await this.#tokenOf(chain, s.buy))!;
     const units = toUnits(s.amount, sell.decimals);
     const slip = this.#desk.settings().slippageBps;
     const fresh = chain.kind === "evm" ? await this.#routers.evmQuote(chain, sell, buy, units) : await this.#routers.solQuote(sell, buy, units, slip);

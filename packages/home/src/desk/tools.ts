@@ -9,13 +9,31 @@ import type { Desk } from "./desk.ts";
 import type { Swaps } from "./swaps.ts";
 import type { Wallets } from "./wallets.ts";
 import { OPS, problemOf, SYMBOLS, TIMEFRAMES, words, type Strategy, type Timeframe } from "./strategy.ts";
+import { DEX_CHAINS, isDexChain, isTokenAddress, readTokenKey, tokenKey, type Dex, type DexChain, type DexPair } from "./dex.ts";
+import type { Safety } from "./safety.ts";
 
 const obj = (properties: Record<string, unknown>, required: string[]): Record<string, unknown> => ({ type: "object", properties, required, additionalProperties: false });
 const s = (v: unknown): string => (typeof v === "string" ? v : v === undefined || v === null ? "" : String(v));
 const usd = (n: number): string => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const pct = (n: number | null): string => (n === null || !Number.isFinite(n) ? "n/a" : `${n >= 0 ? "+" : ""}${n.toFixed(2)}%`);
 const fail = (e: unknown): ToolResult => ({ content: e instanceof Error ? e.message : String(e), isError: true });
-const symbolParam = { type: "string", enum: [...SYMBOLS] };
+const majorParam = { type: "string", enum: [...SYMBOLS] };
+/** A market: one of the majors, or any token on a DEX by its chain and address (PLAN 5.28). */
+const symbolParam = { type: "string", description: `${SYMBOLS.join(", ")}; or any token by its chain and address, as "solana:<mint>" or "base:0x…" (token_search finds them; a pump.fun token's mint ends in "pump")` };
+/** A market as given, or why it is not one. */
+const marketOf = (v: unknown): string | Error => {
+  const x = s(v).trim();
+  return (SYMBOLS as readonly string[]).includes(x) || readTokenKey(x) ? x : new Error(`"${x}" is not a market: one of ${SYMBOLS.join(", ")}, or a token as "solana:<mint>" or "base:0x…"`);
+};
+const money = (n: number | null): string => (n === null ? "n/a" : n >= 1e9 ? `$${(n / 1e9).toFixed(2)}B` : n >= 1e6 ? `$${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(1)}K` : `$${n.toFixed(2)}`);
+const ago = (at: number | null, now: number): string => {
+  if (at === null) return "n/a";
+  const h = (now - at) / 3600_000;
+  return h < 1 ? `${Math.round(h * 60)} minutes` : h < 48 ? `${Math.round(h)} hours` : `${Math.round(h / 24)} days`;
+};
+/** A pair in a line a model can read. */
+const pairLine = (p: DexPair, now: number): string =>
+  `${p.base.symbol} (${p.base.name}) on ${p.chain}, ${tokenKey(p.chain, p.base.address)}: ${p.priceUsd === null ? "no price" : `$${p.priceUsd.toPrecision(6)}`}, ${pct(p.change.h24)} 24h, ${pct(p.change.h1)} 1h; liquidity ${money(p.liquidityUsd)}, 24h volume ${money(p.volume24h)}, market cap ${money(p.marketCap ?? p.fdv)}; ${p.buys24h ?? "?"} buys and ${p.sells24h ?? "?"} sells in 24h; its pair ${ago(p.createdAt, now)} old, on ${p.dex}.`;
 
 /** The strategy's shape, for the model: what `propose_strategy` and `backtest_strategy` take. */
 const SERIES = {
@@ -54,14 +72,48 @@ export function chartWords(symbol: string, tf: Timeframe, c: readonly Candle[]):
   ].join("\n");
 }
 
-export function deskTools(o: { desk: Desk; wallets: Wallets; swaps: Swaps; nameOf: (orb: string) => string }): ToolDef[] {
-  const { desk, wallets, swaps } = o;
+export function deskTools(o: { desk: Desk; wallets: Wallets; swaps: Swaps; dex: Dex; safety: (chain: DexChain, address: string) => Promise<Safety>; now: () => number; nameOf: (orb: string) => string }): ToolDef[] {
+  const { desk, wallets, swaps, dex } = o;
   const g = GROUPS.desk;
   return [
+    // any token on a DEX (PLAN 5.28; owner, 10-11: "shitcoins, anything", pump.fun's too): found, then read
+    {
+      name: "token_search", group: g, label: "Looking up a token",
+      description: "Find any token on a DEX by its name, symbol or contract address (a pump.fun token's mint ends in \"pump\"), on Solana, Ethereum, Base, Arbitrum, Optimism, Polygon and BNB Chain: each with its price, change, liquidity, volume, market cap, buys and sells, and its pair's age. The key it gives (\"solana:<mint>\") is what market_chart, paper_trade and token_info take.",
+      parameters: obj({ query: { type: "string" } }, ["query"]),
+      describe: (a) => `look up ${s(a.query)}`, decision: "allow",
+      async run(a) {
+        try {
+          const found = (await dex.search(s(a.query))).slice(0, 8);
+          return { content: found.length ? found.map((p) => pairLine(p, o.now())).join("\n") : `Nothing found for "${s(a.query)}".` };
+        } catch (e) {
+          return fail(e);
+        }
+      },
+    },
+    {
+      name: "token_info", group: g, label: "Reading a token",
+      description: "One token in full: its most liquid pairs, and what it can do to whoever holds it, read from its own chain (on Solana an authority that can freeze what you hold or mint more, or a fee on every transfer; on the EVM chains functions that can stop you selling, or a proxy). Read it before any trade in a token you have not traded.",
+      parameters: obj({ chain: { type: "string", enum: [...DEX_CHAINS] }, address: { type: "string" } }, ["chain", "address"]),
+      describe: (a) => `read ${s(a.chain)} token ${s(a.address).slice(0, 10)}…`, decision: "allow",
+      async run(a) {
+        try {
+          const chain = s(a.chain);
+          const address = s(a.address).trim();
+          if (!isDexChain(chain) || !isTokenAddress(chain, address)) return fail(new Error(`not a ${chain} token address`));
+          const pairs = (await dex.token(chain, address)).slice(0, 4);
+          if (!pairs.length) return { content: "No pair trades this token now." };
+          const safe = await o.safety(chain, address);
+          return { content: [...pairs.map((p) => pairLine(p, o.now())), `Checked ${safe.checked.join(", ") || "nothing"}: ${safe.flags.length ? safe.flags.map((f) => `${f.level === "warn" ? "WARN" : "note"}: ${f.words}`).join("; ") : "nothing found against it."}`].join("\n") };
+        } catch (e) {
+          return fail(e);
+        }
+      },
+    },
     {
       name: "market_prices", group: g, label: "Reading the prices",
       description: `The price now of ${SYMBOLS.join(", ")} (in dollars), with the change, high and low over 24 hours; a price older than a minute is said stale.`,
-      parameters: obj({ symbols: { type: "array", items: symbolParam } }, []),
+      parameters: obj({ symbols: { type: "array", items: majorParam } }, []),
       describe: () => "read the market's prices", decision: "allow",
       async run(a) {
         try {
@@ -80,7 +132,9 @@ export function deskTools(o: { desk: Desk; wallets: Wallets; swaps: Swaps; nameO
       describe: (a) => `read ${s(a.symbol)}'s ${s(a.timeframe)} chart`, decision: "allow",
       async run(a) {
         try {
-          return { content: chartWords(s(a.symbol), s(a.timeframe) as Timeframe, await desk.market.closed(s(a.symbol), s(a.timeframe) as Timeframe, 200)) };
+          const m = marketOf(a.symbol);
+          if (m instanceof Error) return fail(m);
+          return { content: chartWords(m, s(a.timeframe) as Timeframe, await desk.market.closed(m, s(a.timeframe) as Timeframe, 200)) };
         } catch (e) {
           return fail(e);
         }
@@ -140,7 +194,9 @@ export function deskTools(o: { desk: Desk; wallets: Wallets; swaps: Swaps; nameO
       describe: (a) => `${s(a.side)} ${usd(Number(a.usd))} of ${s(a.symbol)} on paper`, decision: "allow",
       async run(a, ctx) {
         try {
-          const r = await desk.paperTrade(ctx.orb, s(a.symbol), s(a.side) as "buy" | "sell", Number(a.usd));
+          const m = marketOf(a.symbol);
+          if (m instanceof Error) return fail(m);
+          const r = await desk.paperTrade(ctx.orb, m, s(a.side) as "buy" | "sell", Number(a.usd));
           const t = r.trade as { pnl: number; pnlPct: number } | null;
           return { content: `Filled at ${usd(r.px)}. Paper cash now ${usd(r.book.cash)}.${t ? ` That sale closed ${pct(t.pnlPct)} (${usd(t.pnl)}) after fees.` : ""}` };
         } catch (e) {
@@ -203,7 +259,7 @@ export function deskTools(o: { desk: Desk; wallets: Wallets; swaps: Swaps; nameO
     {
       name: "propose_swap", group: g, label: "Asking for a trade",
       description: "Ask the person for a real trade from their own wallet, a swap on a DEX (KyberSwap on base, ethereum, arbitrum, optimism, polygon; Jupiter on solana). It only asks: it waits for their yes at the desk, then their wallet's signature; the desk's limits and slippage are kept. Say why in one or two lines, with the risk.",
-      parameters: obj({ chain: { type: "string", enum: ["base", "ethereum", "arbitrum", "optimism", "polygon", "solana"] }, sell: { type: "string" }, buy: { type: "string" }, amount: { type: "string", description: "Of what is sold, e.g. \"0.05\"." }, why: { type: "string" } }, ["chain", "sell", "buy", "amount", "why"]),
+      parameters: obj({ chain: { type: "string", enum: ["base", "ethereum", "arbitrum", "optimism", "polygon", "solana"] }, sell: { type: "string", description: "A token on that chain: its symbol (ETH, USDC, SOL…) or any token's address." }, buy: { type: "string", description: "The same: a symbol, or any token's address (token_search finds it)." }, amount: { type: "string", description: "Of what is sold, e.g. \"0.05\"." }, why: { type: "string" } }, ["chain", "sell", "buy", "amount", "why"]),
       describe: (a) => `ask to swap ${s(a.amount)} ${s(a.sell)} for ${s(a.buy)} on ${s(a.chain)}`, decision: "allow",
       async run(a, ctx) {
         try {

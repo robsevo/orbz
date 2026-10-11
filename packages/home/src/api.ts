@@ -11,6 +11,7 @@
 // (that stays for local tools), and lets in only a session: a pairing link (a QR code on a phone)
 // or a passkey, each a device that can be revoked.
 import { CHAINS } from "./desk/chains.ts";
+import { DEX_CHAINS, isDexChain, isTokenAddress, readTokenKey, tokenKey } from "./desk/dex.ts";
 import { DeskError, type Settings } from "./desk/desk.ts";
 import { SwapError } from "./desk/swaps.ts";
 import { SYMBOLS, TIMEFRAMES, type Strategy, type Timeframe } from "./desk/strategy.ts";
@@ -628,6 +629,18 @@ async function handle(
         const now = home.clock.now();
         const prices = await home.market.tickers([...SYMBOLS]).catch(() => []);
         const price = new Map(prices.map((t) => [t.symbol, t.price]));
+        // any token a book holds or a swap names (PLAN 5.28): its name and its price now, for the page and the books' worth
+        const keys = new Set<string>();
+        for (const b of home.desk.books()) for (const k of [b.symbol ?? "", ...b.holdings.map((h) => h.symbol)]) if (readTokenKey(k)) keys.add(k);
+        for (const sw of home.swaps.list(30)) for (const a of [sw.sell, sw.buy]) if (isDexChain(sw.chain) && isTokenAddress(sw.chain, a)) keys.add(tokenKey(sw.chain, a));
+        const tokens: Record<string, { symbol: string; name: string; image: string | null; priceUsd: number | null }> = {};
+        await Promise.all([...keys].slice(0, 30).map(async (k) => {
+          const t = readTokenKey(k)!;
+          const top = (await home.dex.token(t.chain, t.address).catch(() => []))[0];
+          if (!top) return;
+          tokens[k] = { symbol: top.base.symbol, name: top.base.name, image: top.image, priceUsd: top.priceUsd };
+          if (top.priceUsd !== null) price.set(k, top.priceUsd);
+        }));
         const books = home.desk.books().map((b) => {
           const held = b.strategy !== null ? (b.qty > 0 && b.symbol ? b.qty * (price.get(b.symbol) ?? b.entryPx) : 0) : b.holdings.reduce((n, h) => n + h.qty * (price.get(h.symbol) ?? h.cost / Math.max(h.qty, 1e-12)), 0);
           return { ...b, equity: b.cash + held };
@@ -635,15 +648,72 @@ async function handle(
         const recent = (type: string, n: number) => home.events.ofType(type).slice(-n).reverse().map((e) => ({ seq: e.seq, at: e.at, orb: e.orb, ...e.data }));
         return {
           now, market: home.market.status(), prices, strategies: home.desk.strategies(), books, notes: home.desk.notes(), settings: home.desk.settings(),
-          fills: recent("desk.fill", 40), trades: recent("desk.trade_closed", 40), wallets: home.wallets.list(), swaps: home.swaps.list(30),
+          fills: recent("desk.fill", 40), trades: recent("desk.trade_closed", 40), wallets: home.wallets.list(), swaps: home.swaps.list(30), tokens, dex: home.dex.status(),
           chains: CHAINS.map((c) => ({ id: c.id, name: c.name, kind: c.kind, ...(c.kind === "evm" && { chainId: c.chainId }), explorer: c.explorer, tokens: c.tokens.map((t) => ({ symbol: t.symbol, decimals: t.decimals })) })),
         };
       }
       if (method === "GET" && parts[1] === "candles") {
         const symbol = url.searchParams.get("symbol") ?? "BTC";
         const tf = (url.searchParams.get("tf") ?? "1h") as Timeframe;
-        if (!(SYMBOLS as readonly string[]).includes(symbol) || !TIMEFRAMES.includes(tf)) no(400, "a symbol and a timeframe the desk knows");
+        if (!((SYMBOLS as readonly string[]).includes(symbol) || readTokenKey(symbol)) || !TIMEFRAMES.includes(tf)) no(400, "a symbol and a timeframe the desk knows");
         return { symbol, tf, candles: await home.market.candles(symbol, tf, Math.min(500, Math.max(30, Number(url.searchParams.get("n")) || 200))) };
+      }
+      // any token on a DEX (PLAN 5.28; owner, 10-11: "a search bar for any contract address, like dexscreener's"): a
+      // search, a token's pairs and what it can do to whoever holds it, a pool's bars and last trades, what is trending
+      if (method === "GET" && parts[1] === "dex") {
+        if (parts[2] === "search" && parts.length === 3) return { pairs: (await home.dex.search(url.searchParams.get("q") ?? "")).slice(0, 30) };
+        // a coin's picture, through the home (the page's own address: img-src 'self'), from an image host only
+        if (parts[2] === "image" && parts.length === 3) {
+          const pic = await home.dex.image(url.searchParams.get("u") ?? "").catch(() => null);
+          if (!pic) no(404, "no such picture");
+          res!.writeHead(200, { "content-type": pic!.type, "cache-control": "private, max-age=86400", "x-content-type-options": "nosniff", "content-security-policy": "default-src 'none'; sandbox" });
+          res!.end(pic!.bytes);
+          return STREAMING;
+        }
+        const chain = parts[2] === "trending" ? (url.searchParams.get("chain") ?? "solana") : (parts[3] ?? "");
+        if (!isDexChain(chain)) no(400, `a chain: ${DEX_CHAINS.join(", ")}`);
+        const c = chain as (typeof DEX_CHAINS)[number];
+        if (parts[2] === "trending" && parts.length === 3) return { pairs: (await home.dex.trending(c)).slice(0, 30) };
+        const at = decodeURIComponent(parts[4] ?? "");
+        const token = url.searchParams.get("token") ?? at;
+        if (parts.length !== 5 || at.length < 20 || at.length > 100 || !isTokenAddress(c, token)) no(400, `a ${chain} address`);
+        if (parts[2] === "token") return { pairs: (await home.dex.token(c, at)).slice(0, 20) };
+        if (parts[2] === "safety") return { safety: await home.tokenSafety(c, at) };
+        if (parts[2] === "candles") {
+          const tf = (url.searchParams.get("tf") ?? "15m") as Timeframe;
+          if (!TIMEFRAMES.includes(tf)) no(400, `a timeframe: ${TIMEFRAMES.join(", ")}`);
+          return { candles: await home.dex.candles(c, at, token, tf, Math.min(1000, Math.max(30, Number(url.searchParams.get("n")) || 300))) };
+        }
+        if (parts[2] === "trades") return { trades: (await home.dex.trades(c, at, token)).slice(0, 60) };
+        no(404, "no such thing on the desk");
+      }
+      // an orb sent to a token or a major (owner, 10-11: "user can input the contract address and view the coin + trade
+      // manually or send a certain orb to trade it"): on paper, or for real, each real trade still asked of you (rule 9);
+      // it is told in its chat, and walks to the war room's screen (desk.sent)
+      if (method === "POST" && parts[1] === "send" && parts.length === 2) {
+        const b = await body(req);
+        const orb = text(b, "orb");
+        if (!home.inbox.orb(orb)) no(404, `no orb "${orb}"`);
+        const market = text(b, "market").trim();
+        const token = readTokenKey(market);
+        if (!token && !(SYMBOLS as readonly string[]).includes(market)) no(400, 'a market: a major, or a token as "solana:<mint>"');
+        const mode = b.mode === "real" ? "real" : "paper";
+        const budget = b.budget === undefined || b.budget === null || b.budget === "" ? null : Number(b.budget);
+        if (budget !== null && !(budget >= 1 && budget <= 1_000_000)) no(400, "a budget of $1 to $1,000,000");
+        const note = typeof b.note === "string" ? b.note.trim().slice(0, 300) : "";
+        const label = token ? ((await home.dex.token(token.chain, token.address).catch(() => []))[0]?.base.symbol ?? market) : market;
+        const brief = [
+          `Trade ${label} (${market}) for me, ${mode === "paper" ? "on paper" : "for real"}${budget !== null ? `, up to $${budget}` : ""}.`,
+          token ? `Read it first: token_info (chain ${token.chain}, address ${token.address}) and its chart (market_chart takes "${market}").` : `Read its chart first (market_chart, "${market}").`,
+          mode === "paper"
+            ? `Then trade it with paper_trade on "${market}" when you see an entry, and sell when your reason for it is gone.`
+            : `When you see an entry, ask me for it with propose_swap${token ? ` (chain ${token.chain}, buy ${token.address})` : ""}: it waits for my yes and my wallet's signature, inside the desk's limits.`,
+          note && `My note: ${note}`,
+          "Tell me what you see, what you did and why.",
+        ].filter(Boolean).join(" ");
+        const item = home.inbox.send(orb, `chat:${orb}`, brief);
+        home.events.append("desk.sent", { market, label, mode, budget }, { orb });
+        return { sent: { orb, market, label, mode, budget }, item };
       }
       if (method === "POST" && parts[1] === "backtest" && parts.length === 2) {
         const b = await body(req);

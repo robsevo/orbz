@@ -29,6 +29,7 @@ const BY_TOOL: Record<string, Area> = {
   // the desk (PLAN 5.25)
   market_prices: "desk", market_chart: "desk", backtest_strategy: "desk", propose_strategy: "desk", run_strategy: "desk",
   paper_trade: "desk", desk_book: "desk", market_note: "desk", wallet_holdings: "desk", propose_swap: "desk",
+  token_search: "desk", token_info: "desk",
 };
 const DEVOPS_COMMAND = /\b(git|docker|kubectl|systemctl|terraform|ansible|nginx)\b/;
 const FINANCE_WORDS = /\b(stripe|invoices?|receipts?|ledger|payments?|payroll|tax|vat)\b/i;

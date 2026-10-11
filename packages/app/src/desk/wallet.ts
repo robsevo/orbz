@@ -83,6 +83,21 @@ export async function connectWallet(f: Found): Promise<string> {
   return a.address;
 }
 
+/** The wallet's address without a window, when it said yes to this page before (null when it would have to ask). */
+export async function connectSilently(f: Found): Promise<string | null> {
+  try {
+    if (f.kind === "evm") {
+      const accounts = (await evm.get(f.id)?.request({ method: "eth_accounts" })) as string[] | undefined;
+      return accounts?.[0] ?? null;
+    }
+    const w = solana.get(f.id);
+    const r = await w?.features["standard:connect"]?.connect?.({ silent: true });
+    return r?.accounts.find((x) => (x.chains ?? ["solana:mainnet"]).some((c) => c.startsWith("solana:")))?.address ?? r?.accounts[0]?.address ?? null;
+  } catch {
+    return null;
+  }
+}
+
 const hex = (v: string | number | bigint): string => `0x${BigInt(v).toString(16)}`;
 /** The chains a wallet may not know yet, so it can be told them (EIP-3085): the ones the desk trades on. */
 const ADD: Record<number, { chainName: string; rpcUrls: string[]; nativeCurrency: { name: string; symbol: string; decimals: number }; blockExplorerUrls: string[] }> = {

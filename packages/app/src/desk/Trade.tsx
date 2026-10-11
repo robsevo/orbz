@@ -8,24 +8,19 @@ import type { Character } from "../orb/spec.ts";
 import { idOf, type DeskChain, type DeskHolding, type DeskQuote, type DeskSwap, type DeskWallet, type Office } from "../home/link.ts";
 import { Balanced } from "../ui/Balanced.tsx";
 import { Pick } from "../ui/Pick.tsx";
-import { button, card, field, head, shortAddress, small, strong, usd, well } from "./kit.ts";
-import { connectWallet, discover, signAndSend, type Found } from "./wallet.ts";
+import { button, card, field, head, marketName, shortAddress, small, strong, usd, well } from "./kit.ts";
+import type { Found } from "./wallet.ts";
+import type { WalletHere } from "./useWallet.ts";
+import { NoWallet } from "./WalletSheet.tsx";
 
 const STATE_WORDS: Record<DeskSwap["state"], string> = { asked: "Waiting for your yes", approved: "Approved: waiting for your wallet", built: "In your wallet", sent: "Sent: waiting for the chain", confirmed: "Done", failed: "Failed", denied: "You said no", expired: "Expired" };
 
-export function TradePanel({ home, crew, wallets, swaps, chains, reload }: { home: Office; crew: Character[]; wallets: DeskWallet[]; swaps: DeskSwap[]; chains: DeskChain[]; reload: () => void }) {
-  const [found, setFound] = useState<Found[]>([]);
-  const [linked, setLinked] = useState<{ f: Found; address: string } | null>(null);
+export function TradePanel({ home, crew, wallets, swaps, chains, reload, wallet, labels }: { home: Office; crew: Character[]; wallets: DeskWallet[]; swaps: DeskSwap[]; chains: DeskChain[]; reload: () => void; wallet: WalletHere; labels?: Record<string, { symbol: string }> }) {
+  const { found, linked } = wallet;
   const [paste, setPaste] = useState("");
   const [holdings, setHoldings] = useState<Record<number, { holdings: DeskHolding[]; errors: string[] }>>({});
   const [said, setSaid] = useState<string | null>(null);
   const [step, setStep] = useState<string | null>(null);
-  useEffect(() => discover(setFound), []);
-  // no wallet in this browser (owner, 10-11: "how does the user connect their wallet? i dont see any way?"): Orbz's own
-  // window is a browser profile of its own, so a wallet lives in the browser beside it, or in a phone's wallet app
-  const here = ["127.0.0.1", "localhost", "[::1]"].includes(globalThis.location?.hostname ?? "");
-  const [elsewhere, setElsewhere] = useState<{ link: string | null; words: string } | null>(null);
-  const PLACE = "/desk/trade";
   const chainList = chains.length ? chains : [{ id: "base", name: "Base", kind: "evm" as const, explorer: "", tokens: [] }];
   const [chain, setChain] = useState("base");
   const c = chainList.find((x) => x.id === chain) ?? chainList[0]!;
@@ -50,27 +45,9 @@ export function TradePanel({ home, crew, wallets, swaps, chains, reload }: { hom
       setStep(null);
     }
   };
-  const connect = (f: Found): Promise<void> => act(async () => {
-    const address = await connectWallet(f);
-    setLinked({ f, address });
-    await home.addWallet(address, { wallet: f.name });
-    reload();
-  });
+  const connect = (f: Found): Promise<void> => act(() => wallet.connect(f));
   /** A swap kept by the home, built for the wallet connected here, signed by it, its hash told back. */
-  const signIt = async (s: DeskSwap): Promise<void> => {
-    const kind = chainList.find((x) => x.id === s.chain)?.kind ?? "evm";
-    if (!linked || linked.f.kind !== kind) throw new Error(`Connect a ${kind === "solana" ? "Solana" : "Base or Ethereum"} wallet here first: it is what signs.`);
-    setStep("Building the transaction for your wallet");
-    const { built } = await home.buildSwap(s.id, linked.address);
-    try {
-      const tx = await signAndSend(linked.f, linked.address, built, setStep);
-      await home.sentSwap(s.id, tx);
-    } catch (e) {
-      await home.unsentSwap(s.id, (e as Error).message).catch(() => undefined);
-      throw e;
-    }
-    reload();
-  };
+  const signIt = (s: DeskSwap): Promise<void> => wallet.sign(s.id, chainList.find((x) => x.id === s.chain)?.kind ?? "evm", setStep);
   const waiting = swaps.filter((s) => s.state === "asked");
   const mine = linked ? wallets.find((w) => w.address.toLowerCase() === linked.address.toLowerCase()) : null;
   return (
@@ -80,7 +57,7 @@ export function TradePanel({ home, crew, wallets, swaps, chains, reload }: { hom
           <span style={head}>{`Waiting for your yes (${waiting.length})`}</span>
           {waiting.map((s) => (
             <article key={s.id} data-swap-asked={s.id} style={well}>
-              <b style={{ font: "800 15px/20px var(--font)", color: "var(--text-1)" }}>{`${crew.find((o) => idOf(o.name) === s.orb)?.name ?? s.orb ?? "An orb"} asks: ${s.amount} ${s.sell} for about ${s.quote?.out ?? "?"} ${s.buy} on ${chainList.find((x) => x.id === s.chain)?.name ?? s.chain}`}</b>
+              <b style={{ font: "800 15px/20px var(--font)", color: "var(--text-1)" }}>{`${crew.find((o) => idOf(o.name) === s.orb)?.name ?? s.orb ?? "An orb"} asks: ${s.amount} ${marketName(s.sell, labels, s.chain)} for about ${s.quote?.out ?? "?"} ${s.buy} on ${chainList.find((x) => x.id === s.chain)?.name ?? s.chain}`}</b>
               {s.why && <span style={{ ...small, color: "var(--text-2)" }}>{`“${s.why}”`}</span>}
               <span className="num" style={small}>{`About ${usd(s.usd)}${s.quote?.priceImpactPct != null ? ` · price impact ${s.quote.priceImpactPct.toFixed(2)}%` : ""}${s.quote?.route.length ? ` · via ${s.quote.route.join(", ")}` : ""}`}</span>
               <Balanced min={140} gap={8}>
@@ -97,32 +74,15 @@ export function TradePanel({ home, crew, wallets, swaps, chains, reload }: { hom
         {found.length > 0 ? (
           <Balanced min={150} gap={8}>
             {found.map((f) => (
-              <button key={f.id} type="button" data-wallet-found={f.name} onClick={() => void connect(f)} style={{ ...(linked?.f.id === f.id ? strong : button), display: "flex", alignItems: "center", gap: 8, justifyContent: "center" }}>
-                {f.icon && <img src={f.icon} alt="" width={18} height={18} style={{ borderRadius: 4 }} />}
-                {linked?.f.id === f.id ? `${f.name} · ${shortAddress(linked.address)}` : `Connect ${f.name}`}
+              <button key={f.id} type="button" data-wallet-found={f.name} onClick={() => void connect(f)} style={{ ...(linked?.f.id === f.id ? strong : button), display: "flex", alignItems: "center", gap: 8, justifyContent: "center", minWidth: 0 }}>
+                {f.icon && <img src={f.icon} alt="" width={18} height={18} style={{ borderRadius: 4, flex: "0 0 18px" }} />}
+                <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{linked?.f.id === f.id ? `${f.name} · ${shortAddress(linked.address)}` : `Connect ${f.name}`}</span>
               </button>
             ))}
           </Balanced>
         ) : (
-          <div data-no-wallet style={{ display: "grid", gap: 8, minWidth: 0 }}>
-            <span style={small}>{here
-              ? "No wallet in this window: it is Orbz's own, so the wallet in your browser cannot reach it. Open Orbz in your browser, signed in, and connect it there."
-              : "No wallet in this browser. On a phone, open Orbz inside your wallet app (MetaMask, Phantom and the rest have a browser of their own): copy a link and open it there."}</span>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {here && (
-                <button type="button" data-open-browser style={strong} onClick={() => void act(async () => {
-                  const r = await home.openInBrowser(PLACE);
-                  setElsewhere(r.opened ? { link: null, words: "Opened in your browser: connect your wallet there." } : { link: r.link, words: "No browser could be opened from here: open this link in yours (good for five minutes)." });
-                })}>Open in my browser</button>
-              )}
-              <button type="button" data-copy-link style={here ? button : strong} onClick={() => void act(async () => {
-                const link = `${await home.pairPhone()}&to=${encodeURIComponent(PLACE)}`;
-                const copied = await globalThis.navigator?.clipboard?.writeText(link).then(() => true, () => false);
-                setElsewhere({ link, words: copied ? "Copied: open it in your wallet app's browser, or any browser with your wallet (good for five minutes)." : "Open this link in your wallet app's browser, or any browser with your wallet (good for five minutes)." });
-              })}>Copy a link</button>
-            </div>
-            {elsewhere && <span data-elsewhere style={small}>{elsewhere.words}</span>}
-            {elsewhere?.link && <code data-elsewhere-link style={{ ...small, overflowWrap: "anywhere", userSelect: "all" }}>{elsewhere.link}</code>}
+          <div style={{ display: "grid", gap: 8, minWidth: 0 }}>
+            <NoWallet home={home} />
             <span style={small}>Or watch an address, to see what it holds:</span>
           </div>
         )}
@@ -187,7 +147,7 @@ export function TradePanel({ home, crew, wallets, swaps, chains, reload }: { hom
             const ex = chainList.find((x) => x.id === s.chain)?.explorer;
             return (
               <div key={s.id} data-swap={s.id} data-state={s.state} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, minWidth: 0, font: "600 13px/18px var(--font)", color: "var(--text-2)" }}>
-                <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{`${s.amount} ${s.sell} → ${s.buy} · ${chainList.find((x) => x.id === s.chain)?.name ?? s.chain}`}</span>
+                <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{`${s.amount} ${marketName(s.sell, labels, s.chain)} → ${marketName(s.buy, labels, s.chain)} · ${chainList.find((x) => x.id === s.chain)?.name ?? s.chain}`}</span>
                 {s.tx && ex ? <a href={`${ex}${s.tx}`} target="_blank" rel="noreferrer" style={{ color: "var(--accent)", whiteSpace: "nowrap" }}>{STATE_WORDS[s.state]}</a> : <span style={{ whiteSpace: "nowrap", color: s.state === "failed" ? "var(--off)" : s.state === "confirmed" ? "var(--ok)" : "var(--text-3)" }}>{STATE_WORDS[s.state]}</span>}
               </div>
             );

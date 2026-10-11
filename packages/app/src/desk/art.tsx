@@ -46,6 +46,20 @@ export function Backdrop({ now, sky, prices, spark, notes, strategies, riskOn, b
   const coffee = areaOf("coffee").rect;
   const pit = areaOf("pit").rect;
   const { shelves, corkboard, armchair, table, whiteboard, bar, fridge, stools, headDesk, bell, board: lb, riskDesk } = TPIECES;
+  // the war room's screen: the last of the price line as candles, and the line over them
+  const screen = (() => {
+    const xs = spark.length > 1 ? spark.slice(-13) : [1, 1.02, 1.01, 1.04, 1.03, 1.06, 1.05, 1.08, 1.07, 1.1, 1.09, 1.12, 1.11];
+    const lo = Math.min(...xs);
+    const hi = Math.max(...xs);
+    const y = (v: number): number => whiteboard.y + 8 - ((v - lo) / (hi - lo || 1)) * 30;
+    const x = (i: number): number => whiteboard.x + 14 + i * ((148 - 14) / Math.max(1, xs.length - 1));
+    const candles = xs.slice(1).map((c, i) => {
+      const o = xs[i]!;
+      const wick = (hi - lo || 1) * 0.06;
+      return { x: x(i + 1) - 3, o: y(o), c: y(c), hi: y(Math.max(o, c) + wick), lo: y(Math.min(o, c) - wick), up: c >= o };
+    });
+    return { candles, line: xs.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)} ${(y(v) - 2).toFixed(1)}`).join(" ") };
+  })();
   const sMin = Math.min(...spark);
   const sMax = Math.max(...spark);
   const sparkPath = spark.length > 1 ? spark.map((v, i) => `${i ? "L" : "M"}${(470 + (i / (spark.length - 1)) * 260).toFixed(1)} ${(64 - ((v - sMin) / (sMax - sMin || 1)) * 36).toFixed(1)}`).join(" ") : "";
@@ -155,12 +169,23 @@ export function Backdrop({ now, sky, prices, spark, notes, strategies, riskOn, b
       </Hue>
       <Plant x={research.x + 26} y={270} s={0.95} hue="clover" />
 
-      {/* the war room: the whiteboard of strategies (a sticky each), the table */}
+      {/* the war room: its screen, live (press it: any token, its chart and a trade, owner 10-11), the strategies on it a
+          tile each, and the table */}
       <rect x={whiteboard.x} y={whiteboard.y - 34} width={whiteboard.w} height={whiteboard.h + 30} rx={4} style={f("raised")} />
-      <rect x={whiteboard.x + 5} y={whiteboard.y - 29} width={whiteboard.w - 10} height={whiteboard.h + 20} rx={2} style={f("text-2")} />
+      <rect x={whiteboard.x + 5} y={whiteboard.y - 29} width={whiteboard.w - 10} height={whiteboard.h + 20} rx={2} style={f("ground")} />
+      {[0, 1, 2].map((i) => (
+        <line key={i} x1={whiteboard.x + 10} x2={whiteboard.x + 148} y1={whiteboard.y - 18 + i * 11} y2={whiteboard.y - 18 + i * 11} style={st("hairline", 0.6)} />
+      ))}
+      {screen.candles.map((c, i) => (
+        <g key={i}>
+          <line x1={c.x} x2={c.x} y1={c.hi} y2={c.lo} style={st(c.up ? "ok" : "off", 0.8)} />
+          <rect x={c.x - 2.2} y={Math.min(c.o, c.c)} width={4.4} height={Math.max(1.2, Math.abs(c.o - c.c))} style={f(c.up ? "ok" : "off")} />
+        </g>
+      ))}
       <Hue hue="amber">
-        <path d={`M${whiteboard.x + 16} ${whiteboard.y + 10} L${whiteboard.x + 60} ${whiteboard.y - 6} L${whiteboard.x + 96} ${whiteboard.y + 2} L${whiteboard.x + 140} ${whiteboard.y - 18}`} style={st("accent", 2)} />
+        <path d={screen.line} style={{ ...st("accent", 1.6), fill: "none" }} opacity={0.9} />
       </Hue>
+      <circle cx={whiteboard.x + 14} cy={whiteboard.y - 23} r={2.2} style={f("ok")} />
       {Array.from({ length: Math.min(6, strategies) }, (_, i) => (
         <Hue key={i} hue={(["citron", "mint", "pink"] as HueName[])[i % 3]!}>
           <rect x={whiteboard.x + 156 + (i % 3) * 30} y={whiteboard.y - 24 + Math.floor(i / 3) * 24} width={24} height={20} rx={1.5} style={f("accent")} opacity={0.9} />
@@ -320,6 +345,10 @@ export function Bell({ ringing }: { ringing: boolean }) {
 }
 
 export const TRADE_CSS = `
+@keyframes orbs-war-pulse { 0%, 100% { box-shadow: 0 0 0 0 transparent; } 50% { box-shadow: 0 0 0 2px var(--accent-fill), 0 0 16px var(--accent-glow); } }
+.orbs-war-screen { animation: orbs-war-pulse 2.8s ease-in-out infinite; }
+.orbs-war-screen:hover, .orbs-war-screen:focus-visible { animation: none; box-shadow: 0 0 0 2px var(--accent), 0 0 20px var(--accent-glow); outline: 0; }
+@media (prefers-reduced-motion: reduce) { .orbs-war-screen { animation: none; } }
 @keyframes orbs-trade-ring { 0%, 100% { transform: rotate(0deg) } 25% { transform: rotate(18deg) } 75% { transform: rotate(-18deg) } }
 @keyframes orbs-trade-tape { from { transform: translateX(0) } to { transform: translateX(-50%) } }
 .orbs-trade-tape { animation: orbs-trade-tape 40s linear infinite; }
