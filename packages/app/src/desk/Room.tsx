@@ -15,6 +15,7 @@ import { NAMES } from "../floor/props.ts";
 import { DeskFloor } from "./Floor.tsx";
 import { button, card, chip, field, head, marketName, pct, shortAddress, small, strong, usd, well, ago } from "./kit.ts";
 import { TokenDesk, type Picked } from "./TokenDesk.tsx";
+import { AccountSwitch } from "./Account.tsx";
 import { useWallet } from "./useWallet.ts";
 import { WalletSheet } from "./WalletSheet.tsx";
 import { useCramped } from "../ui/fill.ts";
@@ -203,11 +204,11 @@ export function DeskRoom({ home, office, moods, go, tab: opening = null }: { hom
       ) : shown === "books" ? (
         <Books s={s} crew={crew} />
       ) : shown === "desk" ? (
-        <Desk s={s} crew={crew} office={office} go={go} />
+        <Desk home={home} s={s} crew={crew} office={office} go={go} reload={() => void load()} />
       ) : (
         <Limits home={home} settings={s.settings} reload={load} />
       )}
-      {screen && s && <TokenDesk home={home} prices={tape} chains={s.chains} crew={crew} strategies={s.strategies} wallet={wallet} openWallet={openWallet} start={screenAt} close={() => setScreen(false)} />}
+      {screen && s && <TokenDesk home={home} prices={tape} chains={s.chains} crew={crew} strategies={s.strategies} accounts={s.accounts ?? []} reload={() => void load()} wallet={wallet} openWallet={openWallet} start={screenAt} close={() => setScreen(false)} />}
       {sheet && <WalletSheet home={home} wallet={wallet} close={() => setSheet(false)} />}
     </div>
   );
@@ -253,7 +254,7 @@ function Books({ s, crew }: { s: DeskState; crew: Character[] }) {
 /** Each orb's P&L (owner, 10-11: "each orb pnl"): every book it has had, against what it started with; its closed
  * trades (today's, how many it won, its best and worst); what it still holds; the real trades it asked you for. An orb
  * of the money kind with a book of its own is here too. */
-function Desk({ s, crew, office, go }: { s: DeskState; crew: Character[]; office: Character[]; go: (r: Route) => void }) {
+function Desk({ home, s, crew, office, go, reload }: { home: Office; s: DeskState; crew: Character[]; office: Character[]; go: (r: Route) => void; reload: () => void }) {
   const of = new Map((s.orbs ?? []).map((p) => [p.orb, p]));
   const people = [...crew, ...office.filter((o) => !crew.includes(o) && of.has(idOf(o.name)))];
   const rows = people.map((c) => ({ c, p: of.get(idOf(c.name)) ?? null })).sort((a, b) => (b.p?.pnl ?? 0) - (a.p?.pnl ?? 0));
@@ -279,23 +280,30 @@ function Desk({ s, crew, office, go }: { s: DeskState; crew: Character[]; office
         {!people.length && <span style={small}>No one on the desk yet.</span>}
         <Balanced min={250} gap={10}>
           {rows.map(({ c, p }) => (
-            <button key={c.name} type="button" data-orb-pnl={c.name} data-orb={c.hue} onClick={() => go({ room: "office", orb: c.name })} style={{ ...well, display: "grid", gap: 6, border: 0, color: "inherit", textAlign: "left", cursor: "pointer", minWidth: 0 }}>
-              <span style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                <Orb character={c} size={40} poke={false} still />
-                <span style={{ display: "grid", minWidth: 0 }}>
-                  <b style={{ font: "800 14px/19px var(--font)", color: "var(--accent)" }}>{c.name}</b>
-                  <span style={{ ...small, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{SPECIALTIES[c.specialty].title}</span>
+            <div key={c.name} data-orb-pnl={c.name} data-orb={c.hue} style={{ ...well, display: "grid", gap: 8, minWidth: 0 }}>
+              <button type="button" data-orb-open={c.name} onClick={() => go({ room: "office", orb: c.name })} aria-label={`${c.name}'s page`} style={{ display: "grid", gap: 6, border: 0, background: "none", padding: 0, color: "inherit", textAlign: "left", cursor: "pointer", minWidth: 0 }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                  <Orb character={c} size={40} poke={false} still />
+                  <span style={{ display: "grid", minWidth: 0 }}>
+                    <b style={{ font: "800 14px/19px var(--font)", color: "var(--accent)" }}>{c.name}</b>
+                    <span style={{ ...small, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{SPECIALTIES[c.specialty].title}</span>
+                  </span>
                 </span>
-              </span>
-              <span className="num" data-pnl style={{ font: "900 20px/26px var(--font)", ...tone(p?.pnl ?? 0) }}>{p ? `${signed(p.pnl)}${p.start > 0 ? ` · ${pct((p.pnl / p.start) * 100)}` : ""}` : "No trades yet"}</span>
+                <span className="num" data-pnl style={{ font: "900 20px/26px var(--font)", ...tone(p?.pnl ?? 0) }}>{p ? `${signed(p.pnl)}${p.start > 0 ? ` · ${pct((p.pnl / p.start) * 100)}` : ""}` : "No trades yet"}</span>
+              </button>
               {p && (
                 <span className="num" style={{ ...small, display: "grid", gap: 2 }}>
-                  <span>{`Today ${signed(p.today)} · ${p.trades} trades${p.trades ? `, ${Math.round((p.wins / p.trades) * 100)}% won` : ""}`}</span>
+                  <span>{`On paper · today ${signed(p.today)} · ${p.trades} trades${p.trades ? `, ${Math.round((p.wins / p.trades) * 100)}% won` : ""}`}</span>
                   {p.trades > 0 && <span>{`Best ${signed(p.best ?? 0)} · worst ${signed(p.worst ?? 0)} · fees ${usd(p.fees)}`}</span>}
                   <span>{`${p.open ? `${p.open} open` : "Nothing open"}${p.real.asked ? ` · real: ${p.real.yes} of ${p.real.asked} asked said yes${p.real.sentUsd ? `, ${usd(p.real.sentUsd)} sent` : ""}` : ""}`}</span>
                 </span>
               )}
-            </button>
+              {/* real money, apart: a dollar of it is not a paper one to you (PLAN 5.34) */}
+              {p?.money && (
+                <span className="num" data-money-pnl style={{ ...small, color: "var(--text-2)" }}>{`Real money: ${usd(p.money.equity)} of ${usd(p.money.start)}, ${signed(p.money.equity - p.money.start)}`}</span>
+              )}
+              <AccountSwitch home={home} orb={idOf(c.name)} name={c.name} account={(s.accounts ?? []).find((a) => a.orb === idOf(c.name)) ?? null} changed={reload} />
+            </div>
           ))}
         </Balanced>
       </section>

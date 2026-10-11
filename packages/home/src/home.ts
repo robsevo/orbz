@@ -84,6 +84,7 @@ import { binanceSource, Market, offlineFetch, offlineSource, type MarketSource }
 import { Dex, offlineDex, publicDex, type DexChain, type DexSource } from "./desk/dex.ts";
 import { safetyOf, type Safety } from "./desk/safety.ts";
 import { publicRouters, Swaps, type Routers } from "./desk/swaps.ts";
+import { Orders } from "./desk/orders.ts";
 import { deskTools } from "./desk/tools.ts";
 import { Wallets } from "./desk/wallets.ts";
 import { Loops, type LoopsOptions } from "./loops.ts";
@@ -259,6 +260,8 @@ export class Home {
   readonly desk: Desk;
   readonly wallets: Wallets;
   readonly swaps: Swaps;
+  /** An orb's orders on its account, paper or real money alike to it (PLAN 5.34). */
+  readonly orders: Orders;
   readonly #deskOn: boolean;
   /** School (PLAN 5.7): an orb you let go, learning the subjects you picked, night by night. */
   readonly school: School;
@@ -312,6 +315,9 @@ export class Home {
       seen: (chain) => this.swaps.list(200).filter((x) => x.chain === chain).flatMap((x) => [x.sell, x.buy]).filter((a) => /^0x[0-9a-fA-F]{40}$/.test(a)),
     });
     this.swaps = new Swaps(db, this.events, this.market, this.desk, opts.desk?.routers ?? publicRouters({ fetch: deskFetch }), now, { fetch: deskFetch, dex: this.dex });
+    // an orb's orders, one way whatever its account (PLAN 5.34): a real one filled, or not, when its swap is done
+    this.orders = new Orders(db, this.events, this.desk, this.swaps, this.market, now);
+    this.swaps.onSettled = (s) => this.orders.settled(s);
     const big = opts.brain?.preset.big ?? null;
     this.chatgpt = new ChatGPT({ dataDir: this.dataDir, events: this.events, clock: this.clock, ...opts.chatgpt });
     const chatgptReady = this.chatgpt.load().then(() => {}, () => {}); // a home never signed in does not touch the keychain
@@ -417,7 +423,7 @@ export class Home {
       // reverse engineering (PLAN 4.8): read what it is handed, statically, on a thread with a ceiling
       ...reverseTools(),
       // the desk (PLAN 5.25): prices, strategies on paper, notes, your wallets read, a real swap only asked
-      ...deskTools({ desk: this.desk, wallets: this.wallets, swaps: this.swaps, dex: this.dex, safety: (c, a) => this.tokenSafety(c, a), now: () => this.clock.now(), nameOf: (orb) => this.inbox.orb(orb)?.name ?? orb }),
+      ...deskTools({ desk: this.desk, wallets: this.wallets, orders: this.orders, dex: this.dex, safety: (c, a) => this.tokenSafety(c, a), now: () => this.clock.now(), nameOf: (orb) => this.inbox.orb(orb)?.name ?? orb }),
       // the reading library (PLAN 3.12): the sites the office follows, beside web search
       ...readingTools(this.reading, (orb) => this.inbox.orb(orb)?.name ?? orb),
       // how the org works (PLAN 5.4): who fits a row, and a Senior passing a habit on (your yes first)
@@ -1037,6 +1043,7 @@ export class Home {
     if (this.#reportsOn) void this.reports.due()?.catch(() => undefined); // the board's report, from 08:00 each day (PLAN 5.18)
     if (this.#deskOn) {
       void this.desk.due().catch(() => undefined); // live strategies stepped at each bar's close (PLAN 5.24)
+      void this.orders.due().catch(() => undefined); // and a run of real money's orders placed (PLAN 5.34)
       void this.swaps.due().catch(() => undefined); // swaps sent followed on their chain, the unanswered expired (PLAN 5.27)
     }
     await this.triggers.poll({ all: woke });

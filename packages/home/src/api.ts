@@ -656,20 +656,23 @@ async function handle(
           return [...ids].map((orb) => {
             // its P&L: every book it has had, live or stopped, worth now against what it started with (gains made and
             // gains on paper still open, each once); its closed trades' numbers beside it
-            const its = all.filter((b) => b.orb === orb);
+            // on paper and real money apart (PLAN 5.34): a dollar of each is not the same to you
+            const its = all.filter((b) => b.orb === orb && !b.real);
+            const real = all.filter((b) => b.orb === orb && b.real && b.strategy === null);
             const r = realized.get(orb) ?? { orb, trades: 0, wins: 0, realized: 0, today: 0, best: null, worst: null, fees: 0, last: null };
             const mine = asks.filter((x) => x.orb === orb);
             const start = its.reduce((n, b) => n + b.cashStart, 0);
             const equity = its.reduce((n, b) => n + b.equity, 0);
             return {
               ...r, start, equity, pnl: equity - start,
+              money: real.length ? { start: real.reduce((n, b) => n + b.cashStart, 0), equity: real.reduce((n, b) => n + b.equity, 0) } : null,
               open: its.filter((b) => b.state === "live").reduce((n, b) => n + (b.qty > 0 ? 1 : 0) + b.holdings.filter((h) => h.qty > 0).length, 0),
               real: { asked: mine.length, yes: mine.filter((x) => ["approved", "built", "sent", "confirmed"].includes(x.state)).length, sentUsd: mine.filter((x) => x.state === "sent" || x.state === "confirmed").reduce((n, x) => n + x.usd, 0) },
             };
           }).sort((a, b) => b.pnl - a.pnl);
         };
         return {
-          now, market: home.market.status(), prices, top: await home.market.top(10), strategies: home.desk.strategies(), books, notes: home.desk.notes(), settings: home.desk.settings(),
+          now, market: home.market.status(), prices, top: await home.market.top(10), strategies: home.desk.strategies(), accounts: home.desk.accounts(), books, notes: home.desk.notes(), settings: home.desk.settings(),
           fills: recent("desk.fill", 40), trades: recent("desk.trade_closed", 40), wallets: home.wallets.list(), swaps: home.swaps.list(30), tokens, dex: home.dex.status(), orbs: pnlOf(books),
           chains: CHAINS.map((c) => ({ id: c.id, name: c.name, kind: c.kind, ...(c.kind === "evm" && { chainId: c.chainId }), explorer: c.explorer, tokens: c.tokens.map((t) => ({ symbol: t.symbol, decimals: t.decimals })) })),
         };
@@ -728,8 +731,10 @@ async function handle(
         no(404, "no such thing on the desk");
       }
       // an orb sent to a token or a major (owner, 10-11: "user can input the contract address and view the coin + trade
-      // manually or send a certain orb to trade it"): on paper, or for real, each real trade still asked of you (rule 9);
-      // it is told in its chat, and walks to the war room's screen (desk.sent)
+      // manually or send a certain orb to trade it"): told in its chat to trade it from its account, in the same words
+      // whether its account is on paper or real money ("we dont want the orbs to know the difference. money is money";
+      // PLAN 5.34: you set which on its account, and each real order still waits for you, rule 9); it walks to the war
+      // room's screen (desk.sent)
       if (method === "POST" && parts[1] === "send" && parts.length === 2) {
         const b = await body(req);
         const orb = text(b, "orb");
@@ -737,23 +742,31 @@ async function handle(
         const market = text(b, "market").trim();
         const token = readTokenKey(market);
         if (!token && !(SYMBOLS as readonly string[]).includes(market)) no(400, 'a market: a major, or a token as "solana:<mint>"');
-        const mode = b.mode === "real" ? "real" : "paper";
         const budget = b.budget === undefined || b.budget === null || b.budget === "" ? null : Number(b.budget);
         if (budget !== null && !(budget >= 1 && budget <= 1_000_000)) no(400, "a budget of $1 to $1,000,000");
         const note = typeof b.note === "string" ? b.note.trim().slice(0, 300) : "";
         const label = token ? ((await home.dex.token(token.chain, token.address).catch(() => []))[0]?.base.symbol ?? market) : market;
         const brief = [
-          `Trade ${label} (${market}) for me, ${mode === "paper" ? "on paper" : "for real"}${budget !== null ? `, up to $${budget}` : ""}.`,
+          `Trade ${label} (${market}) for me${budget !== null ? `, with up to $${budget} of your account` : ""}.`,
           token ? `Read it first: token_info (chain ${token.chain}, address ${token.address}) and its chart (market_chart takes "${market}").` : `Read its chart first (market_chart, "${market}").`,
-          mode === "paper"
-            ? `Then trade it with paper_trade on "${market}" when you see an entry, and sell when your reason for it is gone.`
-            : `When you see an entry, ask me for it with propose_swap${token ? ` (chain ${token.chain}, buy ${token.address})` : ""}: it waits for my yes and my wallet's signature, inside the desk's limits.`,
+          `When you see an entry, place an order on "${market}" (place_order), and sell when your reason for it is gone.`,
           note && `My note: ${note}`,
           "Tell me what you see, what you did and why.",
         ].filter(Boolean).join(" ");
+        const mode = home.desk.account(orb).mode;
         const item = home.inbox.send(orb, `chat:${orb}`, brief);
         home.events.append("desk.sent", { market, label, mode, budget }, { orb });
         return { sent: { orb, market, label, mode, budget }, item };
+      }
+      // an orb's account (PLAN 5.34): on paper, or real money up to the budget you give it; yours alone to set, here
+      if (method === "PUT" && parts[1] === "accounts" && parts.length === 3) {
+        const orb = decodeURIComponent(parts[2]!);
+        if (!home.inbox.orb(orb)) no(404, `no orb "${orb}"`);
+        const b = await body(req);
+        if (b.mode !== "paper" && b.mode !== "real") no(400, "an account is on paper or real money");
+        const budget = b.budget === undefined || b.budget === null || b.budget === "" ? undefined : Number(b.budget);
+        const a = home.desk.setAccount(orb, b.mode as "paper" | "real", budget);
+        return { account: { orb, mode: a.mode, budget: a.budget, cash: a.book.cash } };
       }
       if (method === "POST" && parts[1] === "backtest" && parts.length === 2) {
         const b = await body(req);

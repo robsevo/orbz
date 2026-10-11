@@ -76,7 +76,8 @@ export function marksOn(market: string, o: { fills: readonly FillEvent[]; swaps:
     return address.toLowerCase() === key.address.toLowerCase();
   };
   const paper: Fill[] = o.fills
-    .filter((e) => e.data.symbol === market && (e.data.side === "buy" || e.data.side === "sell"))
+    // a fill of real money is the real trade's (its swap, below): on paper only here
+    .filter((e) => e.data.symbol === market && e.data.paper !== false && (e.data.side === "buy" || e.data.side === "sell"))
     .map((e) => ({
       kind: "paper", orb: e.orb, at: e.at, side: e.data.side as "buy" | "sell",
       px: finite(Number(e.data.px)), qty: finite(Number(e.data.qty)), usd: typeof e.data.usd === "number" ? e.data.usd : null,

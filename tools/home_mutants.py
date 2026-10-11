@@ -462,6 +462,31 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("a losing trade counted as a win", "src/desk/desk.ts", [
         ("      if (pnl > 0) p.wins++;", "      if (pnl !== 0) p.wins++;"),
     ], ["dex.test.ts"]),
+    # an orb's account and its orders (PLAN 5.34; owner, 10-11: "we dont want the orbs to know the difference. money is money")
+    ("a real order you denied is filled", "src/desk/orders.ts", [
+        ('    if (s.state === "confirmed") {\n      const out = Number(s.quote?.out);', '    if (s.state === "confirmed" || s.state === "denied") {\n      const out = Number(s.quote?.out);'),
+    ], ["orders.test.ts"]),
+    ("an order's result tells the orb which account it is", "src/desk/tools.ts", [
+        ("return { content: `Order ${order.id} placed: ${order.side}", "return { content: `Order ${order.id} ${order.state === \"filled\" ? \"filled\" : \"placed\"}: ${order.side}"),
+    ], ["orders.test.ts"]),
+    ("the brief tells the orb it is real money", "src/api.ts", [
+        ("`Trade ${label} (${market}) for me${budget !== null", "`Trade ${label} (${market}) for me${home.desk.account(orb).mode === \"real\" ? \", with real money\" : \"\"}${budget !== null"),
+    ], ["orders.test.ts"]),
+    ("what waits to be bought is not spoken for", "src/desk/orders.ts", [
+        ('      const left = a.book.cash - this.#waiting(orb).filter((x) => x.side === "buy").reduce((n, x) => n + x.usd, 0);', "      const left = a.book.cash;"),
+    ], ["orders.test.ts"]),
+    ("a run of real money never places its orders", "src/desk/orders.ts", [
+        ("        if (usd >= 1) await this.place(b.orb,", "        if (usd >= 1e12) await this.place(b.orb,"),
+    ], ["orders.test.ts"]),
+    ("a winning trade of real money earns no XP", "src/gym/xp.ts", [
+        ('if (!e.orb || typeof e.data.paper !== "boolean" || !(Number(e.data.pnl) > 0)) return;', "if (!e.orb || e.data.paper !== true || !(Number(e.data.pnl) > 0)) return;"),
+    ], ["orders.test.ts"]),
+    ("real money's P&L summed with paper's", "src/api.ts", [
+        ("            const its = all.filter((b) => b.orb === orb && !b.real);", "            const its = all.filter((b) => b.orb === orb);"),
+    ], ["orders.test.ts"]),
+    ("a fill of real money drawn as a paper one", "src/desk/chart.ts", [
+        ("    .filter((e) => e.data.symbol === market && e.data.paper !== false && (e.data.side === \"buy\" || e.data.side === \"sell\"))", "    .filter((e) => e.data.symbol === market && (e.data.side === \"buy\" || e.data.side === \"sell\"))"),
+    ], ["chart.test.ts"]),
     # a chart live, the top 10 (PLAN 5.33; owner, 10-11: "the candlestick freezes"; "have top 10 cryptos clickable")
     ("a Solana coin's live price never asks Jupiter", "src/desk/dex.ts", [
         ('    if (chain === "solana" && this.#source.prices) {', '    if (chain === "solana" && this.#source.prices && false) {'),
@@ -3376,6 +3401,10 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ], ["desk-view.test.ts"]),
     ("the swap form's any coin is ignored", "src/desk/Trade.tsx", [
         ("  const to = buy === ANY ? buyAt.trim() : buy;", "  const to = buy;"),
+    ], ["desk-view.test.ts"]),
+    # an orb's account, yours to set (PLAN 5.34)
+    ("the account switch sets nothing", "src/desk/Account.tsx", [
+        ("      await home.setDeskAccount(orb, m, b);\n", ""),
     ], ["desk-view.test.ts"]),
     # the chart live and zoomed; the top 10 on the tape; the majors first (PLAN 5.33, owner 10-11)
     ("a price now never reaches the forming bar", "src/desk/TokenPage.tsx", [

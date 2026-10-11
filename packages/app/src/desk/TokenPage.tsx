@@ -6,7 +6,7 @@
 // home's, from the public DEX data; nothing here is advice.
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { Character } from "../orb/spec.ts";
-import { idOf, type DeskCandle, type DeskChain, type DeskDrawn, type DeskLive, type DeskMarks, type DeskQuote, type DeskStrategy, type DeskTicker, type DexChain, type DexPair, type DexTrade, type Office, type TokenSafety } from "../home/link.ts";
+import { idOf, type DeskCandle, type DeskChain, type DeskAccount, type DeskDrawn, type DeskLive, type DeskMarks, type DeskQuote, type DeskStrategy, type DeskTicker, type DexChain, type DexPair, type DexTrade, type Office, type TokenSafety } from "../home/link.ts";
 import { Candles, type Layer } from "../ui/Candles.tsx";
 import { changeText, priceText, TF_MS, withLive } from "../ui/candles.ts";
 import { keep, loadKept, withStudy, type Kept } from "../ui/studies.ts";
@@ -16,6 +16,7 @@ import { Balanced, OneLine } from "../ui/Balanced.tsx";
 import { Pick } from "../ui/Pick.tsx";
 import { button, card, chip, compact, field, head, picture, shortAddress, small, strong, TIMEFRAMES, well } from "./kit.ts";
 import type { WalletHere } from "./useWallet.ts";
+import { AccountSwitch } from "./Account.tsx";
 
 export const CHAIN_NAMES: Record<DexChain, string> = { solana: "Solana", ethereum: "Ethereum", base: "Base", arbitrum: "Arbitrum", optimism: "Optimism", polygon: "Polygon", bsc: "BNB Chain" };
 /** Where a coin is looked at on its own chain, when the desk does not swap there. */
@@ -299,9 +300,8 @@ function TradeBox({ home, chain, token, symbol, chains, wallet, openWallet }: { 
 
 /** An orb sent to it: on paper, or for real (each real trade still asked of you); told in its chat, it walks to the
  * war room's screen. */
-function SendOrb({ home, crew, market, label }: { home: Office; crew: Character[]; market: string; label: string }) {
+function SendOrb({ home, crew, market, label, accounts, reload }: { home: Office; crew: Character[]; market: string; label: string; accounts: DeskAccount[]; reload: () => void }) {
   const [who, setWho] = useState(crew[0]?.name ?? "");
-  const [mode, setMode] = useState<"paper" | "real">("paper");
   const [budget, setBudget] = useState("100");
   const [note, setNote] = useState("");
   const [sent, setSent] = useState<{ ok: boolean; words: string } | null>(null);
@@ -314,13 +314,13 @@ function SendOrb({ home, crew, market, label }: { home: Office; crew: Character[
       </section>
     );
   }
+  const orb = crew.find((c) => c.name === who) ?? crew[0]!;
   const send = async (): Promise<void> => {
     setBusy(true);
     setSent(null);
     try {
-      const orb = crew.find((c) => c.name === who) ?? crew[0]!;
-      await home.sendOrb({ orb: idOf(orb.name), market, mode, budget: budget ? Number(budget) : null, note });
-      setSent({ ok: true, words: `${orb.name} has ${label}, ${mode === "paper" ? "on paper" : "for real: each trade it wants comes to you for a yes"}${budget ? `, up to $${budget}` : ""}. It reads the coin and its chart, then says what it sees in its chat.` });
+      const r = await home.sendOrb({ orb: idOf(orb.name), market, budget: budget ? Number(budget) : null, note });
+      setSent({ ok: true, words: `${orb.name} has ${label}${budget ? `, up to $${budget}` : ""}, ${r.mode === "real" ? "with real money: each order comes to you for a yes" : "on paper"}. It reads the coin and its chart, then says what it sees in its chat.` });
       setNote("");
     } catch (e) {
       setSent({ ok: false, words: (e as Error).message });
@@ -332,11 +332,8 @@ function SendOrb({ home, crew, market, label }: { home: Office; crew: Character[
     <section data-send-orb aria-label="Send an orb" style={card}>
       <span style={head}>Send an orb</span>
       <Pick title="Orb" label="The orb to send" value={who} options={crew.map((c) => [c.name, c.name] as const)} onChange={setWho} data={{ "data-send-who": who }} />
-      <div role="radiogroup" aria-label="Paper or real" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-        {(["paper", "real"] as const).map((x) => (
-          <button key={x} type="button" role="radio" aria-checked={mode === x} data-send-mode={x} onClick={() => setMode(x)} style={chip(mode === x)}>{x === "paper" ? "On paper" : "For real"}</button>
-        ))}
-      </div>
+      {/* its account, paper or real money (PLAN 5.34): yours to set; the orb is told the same either way */}
+      <AccountSwitch key={orb.name} home={home} orb={idOf(orb.name)} name={orb.name} account={accounts.find((a) => a.orb === idOf(orb.name)) ?? null} changed={reload} />
       <Balanced min={130} gap={8}>
         <label style={{ display: "grid", gap: 4, minWidth: 0 }}>
           <span style={head}>Up to ($)</span>
@@ -348,7 +345,6 @@ function SendOrb({ home, crew, market, label }: { home: Office; crew: Character[
         </label>
       </Balanced>
       <button type="button" data-send-go disabled={busy} onClick={() => void send()} style={{ ...strong, minHeight: 44 }}>{`Send ${who || "an orb"} to ${label}`}</button>
-      <span style={{ ...small, fontSize: 12 }}>{mode === "paper" ? "Paper: it learns from what the market does to its trades, and its wins are its XP." : "Real: it asks you for each trade, a card here, then your wallet signs. Never on its own."}</span>
       {sent && <span data-sent role={sent.ok ? "status" : "alert"} style={{ ...small, color: sent.ok ? "var(--ok)" : "var(--alert)" }}>{sent.words}</span>}
     </section>
   );
@@ -403,8 +399,8 @@ function Recent({ trades, symbol, now }: { trades: DexTrade[] | null; symbol: st
 }
 
 /** A coin on a DEX: its pairs read every 20 s, its safety once, its last trades every 20 s. */
-export function TokenPage({ home, chain, address, chains, crew, strategies, wallet, openWallet, phone, back }: {
-  home: Office; chain: DexChain; address: string; chains: DeskChain[]; crew: Character[]; strategies: DeskStrategy[]; wallet: WalletHere; openWallet: (kind: "evm" | "solana") => void; phone: boolean; back: () => void;
+export function TokenPage({ home, chain, address, chains, crew, strategies, accounts, reload, wallet, openWallet, phone, back }: {
+  home: Office; chain: DexChain; address: string; chains: DeskChain[]; crew: Character[]; strategies: DeskStrategy[]; accounts: DeskAccount[]; reload: () => void; wallet: WalletHere; openWallet: (kind: "evm" | "solana") => void; phone: boolean; back: () => void;
 }) {
   const [pairs, setPairs] = useState<DexPair[] | null>(null);
   const [at, setAt] = useState(0);
@@ -515,7 +511,7 @@ export function TokenPage({ home, chain, address, chains, crew, strategies, wall
   );
   const chart = <Chart home={home} load={(tf) => home.dexCandles(chain, p.pair, address, tf, 300)} tfKey={`${p.pair}`} market={market} label={sym} phone={phone} strategies={strategies} crew={crew} onPrice={setLivePrice} />;
   const trade = <TradeBox home={home} chain={chain} token={address} symbol={sym} chains={chains} wallet={wallet} openWallet={openWallet} />;
-  const send = <SendOrb home={home} crew={crew} market={market} label={sym} />;
+  const send = <SendOrb home={home} crew={crew} market={market} label={sym} accounts={accounts} reload={reload} />;
   if (phone) {
     return (
       <div data-token-page={market} style={{ display: "grid", gap: "var(--s3)", minWidth: 0 }}>
@@ -549,7 +545,7 @@ export function TokenPage({ home, chain, address, chains, crew, strategies, wall
 }
 
 /** A major (BTC, ETH, SOL and the rest): its chart from the market, its day, an orb sent to it on paper. */
-export function MajorPage({ home, symbol, ticker, crew, strategies, phone, back }: { home: Office; symbol: string; ticker: DeskTicker | null; crew: Character[]; strategies: DeskStrategy[]; phone: boolean; back: () => void }) {
+export function MajorPage({ home, symbol, ticker, crew, strategies, accounts, reload, phone, back }: { home: Office; symbol: string; ticker: DeskTicker | null; crew: Character[]; strategies: DeskStrategy[]; accounts: DeskAccount[]; reload: () => void; phone: boolean; back: () => void }) {
   const [livePrice, setLivePrice] = useState<number | null>(null);
   useEffect(() => {
     setLivePrice(null);
@@ -566,7 +562,7 @@ export function MajorPage({ home, symbol, ticker, crew, strategies, phone, back 
     </div>
   );
   const chart = <Chart home={home} load={(tf) => home.candles(symbol, tf, 200)} tfKey={symbol} market={symbol} label={symbol} phone={phone} strategies={strategies} crew={crew} onPrice={setLivePrice} />;
-  const send = <SendOrb home={home} crew={crew} market={symbol} label={symbol} />;
+  const send = <SendOrb home={home} crew={crew} market={symbol} label={symbol} accounts={accounts} reload={reload} />;
   return phone ? (
     <div data-major-page={symbol} style={{ display: "grid", gap: "var(--s3)", minWidth: 0 }}>{head1}{chart}{send}</div>
   ) : (

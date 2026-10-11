@@ -1,7 +1,7 @@
 // Real trades from your own wallet, decentralized, each one yours (PLAN 5.27; owner, 10-10: "both" paper and real). A
 // swap is routed by a public DEX aggregator, with no account anywhere: KyberSwap on the EVM chains (Ethereum, Base,
 // Arbitrum, Optimism, Polygon), Jupiter on Solana. Its life, each step a state kept here:
-//   asked     an orb proposed it (`propose_swap`), with a quote: nothing more happens without you (CLAUDE.md rule 9)
+//   asked     an orb's order of real money (orders.ts), with a quote: nothing more happens without you (CLAUDE.md rule 9)
 //   approved  you said yes (an orb's), or pressed Swap yourself (your own)
 //   built     a fresh quote and its transaction for your wallet's address, refused when the price moved past your
 //             slippage from what you approved, or past your limits; a token that needs an allowance asks for it first
@@ -96,6 +96,10 @@ export class Swaps {
   readonly #dex: Dex | null;
   readonly #decimals = new Map<string, number>();
   #following: Promise<void> | null = null;
+
+  /** Told when a swap is done, one way or the other (denied, confirmed, failed, expired): an orb's order of real money
+   * is filled, or not, by it (orders.ts, PLAN 5.34). */
+  onSettled: ((s: Swap) => void) | null = null;
 
   constructor(db: DatabaseSync, events: EventLog, market: Market, desk: Desk, routers: Routers, now: () => number, o: { fetch?: typeof fetch; dex?: Dex | null } = {}) {
     this.#db = db;
@@ -226,7 +230,9 @@ export class Swaps {
     }
     this.#db.prepare("UPDATE desk_swaps SET state = ? WHERE id = ? AND state = 'asked'").run(yes ? "approved" : "denied", id);
     this.#events.append(yes ? "desk.swap_approved" : "desk.swap_denied", { swap: id }, { orb: s.orb });
-    return this.get(id)!;
+    const now = this.get(id)!;
+    if (!yes) this.onSettled?.(now);
+    return now;
   }
 
   /** The transaction for your wallet to sign: only for a swap you approved, a fresh quote, its price and your limits kept. */
@@ -290,6 +296,7 @@ export class Swaps {
     const s = this.get(id)!;
     this.#db.prepare("UPDATE desk_swaps SET state = ?, error = ?, settled_at = ? WHERE id = ?").run(state, error, this.#now(), id);
     this.#events.append("desk.swap_settled", { swap: id, state, error, chain: s.chain, sell: s.sell, buy: s.buy, amount: s.amount, tx: s.tx }, { orb: s.orb });
+    this.onSettled?.(this.get(id)!);
   }
 
   /** Follows what was sent until the chain says, and lets what nobody answered expire. */

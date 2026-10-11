@@ -28,7 +28,7 @@ const BY_TOOL: Record<string, Area> = {
   inspect_binary: "research", inspect_app: "research", inspect_contract: "research", inspect_capture: "research",
   // the desk (PLAN 5.25)
   market_prices: "desk", market_chart: "desk", backtest_strategy: "desk", propose_strategy: "desk", run_strategy: "desk",
-  paper_trade: "desk", desk_book: "desk", market_note: "desk", wallet_holdings: "desk", propose_swap: "desk",
+  place_order: "desk", desk_book: "desk", market_note: "desk", wallet_holdings: "desk",
   token_search: "desk", token_info: "desk",
 };
 const DEVOPS_COMMAND = /\b(git|docker|kubectl|systemctl|terraform|ansible|nginx)\b/;

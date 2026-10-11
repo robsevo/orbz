@@ -21,7 +21,8 @@ export const XP = {
   examCleared: 20,
   /** An idea of its in the board's report that you approved (PLAN 5.18; owner, 10-07: "so they get xp if we approve it"). */
   ideaApproved: 30,
-  /** A paper trade closed in profit after both fees (PLAN 5.25): graded by the market, by how hard it was to win (tradeTier). */
+  /** A trade closed in profit after its costs, on paper or real money alike (PLAN 5.25, 5.34: "money is money"): graded by
+   * the market, by how hard it was to win (tradeTier). */
   trade: { easy: 10, standard: 25, hard: 40, expert: 60 } satisfies Record<Tier, number>,
   denied: -5, habitRolledBack: -25, never: -10,
 } as const;
@@ -152,11 +153,12 @@ export class Xp {
         if (e.orb) this.#give(e.orb, XP.ideaApproved, "an idea you approved from the board's report", e);
         return;
       case "desk.trade_closed": {
-        // graded by the market (rule 8): a paper trade that made money after both fees; a loss earns nothing
-        if (!e.orb || e.data.paper !== true || !(Number(e.data.pnl) > 0)) return;
+        // graded by the market (rule 8): a trade that made money after its costs, paper or real alike (money is money,
+        // and the line says neither: an orb may read it); a loss earns nothing
+        if (!e.orb || typeof e.data.paper !== "boolean" || !(Number(e.data.pnl) > 0)) return;
         const tier = tradeTier(e.data);
         const where = `${String(e.data.symbol)}${typeof e.data.timeframe === "string" ? ` ${e.data.timeframe}` : ""}`;
-        this.#give(e.orb, XP.trade[tier], `${aOrAn(tier)} ${tier} trade won on paper (${where}, +${Number(e.data.pnlPct).toFixed(2)}% after fees)`, e, { tier, area: "desk" });
+        this.#give(e.orb, XP.trade[tier], `${aOrAn(tier)} ${tier} trade won (${where}, +${Number(e.data.pnlPct).toFixed(2)}% after its costs)`, e, { tier, area: "desk" });
         return;
       }
       case "orb.learned":

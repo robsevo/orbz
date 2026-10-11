@@ -554,6 +554,37 @@ const MIGRATIONS: string[] = [
     value TEXT NOT NULL
   );
   `,
+  // v18 (PLAN 5.34; owner, 10-11: "how do we alternate between paper and real? and we dont want the orbs to know the
+  // difference. money is money"): each orb's account, on paper or with real money (a budget only you set), a book that
+  // is real money (`real`), and the orders an orb places on its account, one way whichever it is
+  `
+  ALTER TABLE desk_books ADD COLUMN real INTEGER NOT NULL DEFAULT 0;
+  CREATE TABLE desk_accounts (
+    orb     TEXT    PRIMARY KEY,
+    mode    TEXT    NOT NULL CHECK (mode IN ('paper', 'real')),
+    budget  REAL    NOT NULL DEFAULT 0,
+    at      INTEGER NOT NULL
+  );
+  CREATE TABLE desk_orders (
+    id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    orb      TEXT    NOT NULL,
+    book     INTEGER NOT NULL,
+    market   TEXT    NOT NULL,
+    side     TEXT    NOT NULL CHECK (side IN ('buy', 'sell')),
+    usd      REAL    NOT NULL,
+    why      TEXT    NOT NULL DEFAULT '',
+    state    TEXT    NOT NULL CHECK (state IN ('placed', 'filled', 'not_filled')),
+    swap     INTEGER,
+    strategy INTEGER,
+    qty      REAL,
+    px       REAL,
+    reason   TEXT,
+    at       INTEGER NOT NULL,
+    done_at  INTEGER
+  );
+  CREATE INDEX desk_orders_orb ON desk_orders (orb, id);
+  CREATE UNIQUE INDEX desk_orders_swap ON desk_orders (swap) WHERE swap IS NOT NULL;
+  `,
 ];
 
 /** The home's data is the person's: the folder is theirs alone (0700) and so is the database

@@ -264,7 +264,7 @@ function plainPair(): DexPair {
 
 test("the orbs' token_search and token_info; the door's routes, and what they refuse", async (t) => {
   const { home } = await tokenHome(t, { chains: { getAccountInfo: () => ({ value: { data: { parsed: { type: "mint", info: { decimals: 6, freezeAuthority: "Auth111111111111111111111111111111111111111", mintAuthority: null } } } } }) } });
-  const tools = new Map(deskTools({ desk: home.desk, wallets: home.wallets, swaps: home.swaps, dex: home.dex, safety: (c, a) => home.tokenSafety(c, a), now: () => home.clock.now(), nameOf: (x) => x }).map((x) => [x.name, x]));
+  const tools = new Map(deskTools({ desk: home.desk, wallets: home.wallets, orders: home.orders, dex: home.dex, safety: (c, a) => home.tokenSafety(c, a), now: () => home.clock.now(), nameOf: (x) => x }).map((x) => [x.name, x]));
   const searched = await tools.get("token_search")!.run!({ query: "fart" }, { orb: "tess" } as never);
   assert.match(searched.content as string, new RegExp(`Fartcoin \\(Fartcoin\\) on solana, solana:${MINT}: \\$0\\.160000`));
   const info = await tools.get("token_info")!.run!({ chain: "solana", address: MINT }, { orb: "tess" } as never);
@@ -292,7 +292,7 @@ test("the orbs' token_search and token_info; the door's routes, and what they re
   assert.ok("tokens" in snap && "dex" in snap, "the desk's snapshot names any token it holds, and says how the DEX data is");
 });
 
-test("an orb sent to a coin: told in its chat, on paper or for real (each real trade still asked); it walks to the war room's screen; what is not one refused", async (t) => {
+test("an orb sent to a coin: told in its chat to trade it from its account (PLAN 5.34: the same words whatever its account is); it walks to the war room's screen; what is not one refused", async (t) => {
   const { home } = await tokenHome(t);
   const door = await serve(home, { port: 0 });
   t.after(() => door.close());
@@ -301,16 +301,12 @@ test("an orb sent to a coin: told in its chat, on paper or for real (each real t
     return { status: r.status, json: (await r.json()) as Record<string, unknown> };
   };
   const key = `solana:${MINT}`;
-  const paper = await post({ orb: "tess", market: key, mode: "paper", budget: 100, note: "under $0.15" });
-  assert.deepEqual(paper.json.sent, { orb: "tess", market: key, label: "Fartcoin", mode: "paper", budget: 100 }, "named by its symbol");
-  const real = await post({ orb: "tess", market: key, mode: "real" });
-  assert.equal(real.status, 200);
-  const told = [paper, real].map((r) => r.json.item as { conversation: string; text: string });
-  assert.deepEqual(told.map((i) => i.conversation), ["chat:tess", "chat:tess"], "both told in its own chat");
-  assert.match(told[0]!.text, /^Trade Fartcoin \(solana:9BB6\S+pump\) for me, on paper, up to \$100\. Read it first: token_info .* paper_trade .* My note: under \$0\.15/);
-  assert.match(told[1]!.text, /for real\. .* propose_swap \(chain solana, buy 9BB6\S+pump\): it waits for my yes and my wallet's signature/, "real: asked of you, never on its own");
-  assert.doesNotMatch(told[1]!.text, /paper_trade/);
-  assert.deepEqual(home.events.ofType("desk.sent").map((e) => [e.orb, e.data.label, e.data.mode]), [["tess", "Fartcoin", "paper"], ["tess", "Fartcoin", "real"]], "its moment on the floor: to the war room's screen");
+  const sent = await post({ orb: "tess", market: key, budget: 100, note: "under $0.15" });
+  assert.deepEqual(sent.json.sent, { orb: "tess", market: key, label: "Fartcoin", mode: "paper", budget: 100 }, "named by its symbol; you are told its account's kind");
+  const told = sent.json.item as { conversation: string; text: string };
+  assert.equal(told.conversation, "chat:tess", "told in its own chat");
+  assert.match(told.text, /^Trade Fartcoin \(solana:9BB6\S+pump\) for me, with up to \$100 of your account\. Read it first: token_info .* place an order on "solana:9BB6\S+pump" \(place_order\).* My note: under \$0\.15/);
+  assert.deepEqual(home.events.ofType("desk.sent").map((e) => [e.orb, e.data.label, e.data.mode]), [["tess", "Fartcoin", "paper"]], "its moment on the floor: to the war room's screen");
   assert.equal((await post({ orb: "tess", market: "BTC" })).status, 200, "a major too");
   assert.equal((await post({ orb: "nobody", market: key })).status, 404);
   assert.equal((await post({ orb: "tess", market: "NOPE" })).status, 400, "not a market");

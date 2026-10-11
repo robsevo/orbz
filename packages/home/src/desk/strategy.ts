@@ -184,6 +184,19 @@ function holds(r: Rules, at: (s: Series) => number[], i: number): boolean {
   return "all" in r ? r.all.every(test) : r.any.some(test);
 }
 
+/** What a strategy's rules say at bar i's close for an account that holds its market or not (PLAN 5.34: a run whose
+ * orders are filled by the market itself, not a simulator): "buy" when it holds none and its entry holds; "sell" when
+ * it holds and the close is past its stop, its target or its trailing stop (each read at a close, as an order can only
+ * be placed then), or its exit holds. */
+export function signalAt(s: Strategy, c: readonly Candle[], i: number, at: (x: Series) => number[], held: { entryPx: number; best: number } | null): "buy" | "sell" | null {
+  if (!held) return holds(s.entry, at, i) ? "buy" : null;
+  const close = c[i]!.c;
+  if (s.stopLossPct !== undefined && close <= held.entryPx * (1 - s.stopLossPct / 100)) return "sell";
+  if (s.takeProfitPct !== undefined && close >= held.entryPx * (1 + s.takeProfitPct / 100)) return "sell";
+  if (s.trailingStopPct !== undefined && close <= Math.max(held.best, close) * (1 - s.trailingStopPct / 100)) return "sell";
+  return s.exit && holds(s.exit, at, i) ? "sell" : null;
+}
+
 // ── the one simulator ─────────────────────────────────────────────────────────────────────────────
 export type Trade = { entryT: number; entryPx: number; exitT: number; exitPx: number; qty: number; pnl: number; pnlPct: number; fees: number; why: "rule" | "stop" | "target" | "trailing" | "end" | "stopped" };
 export type SimState = {

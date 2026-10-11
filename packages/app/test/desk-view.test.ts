@@ -321,9 +321,8 @@ test("the desk: the floor and its tabs at desk and phone sizes; a strategy kept 
   const coin = h.swaps.list().find((x) => x.buy === MINT)!;
   assert.deepEqual([coin.chain, coin.sell, coin.amount], ["solana", "SOL", "0.5"], "the coin kept by its address, your own swap signed by your wallet");
   await page.locator("select[data-send-who]").selectOption("Kit");
-  await page.locator('[data-send-mode="paper"]').click();
   await page.locator("[data-send-go]").click();
-  await page.locator("[data-sent]", { hasText: "Kit has Fartcoin, on paper" }).waitFor({ timeout: 10_000 });
+  await page.locator("[data-sent]", { hasText: /^Kit has Fartcoin, up to \$100, on paper\./ }).waitFor({ timeout: 10_000 });
   assert.ok(h.events.ofType("desk.sent").some((e) => e.orb === "kit" && e.data.mode === "paper" && e.data.label === "Fartcoin"), "Kit sent, on paper");
   await page.locator("[data-token-close]").click();
   await page.locator("[data-token-desk]").waitFor({ state: "detached" });
@@ -351,6 +350,20 @@ test("the desk: the floor and its tabs at desk and phone sizes; a strategy kept 
   assert.match(await page.locator('[data-orb-pnl="Kit"] [data-pnl]').innerText(), /^[+−]\$[\d,]+\.\d\d/);
   assert.match(await page.locator("[data-desk-pnl]").innerText(), /on paper, the whole desk/);
   assert.deepEqual(await measure(page), [], "each orb's P&L, at desk size");
+  // an orb's account (owner, 10-11: "how do we alternate between paper and real? and we dont want the orbs to know the
+  // difference. money is money"): Kit's made real money with a budget of $50, here, by you; then paper again
+  const kit = page.locator('[data-account="kit"]');
+  assert.equal(await kit.getAttribute("data-account-mode"), "paper");
+  await kit.locator("[data-account-real]").click();
+  await kit.locator("[data-account-budget]").fill("50");
+  await kit.locator("[data-account-set]").click();
+  await page.locator('[data-account="kit"][data-account-mode="real"]').waitFor({ timeout: 20_000 });
+  assert.deepEqual([h.desk.account("kit").mode, h.desk.account("kit").budget], ["real", 50]);
+  assert.match(await kit.locator("[data-account-words]").innerText(), /^Real money: \$50\.00 left of \$50\.00\. Each order Kit places comes to you for a yes/);
+  assert.deepEqual(await measure(page), [], "an account of real money, at desk size");
+  await kit.locator("[data-account-paper]").click();
+  await page.locator('[data-account="kit"][data-account-mode="paper"]').waitFor({ timeout: 20_000 });
+  assert.equal(h.desk.account("kit").mode, "paper");
   // a swap of any coin, by its address (owner, 10-11: "coin swap in general, not just pump.fun")
   await tab(page, "trade");
   await page.locator("[data-trade-chain]").selectOption("base");

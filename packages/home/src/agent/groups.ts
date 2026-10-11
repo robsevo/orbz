@@ -21,7 +21,7 @@ export const GROUPS = {
   // reverse engineering (PLAN 4.8; owner, 10-10): the Reverse Engineer's, and the Guardian's (security), by specialty
   reverse: { id: "reverse", about: "reverse engineering, statically: a binary's anatomy (ELF, PE, Mach-O), a JavaScript or Electron app, a smart contract's bytecode, a network capture", families: [], specialties: ["reverse", "security"] },
   // the desk (PLAN 5.25): its department's, and the money orbs' by specialty
-  desk: { id: "desk", about: "the desk: prices and charts of the majors and of any token on a DEX by its name or address (pump.fun's too), what a token can do to its holders, strategies backtested and run on paper, paper trades, notes on a coin, the person's wallets (read only), and asking the person for a real swap", families: ["desk"], specialties: ["investor", "crypto", "fundamentals", "cfo"] },
+  desk: { id: "desk", about: "the desk: prices and charts of the majors and of any token on a DEX by its name or address (pump.fun's too), what a token can do to its holders, strategies backtested and run on its account, orders placed on that account, notes on a coin, the person's wallets (read only)", families: ["desk"], specialties: ["investor", "crypto", "fundamentals", "cfo"] },
 } as const satisfies Record<string, ToolGroup>;
 
 /** The groups a run starts with: its department's; every group for an all-rounder; the plans and the team in a session. */

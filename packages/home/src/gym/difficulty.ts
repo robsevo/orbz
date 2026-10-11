@@ -68,7 +68,7 @@ export const tierOf = (unit: number, at: Scale["at"]): Tier => (unit >= at[2] ? 
 
 const CHECK = /\b(test|tests|pytest|jest|vitest|mocha|tsc|eslint|ruff|mypy|clippy|build|check|lint|typecheck)\b|\bcargo\s+(test|build|check)\b|\bgo\s+(test|build|vet)\b|\bmake\b/;
 const TEXT = /\.(md|txt|html?|docx?|rtf|tex)$/i;
-const ITEM_TOOLS = /^(read_mail|draft_reply|remind|move_reminder|list_reminders|schedule_job|read_calendar|ask_day|teach|lesson_step|market_prices|market_chart|backtest_strategy|propose_strategy|run_strategy|paper_trade|desk_book|market_note|wallet_holdings|propose_swap)$|^mcp__/;
+const ITEM_TOOLS = /^(read_mail|draft_reply|remind|move_reminder|list_reminders|schedule_job|read_calendar|ask_day|teach|lesson_step|market_prices|market_chart|backtest_strategy|propose_strategy|run_strategy|place_order|desk_book|market_note|wallet_holdings)$|^mcp__/;
 const hostOf = (url: string): string | null => {
   try {
     return new URL(url).hostname.replace(/^www\./, "");

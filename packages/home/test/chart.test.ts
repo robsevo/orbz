@@ -65,7 +65,7 @@ test("bars that are not bars are refused: too few or too many, a number missing,
 const EVM = "0x4200000000000000000000000000000000000042";
 const swap = (o: Partial<Swap>): Swap => ({ id: 1, orb: "tess", chain: "solana", sell: "SOL", buy: MINT, amount: "0.5", usd: 80, why: "", quote: null, state: "sent", tx: "tx", error: null, createdAt: START, settledAt: null, ...o });
 const quoted = (out: string): Swap["quote"] => ({ amountIn: "1", amountOut: "1", out, priceImpactPct: null, feeUsd: null, route: [], router: null });
-const book = (o: Partial<Book>): Book => ({ id: 1, orb: "tess", strategy: 7, symbol: `solana:${MINT}`, cashStart: 10_000, cash: 10_000, qty: 0, entryPx: 0, entryT: 0, fees: 0, state: "live", startedAt: START - H, stoppedAt: null, holdings: [], ...o });
+const book = (o: Partial<Book>): Book => ({ id: 1, orb: "tess", strategy: 7, symbol: `solana:${MINT}`, cashStart: 10_000, cash: 10_000, qty: 0, entryPx: 0, entryT: 0, fees: 0, state: "live", startedAt: START - H, stoppedAt: null, holdings: [], real: false, lastBar: null, best: 0, ...o });
 
 test("what was done on a market: its paper fills only; the real trades that went, a coin by its address on its own chain, a major by its symbol, each at what its dollars bought; the strategies run on it", () => {
   const coin = `solana:${MINT}`;
@@ -73,6 +73,7 @@ test("what was done on a market: its paper fills only; the real trades that went
     { at: START - 2 * H, orb: "tess", data: { book: 1, strategy: 7, symbol: coin, side: "buy", qty: 1000, px: 0.15, paper: true } },
     { at: START - H, orb: "kit", data: { book: 2, symbol: coin, side: "sell", qty: 400, px: 0.17, usd: 68, paper: true } },
     { at: START - H, orb: "kit", data: { book: 2, symbol: "BTC", side: "buy", qty: 0.01, px: 60_000, paper: true } }, // another market
+    { at: START - H / 2, orb: "tess", data: { book: 9, symbol: coin, side: "buy", qty: 500, px: 0.16, paper: false } }, // real money's: its swap's, below
   ];
   const swaps: Swap[] = [
     swap({ id: 1, buy: MINT, quote: quoted("500"), usd: 80, createdAt: START - 30 * 60_000, settledAt: START - 29 * 60_000 }), // a buy: $80 for 500

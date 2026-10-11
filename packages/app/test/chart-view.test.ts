@@ -118,7 +118,8 @@ test("the desk's chart: the bar's clock; indicators from its right-click menu, k
   await page.locator("[data-tick]").first().waitFor({ timeout: 20_000 });
   assert.deepEqual(await page.locator("[data-tick]").evaluateAll((els) => els.map((e) => e.getAttribute("data-tick"))), ["ETH", "BTC", "SOL", "XRP", "BNB", "DOGE", "TRX", "ADA", "LINK", "ZEC"]);
   assert.ok(SYMBOLS.includes("HYPE"), "the eleventh by market cap is a major too, and left off");
-  await page.locator('[data-tick="ETH"]').hover({ force: true });
+  // a pointer over the tape holds it still (its frame does not move, so it is there for sure), then a coin is pressed
+  await page.locator("[data-tape]").hover();
   await page.locator('[data-tick="ETH"]').click();
   await page.locator('[data-major-page="ETH"] [data-candles]').waitFor({ timeout: 20_000 });
   await page.locator("[data-token-close]").click();

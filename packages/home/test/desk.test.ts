@@ -85,7 +85,7 @@ test("a winning paper trade is XP graded by the market, by how hard it was; a lo
   const xp = home.events.ofType("xp.earned").filter((e) => e.orb === "tess");
   assert.equal(xp.length, 1);
   assert.deepEqual([xp[0]!.data.amount, xp[0]!.data.tier, xp[0]!.data.area], [XP.trade.expert, "expert", "desk"], "held two minutes: a quick win is the hardest");
-  assert.match(String(xp[0]!.data.reason), /^an expert trade won on paper \(ETH, \+\d+\.\d\d% after fees\)$/);
+  assert.match(String(xp[0]!.data.reason), /^an expert trade won \(ETH, \+\d+\.\d\d% after its costs\)$/);
   assert.equal(radarOf(home.events, "tess").desk.xp, XP.trade.expert, "the radar puts it in the desk's area");
   // a loss: nothing
   await home.desk.paperTrade("tess", "ETH", "buy", 1_000);

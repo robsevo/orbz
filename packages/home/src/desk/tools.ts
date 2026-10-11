@@ -1,12 +1,14 @@
-// The desk's tools (PLAN 5.25), its orbs' (and the money orbs', by specialty): prices and charts, a
-// strategy backtested, kept and run live on paper, paper trades on an orb's own book, research notes on a coin, your
-// wallets' holdings (read only), and a real swap asked of you. Paper is never money, so it never asks; a real swap is
-// only ever ASKED here (it waits for your yes and your wallet's signature, swaps.ts): the tool moves nothing.
+// The desk's tools (PLAN 5.25, 5.34), its orbs' (and the money orbs', by specialty): prices and charts, a strategy
+// backtested, kept and run on an orb's account, an order placed on that account, research notes on a coin, your wallets'
+// holdings (read only). An orb's account is on paper or real money as you set it (desk.ts `account`), and nothing an orb
+// reads here says which (owner, 10-11: "we dont want the orbs to know the difference. money is money"): an order is
+// placed the one way (orders.ts), and an order of real money is only ever asked of you there (it waits for your yes and
+// your wallet's signature, swaps.ts); no tool here moves anything.
 import type { ToolDef, ToolResult } from "../agent/tools.ts";
 import { GROUPS } from "../agent/groups.ts";
 import { atr, ema, macd, rsi, type Candle } from "./indicators.ts";
 import type { Desk } from "./desk.ts";
-import type { Swaps } from "./swaps.ts";
+import type { Orders } from "./orders.ts";
 import type { Wallets } from "./wallets.ts";
 import { OPS, problemOf, SYMBOLS, TIMEFRAMES, words, type Strategy, type Timeframe } from "./strategy.ts";
 import { DEX_CHAINS, isDexChain, isTokenAddress, readTokenKey, tokenKey, type Dex, type DexChain, type DexPair } from "./dex.ts";
@@ -73,14 +75,14 @@ export function chartWords(symbol: string, tf: Timeframe, c: readonly Candle[]):
   ].join("\n");
 }
 
-export function deskTools(o: { desk: Desk; wallets: Wallets; swaps: Swaps; dex: Dex; safety: (chain: DexChain, address: string) => Promise<Safety>; now: () => number; nameOf: (orb: string) => string }): ToolDef[] {
-  const { desk, wallets, swaps, dex } = o;
+export function deskTools(o: { desk: Desk; wallets: Wallets; orders: Orders; dex: Dex; safety: (chain: DexChain, address: string) => Promise<Safety>; now: () => number; nameOf: (orb: string) => string }): ToolDef[] {
+  const { desk, wallets, orders, dex } = o;
   const g = GROUPS.desk;
   return [
     // any token on a DEX (PLAN 5.28; owner, 10-11: "shitcoins, anything", pump.fun's too): found, then read
     {
       name: "token_search", group: g, label: "Looking up a token",
-      description: "Find any token on a DEX by its name, symbol or contract address (a pump.fun token's mint ends in \"pump\"), on Solana, Ethereum, Base, Arbitrum, Optimism, Polygon and BNB Chain: each with its price, change, liquidity, volume, market cap, buys and sells, and its pair's age. The key it gives (\"solana:<mint>\") is what market_chart, paper_trade and token_info take.",
+      description: "Find any token on a DEX by its name, symbol or contract address (a pump.fun token's mint ends in \"pump\"), on Solana, Ethereum, Base, Arbitrum, Optimism, Polygon and BNB Chain: each with its price, change, liquidity, volume, market cap, buys and sells, and its pair's age. The key it gives (\"solana:<mint>\") is what market_chart, place_order and token_info take.",
       parameters: obj({ query: { type: "string" } }, ["query"]),
       describe: (a) => `look up ${s(a.query)}`, decision: "allow",
       async run(a) {
@@ -159,7 +161,7 @@ export function deskTools(o: { desk: Desk; wallets: Wallets; swaps: Swaps; dex: 
     },
     {
       name: "propose_strategy", group: g, label: "Proposing a strategy",
-      description: "Keep a strategy on the desk, with its backtest, for the person to see at the desk and run live on paper (or for you to run with run_strategy). Say why in one line.",
+      description: "Keep a strategy on the desk, with its backtest, for the person to see and run (or for you to run on your account with run_strategy). Say why in one line.",
       parameters: obj({ strategy: STRATEGY, why: { type: "string" } }, ["strategy", "why"]),
       describe: (a) => `propose the strategy ${s((a.strategy as Strategy | undefined)?.name)}`, decision: "allow",
       precheck: (a) => problemOf(a.strategy),
@@ -175,54 +177,67 @@ export function deskTools(o: { desk: Desk; wallets: Wallets; swaps: Swaps; dex: 
       },
     },
     {
-      name: "run_strategy", group: g, label: "Running a strategy on paper",
-      description: "Run a kept strategy live on paper money ($10,000), yourself: it trades at each bar's close from now on, and its closed trades are your XP when they make money after fees. Paper is never real money.",
+      name: "run_strategy", group: g, label: "Running a strategy",
+      description: "Run a kept strategy on your account from now on: at each bar's close it places the order its rules say, from your account's dollars (a trade takes the strategy's sizePct of them). Its closed trades are your XP when they make money after their costs.",
       parameters: obj({ strategy: { type: "number", description: "The strategy's number." } }, ["strategy"]),
-      describe: (a) => `run strategy ${s(a.strategy)} on paper`, decision: "allow",
+      describe: (a) => `run strategy ${s(a.strategy)} on its account`, decision: "allow",
       async run(a, ctx) {
         try {
           const b = await desk.run(Number(a.strategy), ctx.orb);
-          return { content: `Running on paper as book ${b.id}, from the next bar's close.` };
+          return { content: `Running on your account as run ${b.id}, from the next bar's close.` };
         } catch (e) {
           return fail(e);
         }
       },
     },
     {
-      name: "paper_trade", group: g, label: "Making a paper trade",
-      description: "A paper trade on your own book ($10,000 of paper to start) at the price now, with a swap's fee and slippage: buy for `usd` dollars, or sell `usd` dollars' worth of what you hold. A trade sold for more than it cost after fees is XP; paper is never real money.",
-      parameters: obj({ symbol: symbolParam, side: { type: "string", enum: ["buy", "sell"] }, usd: { type: "number" }, why: { type: "string" } }, ["symbol", "side", "usd", "why"]),
-      describe: (a) => `${s(a.side)} ${usd(Number(a.usd))} of ${s(a.symbol)} on paper`, decision: "allow",
+      name: "place_order", group: g, label: "Placing an order",
+      description: "Place an order on your account: buy `usd` dollars of a market at the price now, or sell `usd` dollars' worth of what you hold of it (all of it when that is more). Its fill shows in your account (desk_book). A trade sold for more than it cost after its costs is XP; a loss is not. Say why in one line.",
+      parameters: obj({ market: symbolParam, side: { type: "string", enum: ["buy", "sell"] }, usd: { type: "number", description: "Dollars, 1 to 1,000,000." }, why: { type: "string" } }, ["market", "side", "usd", "why"]),
+      describe: (a) => `place an order: ${s(a.side)} ${usd(Number(a.usd))} of ${s(a.market)}`, decision: "allow",
       async run(a, ctx) {
         try {
-          const m = marketOf(a.symbol);
+          const m = marketOf(a.market);
           if (m instanceof Error) return fail(m);
-          const r = await desk.paperTrade(ctx.orb, m, s(a.side) as "buy" | "sell", Number(a.usd));
-          const t = r.trade as { pnl: number; pnlPct: number } | null;
-          return { content: `Filled at ${usd(r.px)}. Paper cash now ${usd(r.book.cash)}.${t ? ` That sale closed ${pct(t.pnlPct)} (${usd(t.pnl)}) after fees.` : ""}` };
+          const order = await orders.place(ctx.orb, { market: m, side: s(a.side) as "buy" | "sell", usd: Number(a.usd), why: s(a.why) });
+          return { content: `Order ${order.id} placed: ${order.side} ${usd(order.usd)} of ${m}. Its fill shows in your account (desk_book).` };
         } catch (e) {
           return fail(e);
         }
       },
     },
     {
-      name: "desk_book", group: g, label: "Reading the book",
-      description: "Your paper books: cash, what you hold valued now, and how each strategy you run is doing.",
+      name: "desk_book", group: g, label: "Reading the account",
+      description: "Your account: its dollars, what it holds valued now, its result since it began; your orders still to fill and the last that did; each strategy you run on it.",
       parameters: obj({}, []),
-      describe: () => "read its paper books", decision: "allow",
+      describe: () => "read its account", decision: "allow",
       async run(_a, ctx) {
         try {
-          const mine = desk.books().filter((b) => b.orb === ctx.orb && b.state === "live");
-          if (!mine.length) return { content: "No paper book yet: paper_trade starts your own, run_strategy runs one." };
-          const prices = new Map((await desk.market.tickers([...SYMBOLS])).map((t) => [t.symbol, t.price]));
-          return {
-            content: mine.map((b) => {
-              const held = b.strategy !== null ? (b.qty > 0 && b.symbol ? b.qty * (prices.get(b.symbol) ?? b.entryPx) : 0) : b.holdings.reduce((n, h) => n + h.qty * (prices.get(h.symbol) ?? h.cost / h.qty), 0);
-              const eq = b.cash + held;
-              const name = b.strategy !== null ? (desk.strategy(b.strategy)?.name ?? `strategy ${b.strategy}`) : "your own book";
-              return `Book ${b.id}, ${name}: ${usd(eq)} (${pct(((eq - b.cashStart) / b.cashStart) * 100)}), cash ${usd(b.cash)}${b.holdings.length ? `, holding ${b.holdings.map((h) => `${h.qty.toPrecision(4)} ${h.symbol}`).join(", ")}` : b.qty > 0 ? `, holding ${b.qty.toPrecision(4)} ${b.symbol}` : ""}.`;
-            }).join("\n"),
-          };
+          const a = desk.account(ctx.orb);
+          const b = a.book;
+          const prices = new Map<string, number>();
+          for (const h of b.holdings) {
+            const p = await desk.market.price(h.symbol).catch(() => null);
+            if (p !== null) prices.set(h.symbol, p);
+          }
+          const held = b.holdings.reduce((n, h) => n + h.qty * (prices.get(h.symbol) ?? h.cost / h.qty), 0);
+          const eq = b.cash + held;
+          const lines = [
+            `Your account: ${usd(eq)}${b.cashStart > 0 ? ` (${pct(((eq - b.cashStart) / b.cashStart) * 100)} since it began with ${usd(b.cashStart)})` : ""}; ${usd(b.cash)} to spend.`,
+            b.holdings.length ? `Holding: ${b.holdings.map((h) => `${h.qty.toPrecision(5)} ${h.symbol} (cost ${usd(h.cost)}${prices.has(h.symbol) ? `, now ${usd(h.qty * prices.get(h.symbol)!)}` : ""})`).join("; ")}.` : "Holding nothing.",
+          ];
+          const list = orders.list(ctx.orb, 12);
+          const waiting = list.filter((x) => x.state === "placed");
+          const done = list.filter((x) => x.state !== "placed").slice(0, 6);
+          if (waiting.length) lines.push(`Orders to fill: ${waiting.map((x) => `#${x.id} ${x.side} ${usd(x.usd)} of ${x.market}`).join("; ")}.`);
+          if (done.length) lines.push(`Last orders: ${done.map((x) => (x.state === "filled" ? `#${x.id} ${x.side === "buy" ? "bought" : "sold"} ${x.qty?.toPrecision(5)} ${x.market} at ${usd(x.px ?? 0)}` : `#${x.id} ${x.side} ${x.market}: not filled, ${x.reason ?? "it did not go through"}`)).join("; ")}.`);
+          const runs = desk.books().filter((x) => x.orb === ctx.orb && x.strategy !== null && x.state === "live");
+          for (const r of runs) {
+            const st = desk.strategy(r.strategy!);
+            const closed = desk.closedTrades(ctx.orb, r.strategy!);
+            lines.push(`Run ${r.id}, ${st?.name ?? `strategy ${r.strategy}`} on ${r.symbol}: ${closed.n} closed trade${closed.n === 1 ? "" : "s"}, ${usd(closed.pnl)} after their costs.`);
+          }
+          return { content: lines.join("\n") };
         } catch (e) {
           return fail(e);
         }
@@ -255,20 +270,6 @@ export function deskTools(o: { desk: Desk; wallets: Wallets; swaps: Swaps; dex: 
           out.push(`${w.label || w.wallet || w.chain} (${w.chain}): ${h.holdings.map((x) => `${x.amount} ${x.symbol} on ${x.chain}${x.usd === null ? "" : ` (${usd(x.usd)})`}`).join(", ") || "nothing held"}${h.errors.length ? `; not read: ${h.errors.join("; ")}` : ""}`);
         }
         return { content: out.join("\n") };
-      },
-    },
-    {
-      name: "propose_swap", group: g, label: "Asking for a trade",
-      description: "Ask the person for a real trade from their own wallet, a swap on a DEX (KyberSwap on base, ethereum, arbitrum, optimism, polygon; Jupiter on solana). It only asks: it waits for their yes at the desk, then their wallet's signature; the desk's limits and slippage are kept. Say why in one or two lines, with the risk.",
-      parameters: obj({ chain: { type: "string", enum: CHAINS.map((c) => c.id) }, sell: { type: "string", description: "A token on that chain: its symbol (ETH, USDC, SOL…) or any token's address." }, buy: { type: "string", description: "The same: a symbol, or any token's address (token_search finds it)." }, amount: { type: "string", description: "Of what is sold, e.g. \"0.05\"." }, why: { type: "string" } }, ["chain", "sell", "buy", "amount", "why"]),
-      describe: (a) => `ask to swap ${s(a.amount)} ${s(a.sell)} for ${s(a.buy)} on ${s(a.chain)}`, decision: "allow",
-      async run(a, ctx) {
-        try {
-          const sw = await swaps.ask({ by: ctx.orb, chain: s(a.chain), sell: s(a.sell), buy: s(a.buy), amount: s(a.amount), why: s(a.why) });
-          return { content: `Asked as swap ${sw.id}: ${sw.amount} ${sw.sell} (about ${usd(sw.usd)}) for about ${sw.quote?.out} ${sw.buy}${sw.quote?.route.length ? ` via ${sw.quote.route.join(", ")}` : ""}. It waits for the person's yes and their wallet's signature; you will hear how it went.` };
-        } catch (e) {
-          return fail(e);
-        }
       },
     },
   ];
