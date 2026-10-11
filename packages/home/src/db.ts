@@ -474,6 +474,86 @@ const MIGRATIONS: string[] = [
   );
   ALTER TABLE notices ADD COLUMN lesson INTEGER;
   `,
+  // v17 (PLAN 5.22-5.27): the desk: strategies (rules by code, desk/strategy.ts), paper books (a strategy run
+  // live by an orb, or an orb's own book: cash, the one position per book, what the last close decided), the desk's
+  // research notes, your wallets by their public address only, the real trades (DEX swaps) and their cards, and the
+  // desk's settings (limits, slippage, the off switch). What happens on it is in the event log (desk.*).
+  `
+  CREATE TABLE desk_strategies (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    name       TEXT    NOT NULL,
+    by_orb     TEXT,
+    spec       TEXT    NOT NULL,
+    backtest   TEXT,
+    created_at INTEGER NOT NULL,
+    archived   INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE TABLE desk_books (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    orb         TEXT    NOT NULL,
+    strategy    INTEGER,
+    symbol      TEXT,
+    cash_start  REAL    NOT NULL,
+    cash        REAL    NOT NULL,
+    qty         REAL    NOT NULL DEFAULT 0,
+    entry_px    REAL    NOT NULL DEFAULT 0,
+    entry_t     INTEGER NOT NULL DEFAULT 0,
+    best        REAL    NOT NULL DEFAULT 0,
+    fees        REAL    NOT NULL DEFAULT 0,
+    pending     TEXT,
+    last_bar    INTEGER,
+    state       TEXT    NOT NULL CHECK (state IN ('live', 'stopped')),
+    started_at  INTEGER NOT NULL,
+    stopped_at  INTEGER
+  );
+  CREATE TABLE desk_holdings (
+    book   INTEGER NOT NULL,
+    symbol TEXT    NOT NULL,
+    qty    REAL    NOT NULL,
+    cost   REAL    NOT NULL,
+    since  INTEGER NOT NULL,
+    PRIMARY KEY (book, symbol)
+  );
+  CREATE TABLE desk_notes (
+    id     INTEGER PRIMARY KEY AUTOINCREMENT,
+    orb    TEXT    NOT NULL,
+    symbol TEXT    NOT NULL,
+    title  TEXT    NOT NULL,
+    text   TEXT    NOT NULL,
+    at     INTEGER NOT NULL
+  );
+  CREATE TABLE desk_wallets (
+    id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    chain    TEXT    NOT NULL CHECK (chain IN ('evm', 'solana', 'bitcoin')),
+    address  TEXT    NOT NULL,
+    label    TEXT    NOT NULL DEFAULT '',
+    wallet   TEXT,
+    added_at INTEGER NOT NULL,
+    UNIQUE (chain, address)
+  );
+  CREATE TABLE desk_swaps (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    card       INTEGER,
+    orb        TEXT,
+    chain      TEXT    NOT NULL,
+    sell       TEXT    NOT NULL,
+    buy        TEXT    NOT NULL,
+    amount     TEXT    NOT NULL,
+    usd        REAL    NOT NULL,
+    why        TEXT    NOT NULL DEFAULT '',
+    quote      TEXT,
+    state      TEXT    NOT NULL CHECK (state IN ('asked', 'approved', 'built', 'sent', 'confirmed', 'failed', 'denied', 'expired')),
+    tx         TEXT,
+    error      TEXT,
+    created_at INTEGER NOT NULL,
+    settled_at INTEGER
+  );
+  CREATE UNIQUE INDEX desk_swaps_tx ON desk_swaps (tx) WHERE tx IS NOT NULL;
+  CREATE TABLE desk_settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
+  `,
 ];
 
 /** The home's data is the person's: the folder is theirs alone (0700) and so is the database

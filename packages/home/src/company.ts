@@ -15,6 +15,7 @@
 // and every money orb reports to it. Everyone takes direction from the CEO and follows what the board decides.
 import { budgetLine, type Budget } from "./about.ts";
 import { SPECIALTY_FAMILIES, type Family, type Specialty } from "./brain/constitution.ts";
+import { DESK_NAMES } from "./desk/names.ts";
 
 /** The two appointed first, in this order: nothing else joins before both are in. */
 export const FOUNDING: readonly Specialty[] = ["ceo", "assistant"];
@@ -22,9 +23,9 @@ export const FOUNDING: readonly Specialty[] = ["ceo", "assistant"];
 /** Each department's head, by its post (owner, 10-07: "restructure it so it fits this makes things easier to see"):
  * the Executive the CEO, Build the CTO, Think the Chief of Staff, Make the CMO, Finance the CFO, Business the COO, Life
  * your personal assistant. A department opens for hiring with its head. */
-export const HEAD_OF: Record<Family, Specialty> = { exec: "ceo", build: "cto", think: "chiefofstaff", make: "cmo", finance: "cfo", business: "coo", life: "assistant" };
-const POST: Partial<Record<Specialty, string>> = { ceo: "CEO", assistant: "personal assistant", cfo: "CFO", cto: "CTO", chiefofstaff: "Chief of Staff", cmo: "CMO", coo: "COO" };
-const DEPARTMENT: Record<Family, string> = { exec: "the Executive", build: "Build", think: "Think", make: "Make", finance: "Finance", business: "Business", life: "Life" };
+export const HEAD_OF: Record<Family, Specialty> = { exec: "ceo", build: "cto", think: "chiefofstaff", make: "cmo", finance: "cfo", business: "coo", life: "assistant", desk: "deskhead" };
+const POST: Partial<Record<Specialty, string>> = { ceo: "CEO", assistant: "personal assistant", cfo: "CFO", cto: "CTO", chiefofstaff: "Chief of Staff", cmo: "CMO", coo: "COO", deskhead: DESK_NAMES.head };
+const DEPARTMENT: Record<Family, string> = { exec: "the Executive", build: "Build", think: "Think", make: "Make", finance: "Finance", business: "Business", life: "Life", desk: DESK_NAMES.dept };
 
 /** Who is to be appointed next, while the CEO and your assistant are not both in. */
 export function nextFounding(office: readonly string[]): Specialty | null {

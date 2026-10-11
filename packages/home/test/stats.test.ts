@@ -18,11 +18,11 @@ test("the charts' sums, by code from the log: tokens by day, model, kind of turn
   const to = (at: number): void => clock.suspend(at - clock.now());
   const spend = (orb: string | null, conversation: string | null, data: Record<string, unknown>): void =>
     void home.events.append("brain.spend", { tier: "big", cost_usd: null, cost_source: "none", ...data }, { orb, conversation });
-  const xp = (orb: string, amount: number): void => void home.events.append(amount >= 0 ? "xp.earned" : "xp.lost", { amount, reason: "work", source: 1, at: clock.now() }, { orb });
+  const xp = (orb: string, amount: number, tier?: string): void => void home.events.append(amount >= 0 ? "xp.earned" : "xp.lost", { amount, reason: "work", source: 1, at: clock.now(), ...(tier && { tier }) }, { orb });
 
   // ten days ago: before a week's range (control)
   spend("ada", "chat:ada", { model: "gpt-5", turn: "work", prompt_tokens: 9_000, cached_tokens: 0, completion_tokens: 900 });
-  xp("ada", 100);
+  xp("ada", 100, "expert");
   // two days ago: a session's lead, and a chat
   to(now - 2 * DAY);
   spend("ada", "team:1:brainstorm", { model: "gpt-5", turn: "lead", prompt_tokens: 1_000, cached_tokens: 200, completion_tokens: 100 });
@@ -31,12 +31,12 @@ test("the charts' sums, by code from the log: tokens by day, model, kind of turn
   // yesterday: a call no orb made (school's), XP earned and taken back
   to(now - DAY);
   spend(null, null, { model: "mini", prompt_tokens: 300, completion_tokens: 30 });
-  xp("bea", 40);
+  xp("bea", 40, "hard");
   xp("bea", -5);
   // today
   to(now);
   spend("ada", "chat:ada", { model: "gpt-5", turn: "work", prompt_tokens: 2_000, cached_tokens: 1_500, completion_tokens: 200 });
-  xp("ada", 10);
+  xp("ada", 10, "easy");
 
   const s = statsOf(home, 7);
   assert.deepEqual(s.days, ["2026-10-01", "2026-10-02", "2026-10-03", "2026-10-04", "2026-10-05", "2026-10-06", "2026-10-07"], "the last seven days, today the last");
@@ -49,6 +49,8 @@ test("the charts' sums, by code from the log: tokens by day, model, kind of turn
   assert.deepEqual(s.xp.total, { earned: 65, lost: 5 });
   assert.deepEqual(s.xp.byDay.slice(4), [{ earned: 15, lost: 0 }, { earned: 40, lost: 5 }, { earned: 10, lost: 0 }]);
   assert.deepEqual(s.xp.byOrb.map((o) => [o.name, o.earned, o.lost]), [["Bea", 40, 5], ["Ada", 25, 0]], "by orb, the most kept first");
+  // by how hard the work was (PLAN 3.13): only the jobs, each in its tier; the plan row's 15 has none; ten days ago is out
+  assert.deepEqual(s.xp.byTier, [{ tier: "easy", jobs: 1, earned: 10 }, { tier: "standard", jobs: 0, earned: 0 }, { tier: "hard", jobs: 1, earned: 40 }, { tier: "expert", jobs: 0, earned: 0 }]);
 
   // thirty days hold ten days ago; a range the charts do not offer is a week
   const month = statsOf(home, 30);

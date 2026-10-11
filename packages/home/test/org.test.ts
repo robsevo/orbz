@@ -250,6 +250,6 @@ test("let go the lead, and the next one up leads: the most experienced in the po
 test("each department's head, by its post (owner, 10-07): the Executive the CEO, Build the CTO, Finance the CFO, Life the assistant; no one yet where none is appointed", () => {
   const team = [m("cleo", "ceo", "Senior", 1), m("pip", "assistant", "Senior", 2), m("fin", "cfo", "Senior", 3), m("tess", "cto", "Junior", 4), m("tom", "cto", "Senior", 5), m("ada", "frontend", "Senior", 6)];
   const heads = headsOf(team);
-  assert.deepEqual(heads, { exec: "cleo", build: "tom", think: null, make: null, finance: "fin", business: null, life: "pip" }, "the top-ranked of the post heads it; a department without its head's post has none (control)");
+  assert.deepEqual(heads, { exec: "cleo", build: "tom", think: null, make: null, finance: "fin", business: null, life: "pip", desk: null }, "the top-ranked of the post heads it; a department without its head's post has none (control)");
   assert.equal(headsOf([]).exec, null, "an empty office: no heads");
 });

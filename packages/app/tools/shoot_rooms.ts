@@ -2,7 +2,9 @@
 // better", app wide): `node tools/shoot_rooms.ts <dir> [--rooms home,org] [--sizes desk,phone]` saves <room>-<size>.png,
 // the whole page. A real home in a scratch folder with a company in it (the Founder, the CEO, the assistant, the CFO, a
 // few in their departments), a chat, a session with a plan on its board, schedules, a bill, the board's report (a
-// stand-in model), XP and the brains' tokens. measure()'s findings print with each.
+// stand-in model), XP and the brains' tokens. measure()'s findings print with each. The desk's rooms (`desk`,
+// `desk-<tab>`, PLAN 5.22) come last: its crew hired and its floor opened only for them, on a stand-in market, so the
+// rooms before them are the office as everyone has it.
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -12,6 +14,8 @@ import { Home } from "../../home/src/home.ts";
 import { serve } from "../../home/src/api.ts";
 import { MemoryStore } from "../../home/src/chatgpt/store.ts";
 import { fakeModel } from "../../home/test/fakes/model.ts";
+import { standInMarket, standInRouters } from "../../home/test/fakes/market.ts";
+import { keptBy, TURNS } from "../src/floor/props.ts";
 
 const APP = new URL("..", import.meta.url).pathname;
 const dir = process.argv[2]!;
@@ -22,6 +26,7 @@ const ROOMS: [string, string][] = [
   ["calendar", "#/calendar"], ["lab", "#/lab"], ["report", "#/report"], ["stats", "#/stats/brain"], ["xp", "#/stats/xp"],
   ["org", "#/org"], ["recruiter", "#/recruiter"], ["cv", "#/recruiter"], ["career", "#/career/Max"], ["settings", "#/settings"],
 ];
+const DESK_ROOMS: [string, string][] = ["market", "strategies", "trade", "books", "desk", "limits"].map((tab) => [tab === "market" ? "desk" : `desk-${tab}`, "#/desk"]);
 const only = arg("--rooms")?.split(",");
 const sizes = (arg("--sizes") ?? "desk,phone").split(",");
 const cleanups: (() => unknown)[] = [];
@@ -34,6 +39,7 @@ const data = mkdtempSync(join(tmpdir(), "orbs-shoot-rooms-data-"));
 const h = Home.open({
   dataDir: data, protect: [], spendCapUsd: null, chatgpt: { store: new MemoryStore() }, brains: { store: new MemoryStore() },
   brain: { preset: { id: "t", title: "t", own: null, big: { name: "big", baseUrl: model.url, model: "m", retries: 0 }, teacher: null } },
+  desk: { on: true, source: standInMarket(() => Date.now()), routers: standInRouters({ outPer: () => 0.0004 }), fetch: (async () => new Response("{}", { status: 503 })) as typeof fetch },
 });
 h.start();
 h.about.setName("Robin");
@@ -64,6 +70,22 @@ model.replies.push(
 await h.reports.make().catch((e: Error) => console.log("no report:", e.message));
 const d = await serve(h, { port: 0, appDir: out });
 const browser = await launch();
+/** The desk's crew and its work, and its floor opened: only before its own rooms. */
+const desk = async (): Promise<void> => {
+  const crew = [
+    ["vic", "Vic", "deskhead", "lime", "bean", "bowler"], ["kit", "Kit", "dealer", "amber", "kitty", "headset"], ["quinn", "Quinn", "quant", "violet", "owl", "none"],
+    ["oz", "Oz", "onchain", "teal", "drop", "antenna"], ["rae", "Rae", "risk", "coral", "cub", "hard hat"],
+  ] as const;
+  for (const [id, name, sp, hue, shape, hat] of crew) h.inbox.addOrb(id, name, sp, { shape, eyes: "big", hue, hat } as never);
+  const ema = (a: number, b: number, op: string) => ({ all: [{ left: { kind: "ema", period: a }, op, right: { kind: "ema", period: b } }] }) as never;
+  const spec = { name: "EMA cross · BTC 1h", symbol: "BTC", timeframe: "1h", entry: ema(9, 21, "crosses_above"), exit: ema(9, 21, "crosses_below"), stopLossPct: 3, takeProfitPct: 6, sizePct: 50 } as never;
+  const row = h.desk.save(spec, "quinn", await h.desk.backtest(spec));
+  await h.desk.run(row.id, "kit");
+  await h.desk.paperTrade("vic", "ETH", "buy", 1_500);
+  h.desk.note("oz", "SOL", "Unlocks this month", "About 2% of the supply unlocks on the 28th; the last two unlocks were sold into within a week.");
+  for (const t of TURNS) h.about.keep(keptBy(t));
+};
+const shoot = async (rooms: [string, string][]): Promise<void> => {
 for (const size of sizes) {
   const vp = size === "phone" ? { width: 390, height: 844 } : { width: 1280, height: 900 };
   const ctx = await browser.newContext({ viewport: vp, deviceScaleFactor: 2, colorScheme: "dark" });
@@ -71,10 +93,15 @@ for (const size of sizes) {
   await page.addInitScript(() => { (globalThis as { __orbsTime?: number }).__orbsTime = 3.4; });
   await page.goto(d.pairLink().replace("orbs.html#", "orbs.html?splash=0&intro=0#"));
   await page.locator(".orbs-window").waitFor({ timeout: 30_000 });
-  for (const [room, hash] of ROOMS) {
+  for (const [room, hash] of rooms) {
     if (only && !only.includes(room)) continue;
     await page.evaluate((x) => (location.hash = x), hash);
     await page.waitForTimeout(1800);
+    // a tab of the desk's own
+    if (room.startsWith("desk")) {
+      await page.locator(`[data-desk-tab="${room.split("-")[1] ?? "market"}"]`).click();
+      await page.waitForTimeout(1500);
+    }
     // an applicant's profile (its CV), opened from its card: the screen as it shows, the dialog over the room
     if (room === "cv") {
       await page.locator("[data-profile-open]").first().click();
@@ -91,6 +118,12 @@ for (const size of sizes) {
     await page.screenshot({ path: join(dir, `${room}-${size}.png`), fullPage: true });
   }
   await ctx.close();
+}
+};
+await shoot(ROOMS);
+if (!only || only.some((r) => r.startsWith("desk"))) {
+  await desk();
+  await shoot(DESK_ROOMS);
 }
 await browser.close();
 await d.close();

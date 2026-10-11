@@ -14,6 +14,8 @@
 //   - the positions in their departments, each named (owner, 10-07: "an all filter ... and also give them
 //     groups"): one department's or All, and every one shown ticked or unticked in one press, one request;
 //     the fundamental analyst among Business's;
+//   - a dropdown's own list readable in every theme (owner, 10-11: "when we drop down everything else is white"):
+//     the browser draws it on white under a field's see-through fill, so each choice has its own ground;
 //   - nothing spills.
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -30,6 +32,7 @@ import { fakeModel } from "../../home/test/fakes/model.ts";
 import { levelOf } from "../../home/src/gym/levels.ts";
 import { applicant, SPECIALTIES } from "../src/orb/spec.ts";
 import { toHome } from "../src/home/link.ts";
+import { THEMES } from "../src/design/tokens.ts";
 
 const APP = fileURLToPath(new URL("..", import.meta.url));
 /** Your CEO and every department's head, so the Recruiter is open throughout (PLAN 5.13). */
@@ -38,6 +41,26 @@ const heads = (h: Home): void => {
     h.inbox.addOrb(id, name, sp, { shape: "bean", eyes: "classic", hue });
   }
 };
+/** Every dropdown and every choice in its list on the page, in a theme: whether its own ground is solid, and its words'
+ * contrast on that ground (WCAG 2). */
+const lists = (page: Page, theme: string) => page.evaluate((theme) => {
+  const root = document.documentElement;
+  const was = root.getAttribute("data-theme");
+  root.setAttribute("data-theme", theme);
+  const rgba = (c: string): number[] => (c.match(/[\d.]+/g) ?? []).map(Number);
+  const lum = (c: number[]): number => {
+    const f = (v: number): number => ((v /= 255) <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+    return 0.2126 * f(c[0]!) + 0.7152 * f(c[1]!) + 0.0722 * f(c[2]!);
+  };
+  const out = [...document.querySelectorAll("select, select option")].map((el) => {
+    const s = getComputedStyle(el);
+    const [hi, lo] = [lum(rgba(s.color)), lum(rgba(s.backgroundColor))].sort((a, b) => b - a);
+    return { what: `${el.tagName.toLowerCase()} ${el.textContent?.trim().slice(0, 24)}`, solid: (rgba(s.backgroundColor)[3] ?? 1) === 1, ratio: (hi! + 0.05) / (lo! + 0.05) };
+  });
+  if (was === null) root.removeAttribute("data-theme");
+  else root.setAttribute("data-theme", was);
+  return out;
+}, theme);
 const skip = findChrome() ? false : "no Chromium on this machine";
 let browser: Browser;
 let dist: string;
@@ -226,21 +249,30 @@ test("the floor's Hiring tags open on who applied to their department; All and t
   await page.locator('[data-applying="backend"] [data-applicant]').first().waitFor({ timeout: 20_000 });
   assert.deepEqual(await shown(page), ["backend"], "Build's tag: only who applied to Build");
   assert.match(await page.locator("[data-applicants-of]").innerText(), /Who applied: Build/i);
-  assert.equal(await page.locator('[data-department="build"]').getAttribute("aria-pressed"), "true");
+  assert.equal(await page.locator("select[data-department]").inputValue(), "build", "its dropdown says so (owner, 10-10: dropdowns)");
   await page.waitForTimeout(300);
   assert.ok(await inView(page), "they are in view, past the positions");
   assert.equal(await page.locator("[data-best] [data-ranked]").count(), 2, "ranked among themselves");
   assert.deepEqual(await measure(page), [], "a department's applicants, at desk size");
 
-  // Think, a press away; then All; Back returns
-  await page.locator('[data-department="think"]').click();
+  // Think, a choice away; then All; Back returns
+  await page.locator("select[data-department]").selectOption("think");
   await page.waitForFunction(() => location.hash === "#/recruiter/think", undefined, { timeout: 10_000 });
   await page.locator('[data-applying="planning"] [data-applicant]').first().waitFor({ timeout: 20_000 });
   assert.deepEqual(await shown(page), ["planning"], "Think: only who applied to Think");
-  await page.locator('[data-department="all"]').click();
+  await page.locator("select[data-department]").selectOption("");
   await page.waitForFunction(() => location.hash === "#/recruiter", undefined, { timeout: 10_000 });
   await page.waitForFunction(() => document.querySelectorAll("[data-applying]").length === 2, undefined, { timeout: 10_000 });
   assert.deepEqual((await shown(page)).sort(), ["backend", "planning"], "All: everyone");
+  // by position: the positions you are hiring for, one at a time, the best for your team among them only
+  assert.deepEqual(await page.locator("select[data-applicant-position] option").evaluateAll((os) => os.map((o) => (o as HTMLOptionElement).value)), ["", "backend", "planning"], "All, then each position you are hiring for");
+  await page.locator("select[data-applicant-position]").selectOption("planning");
+  await page.waitForFunction(() => document.querySelectorAll("[data-applying]").length === 1, undefined, { timeout: 10_000 });
+  assert.deepEqual(await shown(page), ["planning"], "one position: only who applied to it");
+  assert.equal(await page.locator("[data-best]").count(), 1, "ranked among themselves");
+  assert.equal(await page.locator("[data-best] [data-ranked]").count(), 2);
+  await page.locator("select[data-applicant-position]").selectOption("");
+  await page.waitForFunction(() => document.querySelectorAll("[data-applying]").length === 2, undefined, { timeout: 10_000 });
   await page.goBack();
   await page.waitForFunction(() => location.hash === "#/recruiter/think" && document.querySelectorAll("[data-applying]").length === 1, undefined, { timeout: 10_000 });
 
@@ -289,7 +321,7 @@ test("the positions in their departments, each named; one department's or All; e
   assert.equal(await page.locator('[data-position-group="finance"] [data-position="fundamentals"]').innerText(), "Fundamental Analyst");
 
   // one department: its positions alone, and all of them in one press, one request
-  await page.locator('[data-position-filter="finance"]').click();
+  await page.locator("select[data-position-filter]").selectOption("finance");
   assert.deepEqual(await groups(page), ["finance"], "Finance alone");
   const puts: string[] = [];
   page.on("request", (r) => void (r.method() === "PUT" && /\/recruiter\/positions/.test(r.url()) && puts.push(r.url())));
@@ -302,20 +334,30 @@ test("the positions in their departments, each named; one department's or All; e
   await page.locator('[data-applying="fundamentals"] [data-applicant]').first().waitFor({ timeout: 20_000 });
   assert.deepEqual(await measure(page), [], "a department's positions, at desk size");
 
+  // a dropdown's own list, readable in every theme (owner, 10-11): each choice on a solid ground of its own
+  for (const theme of Object.keys(THEMES)) {
+    const seen = await lists(page, theme);
+    assert.ok(seen.filter((c) => c.what.startsWith("option")).length >= 8, `${theme}: the dropdowns' choices`);
+    assert.deepEqual(seen.filter((c) => c.what.startsWith("option") && (!c.solid || c.ratio < 4.5)), [], `${theme}: every choice readable on its own ground`);
+    // the control: the same look finds a see-through ground, the fields' own, which is what the list was drawn under
+    assert.ok(seen.some((c) => c.what.startsWith("select") && !c.solid), `${theme}: a see-through ground is seen`);
+  }
+
   // All: every position in one press, then none
-  await page.locator('[data-position-filter="all"]').click();
+  await page.locator("select[data-position-filter]").selectOption("");
   assert.equal((await groups(page)).length, 7);
   assert.equal(await all(page).innerText(), "All positions", "not all of them yet");
   await all(page).click();
   await page.waitForFunction(() => document.querySelector("[data-tick-shown]")?.textContent === "✓ All positions", undefined, { timeout: 20_000 });
-  assert.equal(h.recruiter.positions().length, Object.keys(SPECIALTIES).length, "every position");
+  // every position shown: the desk's are not, while it is shut (PLAN 5.21)
+  assert.equal(h.recruiter.positions().length, Object.values(SPECIALTIES).filter((v) => v.family !== "desk").length, "every position");
   await all(page).click();
   await page.waitForFunction(() => document.querySelector("[data-tick-shown]")?.textContent === "All positions", undefined, { timeout: 20_000 });
   assert.deepEqual(h.recruiter.positions(), [], "and none, in one press");
   assert.equal(puts.length, 3);
 
   const phone = await open({ width: 390, height: 844 });
-  await phone.locator('[data-position-filter="life"]').click();
+  await phone.locator("select[data-position-filter]").selectOption("life");
   assert.deepEqual(await groups(phone), ["life"]);
   assert.deepEqual(await measure(phone), [], "at phone size");
 });

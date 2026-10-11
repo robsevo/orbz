@@ -78,6 +78,12 @@ import { Board, boardTools, reviewerProblem } from "./plans/board.ts";
 import { Lessons, lessonTools } from "./lessons.ts";
 import { chat } from "./brain/openai.ts";
 import { TOOLS } from "./agent/tools.ts";
+import { reverseTools } from "./reverse/tools.ts";
+import { Desk } from "./desk/desk.ts";
+import { binanceSource, Market, offlineFetch, offlineSource, type MarketSource } from "./desk/market.ts";
+import { publicRouters, Swaps, type Routers } from "./desk/swaps.ts";
+import { deskTools } from "./desk/tools.ts";
+import { Wallets } from "./desk/wallets.ts";
 import { Loops, type LoopsOptions } from "./loops.ts";
 import { cronOf, Schedules } from "./schedule.ts";
 import { Triggers } from "./triggers.ts";
@@ -108,6 +114,10 @@ export type HomeOptions = {
   /** The board's daily report (PLAN 5.18): sent by the tick for the real home (main.ts), never in a test home unless
    * it says so (its ideas ask the brain, which would take the replies another test scripted); made on asking in both. */
   reports?: { on?: boolean };
+  /** The desk (PLAN 5.22-5.27): its market (public market data), the DEX routers and the chains' RPCs. `on`
+   * steps live strategies and follows sent swaps by the tick: the real home (main.ts); a test home is off and has no
+   * network unless it hands in stand-ins (`source`, `routers`, `fetch`). */
+  desk?: { on?: boolean; source?: MarketSource; routers?: Routers; fetch?: typeof fetch };
   /** How long a stopped run may take to wind down (default 5 s). */
   graceMs?: number;
   /** School (PLAN 5.7): tonight's share of the brain (tests set less). */
@@ -239,6 +249,12 @@ export class Home {
   /** The board's daily report (PLAN 5.18). */
   readonly reports: BoardReports;
   readonly #reportsOn: boolean;
+  /** The desk (PLAN 5.22-5.27): the market, the strategies and paper books, your wallets, real swaps. */
+  readonly market: Market;
+  readonly desk: Desk;
+  readonly wallets: Wallets;
+  readonly swaps: Swaps;
+  readonly #deskOn: boolean;
   /** School (PLAN 5.7): an orb you let go, learning the subjects you picked, night by night. */
   readonly school: School;
   /** XP from graded evidence only (PLAN 3.6): the ledger, in the event log. */
@@ -277,6 +293,14 @@ export class Home {
     this.spend = new Spend(this.events, this.clock, opts.spendCapUsd === undefined ? DEFAULT_SPEND_CAP_USD : opts.spendCapUsd);
     this.conversations = new Conversations(db, this.events, this.clock);
     this.reading = new Reading(db, this.events, this.clock, opts.reading ?? {});
+    // the desk: off (and offline) in a test home unless it hands in its stand-ins
+    this.#deskOn = opts.desk?.on ?? false;
+    const now = (): number => this.clock.now();
+    this.market = new Market(opts.desk?.source ?? (this.#deskOn ? binanceSource() : offlineSource()), now);
+    this.desk = new Desk(db, this.events, this.market, now);
+    const deskFetch = opts.desk?.fetch ?? (this.#deskOn ? undefined : offlineFetch);
+    this.wallets = new Wallets(db, this.events, this.market, now, { fetch: deskFetch });
+    this.swaps = new Swaps(db, this.events, this.market, this.desk, opts.desk?.routers ?? publicRouters({ fetch: deskFetch }), now, { fetch: deskFetch });
     const big = opts.brain?.preset.big ?? null;
     this.chatgpt = new ChatGPT({ dataDir: this.dataDir, events: this.events, clock: this.clock, ...opts.chatgpt });
     const chatgptReady = this.chatgpt.load().then(() => {}, () => {}); // a home never signed in does not touch the keychain
@@ -379,6 +403,10 @@ export class Home {
       }),
       ...computerTools(this.computers, this.vault, pageCheck),
       ...lessonTools(this.lessons),
+      // reverse engineering (PLAN 4.8): read what it is handed, statically, on a thread with a ceiling
+      ...reverseTools(),
+      // the desk (PLAN 5.25): prices, strategies on paper, notes, your wallets read, a real swap only asked
+      ...deskTools({ desk: this.desk, wallets: this.wallets, swaps: this.swaps, nameOf: (orb) => this.inbox.orb(orb)?.name ?? orb }),
       // the reading library (PLAN 3.12): the sites the office follows, beside web search
       ...readingTools(this.reading, (orb) => this.inbox.orb(orb)?.name ?? orb),
       // how the org works (PLAN 5.4): who fits a row, and a Senior passing a habit on (your yes first)
@@ -990,6 +1018,10 @@ export class Home {
     this.social.momentDue(); // and now and then run into each other (owner, 10-07: "micro interactions")
     this.boardroom.due(); // the board's election: when there is none, when its size changes, once a week (PLAN 5.16)
     if (this.#reportsOn) void this.reports.due()?.catch(() => undefined); // the board's report, from 08:00 each day (PLAN 5.18)
+    if (this.#deskOn) {
+      void this.desk.due().catch(() => undefined); // live strategies stepped at each bar's close (PLAN 5.24)
+      void this.swaps.due().catch(() => undefined); // swaps sent followed on their chain, the unanswered expired (PLAN 5.27)
+    }
     await this.triggers.poll({ all: woke });
   }
 
@@ -998,7 +1030,7 @@ export class Home {
     this.#cancelTimer?.();
     const now = this.clock.now();
     let delay = this.#heartbeatMs;
-    for (const at of [this.schedules.nextDueAt(), this.notices.nextDueAt(), this.loops.nextDueAt(), this.triggers.nextPollAt(), this.gym.nextAt(), this.school.nextAt(), this.recruiter.nextAt(), this.reading.nextAt(), this.social.nextAt(), this.social.nextMomentAt(), this.boardroom.nextAt(), this.#reportsOn ? this.reports.nextAt() : null]) {
+    for (const at of [this.schedules.nextDueAt(), this.notices.nextDueAt(), this.loops.nextDueAt(), this.triggers.nextPollAt(), this.gym.nextAt(), this.school.nextAt(), this.recruiter.nextAt(), this.reading.nextAt(), this.social.nextAt(), this.social.nextMomentAt(), this.boardroom.nextAt(), this.#reportsOn ? this.reports.nextAt() : null, this.#deskOn ? this.desk.nextAt() : null, this.#deskOn ? this.swaps.nextAt() : null]) {
       if (at !== null) delay = Math.min(delay, at - now);
     }
     this.#cancelTimer = this.clock.timer(Math.max(MIN_DELAY_MS, delay), () => void this.tick());

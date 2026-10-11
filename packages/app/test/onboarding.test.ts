@@ -326,6 +326,30 @@ for (const size of ["phone", "desk"] as const) {
   });
 }
 
+// owner, 10-10: "Intro font bigger, cant see in video": the first open is filmed at a desk's size and shown on a phone, so
+// its words were a caption's (18 px in a 720 px box). Now a game's: 26 px or more on a desk, 19 or more on a phone, the
+// fields as big as the words, the buttons 16 or more; measured as drawn (the computed size), on the line said and the
+// name asked for.
+for (const [size, words, field, button] of [["desk", 26, 24, 17], ["phone", 19, 19, 16]] as const) {
+  test(`the story's words are big enough to read in a film of it, at ${size} size`, { skip }, async () => {
+    const page = await open(size);
+    try {
+      await page.locator("[data-onboarding]").waitFor();
+      const px = (sel: string) => page.locator(sel).first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+      const said = await px("[data-onboarding] > div[data-orb]");
+      assert.ok(said >= words, `a line said: ${said} px (at least ${words})`);
+      await until(page, "ask-name");
+      const name = await page.getByRole("textbox", { name: "Your name" }).evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+      assert.ok(name >= field, `the name field: ${name} px (at least ${field})`);
+      const that = await page.getByRole("button", { name: "That's me" }).evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+      assert.ok(that >= button, `its button: ${that} px (at least ${button})`);
+      assert.deepEqual(await measure(page), [], "and the layout rule still holds");
+    } finally {
+      await page.context().close();
+    }
+  });
+}
+
 test("?intro=0 skips it", { skip }, async () => {
   const page = await open("desk", "?splash=0&intro=0");
   try {

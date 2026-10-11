@@ -16,6 +16,7 @@ import { grownOf, TOTAL } from "../orb/dna.ts";
 import { idOf, type CareerState, type Office } from "../home/link.ts";
 import { span } from "../orb/age.ts";
 import { Radar } from "../ui/Radar.tsx";
+import { NAMES } from "../floor/props.ts";
 import { Balanced, Tall } from "../ui/Balanced.tsx";
 import { useCramped } from "../ui/fill.ts";
 import { ReportCard } from "./School.tsx";
@@ -64,7 +65,8 @@ export function CareerRoom({ home, orb }: { home: Office | null; orb: Character 
   if (!c) return <p style={{ ...small, padding: "var(--s5)" }}>{said ?? "Loading…"}</p>;
   const sh = sheetOf(orb);
   const grown = grownOf(orb, sh.leans, c.radar, c.niches, sh.dna, c.xp);
-  const areas = Object.entries(c.radar);
+  // an area no one in the office works in yet stays off every radar until it has work in it (the desk's)
+  const areas = Object.entries(c.radar).filter(([name, a]) => name !== "desk" || a.xp > 0 || a.runs > 0);
   const top = Math.max(1, ...areas.map(([, a]) => a.xp));
   const toNext = c.next ? Math.min(1, c.next.evidence.xp.has / Math.max(1, c.next.evidence.xp.needs)) : 1;
   const rung = LADDER.indexOf(c.level as (typeof LADDER)[number]);
@@ -160,7 +162,7 @@ export function CareerRoom({ home, orb }: { home: Office | null; orb: Character 
           <span style={small}>{`${TOTAL} points for every orb, moved by what it is made of and by its work, one more each level.`}</span>
         </Section>
         <Section title={`What ${orb.name} does`}>
-          <Radar items={areas.map(([name, a]) => ({ name, value: Math.round((a.xp / top) * 5) }))} />
+          <Radar items={areas.map(([name, a]) => ({ name: name === "desk" ? NAMES.dept.toLowerCase() : name, value: Math.round((a.xp / top) * 5) }))} />
           {areas.every(([, a]) => a.xp === 0) ? <span style={small}>Nothing yet: finished work you approve fills this in, by the kind of work it was.</span> : c.niches.length > 0 && <span style={small}>{`Its work leans on ${c.niches.map((n) => n.word).join(" · ")}.`}</span>}
         </Section>
       </div>

@@ -14,6 +14,9 @@
 // The positions in their departments, each named, and All (owner, 10-07: "an all filter so if were looking for
 // all positions, we can see everything instead of clicking, and also give them groups"): show one department's
 // positions or all of them, and tick every one shown in one press (one request to the home, not one each).
+// The filters are dropdowns (owner, 10-10: "Fix the recruiting page filtering by adding maybe dropdowns instead?"):
+// the department whose positions are shown; then who applied, by department and by position. Two rows of buttons, eight
+// each on a desk and wrapping on a phone, were one choice each.
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Orb } from "../orb/Orb.tsx";
@@ -21,8 +24,9 @@ import { applicant, applicationNote, FAMILIES, SPECIALTIES, type Character, type
 import { idOf, type InterviewLine, type Office, type RecruiterState } from "../home/link.ts";
 import { span } from "../orb/age.ts";
 import { Balanced } from "../ui/Balanced.tsx";
+import { Pick } from "../ui/Pick.tsx";
 import { fitOf, ranked, type Fit } from "../orb/fit.ts";
-import { headOf, openDepartments, whyNot } from "../orb/company.ts";
+import { HEAD_OF, headOf, openDepartments, whyNot } from "../orb/company.ts";
 
 const head: CSSProperties = { font: "700 11px/16px var(--font)", letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)" };
 const small: CSSProperties = { font: "500 13px/18px var(--font)", color: "var(--text-3)", textWrap: "pretty", overflowWrap: "anywhere" };
@@ -35,14 +39,15 @@ type Kind = keyof typeof SPECIALTIES;
 type Starts = "Senior" | "Junior";
 const startsOf = (s: string): Starts => (s === "Senior" ? "Senior" : "Junior");
 
-export function RecruiterRoom({ home, office, family, pick, hired, profile }: { home: Office | null; office: Character[]; family: string | null; pick: (family: Family | null) => void; hired: () => void; profile: (c: Character, startsAs: Starts) => ReactNode }) {
+export function RecruiterRoom({ home, office, family, pick, hired, profile, hide = [] }: { home: Office | null; office: Character[]; family: string | null; pick: (family: Family | null) => void; hired: () => void; profile: (c: Character, startsAs: Starts) => ReactNode; /** departments not shown yet */ hide?: readonly Family[] }) {
   const [state, setState] = useState<RecruiterState | null>(null);
   const [said, setSaid] = useState<string | null>(null);
   const [open, setOpen] = useState<number | null>(null); // whose interview is open
   const [seeing, setSeeing] = useState<number | null>(null); // whose profile is open
   const [group, setGroup] = useState<Family | null>(null); // the positions shown: one department's, or all
+  const [only, setOnly] = useState<string | null>(null); // who applied: to one position, or to all of them
   const applying = useRef<HTMLElement>(null);
-  const dept = family && family in FAMILIES ? (family as Family) : null; // the department shown, or all
+  const dept = family && family in FAMILIES && !hide.includes(family as Family) ? (family as Family) : null; // the department shown, or all
   useEffect(() => {
     if (!home) return;
     const load = (): void => void home.recruiting().then(setState, (e: Error) => setSaid(e.message));
@@ -61,20 +66,22 @@ export function RecruiterRoom({ home, office, family, pick, hired, profile }: { 
   if (!state) return <p style={{ ...small, padding: "var(--s5)" }}>{said ?? "Loading…"}</p>;
   const taken = (name: string): boolean => [...office.map((c) => c.name), ...state.returning.map((r) => r.name)].some((n) => n.toLowerCase() === name.toLowerCase());
   const tick = (k: Kind): void => void home.setPosition(k, !state.positions.includes(k)).then((positions) => setState({ ...state, positions }), (e: Error) => setSaid(e.message));
-  const families = Object.keys(FAMILIES) as Family[];
+  const families = (Object.keys(FAMILIES) as Family[]).filter((f) => !hide.includes(f));
   const familyOf = (k: string): Family | undefined => SPECIALTIES[k as Kind]?.family;
-  const inDept = (k: string): boolean => !dept || familyOf(k) === dept;
+  // the position chosen counts only while it is one of the department's you are hiring for
+  const position = only && state.positions.includes(only) && (!dept || familyOf(only) === dept) ? only : null;
+  const inDept = (k: string): boolean => (!dept || familyOf(k) === dept) && (!position || k === position);
   const hiringIn = families.filter((f) => state.positions.some((k) => familyOf(k) === f)); // the departments you are hiring in
   // a department opens with its head (owner, 10-07: "for every section in recruiter they need to unlock, they need to
   // hire the cfo for example first"): its positions shown, greyed, until then
   const kinds = office.map((c) => c.specialty);
   const opened = openDepartments(kinds);
-  const shownKinds = (Object.keys(SPECIALTIES) as Kind[]).filter((k) => (!group || SPECIALTIES[k].family === group) && !whyNot(k, kinds));
+  const shownKinds = (Object.keys(SPECIALTIES) as Kind[]).filter((k) => (!group || SPECIALTIES[k].family === group) && !whyNot(k, kinds) && !hide.includes(SPECIALTIES[k].family));
   const allShown = shownKinds.every((k) => state.positions.includes(k));
   const tickShown = (): void => void home.setPositions(shownKinds, !allShown).then((positions) => setState({ ...state, positions }), (e: Error) => setSaid(e.message));
   // everyone applying for a position you are hiring for (in the department shown), ranked by how well each would suit the office
   const order = ranked(
-    state.applicants.filter((a) => state.positions.includes(a.specialty) && inDept(a.specialty)).map((a) => ({ a, c: applicant(a.seed, a.specialty as Kind, taken) })),
+    state.applicants.filter((a) => state.positions.includes(a.specialty) && inDept(a.specialty) && !hide.includes(familyOf(a.specialty)!)).map((a) => ({ a, c: applicant(a.seed, a.specialty as Kind, taken) })),
     (x) => fitOf(x.c, office, x.a.startsAs),
   );
   const placed = new Map(order.map((r) => [r.item.a.id, r]));
@@ -86,21 +93,18 @@ export function RecruiterRoom({ home, office, family, pick, hired, profile }: { 
       <h2 style={{ margin: 0, font: "800 22px/28px var(--font)", color: "var(--text-1)" }}>Recruiter</h2>
       <section aria-label="Positions" style={{ display: "grid", gap: 10, minWidth: 0 }}>
         <span style={head}>Positions you are hiring for</span>
-        {/* which department's positions are shown, or all of them (a balanced grid: never one alone on a row) */}
-        <Balanced min={96} gap={6}>
-          {[null, ...families].map((f) => (
-            <button key={f ?? "all"} type="button" aria-pressed={group === f} data-position-filter={f ?? "all"} onClick={() => setGroup(f)} style={{ ...(group === f ? strong : button), ...fits }}>
-              {f ? FAMILIES[f] : "All"}
-            </button>
-          ))}
-        </Balanced>
-        {/* every position shown, ticked (or unticked) in one press */}
-        <button type="button" aria-pressed={allShown} data-tick-shown onClick={tickShown} style={{ ...(allShown ? strong : button), ...fits, justifySelf: "start", maxWidth: "100%" }}>
-          {`${allShown ? "✓ " : ""}${group ? `All of ${FAMILIES[group]}` : "All positions"}`}
-        </button>
+        {/* which department's positions are shown, or all of them; then every position shown, ticked (or unticked) in one press */}
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "end", gap: 8, minWidth: 0 }}>
+          <Pick title="Department" label="Positions of" value={group ?? ""} onChange={(v) => setGroup((v || null) as Family | null)} data={{ "data-position-filter": group ?? "all" }}
+            options={[["", "All departments"], ...families.map((f) => [f, FAMILIES[f]] as const)]} />
+          <button type="button" aria-pressed={allShown} data-tick-shown onClick={tickShown} style={{ ...(allShown ? strong : button), ...fits, minHeight: 36, maxWidth: "100%" }}>
+            {`${allShown ? "✓ " : ""}${group ? `All of ${FAMILIES[group]}` : "All positions"}`}
+          </button>
+        </div>
         {(group ? [group] : families).map((f) => {
           const all = (Object.keys(SPECIALTIES) as Kind[]).filter((k) => SPECIALTIES[k].family === f);
-          const kinds = opened.includes(f) ? all : [];
+          // a department whose head works in it (the desk's) has its head's position open while the rest wait
+          const own = SPECIALTIES[HEAD_OF[f]].family === f;
           const ticked = all.filter((k) => state.positions.includes(k)).length;
           return (
             <div key={f} role="group" aria-label={FAMILIES[f]} data-position-group={f} style={{ display: "grid", gap: 6, minWidth: 0 }}>
@@ -108,12 +112,12 @@ export function RecruiterRoom({ home, office, family, pick, hired, profile }: { 
                 <b style={{ font: "800 14px/20px var(--font)", color: "var(--text-1)" }}>{FAMILIES[f]}</b>
                 <span style={{ ...small, whiteSpace: "nowrap" }}>{opened.includes(f) ? `${ticked} of ${all.length}` : "🔒 Locked"}</span>
               </span>
-              {!opened.includes(f) && <span data-locked={f} style={small}>{`Hire a ${headOf(f)} to open ${FAMILIES[f]}: their position is in the Executive.`}</span>}
+              {!opened.includes(f) && <span data-locked={f} style={small}>{own ? `Hire a ${headOf(f)} first: they open the rest of ${FAMILIES[f]}.` : `Hire a ${headOf(f)} to open ${FAMILIES[f]}: their position is in the Executive.`}</span>}
               {/* a balanced grid: never one position alone on a row */}
               <Balanced min={150} gap={6}>
-                {(kinds.length ? kinds : all).map((k) => {
+                {all.map((k) => {
                   const on = state.positions.includes(k);
-                  const shut = !kinds.length;
+                  const shut = !opened.includes(f) && Boolean(whyNot(k, kinds));
                   return (
                     <button key={k} type="button" aria-pressed={on} data-position={k} disabled={shut} onClick={() => tick(k)} style={{ ...(on ? strong : button), minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", ...(shut && { opacity: 0.45, cursor: "not-allowed" }) }}>
                       {on ? "✓ " : ""}{SPECIALTIES[k].title}
@@ -128,14 +132,13 @@ export function RecruiterRoom({ home, office, family, pick, hired, profile }: { 
       {(hiringIn.length > 0 || dept) && (
         <section ref={applying} data-applicants-of={dept ?? "all"} aria-label="Who applied" style={{ display: "grid", gap: 8, minWidth: 0, scrollMarginTop: "var(--s5)" }}>
           <span style={head}>{dept ? `Who applied: ${FAMILIES[dept]}` : "Who applied"}</span>
-          {/* a balanced grid: never one department alone on a row */}
-          <Balanced min={110} gap={6}>
-            {[null, ...hiringIn].map((f) => (
-              <button key={f ?? "all"} type="button" aria-pressed={dept === f} data-department={f ?? "all"} onClick={() => pick(f)} style={{ ...(dept === f ? strong : button), ...fits }}>
-                {f ? FAMILIES[f] : "All"}
-              </button>
-            ))}
-          </Balanced>
+          {/* by department (its own address, where the floor's Hiring tags go) and by position */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, minWidth: 0 }}>
+            <Pick title="Department" label="Who applied, by department" value={dept ?? ""} onChange={(v) => (setOnly(null), pick((v || null) as Family | null))} data={{ "data-department": dept ?? "all" }}
+              options={[["", "All departments"], ...[...hiringIn, ...(dept && !hiringIn.includes(dept) ? [dept] : [])].map((f) => [f, FAMILIES[f]] as const)]} />
+            <Pick title="Position" label="Who applied, by position" value={position ?? ""} onChange={(v) => setOnly(v || null)} data={{ "data-applicant-position": position ?? "all" }}
+              options={[["", "All positions"], ...state.positions.filter((k) => !dept || familyOf(k) === dept).map((k) => [k, SPECIALTIES[k as Kind]?.title ?? k] as const)]} />
+          </div>
           {dept && !hiringIn.includes(dept) && <span style={small}>{`You are not hiring in ${FAMILIES[dept]} now: tick a position above.`}</span>}
         </section>
       )}

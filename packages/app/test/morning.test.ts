@@ -35,6 +35,8 @@ after(async () => {
 });
 
 const HABIT = "dana|trigger:t1|read_file>remind {subject}";
+// ten bills a day: a bill kept is an easy job (10 XP, PLAN 3.13), so three such days are the 300 Mid needs (the cap is 150)
+const BILL_DAY = ["Rent", "Gym", "Water", "Phone", "Car", "Power", "Net", "Tax", "Card", "Loan"];
 
 test("the morning card: yesterday's split, its cost, what he learned and the night's habit, each taken back in a tap; a promotion given", { skip, timeout: 120_000 }, async (t) => {
   const clock = new FakeClock(new Date(2026, 8, 29, 9, 0).getTime()); // three days of work, then the morning
@@ -45,7 +47,7 @@ test("the morning card: yesterday's split, its cost, what he learned and the nig
   h.about.setName("Robin");
   h.inbox.addOrb("dana", "Dana", "data", { shape: "bean", eyes: "classic", hue: "teal" }, "Junior"); // hired a Junior, so her promotion is to Mid
   for (let day = 0; day < 3; day++) {
-    approved(h.events, "dana", ["Rent", "Gym", "Water", "Phone", "Car"].map((s) => `${s} ${day}`), 100 + day * 10);
+    approved(h.events, "dana", BILL_DAY.map((s) => `${s} ${day}`), 100 + day * 10);
     if (day < 2) clock.suspend(86_400_000);
   }
   // yesterday (1 Oct): two answered by a habit, a lesson kept, what the big brain cost
@@ -75,7 +77,7 @@ test("the morning card: yesterday's split, its cost, what he learned and the nig
   const dana = card.locator('[data-morning-orb="dana"]');
   const words = await dana.innerText();
   assert.match(words, /Dana[\s\S]*\$0\.0123 · 1,000 tokens/);
-  assert.match(words, /2 by habit · 0 by Dana's own brain · 5 by the big brain/, "yesterday's split, as the log has it");
+  assert.match(words, /2 by habit · 0 by Dana's own brain · 10 by the big brain/, "yesterday's split, as the log has it");
   assert.match(words, /Learned: “Invoices go out on the 1st\.”/);
   assert.match(words, /A new habit: A trigger \(t1\): read file, then remind/);
   assert.deepEqual(await desk.locator("[data-split]").evaluateAll((els) => els.map((e) => e.getAttribute("data-split"))), ["habits", "big"]);

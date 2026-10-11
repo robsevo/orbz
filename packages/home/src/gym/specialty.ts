@@ -10,7 +10,7 @@ import type { EventLog } from "../events.ts";
 import { trace } from "../agent/trace.ts";
 import { ledger } from "./xp.ts";
 
-export const AREAS = ["frontend", "backend", "data", "devops", "design", "research", "writing", "inbox", "scheduling", "finance", "bookings", "teaching"] as const;
+export const AREAS = ["frontend", "backend", "data", "devops", "design", "research", "writing", "inbox", "scheduling", "finance", "bookings", "teaching", "desk"] as const;
 export type Area = (typeof AREAS)[number];
 
 export const BY_EXTENSION: Record<string, Area> = {
@@ -22,7 +22,14 @@ export const BY_EXTENSION: Record<string, Area> = {
   md: "writing", txt: "writing", docx: "writing",
   ics: "scheduling", eml: "inbox", mbox: "inbox",
 };
-const BY_TOOL: Record<string, Area> = { web_search: "research", web_fetch: "research", move_reminder: "scheduling", list_reminders: "scheduling" };
+const BY_TOOL: Record<string, Area> = {
+  web_search: "research", web_fetch: "research", move_reminder: "scheduling", list_reminders: "scheduling",
+  // reverse engineering is finding out how something works, with evidence (PLAN 4.8)
+  inspect_binary: "research", inspect_app: "research", inspect_contract: "research", inspect_capture: "research",
+  // the desk (PLAN 5.25)
+  market_prices: "desk", market_chart: "desk", backtest_strategy: "desk", propose_strategy: "desk", run_strategy: "desk",
+  paper_trade: "desk", desk_book: "desk", market_note: "desk", wallet_holdings: "desk", propose_swap: "desk",
+};
 const DEVOPS_COMMAND = /\b(git|docker|kubectl|systemctl|terraform|ansible|nginx)\b/;
 const FINANCE_WORDS = /\b(stripe|invoices?|receipts?|ledger|payments?|payroll|tax|vat)\b/i;
 
@@ -95,7 +102,8 @@ export function radarOf(events: EventLog, orb: string): Radar {
   for (const x of ledger(events)) {
     if (x.orb !== orb) continue;
     const evidence = undoes.get(x.seq) ? sourceOfEntry.get(undoes.get(x.seq)!)! : x.source;
-    const area = areaOfRun.get(runOfEvidence.get(evidence) ?? -1);
+    // a trade's XP names its own area (the desk's, PLAN 5.25): no run is behind it
+    const area = (x.area && (AREAS as readonly string[]).includes(x.area) ? (x.area as Area) : undefined) ?? areaOfRun.get(runOfEvidence.get(evidence) ?? -1);
     if (area) radar[area].xp += x.amount;
   }
   for (const a of AREAS) {

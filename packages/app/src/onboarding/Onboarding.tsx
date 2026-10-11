@@ -19,15 +19,19 @@ const TYPE_MS = 26;
 /** Each personality talks in its own register (semitones over Ash's). */
 const REGISTER: Partial<Record<PersonalityName, number>> = { cheerful: 3, silly: 5, shy: 4, curious: 2, sassy: 2, grumpy: -4, wise: -3, dapper: -2, sleepy: -2, cozy: -1 };
 
+// The story's words as big as a game's (owner, 10-10: "Intro font bigger, cant see in video"): 18 px in a 720 px box read
+// as a caption in a film of the first open; now about 28 px on a desk, never under 19 on a phone, in a wider box.
 const box: CSSProperties = {
-  position: "relative", width: "min(720px, 100%)", minHeight: 112, padding: "22px 22px 18px", borderRadius: 22,
+  position: "relative", width: "min(900px, 100%)", minHeight: 128, padding: "26px 26px 22px", borderRadius: 24,
   background: "linear-gradient(180deg, var(--fill) 0, transparent 60px), var(--card)", boxShadow: "inset 0 0 0 .5px var(--hairline), 0 8px 24px var(--shadow)",
-  font: "500 18px/26px var(--font)", color: "var(--text-1)",
+  font: "600 clamp(19px, 1.1vw + 14.5px, 28px)/1.42 var(--font)", color: "var(--text-1)", textWrap: "pretty",
 };
 const button: CSSProperties = {
-  font: "700 15px/20px var(--font)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 12, padding: "10px 18px", cursor: "pointer",
-  boxShadow: "inset 0 0 0 .5px var(--hairline)", minHeight: 44,
+  font: "700 clamp(16px, 0.4vw + 13px, 19px)/22px var(--font)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 14, padding: "12px 20px", cursor: "pointer",
+  boxShadow: "inset 0 0 0 .5px var(--hairline)", minHeight: 48,
 };
+/** A field in the story: what you type as big as what is said. */
+const fieldStyle: CSSProperties = { flex: "1 1 160px", minWidth: 0, font: "700 clamp(20px, 0.8vw + 15.5px, 26px)/1.3 var(--font)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 14, padding: "10px 16px", outline: 0, boxShadow: "inset 0 0 0 1px var(--hairline)" };
 
 /** A tour's rooms, as its cards show them. */
 const ROOM: Record<"home" | "office" | "sessions" | "recruiter" | "org", string> = { home: "⌂", office: "◉", sessions: "▦", recruiter: "✚", org: "◇" };
@@ -138,8 +142,8 @@ export function Onboarding({ office, person, home, onDone, story: told = STORY, 
         <div data-tour={beat.room} style={{ display: "grid", justifyItems: "center", gap: "var(--s3)", animation: calm ? undefined : "orbs-stamp 520ms var(--m-spring) both" }}>
           <Orb character={who} size={112} state={typing ? "speaking" : "idle"} gesture={{ name: "nod", n: i }} />
           <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 22px", borderRadius: 20, background: "linear-gradient(165deg, var(--raised), var(--card))", boxShadow: "0 0 0 2px var(--accent), 0 12px 32px var(--shadow)" }}>
-            <span aria-hidden style={{ font: "800 30px/1 var(--font)", color: "var(--accent)" }}>{ROOM[beat.room]}</span>
-            <span style={{ font: "800 22px/28px var(--font)", color: "var(--text-1)" }}>{beat.title}</span>
+            <span aria-hidden style={{ font: "800 36px/1 var(--font)", color: "var(--accent)" }}>{ROOM[beat.room]}</span>
+            <span style={{ font: "800 clamp(22px, 1vw + 17px, 30px)/1.25 var(--font)", color: "var(--text-1)" }}>{beat.title}</span>
           </div>
         </div>
       );
@@ -226,7 +230,7 @@ export function Onboarding({ office, person, home, onDone, story: told = STORY, 
       <div style={{ alignSelf: "center", display: "grid", justifyItems: "center", minWidth: 0, maxWidth: "100%" }}>{stage()}</div>
       <div style={box} data-orb={who.hue}>
         {(beat.kind === "say" || beat.kind === "ask-name" || beat.kind === "ask-company" || beat.kind === "ask-budget" || beat.kind === "hire" || beat.kind === "brains" || beat.kind === "tour") && (
-          <span style={{ position: "absolute", top: -14, left: 18, font: "800 13px/18px var(--font)", letterSpacing: ".04em", color: "var(--text-1)", background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)", borderRadius: 999, padding: "4px 12px" }}>
+          <span style={{ position: "absolute", top: -16, left: 20, font: "800 clamp(13px, 0.3vw + 11px, 16px)/20px var(--font)", letterSpacing: ".04em", color: "var(--text-1)", background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)", borderRadius: 999, padding: "4px 14px" }}>
             {plate}
           </span>
         )}
@@ -248,13 +252,13 @@ export function Onboarding({ office, person, home, onDone, story: told = STORY, 
                 placeholder="Your name"
                 maxLength={40}
                 size={1}
-                style={{ flex: "1 1 160px", minWidth: 0, font: "700 20px/28px var(--font)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 12, padding: "8px 14px", outline: 0, boxShadow: "inset 0 0 0 1px var(--hairline)" }}
+                style={fieldStyle}
               />
               <button type="submit" data-sound="pick" style={{ ...button, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)" }}>
                 That's me
               </button>
             </div>
-            {why && <span style={{ font: "500 14px/20px var(--font)", color: "var(--alert)" }}>{why}</span>}
+            {why && <span style={{ font: "600 16px/22px var(--font)", color: "var(--alert)" }}>{why}</span>}
           </form>
         ) : beat.kind === "ask-company" ? (
           // your company's name (owner, 10-07: "the user first picks his own name, the company name")
@@ -275,13 +279,13 @@ export function Onboarding({ office, person, home, onDone, story: told = STORY, 
                 placeholder="Company name"
                 maxLength={60}
                 size={1}
-                style={{ flex: "1 1 160px", minWidth: 0, font: "700 20px/28px var(--font)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 12, padding: "8px 14px", outline: 0, boxShadow: "inset 0 0 0 1px var(--hairline)" }}
+                style={fieldStyle}
               />
               <button type="submit" data-sound="pick" style={{ ...button, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)" }}>
                 That's it
               </button>
             </div>
-            {why && <span style={{ font: "500 14px/20px var(--font)", color: "var(--alert)" }}>{why}</span>}
+            {why && <span style={{ font: "600 16px/22px var(--font)", color: "var(--alert)" }}>{why}</span>}
           </form>
         ) : beat.kind === "ask-budget" ? (
           // what the company can spend (PLAN 5.20; owner, 10-08: "the user may not have any money to start with. so ask
@@ -314,7 +318,7 @@ export function Onboarding({ office, person, home, onDone, story: told = STORY, 
         ) : (
           <>
             <span aria-label={full || "Press to continue"}>{beat.kind === "say" || beat.kind === "tour" ? shownText : "It's yours."}</span>
-            {!typing && <span aria-hidden style={{ position: "absolute", right: 20, bottom: 12, font: "800 14px/14px var(--font)", color: "var(--accent)", animation: calm ? undefined : "orbs-nudge 900ms ease-in-out infinite" }}>▼</span>}
+            {!typing && <span aria-hidden style={{ position: "absolute", right: 22, bottom: 12, font: "800 18px/18px var(--font)", color: "var(--accent)", animation: calm ? undefined : "orbs-nudge 900ms ease-in-out infinite" }}>▼</span>}
           </>
         )}
       </div>
@@ -323,7 +327,7 @@ export function Onboarding({ office, person, home, onDone, story: told = STORY, 
 }
 
 const field: CSSProperties = { flex: "1 1 160px", minWidth: 0, font: "600 16px/22px var(--font)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 12, padding: "8px 12px", outline: 0, boxShadow: "inset 0 0 0 1px var(--hairline)" };
-const note: CSSProperties = { font: "400 13px/18px var(--font)", color: "var(--text-3)", textWrap: "pretty" };
+const note: CSSProperties = { font: "500 15px/21px var(--font)", color: "var(--text-3)", textWrap: "pretty" };
 const done: CSSProperties = { font: "700 14px/20px var(--font)", color: "var(--accent)" };
 
 /** The brains (owner, 10-02): ChatGPT's sign-in, a Gemini key, a local coder if wanted, each kept by

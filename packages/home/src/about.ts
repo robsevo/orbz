@@ -44,6 +44,24 @@ export class About {
     return { name: row?.value ?? null, since: since ? Number(since.value) : null, company: company?.value ?? null, budget: budget ? (JSON.parse(budget.value) as Budget) : null };
   }
 
+  /** The little things you found in the office and kept (each a short id the app gives), oldest first. */
+  keepsakes(): string[] {
+    const r = this.#db.prepare("SELECT value FROM about WHERE key = 'keepsakes'").get() as { value: string } | undefined;
+    return r ? (JSON.parse(r.value) as string[]) : [];
+  }
+
+  /** Keeps one (once): a short id of lowercase letters and digits, at most sixteen kept. */
+  keep(id: string): string[] {
+    if (!/^[a-z0-9]{1,12}$/.test(id)) throw new Error("a keepsake is 1 to 12 lowercase letters or digits");
+    const now = this.keepsakes();
+    if (now.includes(id)) return now;
+    if (now.length >= 16) throw new Error("sixteen keepsakes is the most");
+    const next = [...now, id];
+    this.#db.prepare("INSERT INTO about (key, value, updated_at) VALUES ('keepsakes', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").run(JSON.stringify(next), this.#clock.now());
+    this.#events.append("about.kept", { id });
+    return next;
+  }
+
   /** What the office calls you: one line, 1-24 letters, said back exactly as kept. */
   setName(raw: string): AboutYou {
     const name = raw.replace(/\s+/g, " ").trim();

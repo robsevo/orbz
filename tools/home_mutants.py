@@ -392,6 +392,93 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("a restart pays for the same evidence again", "src/gym/xp.ts", [
         ('    const done = Math.max(0, ...ledger(events).map((e) => e.source), ...events.ofType("xp.considered").map((e) => Number(e.data.source)));', "    const done = 0;"),
     ], ["xp.test.ts"]),
+    # reverse engineering, REA's logic made ours (PLAN 4.8; owner, 10-10)
+    ("an ELF's imports are taken for its exports", "src/reverse/binary.ts", [
+        ("  const exports = [...new Set(dyn.filter((s) => s.shndx !== 0 && s.bind !== 0", "  const exports = [...new Set(dyn.filter((s) => s.shndx === 0 && s.bind !== 0"),
+    ], ["reverse.test.ts"]),
+    ("a read past the file's end is not checked", "src/reverse/bytes.ts", [
+        ("    if (!Number.isSafeInteger(at) || !Number.isSafeInteger(n) || at < 0 || n < 0 || at + n > this.buf.length)", "    if (!Number.isSafeInteger(at) || !Number.isSafeInteger(n) || at < 0 || n < 0)"),
+    ], ["reverse.test.ts"]),
+    ("a regular expression's quotes open a string", "src/reverse/js.ts", [
+        ("    if (c === \"/\" && regexAllowed()) {", "    if (c === \"/\" && false && regexAllowed()) {"),
+    ], ["reverse.test.ts"]),
+    ("a contract's metadata is read as instructions", "src/reverse/evm.ts", [
+        ("  const list = [...ops(meta ? code.subarray(0, code.length - meta.length - 2) : code)];", "  const list = [...ops(code)];"),
+    ], ["reverse.test.ts"]),
+    ("a capture's credential shows its value", "src/reverse/har.ts", [
+        ("CREDENTIAL_HEADERS.test(hd.name)) credentials.add(`${hd.name.toLowerCase()} → ${u.host}`);", "CREDENTIAL_HEADERS.test(hd.name)) credentials.add(`${hd.name.toLowerCase()}: ${String(hd.value)} → ${u.host}`);"),
+    ], ["reverse.test.ts"]),
+    ("the reverse tools read outside the workspace", "src/reverse/tools.ts", [
+        ("      precheck: (a, ctx) => (inWorkspace(ctx.workspace, s(a.path)) ? null : outside(s(a.path))),\n      run: (a, ctx) => run({ kind: \"binary\"", "      precheck: () => null,\n      run: (a, ctx) => run({ kind: \"binary\""),
+    ], ["reverse.test.ts"]),
+    ("a preload's path is cut at its call's comma", "src/reverse/js.ts", [
+        ("              } else if (is(j, \",\") && depth === 0) break;", "              } else if (is(j, \",\")) break;"),
+    ], ["reverse.test.ts"]),
+    ("an asar header that leaves its archive is read anyway", "src/reverse/app.ts", [
+        ("  if (headerSize < 8 || headerSize > buf.length - 8 || payload !== headerSize - 4 || jsonSize > payload - 4) throw new Unreadable(\"the ASAR header leaves its archive or its sizes disagree\");\n", ""),
+    ], ["reverse.test.ts"]),
+    # the desk (PLAN 5.22-5.27; owner, 10-10): honest backtests, paper XP graded by the market, and a real trade
+    # only ever built after your yes, at the price you approved, inside the desk's limits, its hash taken once
+    ("a swap is built before your yes", "src/desk/swaps.ts", [
+        ('    if (s.state !== "approved" && s.state !== "built") throw new SwapError(s.state === "asked" ? "it waits for your yes first" : `swap ${id} is ${s.state}`);', '    if (s.state === "denied") throw new SwapError(`swap ${id} is ${s.state}`);'),
+    ], ["desk.test.ts"]),
+    ("an orb's swap is approved as it asks", "src/desk/swaps.ts", [
+        ('    const state: SwapState = o.by === null ? "approved" : "asked";', '    const state: SwapState = "approved";'),
+    ], ["desk.test.ts"]),
+    ("a swap's hash is taken twice", "src/desk/swaps.ts", [
+        ('    if (s.state !== "built") throw new SwapError(s.tx ? `swap ${id} was already sent (${s.tx})` : `swap ${id} is ${s.state}: build it for your wallet first`);\n', ""),
+    ], ["desk.test.ts"]),
+    ("the desk's limit a trade is not kept", "src/desk/swaps.ts", [
+        ("    if (usd > s.perTradeUsd) throw", "    if (usd > s.perTradeUsd * 100) throw"),
+    ], ["desk.test.ts"]),
+    ("a price worse than you approved is built anyway", "src/desk/swaps.ts", [
+        ("    if (now * 10_000n < before * BigInt(10_000 - slip)) {", "    if (now * 10_000n < before * BigInt(10_000 - slip * 4)) {"),
+    ], ["desk.test.ts"]),
+    ("a losing paper trade earns XP", "src/gym/xp.ts", [
+        ("        if (!e.orb || e.data.paper !== true || !(Number(e.data.pnl) > 0)) return;", "        if (!e.orb || e.data.paper !== true) return;"),
+    ], ["desk.test.ts"]),
+    ("the backtest fills at the signal bar's close", "src/desk/strategy.ts", [
+        ("    const px = bar.o * (1 + slip);", "    const px = c[Math.max(0, i - 1)]!.c * (1 + slip);"),
+    ], ["strategy.test.ts"]),
+    ("the target is checked before the stop", "src/desk/strategy.ts", [
+        ('    if (bar.l <= stop) sell(Math.min(bar.o, stop), "stop");\n    else if (bar.l <= trail) sell(Math.min(bar.o, trail), "trailing");\n    else if (bar.h >= target) sell(Math.max(bar.o, target), "target");',
+         '    if (bar.h >= target) sell(Math.max(bar.o, target), "target");\n    else if (bar.l <= stop) sell(Math.min(bar.o, stop), "stop");\n    else if (bar.l <= trail) sell(Math.min(bar.o, trail), "trailing");'),
+    ], ["strategy.test.ts"]),
+    ("an address with a typo is kept", "src/desk/chains.ts", [
+        ("    if (mixed && checksummed(a) !== a) return", "    if (false && mixed && checksummed(a) !== a) return"),
+    ], ["desk.test.ts"]),
+    ("a failing feed is asked again while it rests", "src/desk/market.ts", [
+        ("    if (this.#restUntil > this.#now()) throw", "    if (false) throw"),
+    ], ["desk.test.ts"]),
+    ("a stale price is given as a price", "src/desk/market.ts", [
+        ("    return t && !t.stale ? t.price : null;", "    return t ? t.price : null;"),
+    ], ["desk.test.ts"]),
+    ("the market's bars kept in the feed's order", "src/desk/market.ts", [
+        ("      .sort((a, b) => a.t - b.t);", "      ;"),
+    ], ["desk.test.ts"]),
+    ("a keepsake of any name is kept", "src/about.ts", [
+        ('    if (!/^[a-z0-9]{1,12}$/.test(id)) throw new Error("a keepsake is 1 to 12 lowercase letters or digits");\n', ""),
+    ], ["desk.test.ts"]),
+    # XP by how hard the work was in its own area (PLAN 3.13; owner, 10-10: "different weights based on difficulty in
+    # their domain")
+    ("every job is standard, however hard", "src/gym/difficulty.ts", [
+        ('export const tierOf = (unit: number, at: Scale["at"]): Tier => (unit >= at[2] ? "expert" : unit >= at[1] ? "hard" : unit >= at[0] ? "standard" : "easy");', 'export const tierOf = (_unit: number, _at: Scale["at"]): Tier => "standard";'),
+    ], ["xp.test.ts"]),
+    ("a job's XP is a tool call's again", "src/gym/xp.ts", [
+        ("          this.#give(orb, XP.job[d.tier],", "          this.#give(orb, 10 * Math.min(5, Math.max(1, d.measures.calls)),"),
+    ], ["xp.test.ts"]),
+    ("checks run never count", "src/gym/difficulty.ts", [
+        ("          if (CHECK.test(a.command)) m.checks++;\n", ""),
+    ], ["xp.test.ts"]),
+    ("a failed step put right is not counted", "src/gym/difficulty.ts", [
+        ("      else if (failed.delete(name)) m.recovered++;", "      else failed.delete(name);"),
+    ], ["xp.test.ts"]),
+    ("every area is measured as code", "src/gym/difficulty.ts", [
+        ('  const scale = SCALES[area ?? "other"];', "  const scale = SCALES.frontend;"),
+    ], ["xp.test.ts"]),
+    ("the tiers count every XP, a plan row's too", "src/stats.ts", [
+        ("    const tier = xpByTier.find((x) => x.tier === e.data.tier);", '    const tier = xpByTier.find((x) => x.tier === (e.data.tier ?? "standard"));'),
+    ], ["stats.test.ts"]),
     ("the radar counts XP taken back as earned", "src/gym/specialty.ts", [
         ("    if (area) radar[area].xp += x.amount;", "    if (area) radar[area].xp += Math.abs(x.amount);"),
     ], ["specialty.test.ts"]),
@@ -1937,6 +2024,13 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ("    stopMusic();\n    onDone(", "    onDone("),
         ("  useEffect(() => () => stopMusic(), []); // the story over: it fades out\n", ""),
     ], ["onboarding.test.ts"]),
+    # the story's words big enough for a film of it (owner, 10-10: "Intro font bigger, cant see in video")
+    ("the story's words a caption's again", "src/onboarding/Onboarding.tsx", [
+        ('  font: "600 clamp(19px, 1.1vw + 14.5px, 28px)/1.42 var(--font)", color: "var(--text-1)", textWrap: "pretty",', '  font: "500 18px/26px var(--font)", color: "var(--text-1)", textWrap: "pretty",'),
+    ], ["onboarding.test.ts"]),
+    ("the story's name field small again", "src/onboarding/Onboarding.tsx", [
+        ('const fieldStyle: CSSProperties = { flex: "1 1 160px", minWidth: 0, font: "700 clamp(20px, 0.8vw + 15.5px, 26px)/1.3 var(--font)",', 'const fieldStyle: CSSProperties = { flex: "1 1 160px", minWidth: 0, font: "700 18px/1.3 var(--font)",'),
+    ], ["onboarding.test.ts"]),
     # themes besides light and dark (owner, 10-02)
     ("a chosen theme is overridden by the system's", "src/design/tokens.ts", [
         ("    `@media (prefers-color-scheme: light) { :root:not([data-theme]) { color-scheme: light; ${themeVars(\"light\")} } }`,\n", ""),
@@ -2075,6 +2169,12 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("a new call never shows on the charts", "src/rooms/Stats.tsx", [
         ("wait = window.setTimeout(() => ((wait = 0), load()), 4_000);", "wait = window.setTimeout(() => (wait = 0), 4_000);"),
     ], ["stats-view.test.ts"]),
+    ("the XP page shows no tiers", "src/rooms/Stats.tsx", [
+        ("      {x.byTier && x.byTier.some((t) => t.jobs > 0) && (", "      {false && x.byTier && ("),
+    ], ["stats-view.test.ts"]),
+    ("a tier's words say other XP than the home gives", "src/rooms/Stats.tsx", [
+        ('  hard: { name: "Hard", each: "40 XP each", hue: "amber" },', '  hard: { name: "Hard", each: "45 XP each", hue: "amber" },'),
+    ], ["stats-view.test.ts"]),
     # the bottom rooms and the hallways (owner, 10-08: "Gym, Classroom, Library and Interview room, plus the hallway fix")
     ("the night's gym sits them at their desks again", "src/floor/plan.ts", [
         ('  if (mood === "gym") return "gym";', ""),
@@ -2164,6 +2264,16 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ], ["feel.test.ts"]),
     ("a Hiring tag sits under the orbs", "src/floor/Floor.tsx", [
         ('translate: "-50% 0", zIndex: H + 10, ...tag, cursor: "pointer",', 'translate: "-50% 0", zIndex: h.z, ...tag, cursor: "pointer",'),
+    ], ["recruiter-view.test.ts"]),
+    # the Recruiter's filters as dropdowns (owner, 10-10: "Fix the recruiting page filtering by adding maybe dropdowns instead?")
+    ("the position dropdown filters nothing", "src/rooms/Recruiter.tsx", [
+        ("  const inDept = (k: string): boolean => (!dept || familyOf(k) === dept) && (!position || k === position);", "  const inDept = (k: string): boolean => !dept || familyOf(k) === dept;"),
+    ], ["recruiter-view.test.ts"]),
+    ("who applied offers no department", "src/rooms/Recruiter.tsx", [
+        ('              options={[["", "All departments"], ...[...hiringIn, ...(dept && !hiringIn.includes(dept) ? [dept] : [])].map((f) => [f, FAMILIES[f]] as const)]} />', '              options={[["", "All departments"]]} />'),
+    ], ["recruiter-view.test.ts"]),
+    ("the positions' department dropdown shows them all whatever is picked", "src/rooms/Recruiter.tsx", [
+        ('onChange={(v) => setGroup((v || null) as Family | null)}', "onChange={() => setGroup(null)}"),
     ], ["recruiter-view.test.ts"]),
     # a calmer floor and its moments (PLAN 5.19; owner, 10-07: "slow down the amount of things they do ... lively pace
     # please, but goofy and funny as well")
@@ -3112,6 +3222,51 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ('a pasted strand keeps the colours chosen before it', 'src/orbs.tsx', [
         ('edit({ tint: null, tint2: null, hatTint: null, glassesTint: null, ...sane(read.orb, ASH) });', 'edit(sane(read.orb, ASH));'),
     ], ['creator.test.ts']),
+    # the floor's small things (owner, 10-10): each only in its turn, and only the whole words
+    ("a thing on the floor answers out of its turn", "src/floor/props.ts", [
+        ("  return TURNS.find((t) => !kept.includes(keptBy(t))) ?? null;", "  return [...TURNS].reverse().find((t) => !kept.includes(keptBy(t))) ?? null;"),
+    ], ["floor-things.test.ts"]),
+    ("any words will do", "src/floor/props.ts", [
+        ('  return [...d].map((b) => b.toString(16).padStart(2, "0")).join("") === ACCEPTED;', "  return typed.trim().length > 0;"),
+    ], ["floor-things.test.ts"]),
+    # only as written (owner, 10-11): the old forgiving check (its digest only) takes them no more
+    ("the words taken loosely", "src/floor/props.ts", [
+        ('  return [...d].map((b) => b.toString(16).padStart(2, "0")).join("") === ACCEPTED;',
+         '  const loose = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(typed.replace(/\\s+/g, "").toLowerCase())));\n'
+         '  return [...d].map((b) => b.toString(16).padStart(2, "0")).join("") === ACCEPTED || [...loose].map((b) => b.toString(16).padStart(2, "0")).join("") === "02218d8f87efd7b2adf9fc4ad624f7cb941027111e371ec37c68a30517ba82f8";'),
+    ], ["floor-things.test.ts"]),
+    ("a thing shakes out of its turn", "src/floor/Props.tsx", [
+        ('    if (!t || t.on !== thing || t.k !== "press" || dropped) return; // not its turn: nothing moves, nothing shakes', "    if (!t || dropped) return;"),
+    ], ["floor-things.test.ts"]),
+    ("the bin moves out of its turn", "src/floor/Props.tsx", [
+        ("          if (!binTurn) return;\n", ""),
+    ], ["floor-things.test.ts"]),
+    ("the game takes its words out of its turn", "src/floor/Props.tsx", [
+        ('      {screen && <GameScreen code={turn?.k === "code"}', "      {screen && <GameScreen code={true}"),
+    ], ["floor-things.test.ts"]),
+    ("a department shows before its time", "src/orbs.tsx", [
+        ('  const hide: Family[] = open ? [] : ["desk"];', "  const hide: Family[] = [];"),
+    ], ["floor-things.test.ts"]),
+    # the desk's page (PLAN 5.22-5.27): the wallet signs only what you said yes to; the chart's times read forward
+    ("Deny approves an orb's trade", "src/desk/Trade.tsx", [
+        ("onClick={() => void act(async () => (await home.answerSwap(s.id, false), reload()))}", "onClick={() => void act(async () => (await home.answerSwap(s.id, true), reload()))}"),
+    ], ["desk-view.test.ts"]),
+    ("a swap the wallet refused is left built", "src/desk/Trade.tsx", [
+        ("      await home.unsentSwap(s.id, (e as Error).message).catch(() => undefined);\n", ""),
+    ], ["desk-view.test.ts"]),
+    ("a phone's chart draws every bar", "src/ui/Candles.tsx", [
+        ("  const candles = all.slice(-Math.max(30, Math.floor(plotW / 5)));", "  const candles = all;"),
+    ], ["desk-view.test.ts"]),
+    ("the chart's times are counted in UTC", "src/ui/candles.ts", [
+        ("  const local = (t: number): number => t - new Date(t).getTimezoneOffset() * MIN;", "  const local = (t: number): number => t;"),
+    ], ["candles.test.ts"]),
+    # a dropdown's own list readable, and who did what in Lately at a glance (owner, 10-11)
+    ("a dropdown's list drawn on white", "src/design/tokens.ts", [
+        ("    `option, optgroup { background-color: var(--raised); color: var(--text-1); }`,\n", ""),
+    ], ["recruiter-view.test.ts"]),
+    ("the names in Lately not underlined", "src/rooms/Home.tsx", [
+        ('fontWeight: 800, textDecoration: "underline", textDecorationThickness: 1.5, textUnderlineOffset: 3 }}>{w.name}</b>', "fontWeight: 800 }}>{w.name}</b>"),
+    ], ["home-view.test.ts"]),
 ]
 
 # the `orbs` terminal (PLAN 1.9): paths are inside packages/terminal

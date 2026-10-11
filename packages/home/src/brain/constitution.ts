@@ -20,6 +20,9 @@
 export const SPECIALTY_FAMILIES = {
   general: "build", frontend: "build", backend: "build", fullstack: "build", mobile: "build", devops: "build", testing: "build", qa: "build",
   security: "build", data: "build", ai: "build", games: "build", automation: "build",
+  reverse: "build", // owner, 10-10: reverse engineering, REA's logic made ours (PLAN 4.8)
+  // owner, 10-10: the desk (PLAN 5.25), its own department, opened by its head
+  deskhead: "desk", dealer: "desk", quant: "desk", onchain: "desk", risk: "desk",
   planning: "think", lead: "think", product: "think", research: "think", factcheck: "think", analyst: "think", architect: "think",
   design: "make", writing: "make", editing: "make", marketing: "make", social: "make", video: "make",
   office: "business", sales: "business", support: "business", people: "business", operations: "business", paperwork: "business",

@@ -9,7 +9,7 @@
 // every press squishes and clicks (ui/feel.ts, ui/sound.ts), and he reacts to each thing you
 // choose for him: a hat makes him hop, glasses make him nod, a colour makes him wiggle, a shape
 // makes him wobble.
-import { StrictMode, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { StrictMode, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { HUES, MATERIALS, pickerTracks, stylesheet, type HueName } from "./design/tokens.ts";
 import { hex } from "./design/color.ts";
@@ -37,7 +37,7 @@ import { Chat } from "./rooms/Chat.tsx";
 import { type CareerState, connect, type Friend, idOf, keepOffice, keptOffice, type Office, passkeysHere, signInWithPasskey, type Standing, type Tab as SessionTab } from "./home/link.ts";
 import { DEMO_CREW } from "./orb/demo.ts";
 import { NEWBORN, TOUR } from "./onboarding/story.ts";
-import { headOf, nextFounding, openDepartments, whyNot } from "./orb/company.ts";
+import { HEAD_OF, headOf, nextFounding, openDepartments, whyNot } from "./orb/company.ts";
 import type { Gesture, OrbState } from "./orb/life.ts";
 import { useMood, useMoods, WORN } from "./orb/useMood.ts";
 import { preview, stopPreview } from "./orb/preview.ts";
@@ -51,6 +51,9 @@ import { CareerRoom } from "./rooms/Career.tsx";
 import { HomeRoom } from "./rooms/Home.tsx";
 import { RecruiterRoom } from "./rooms/Recruiter.tsx";
 import { Floor } from "./floor/Floor.tsx";
+import { Carried, PaperIcon, PaperView, StickIcon } from "./floor/Props.tsx";
+import { CARRIED, NAMES, piecesOf } from "./floor/props.ts";
+import { DeskRoom } from "./desk/Room.tsx";
 import { applyTheme, savedTheme } from "./ui/theme.ts";
 
 applyTheme(savedTheme(), false); // before the first paint: the theme you chose, never a flash of another
@@ -83,6 +86,24 @@ const setToured = (): void => {
     globalThis.localStorage?.setItem(TOURED, "1");
   } catch {
     // a private window: it plays again next time
+  }
+};
+
+// what the floor's small things gave, in a preview (a home keeps its own, about.ts)
+const KEPT = "orbs.kept";
+const keptHere = (): string[] => {
+  try {
+    const v = JSON.parse(globalThis.localStorage?.getItem(KEPT) ?? "[]") as unknown;
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+};
+const keepHere = (kept: string[]): void => {
+  try {
+    globalThis.localStorage?.setItem(KEPT, JSON.stringify(kept));
+  } catch {
+    // a private window: kept until the page closes
   }
 };
 
@@ -760,7 +781,7 @@ function Peek({ c }: { c: Character }) {
   );
 }
 
-function Creator({ me, edit, replies, setReplies, kinds = [], peek = false }: { me: Character; edit: (p: Partial<Character>) => void; replies: Replies; setReplies: (r: Replies) => void; /** the office's orbs' specialties: who may join next (orb/company.ts) */ kinds?: string[]; /** the orb and its DNA, small, at its top (Peek) */ peek?: boolean }) {
+function Creator({ me, edit, replies, setReplies, kinds = [], peek = false, hide = [] }: { me: Character; edit: (p: Partial<Character>) => void; replies: Replies; setReplies: (r: Replies) => void; /** the office's orbs' specialties: who may join next (orb/company.ts) */ kinds?: string[]; /** the orb and its DNA, small, at its top (Peek) */ peek?: boolean; /** departments not shown yet */ hide?: readonly Family[] }) {
   // the CEO, then your assistant, before anyone; then each department with its head (owner, 10-07)
   const founding = nextFounding(kinds);
   const open = openDepartments(kinds);
@@ -773,7 +794,7 @@ function Creator({ me, edit, replies, setReplies, kinds = [], peek = false }: { 
   const hues = HUES.map((h) => h.name);
   const dice: Record<Tab, () => void> = {
     Personality: () => edit(withPersonality(me, pick(Object.keys(PERSONALITIES) as PersonalityName[]))),
-    Specialty: () => edit({ specialty: founding ?? pick((Object.keys(SPECIALTIES) as SpecialtyName[]).filter((k) => !whyNot(k, kinds))) }),
+    Specialty: () => edit({ specialty: founding ?? pick((Object.keys(SPECIALTIES) as SpecialtyName[]).filter((k) => !whyNot(k, kinds) && !hide.includes(SPECIALTIES[k].family))) }),
     Shape: () => edit({ shape: pick(Object.keys(SHAPES) as ShapeName[]) }),
     Eyes: () => edit({ eyes: pick(Object.keys(EYES) as EyesName[]) }),
     Hat: () => edit({ hat: pick(HAT_CHOICES), hatHue: Math.random() < 0.35 ? partner() : null, hatTint: null }),
@@ -816,21 +837,22 @@ function Creator({ me, edit, replies, setReplies, kinds = [], peek = false }: { 
       )}
       {tab === "Specialty" && !founding && (
         <div style={{ display: "grid", gap: "var(--s4)" }}>
-          {(Object.keys(FAMILIES) as Family[]).map((fam) => (
-            <div key={fam} data-specialty-group={fam} style={{ display: "grid", gap: 8 }}>
-              <Head>{FAMILIES[fam]}</Head>
-              {open.includes(fam) ? (
-                <Cards
-                  value={me.specialty}
-                  entries={(Object.keys(SPECIALTIES) as SpecialtyName[]).filter((k) => SPECIALTIES[k].family === fam).map((k) => [k, SPECIALTIES[k].title, cap(SPECIALTIES[k].focus)])}
-                  onPick={(specialty) => edit({ specialty })}
-                />
-              ) : (
-                // a department opens with its head (owner, 10-07: "for every section in recruiter they need to unlock")
-                <span data-locked={fam} style={{ font: "500 14px/20px var(--font)", color: "var(--text-3)" }}>{`🔒 Hire a ${headOf(fam)} to open ${FAMILIES[fam]}: the ${headOf(fam)} is in the Executive above.`}</span>
-              )}
-            </div>
-          ))}
+          {(Object.keys(FAMILIES) as Family[]).filter((f) => !hide.includes(f)).map((fam) => {
+            // a department opens with its head (owner, 10-07: "for every section in recruiter they need to unlock"); a head
+            // who works in its own department (the desk's) is offered there while the rest wait for it
+            const may = (Object.keys(SPECIALTIES) as SpecialtyName[]).filter((k) => SPECIALTIES[k].family === fam && (open.includes(fam) || !whyNot(k, kinds)));
+            return (
+              <div key={fam} data-specialty-group={fam} style={{ display: "grid", gap: 8 }}>
+                <Head>{FAMILIES[fam]}</Head>
+                {may.length > 0 && <Cards value={me.specialty} entries={may.map((k) => [k, SPECIALTIES[k].title, cap(SPECIALTIES[k].focus)])} onPick={(specialty) => edit({ specialty })} />}
+                {!open.includes(fam) && (
+                  <span data-locked={fam} style={{ font: "500 14px/20px var(--font)", color: "var(--text-3)" }}>
+                    {SPECIALTIES[HEAD_OF[fam]].family === fam ? `🔒 The rest of ${FAMILIES[fam]} opens with a ${headOf(fam)}.` : `🔒 Hire a ${headOf(fam)} to open ${FAMILIES[fam]}: the ${headOf(fam)} is in the Executive above.`}
+                  </span>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
       {tab === "Shape" && <Thumbs title="Shapes" c={me} options={Object.keys(SHAPES) as ShapeName[]} field="shape" label={cap} onPick={(shape) => edit({ shape })} />}
@@ -1035,6 +1057,17 @@ function FlaskIcon() {
   );
 }
 
+/** The desk in the menu: two candles, drawn as the lab's flask is (one lightly filled, one solid). */
+function CandlesIcon() {
+  return (
+    <svg data-icon="candles" width="16" height="16" viewBox="0 0 16 16" aria-hidden style={{ display: "block", overflow: "visible" }}>
+      <path d="M4.6 1.6 V4.6 M4.6 11.4 V14.4 M11.4 2.4 V4 M11.4 9.6 V12.6" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <rect x="2.6" y="4.6" width="4" height="6.8" rx="1" fill="currentColor" fillOpacity=".38" stroke="currentColor" strokeWidth="1.5" />
+      <rect x="9.4" y="4" width="4" height="5.6" rx="1" fill="currentColor" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
 /** Notifications in the menu: a bell (owner, 10-10: "Change notification Icon to a bell in menu"), drawn as the lab's
  * flask is: its body lightly filled, its outline in the menu's colour, the clapper under it. */
 function BellIcon() {
@@ -1145,9 +1178,9 @@ function App() {
     if (home) home.setName(p).catch((e: Error) => setSaid(e.message));
     else savePerson(p);
   };
-  const [room, setRoom] = useState<"home" | "office" | "settings" | "chat" | "sessions" | "notices" | "calendar" | "lab" | "org" | "career" | "recruiter" | "report" | "stats">(() => {
+  const [room, setRoom] = useState<"home" | "office" | "settings" | "chat" | "sessions" | "notices" | "calendar" | "lab" | "org" | "career" | "recruiter" | "report" | "stats" | "desk">(() => {
     const r = parseRoute(location.hash).room;
-    return r === "home" || r === "settings" || r === "chat" || r === "sessions" || r === "notices" || r === "calendar" || r === "lab" || r === "org" || r === "career" || r === "recruiter" || r === "report" || r === "stats" ? r : "office";
+    return r === "home" || r === "settings" || r === "chat" || r === "sessions" || r === "notices" || r === "calendar" || r === "lab" || r === "org" || r === "career" || r === "recruiter" || r === "report" || r === "stats" || r === "desk" ? r : "office";
   });
   // which chart the stats show (PLAN 2.19): the brains' tokens or the XP
   const [statsTab, setStatsTab] = useState<"brain" | "xp">(() => {
@@ -1185,6 +1218,27 @@ function App() {
   useEffect(() => {
     if (!home) keepOffice(office);
   }, [office, home]);
+  // what the floor's small things gave (floor/props.ts): the home keeps it, so every device has it; a preview, here
+  const [kept, setKept] = useState<string[]>(keptHere);
+  const [holding, setHolding] = useState(false); // something carried, in hand
+  const [reading, setReading] = useState(false); // something kept, open to read
+  useEffect(() => {
+    if (!home) return;
+    const load = (): void => void home.keepsakes().then(setKept, () => {});
+    load();
+    return home.watch({ event: (e) => void (e.type === "about.kept" && load()) });
+  }, [home]);
+  const keepIt = async (id: string): Promise<void> => {
+    if (home) return void setKept(await home.keep(id));
+    setKept((k) => {
+      const next = k.includes(id) ? k : [...k, id];
+      keepHere(next);
+      return next;
+    });
+  };
+  const open = kept.includes(CARRIED.open);
+  const pieces = piecesOf(kept).filter(Boolean).length;
+  const hide: Family[] = open ? [] : ["desk"];
 
   const making = view.kind === "new";
   // who may join next (orb/company.ts): the CEO, then your assistant, then each department with its head
@@ -1197,6 +1251,8 @@ function App() {
   const moodNow = useMood(home, view.kind === "new" ? null : idOf(me.name));
   const live = home && view.kind !== "new" ? moodNow : null;
   const moods = useMoods(home, office.map((c) => idOf(c.name))); // the side menu's dots (PLAN 2.4)
+  // the desk works on its own floor (PLAN 5.22): the office's floor holds everyone else
+  const onTheFloor = useMemo(() => office.filter((c) => SPECIALTIES[c.specialty].family !== "desk"), [office]);
   // where he stands, on a home (PLAN 3.8): his level and XP, kept up as they change
   const [standing, setStanding] = useState<Standing | null>(null);
   const [career, setCareer] = useState<CareerState | null>(null); // what his work has grown him into (PLAN 3.11)
@@ -1245,7 +1301,7 @@ function App() {
   /** A new orb by the dice, with a name nobody in the office has. */
   const fresh = (): Character => {
     // the dice keep to who may join: the CEO first, then your assistant, then an open department's (owner, 10-07)
-    const may = (Object.keys(SPECIALTIES) as SpecialtyName[]).filter((k) => !whyNot(k, kinds));
+    const may = (Object.keys(SPECIALTIES) as SpecialtyName[]).filter((k) => !whyNot(k, kinds) && !hide.includes(SPECIALTIES[k].family));
     const seed = roll();
     let c = surprise(seed, founding ? { specialty: founding } : { specialty: may[seed % may.length] ?? "general" });
     for (let i = 0; i < 40 && (taken(c.name) || recent.current.includes(c.name)); i++) c = { ...c, name: orbName(() => Math.random()) };
@@ -1304,9 +1360,10 @@ function App() {
   // where you are is an address (ui/nav.ts): going somewhere adds it to the history, so the side
   // menu's Back and the browser's Back are the same Back
   const routeOf = (): Route =>
-    room === "home" ? { room: "home" } : room === "stats" ? { room: "stats", tab: statsTab } : room === "settings" ? { room: "settings" } : room === "notices" ? { room: "notices" } : room === "calendar" ? { room: "calendar" } : room === "lab" ? { room: "lab" } : room === "report" ? { room: "report" } : room === "org" ? { room: "org", school: schoolFor } : room === "recruiter" ? { room: "recruiter", family: hiringFor } : room === "career" && careerOf ? { room: "career", orb: careerOf } : room === "sessions" ? { room: "sessions", ...inSession } : room === "chat" && talking ? { room: "chat", orb: talking } : view.kind === "new" ? { room: "new" } : { room: "office", orb: view.kind === "orb" ? view.name : null };
+    room === "home" ? { room: "home" } : room === "desk" ? { room: "desk" } : room === "stats" ? { room: "stats", tab: statsTab } : room === "settings" ? { room: "settings" } : room === "notices" ? { room: "notices" } : room === "calendar" ? { room: "calendar" } : room === "lab" ? { room: "lab" } : room === "report" ? { room: "report" } : room === "org" ? { room: "org", school: schoolFor } : room === "recruiter" ? { room: "recruiter", family: hiringFor } : room === "career" && careerOf ? { room: "career", orb: careerOf } : room === "sessions" ? { room: "sessions", ...inSession } : room === "chat" && talking ? { room: "chat", orb: talking } : view.kind === "new" ? { room: "new" } : { room: "office", orb: view.kind === "orb" ? view.name : null };
   const show = (r: Route): void => {
     if (r.room === "home") setRoom("home"); // the home page (owner, 10-07): what the app opens on
+    else if (r.room === "desk") setRoom("desk"); // the desk's own floor
     else if (r.room === "settings") setRoom("settings");
     else if (r.room === "notices") setRoom("notices");
     else if (r.room === "calendar") setRoom("calendar");
@@ -1538,6 +1595,7 @@ function App() {
             {backButton({ justifySelf: "start", marginBottom: "var(--s1)" })}
             {navItem("Home", room === "home" || room === "stats", { room: "home" }, "⌂") /* the charts are the home page's numbers */}
             {navItem("The office", room === "office" && view.kind === "floor", { room: "office", orb: null }, "◉")}
+            {open && navItem(NAMES.room, room === "desk", { room: "desk" }, <CandlesIcon />)}
             {navItem("New orb", room === "office" && making, { room: "new" }, "+", 0, true) /* asks to be pressed (owner, 10-03) */}
             {navItem("Sessions", room === "sessions", { room: "sessions", id: null, tab: "brainstorm" }, "▦")}
             {navItem("Notifications", room === "notices", { room: "notices" }, <BellIcon />, notices.notices.length)}
@@ -1548,6 +1606,18 @@ function App() {
                 shouldnt be able to see the recruiter page yet, it should be greyed out and inaccesible") */}
             {navItem("Recruiter", room === "recruiter" && !founding, { room: "recruiter" }, "✚", 0, false, founding ? (founding === "ceo" ? "Appoint your CEO first" : "Appoint your personal assistant first") : "")}
             {navItem("Settings", room === "settings", { room: "settings" }, "⚙")}
+            {!open && kept.includes(CARRIED.stick) && (
+              <Carried label={NAMES.stick} icon={<span data-orb={me.hue} style={{ width: 18, display: "grid", placeItems: "center", color: "var(--accent)" }}><StickIcon /></span>}
+                take={() => (setHolding(true), go({ room: "office", orb: null }))}
+                style={{ ...s.btn, display: "flex", alignItems: "center", gap: 10, textAlign: "left", background: holding ? "var(--accent-wash)" : "transparent", boxShadow: holding ? "inset 0 0 0 1px var(--accent)" : "none" }} />
+            )}
+            {!open && pieces > 0 && (
+              <button data-paper onClick={() => (setMenu(false), setReading(true))} style={{ ...s.btn, display: "flex", alignItems: "center", gap: 10, textAlign: "left", background: "transparent", boxShadow: "none" }}>
+                <span aria-hidden data-orb={me.hue} style={{ width: 18, display: "grid", placeItems: "center", color: "var(--accent)" }}><PaperIcon /></span>
+                {NAMES.paper}
+                <span className="num" style={{ marginLeft: "auto", font: "700 12px/16px var(--font)", color: "var(--text-3)" }}>{`${pieces}/3`}</span>
+              </button>
+            )}
           </nav>
           <div style={{ ...s.head, margin: "var(--s3) var(--s2) var(--s1)" }}>The office</div>
           <div style={{ display: "grid", gap: 2, overflowY: "auto", minHeight: 0, paddingBlock: 4 }}>
@@ -1580,8 +1650,10 @@ function App() {
         {/* the home page, once there is an office; an empty one opens on making its first orb, as it always has */}
         {room === "home" && office.length ? (
           <HomeRoom home={home} office={office} person={person?.name ?? null} moods={moods} go={go} />
+        ) : room === "desk" && open ? (
+          <DeskRoom home={home} office={office} moods={moods} go={go} />
         ) : room === "recruiter" && !founding ? (
-          <RecruiterRoom home={home} office={office} family={hiringFor} pick={(family) => go({ room: "recruiter", family })} hired={() => void home?.orbs().then((o) => o && setOffice(o))} profile={(c, startsAs) => <Sheet c={c} replies={replies} startsAs={startsAs} applying />} />
+          <RecruiterRoom home={home} office={office} hide={hide} family={hiringFor} pick={(family) => go({ room: "recruiter", family })} hired={() => void home?.orbs().then((o) => o && setOffice(o))} profile={(c, startsAs) => <Sheet c={c} replies={replies} startsAs={startsAs} applying />} />
         ) : room === "org" ? (
           <OrgRoom home={home} office={office} school={schoolFor} open={(c) => go({ room: "career", orb: c.name })} rehired={() => void home?.orbs().then((o) => o && setOffice(o))} />
         ) : room === "career" ? (
@@ -1625,7 +1697,7 @@ function App() {
             })}
           />
         ) : view.kind === "floor" && office.length ? (
-          <Floor home={home} office={office} moods={moods} person={person?.name ?? null} go={go} />
+          <Floor home={home} office={onTheFloor} moods={moods} person={person?.name ?? null} go={go} kept={kept} keep={keepIt} holding={holding} setHolding={setHolding} opened={() => go({ room: "desk" })} />
         ) : (
         <section style={{ minWidth: 0, display: "grid", alignContent: "start", gap: "var(--s5)", padding: "0 0 var(--s6)" }}>
           {said && (
@@ -1736,7 +1808,7 @@ function App() {
             {/* on a wide screen its moods and moves at the top, beside the orb (owner, 10-10: "awake listening etc put that to
                 the right over traits"); the editor first while it is being made; what it is made of over its stats (owner,
                 10-10: "put made of container over the stats container") */}
-            {making && <Creator me={me} edit={edit} replies={replies} setReplies={setReplies} kinds={kinds} peek={!wide} />}
+            {making && <Creator me={me} edit={edit} replies={replies} setReplies={setReplies} kinds={kinds} peek={!wide} hide={hide} />}
             {!making && <Card c={me} replies={replies} setReplies={setReplies} onDelete={(handTo, school) => remove(me.name, handTo, school)} others={office.filter((o) => o.name !== me.name)} />}
             {making ? (
               // a new orb's stats as its page's two cards, under the editor
@@ -1811,6 +1883,14 @@ function App() {
         )}
       </div>
       )}
+      {holding && (
+        <div role="status" data-holding style={{ position: "fixed", left: "50%", bottom: "var(--s5)", transform: "translateX(-50%)", zIndex: 40, display: "flex", alignItems: "center", gap: 10, maxWidth: "calc(100vw - 2 * var(--margin))", padding: "6px 6px 6px 14px", borderRadius: 999, background: "var(--card)", boxShadow: "0 8px 24px var(--shadow), inset 0 0 0 1px var(--hairline)", font: "700 14px/20px var(--font)", color: "var(--text-1)", whiteSpace: "nowrap" }}>
+          <span aria-hidden style={{ color: "var(--accent)" }}><StickIcon /></span>
+          {`Carrying the ${NAMES.stick}`}
+          <button onClick={() => setHolding(false)} className="orbs-small" style={{ ...s.chip, padding: "4px 12px" }}>Put it back</button>
+        </div>
+      )}
+      {reading && <PaperView kept={kept} close={() => setReading(false)} />}
     </main>
   );
 }

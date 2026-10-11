@@ -10,7 +10,7 @@ import { FakeClock } from "../src/clock.ts";
 import { openDb } from "../src/db.ts";
 import { EventLog } from "../src/events.ts";
 import { nichesOf, radarOf, tagRun } from "../src/gym/specialty.ts";
-import { ledger, Xp } from "../src/gym/xp.ts";
+import { ledger, Xp, XP } from "../src/gym/xp.ts";
 import { tempDir } from "./helpers.ts";
 
 function office(t: Parameters<typeof tempDir>[0]) {
@@ -72,8 +72,8 @@ test("the radar matches the ledger exactly, a correction included; the pass rate
   const radar = radarOf(o.events, "pia");
   const onRuns = ledger(o.events).filter((x) => x.orb === "pia").reduce((s, x) => s + x.amount, 0);
   assert.equal(Object.values(radar).reduce((s, r) => s + r.xp, 0), onRuns, "every XP on the ledger, in one area each");
-  assert.equal(radar.frontend.xp, 2 * 20, "the corrected job's XP was taken back, from the same area");
+  assert.equal(radar.frontend.xp, 2 * XP.job.standard, "the corrected job's XP was taken back, from the same area (two files each: standard)");
   assert.equal(radar.frontend.passRate, 2 / 3);
   assert.equal(radar.frontend.runs, 4);
-  assert.equal(radar.finance.xp, 20);
+  assert.equal(radar.finance.xp, XP.job.easy, "an invoice fetched and one file: an easy finance job");
 });

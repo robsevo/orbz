@@ -16,7 +16,7 @@ const Hue = ({ hue, children }: { hue: HueName; children: ReactNode }) => <g dat
 export type Sky = "day" | "dusk" | "night";
 export const skyAt = (h: number): Sky => (h >= 7 && h < 18 ? "day" : h >= 18 && h < 20 ? "dusk" : "night");
 
-function Window({ x, y, w, h, sky }: { x: number; y: number; w: number; h: number; sky: Sky }) {
+export function Window({ x, y, w, h, sky }: { x: number; y: number; w: number; h: number; sky: Sky }) {
   const hue: HueName = sky === "dusk" ? "apricot" : "cornflower";
   return (
     <g>
@@ -43,7 +43,7 @@ function Window({ x, y, w, h, sky }: { x: number; y: number; w: number; h: numbe
   );
 }
 
-function Plant({ x, y, s = 1, hue = "leaf" }: { x: number; y: number; s?: number; hue?: HueName }) {
+export function Plant({ x, y, s = 1, hue = "leaf" }: { x: number; y: number; s?: number; hue?: HueName }) {
   return (
     <g transform={`translate(${x} ${y}) scale(${s})`}>
       <Hue hue={hue}>
@@ -60,7 +60,7 @@ function Plant({ x, y, s = 1, hue = "leaf" }: { x: number; y: number; s?: number
   );
 }
 
-function Clock({ x, y, now }: { x: number; y: number; now: Date }) {
+export function Clock({ x, y, now }: { x: number; y: number; now: Date }) {
   const m = now.getMinutes();
   const h = (now.getHours() % 12) + m / 60;
   return (
@@ -288,7 +288,7 @@ export function Room({ now, sky }: { now: Date; sky: Sky }) {
       <Hue hue="amber">
         <rect x={sofa.x + 22} y={sofa.y - 6} width={20} height={16} rx={5} style={f("accent")} transform={`rotate(-10 ${sofa.x + 32} ${sofa.y + 2})`} />
       </Hue>
-      <g>
+      <g data-prop="shelf">
         <rect x={shelf.x} y={WALL - 52} width={shelf.w} height={shelf.h + 52 + (shelf.y - WALL)} rx={4} style={f("wood")} />
         {[0, 1, 2].map((row) => (
           <g key={row}>
@@ -390,7 +390,7 @@ export function Room({ now, sky }: { now: Date; sky: Sky }) {
         ))}
       </g>
       {/* the arcade cabinet in the games corner */}
-      <g>
+      <g data-prop="arcade">
         <rect x={arcade.x} y={arcade.y - 24} width={arcade.w} height={arcade.h + 24} rx={5} style={f("raised")} />
         <Hue hue="violet">
           <rect x={arcade.x + 5} y={arcade.y - 18} width={arcade.w - 10} height={30} rx={3} style={f("accent")} className="orbs-floor-glow" />
@@ -439,7 +439,7 @@ function Piece({ r, up = 0, z, children, label }: { r: Rect; up?: number; z: num
 export type Screen = "work" | "think" | "wait" | "gym" | "idle" | "off";
 
 /** A desk: its top, its front, a monitor showing what its orb is doing, a keyboard, a mug. */
-export function DeskPiece({ d, screen, hue }: { d: Desk; screen: Screen; hue: OrbHue | null }) {
+export function DeskPiece({ d, screen, hue, coin = false }: { d: Desk; screen: Screen; hue: OrbHue | null; coin?: boolean }) {
   const r = d.rect;
   const mx = d.monitor === "left" ? r.x + 6 : r.x + r.w - 40;
   return (
@@ -454,9 +454,13 @@ export function DeskPiece({ d, screen, hue }: { d: Desk; screen: Screen; hue: Or
       <rect x={mx + 15} y={r.y + 2} width={4} height={8} style={f("ground")} />
       <rect x={mx + 9} y={r.y + 8} width={16} height={3} rx={1.5} style={f("ground")} />
       <rect x={mx} y={r.y - 30} width={34} height={34} rx={4} style={f("ground")} />
-      <g data-orb={hue ?? undefined}>
+      <g data-orb={hue ?? undefined} {...(coin && { "data-prop": "screen" })}>
         {screen === "off" ? (
-          <rect x={mx + 3} y={r.y - 27} width={28} height={26} rx={2} style={f("card")} />
+          <>
+            <rect x={mx + 3} y={r.y - 27} width={28} height={26} rx={2} style={f("card")} />
+            {/* this desk's screen rests on a coin's colour, with or without its orb */}
+            {coin && <circle cx={mx + 17} cy={r.y - 14} r={4} style={f("coin")} opacity={0.75} className="orbs-floor-drift" />}
+          </>
         ) : (
           <>
             <rect x={mx + 3} y={r.y - 27} width={28} height={26} rx={2} style={f(screen === "idle" ? "fill-2" : "accent-fill")} />
@@ -466,7 +470,7 @@ export function DeskPiece({ d, screen, hue }: { d: Desk; screen: Screen; hue: Or
               ))}
             {screen === "think" && [0, 1, 2].map((i) => <circle key={i} cx={mx + 10 + i * 7} cy={r.y - 14} r={2.2} style={{ ...f("accent"), animationDelay: `${i * 0.2}s` }} className="orbs-floor-dots" />)}
             {screen === "gym" && [0, 1, 2, 3].map((i) => <rect key={i} x={mx + 7 + i * 6} y={r.y - 6 - [8, 13, 18, 22][i]!} width={4} height={[8, 13, 18, 22][i]!} rx={1} style={f("accent")} />)}
-            {screen === "idle" && <circle cx={mx + 17} cy={r.y - 14} r={4} style={f("accent")} opacity={0.6} className="orbs-floor-drift" />}
+            {screen === "idle" && <circle cx={mx + 17} cy={r.y - 14} r={4} style={f(coin ? "coin" : "accent")} opacity={coin ? 0.9 : 0.6} className="orbs-floor-drift" />}
           </>
         )}
         {screen === "wait" && (
@@ -502,7 +506,9 @@ export function MeetingTable() {
       <rect x={r.x} y={r.y} width={r.w} height={3} rx={1.5} style={f("fill-2")} />
       <rect x={r.x} y={r.y + r.h - 14} width={r.w} height={14} rx={6} style={f("wood")} opacity={0.82} />
       {[0, 1, 2, 3].map((i) => (
-        <rect key={i} x={r.x + 30 + i * 62} y={r.y + 10} width={22} height={14} rx={2} style={f("text-2")} opacity={0.75} transform={`rotate(${(i % 2 ? 1 : -1) * 6} ${r.x + 41 + i * 62} ${r.y + 17})`} />
+        <g key={i} {...(i === 0 && { "data-prop": "paper" })}>
+          <rect x={r.x + 30 + i * 62} y={r.y + 10} width={22} height={14} rx={2} style={f("text-2")} opacity={0.75} transform={`rotate(${(i % 2 ? 1 : -1) * 6} ${r.x + 41 + i * 62} ${r.y + 17})`} />
+        </g>
       ))}
       <g data-orb="teal">
         <circle cx={r.x + r.w / 2} cy={r.y + 20} r={7} style={f("accent")} opacity={0.6} />
@@ -763,5 +769,11 @@ export const FLOOR_CSS = `
 .orbs-floor-ball { animation: orbs-floor-ball 1.4s linear infinite; }
 @keyframes orbs-floor-pop { from { transform: translate(-50%, 4px) scale(.6); opacity: 0 } to { transform: translate(-50%, 0) scale(1); opacity: 1 } }
 @keyframes orbs-floor-float { 0% { transform: translate(0, 0); opacity: 0 } 30% { opacity: 1 } 100% { transform: translate(6px, -14px); opacity: 0 } }
-@media (prefers-reduced-motion: reduce) { [class^="orbs-floor-"] { animation: none !important; } }
+@keyframes orbs-prop-shake { 0%, 100% { transform: rotate(0) } 20% { transform: rotate(-2.4deg) } 40% { transform: rotate(2.4deg) } 60% { transform: rotate(-1.6deg) } 80% { transform: rotate(1deg) } }
+@keyframes orbs-prop-nudge { 0%, 100% { transform: translate(0, 0) } 25% { transform: translate(-1px, 0) rotate(-1deg) } 75% { transform: translate(1px, 0) rotate(1deg) } }
+.orbs-prop-shake { animation: orbs-prop-shake 420ms ease-in-out; transform-box: fill-box; transform-origin: 50% 100%; }
+.orbs-prop-nudge { animation: orbs-prop-nudge 300ms ease-in-out 2; transform-box: fill-box; transform-origin: 50% 50%; }
+@keyframes orbs-prop-fall { 0% { transform: translate(var(--from-x), var(--from-y)) rotate(-30deg); opacity: 0 } 15% { opacity: 1 } 70% { transform: translate(0, 0) rotate(8deg) } 85% { transform: translate(0, -6px) rotate(-4deg) } 100% { transform: translate(0, 0) rotate(0) } }
+@keyframes orbs-prop-glint { 0%, 100% { filter: brightness(1) } 50% { filter: brightness(1.45) } }
+@media (prefers-reduced-motion: reduce) { [class^="orbs-floor-"], [class^="orbs-prop-"] { animation: none !important; } }
 `;

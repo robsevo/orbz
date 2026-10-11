@@ -180,7 +180,8 @@ export function HomeRoom({ home, office, person, moods, go }: { home: Office | n
             {d.lately.map((w) => (
               <li key={`${w.orb}${w.at}`} data-lately={w.orb} style={{ display: "grid", gap: 2 }}>
                 <span style={small}>
-                  <b data-orb={byId.get(w.orb)?.hue} style={{ color: "var(--accent)", fontWeight: 800 }}>{w.name}</b>
+                  {/* the name underlined in its colour (owner, 10-11: "underline their names so we can see better") */}
+                  <b data-orb={byId.get(w.orb)?.hue} style={{ color: "var(--accent)", fontWeight: 800, textDecoration: "underline", textDecorationThickness: 1.5, textUnderlineOffset: 3 }}>{w.name}</b>
                   {` · ${ago(w.at, d.now)}${w.conversation?.startsWith("team:") ? " · in a session" : ""}`}
                 </span>
                 <span style={body}>{w.summary}</span>

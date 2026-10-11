@@ -4,6 +4,7 @@
 // from the log as the dashboard is (`brain.spend`, `xp.earned`, `xp.lost`), its days the home's own: no brain is asked,
 // nothing is written.
 import { kindOf, modelOf } from "./brain/cost.ts";
+import { TIERS, type Tier } from "./gym/difficulty.ts";
 import type { Home } from "./home.ts";
 
 /** The ranges a chart can show. */
@@ -24,6 +25,8 @@ export type Stats = {
     total: { earned: number; lost: number };
     byDay: { earned: number; lost: number }[];
     byOrb: { orb: string; name: string; earned: number; lost: number }[];
+    /** The jobs you approved by how hard each was in its own area (PLAN 3.13), easy to expert: how many, and their XP. */
+    byTier: { tier: Tier; jobs: number; earned: number }[];
   };
 };
 
@@ -72,11 +75,17 @@ export function statsOf(home: Home, range: number): Stats {
   const xpTotal = { earned: 0, lost: 0 };
   const xpByDay = days.map(() => ({ earned: 0, lost: 0 }));
   const xpByOrb = new Map<string, { orb: string; name: string; earned: number; lost: number }>();
+  const xpByTier = TIERS.map((tier) => ({ tier, jobs: 0, earned: 0 }));
   for (const e of [...home.events.ofType("xp.earned"), ...home.events.ofType("xp.lost")]) {
     // XP is dated by the work it is for, as the dashboard dates it
     const i = at(num(e.data.at ?? e.at));
     if (i === undefined || !e.orb) continue;
     const amount = num(e.data.amount);
+    const tier = xpByTier.find((x) => x.tier === e.data.tier);
+    if (tier && amount > 0) {
+      tier.jobs++;
+      tier.earned += amount;
+    }
     const who = xpByOrb.get(e.orb) ?? xpByOrb.set(e.orb, { orb: e.orb, name: nameOf(e.orb), earned: 0, lost: 0 }).get(e.orb)!;
     for (const l of [xpTotal, xpByDay[i]!, who]) {
       if (amount >= 0) l.earned += amount;
@@ -86,6 +95,6 @@ export function statsOf(home: Home, range: number): Stats {
   return {
     days,
     brain: { total, byDay, byModel: most(byModel), byKind: most(byKind), byOrb: most(byOrb) },
-    xp: { total: xpTotal, byDay: xpByDay, byOrb: [...xpByOrb.values()].sort((a, b) => b.earned - b.lost - (a.earned - a.lost)) },
+    xp: { total: xpTotal, byDay: xpByDay, byOrb: [...xpByOrb.values()].sort((a, b) => b.earned - b.lost - (a.earned - a.lost)), byTier: xpByTier },
   };
 }

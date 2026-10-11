@@ -177,6 +177,14 @@ function Xp({ s, hueOf }: { s: StatsState; hueOf: (orb: string | null) => OrbHue
           <span style={small}>{`No XP in the last ${n} days: it comes from work you approve.`}</span>
         )}
       </section>
+      {/* the jobs you approved by how hard each was in its own area (PLAN 3.13; owner, 10-10: "different weights based on
+          difficulty in their domain") */}
+      {x.byTier && x.byTier.some((t) => t.jobs > 0) && (
+        <section aria-label="XP by how hard the work was" data-xp-tiers style={card}>
+          <span style={head}>By how hard the work was</span>
+          <Bars rows={x.byTier.map((t) => ({ key: t.tier, name: TIER_WORDS[t.tier].name, value: t.earned, sub: `${plural(t.jobs, "job")} · ${TIER_WORDS[t.tier].each}`, hue: TIER_WORDS[t.tier].hue }))} />
+        </section>
+      )}
       {x.byOrb.length > 0 && (
         <section aria-label="XP by orb" style={card}>
           <span style={head}>By orb</span>
@@ -186,6 +194,14 @@ function Xp({ s, hueOf }: { s: StatsState; hueOf: (orb: string | null) => OrbHue
     </>
   );
 }
+
+/** Each tier of difficulty in words: its name, what one job of it earns (the home's gym/xp.ts XP.job), its colour. */
+const TIER_WORDS: Record<"easy" | "standard" | "hard" | "expert", { name: string; each: string; hue: OrbHue }> = {
+  easy: { name: "Easy", each: "10 XP each", hue: "mint" },
+  standard: { name: "Standard", each: "25 XP each", hue: "cornflower" },
+  hard: { name: "Hard", each: "40 XP each", hue: "amber" },
+  expert: { name: "Expert", each: "60 XP each", hue: "violet" },
+};
 
 /** A number on its card. */
 function Figure({ id, label, value, sub }: { id: string; label: string; value: string; sub: string }) {

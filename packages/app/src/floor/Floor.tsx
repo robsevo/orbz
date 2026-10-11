@@ -20,6 +20,7 @@ type Meet = Meeting;
 const MEET_WALK_MS = 12_000;
 import type { Route } from "../ui/nav.ts";
 import { CameraFeed } from "./camera.tsx";
+import { COIN_DESK, Props } from "./Props.tsx";
 import { DeskPiece, FLOOR_CSS, MeetingTable, PingPong, Room, RoomPieces, SideTables, skyAt, type Screen } from "./art.tsx";
 import { busiest, CLASS_DESKS, CORRIDOR, MARKS, PIECES, VIEWS, viewRect, WAITING, zoneOf, type ViewId } from "./plan.ts";
 import { DESKS, H, POIS, ROOMS, SEATS, W, WALL, ZONES, dice, dwell, meetPlan, meetPoi, meetSpot, momentPlan, next, route, seating, sentBy, speed, type Desk, type Plan, type PoiId, type Spot, type Traits } from "./plan.ts";
@@ -45,9 +46,14 @@ const today = (now: Date): string => `${now.getFullYear()}-${String(now.getMonth
 const VIEW_KEY = "orbs.floor.view";
 const greeting = (h: number): string => (h < 5 ? "Working late" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening");
 
-export function Floor({ home, office, moods, person, go }: { home: Office | null; office: Character[]; moods: Record<string, Mood>; person: string | null; go: (r: Route) => void }) {
+export function Floor({ home, office, moods, person, go, kept = [], keep, holding = false, setHolding, opened }: {
+  home: Office | null; office: Character[]; moods: Record<string, Mood>; person: string | null; go: (r: Route) => void;
+  /** The floor's small things (Props.tsx): what is kept, keeping one, what is carried, and what opens. */
+  kept?: readonly string[]; keep?: (id: string) => Promise<void>; holding?: boolean; setHolding?: (h: boolean) => void; opened?: () => void;
+}) {
   // ── the size it is drawn at ──
   const box = useRef<HTMLDivElement>(null);
+  const plan = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   useEffect(() => {
     const el = box.current!;
@@ -507,11 +513,12 @@ export function Floor({ home, office, moods, person, go }: { home: Office | null
             stays put while a phone pans; each room a phone goes to is a camera of its own */}
         <CameraFeed n={shownRect ? VIEWS.findIndex((v) => v.id === view) + 1 : 1} room={shownRect ? VIEWS.find((v) => v.id === view)!.name : "Whole office"}>
         <div ref={pan} data-floor-view data-viewport={shownRect ? "room" : undefined} style={{ overflowX: shownRect ? "hidden" : phone ? "auto" : "visible", overflowY: "hidden", ...(shownRect && { height: px(shownRect.h) }), borderRadius: 20, boxShadow: "inset 0 0 0 1px var(--hairline)", overscrollBehaviorX: "contain", scrollbarWidth: "thin" }}>
-          <div data-floor-plan style={{ position: "relative", width: px(W), height: px(H), borderRadius: 20, overflow: "hidden", isolation: "isolate" }}>
+          <div ref={plan} data-floor-plan style={{ position: "relative", width: px(W), height: px(H), borderRadius: 20, overflow: "hidden", isolation: "isolate" }}>
+            {keep && setHolding && opened && <Props root={plan.current} px={px} kept={kept} keep={keep} holding={holding} setHolding={setHolding} opened={opened} />}
             <Room now={now} sky={sky} />
             {DESKS.map((d) => {
               const { screen, hue } = screenOf(d);
-              return <DeskPiece key={`${d.zone}${d.n}`} d={d} screen={screen} hue={hue} />;
+              return <DeskPiece key={`${d.zone}${d.n}`} d={d} screen={screen} hue={hue} coin={d.zone === COIN_DESK.zone && d.n === COIN_DESK.n} />;
             })}
             <MeetingTable />
             <PingPong rally={rally} />

@@ -18,6 +18,8 @@ import { approved } from "./fixtures/bills.ts";
 import { agentHome } from "./helpers.ts";
 
 const BILLS = "dana|trigger:t1|read_file>remind {subject}";
+/** A day's bills: ten easy jobs (one bill each, PLAN 3.13), 10 XP each. */
+const BILL_DAY = ["Rent", "Gym", "Water", "Phone", "Car", "Power", "Net", "Tax", "Card", "Loan"];
 
 test("XP without an exam passed is not proposed; with both the night proposes it once; only your yes promotes", async (t) => {
   const clock = new FakeClock(new Date(2026, 9, 1, 9, 0).getTime());
@@ -25,7 +27,7 @@ test("XP without an exam passed is not proposed; with both the night proposes it
   home.inbox.addOrb("lee", "Lee", "data"); // Lee came first, so leads data work: Dana starts a Junior
   home.inbox.addOrb("dana", "Dana", "data");
   for (let day = 0; day < 3; day++) {
-    approved(home.events, "dana", ["Rent", "Gym", "Water", "Phone", "Car"].map((s) => `${s} ${day}`), 100 + day * 10); // 100 XP a day: the cap is 150
+    approved(home.events, "dana", BILL_DAY.map((s) => `${s} ${day}`), 100 + day * 10); // 100 XP a day: the cap is 150
     clock.suspend(86_400_000);
   }
   const gym = new Gym({ events: home.events, clock, dataDir: home.dataDir, kit: async () => ({}), teacher: () => null, orbs: () => [{ id: "dana", specialty: "data" }] });
@@ -59,7 +61,7 @@ test("only on the evidence: a regression lately, or work outside its specialty, 
   const clock = new FakeClock(new Date(2026, 9, 1, 9, 0).getTime());
   const { home } = await agentHome(t, [], { clock });
   for (let day = 0; day < 3; day++) {
-    approved(home.events, "dana", ["Rent", "Gym", "Water", "Phone", "Car"].map((s) => `${s} ${day}`), 100 + day * 10);
+    approved(home.events, "dana", BILL_DAY.map((s) => `${s} ${day}`), 100 + day * 10);
     clock.suspend(86_400_000);
   }
   home.events.append("habit.promoted", { kind: BILLS, task: "dana|trigger:t1|{subject}", version: 1, runs: [100, 101, 102] }, { orb: "dana" });

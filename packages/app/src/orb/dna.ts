@@ -249,12 +249,13 @@ export const AREA_SKILLS: Record<string, Partial<Record<Skill, number>>> = {
   frontend: { Building: 0.6, Design: 0.4 }, backend: { Building: 1 }, data: { Data: 1 }, devops: { Building: 1 },
   design: { Design: 1 }, research: { Research: 1 }, writing: { Words: 1 }, inbox: { Care: 0.5, Words: 0.5 },
   scheduling: { Planning: 1 }, finance: { Money: 1 }, bookings: { Planning: 0.6, Care: 0.4 }, teaching: { Care: 0.5, Words: 0.5 },
+  desk: { Money: 0.6, Data: 0.4 }, // the desk (PLAN 5.25): money read by the numbers
 };
 /** The kind of work and the trait it brings out (inside the total): a move per HABIT_XP earned, at most 3. */
 const AREA_TRAIT: Record<string, Spec> = {
   frontend: "Focus>Curiosity 1", backend: "Humour>Focus 1", data: "Humour>Focus 1", devops: "Calm>Nerve 1", design: "Focus>Curiosity 1",
   research: "Pace>Curiosity 1", writing: "Nerve>Care 1", inbox: "Curiosity>Care 1", scheduling: "Pace>Focus 1", finance: "Humour>Focus 1",
-  bookings: "Curiosity>Care 1", teaching: "Nerve>Care 1",
+  bookings: "Curiosity>Care 1", teaching: "Nerve>Care 1", desk: "Calm>Nerve 1",
 };
 const HABIT_XP = 400;
 const NICHE = 1.25; // the niche gains a quarter more

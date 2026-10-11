@@ -7,14 +7,15 @@ import { FAMILIES, SPECIALTIES, type Family } from "../orb/spec.ts";
 import { ZONES } from "../floor/plan.ts";
 
 /** Each department's head's post (home org.ts HEAD_OF). */
-export const HEAD_OF: Record<Family, keyof typeof SPECIALTIES> = { exec: "ceo", build: "cto", think: "chiefofstaff", make: "cmo", finance: "cfo", business: "coo", life: "assistant" };
+export const HEAD_OF: Record<Family, keyof typeof SPECIALTIES> = { exec: "ceo", build: "cto", think: "chiefofstaff", make: "cmo", finance: "cfo", business: "coo", life: "assistant", desk: "deskhead" };
 
-/** Each department's colour: its zone's on the floor, and for the two with no zone of their own the CEO's gold and the
- * CFO's green. */
+/** Each department's colour: its zone's on the floor, and for the three with no zone of their own the CEO's gold, the
+ * CFO's green and the desk's lime. */
 export const HUE_OF: Record<Family, HueName> = {
   exec: "honey",
   finance: "jade",
-  ...(Object.fromEntries(ZONES.filter((z) => z.id !== "play").map((z) => [z.id, z.hue])) as Record<Exclude<Family, "exec" | "finance">, HueName>),
+  desk: "lime",
+  ...(Object.fromEntries(ZONES.filter((z) => z.id !== "play").map((z) => [z.id, z.hue])) as Record<Exclude<Family, "exec" | "finance" | "desk">, HueName>),
 };
 
 /** One kind of work in a team: its lead (none when the lead heads the department), then the rest. */

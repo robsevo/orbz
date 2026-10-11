@@ -10,6 +10,11 @@
 // answers only to those names (a rebound hostname is refused), never takes the loopback token
 // (that stays for local tools), and lets in only a session: a pairing link (a QR code on a phone)
 // or a passkey, each a device that can be revoked.
+import { CHAINS } from "./desk/chains.ts";
+import { DeskError, type Settings } from "./desk/desk.ts";
+import { SwapError } from "./desk/swaps.ts";
+import { SYMBOLS, TIMEFRAMES, type Strategy, type Timeframe } from "./desk/strategy.ts";
+import { WalletError } from "./desk/wallets.ts";
 import { recentWork } from "./worklog.ts";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { existsSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -583,6 +588,94 @@ async function handle(
       return { ok: true };
     } catch (e) {
       throw new HttpError(404, e instanceof Error ? e.message : String(e));
+    }
+  }
+  // the desk (PLAN 5.22-5.27): the market, strategies and paper books, notes, settings, wallets, swaps
+  if (parts[0] === "desk") {
+    const no = (code: number, e: unknown): never => {
+      throw new HttpError(code, e instanceof Error ? e.message : String(e));
+    };
+    const id = (k: number): number => (/^\d+$/.test(parts[k] ?? "") ? Number(parts[k]) : no(404, "no such thing on the desk"));
+    try {
+      if (method === "GET" && parts.length === 1) {
+        const now = home.clock.now();
+        const prices = await home.market.tickers([...SYMBOLS]).catch(() => []);
+        const price = new Map(prices.map((t) => [t.symbol, t.price]));
+        const books = home.desk.books().map((b) => {
+          const held = b.strategy !== null ? (b.qty > 0 && b.symbol ? b.qty * (price.get(b.symbol) ?? b.entryPx) : 0) : b.holdings.reduce((n, h) => n + h.qty * (price.get(h.symbol) ?? h.cost / Math.max(h.qty, 1e-12)), 0);
+          return { ...b, equity: b.cash + held };
+        });
+        const recent = (type: string, n: number) => home.events.ofType(type).slice(-n).reverse().map((e) => ({ seq: e.seq, at: e.at, orb: e.orb, ...e.data }));
+        return {
+          now, market: home.market.status(), prices, strategies: home.desk.strategies(), books, notes: home.desk.notes(), settings: home.desk.settings(),
+          fills: recent("desk.fill", 40), trades: recent("desk.trade_closed", 40), wallets: home.wallets.list(), swaps: home.swaps.list(30),
+          chains: CHAINS.map((c) => ({ id: c.id, name: c.name, kind: c.kind, ...(c.kind === "evm" && { chainId: c.chainId }), explorer: c.explorer, tokens: c.tokens.map((t) => ({ symbol: t.symbol, decimals: t.decimals })) })),
+        };
+      }
+      if (method === "GET" && parts[1] === "candles") {
+        const symbol = url.searchParams.get("symbol") ?? "BTC";
+        const tf = (url.searchParams.get("tf") ?? "1h") as Timeframe;
+        if (!(SYMBOLS as readonly string[]).includes(symbol) || !TIMEFRAMES.includes(tf)) no(400, "a symbol and a timeframe the desk knows");
+        return { symbol, tf, candles: await home.market.candles(symbol, tf, Math.min(500, Math.max(30, Number(url.searchParams.get("n")) || 200))) };
+      }
+      if (method === "POST" && parts[1] === "backtest" && parts.length === 2) {
+        const b = await body(req);
+        const bt = await home.desk.backtest(b.strategy as Strategy);
+        return { backtest: { metrics: bt.metrics, trades: bt.trades.slice(-200), equity: bt.equity.filter((_, i, all) => all.length <= 400 || i % Math.ceil(all.length / 400) === 0 || i === all.length - 1) } };
+      }
+      if (method === "POST" && parts[1] === "strategies" && parts.length === 2) {
+        const b = await body(req);
+        const bt = b.backtest === false ? null : await home.desk.backtest(b.strategy as Strategy).catch(() => null);
+        return { strategy: home.desk.save(b.strategy as Strategy, null, bt) };
+      }
+      if (method === "DELETE" && parts[1] === "strategies" && parts.length === 3) {
+        home.desk.archive(id(2));
+        return { ok: true };
+      }
+      if (method === "POST" && parts[1] === "runs" && parts.length === 2) {
+        const b = await body(req);
+        const orb = text(b, "orb");
+        if (!home.inbox.orb(orb)) no(404, `no orb "${orb}"`);
+        return { book: await home.desk.run(Number(b.strategy), orb) };
+      }
+      if (method === "POST" && parts[1] === "books" && parts.length === 4 && parts[3] === "stop") return { book: await home.desk.stopAndSell(id(2)) };
+      if (method === "PUT" && parts[1] === "settings" && parts.length === 2) return { settings: home.desk.setSettings((await body(req)) as Partial<Settings>) };
+      if (method === "POST" && parts[1] === "wallets" && parts.length === 2) {
+        const b = await body(req);
+        return { wallet: home.wallets.add(text(b, "address"), { label: typeof b.label === "string" ? b.label : "", wallet: typeof b.wallet === "string" ? b.wallet : null }) };
+      }
+      if (method === "DELETE" && parts[1] === "wallets" && parts.length === 3) {
+        home.wallets.remove(id(2));
+        return { ok: true };
+      }
+      if (method === "GET" && parts[1] === "wallets" && parts.length === 4 && parts[3] === "holdings") return await home.wallets.holdings(id(2));
+      if (method === "GET" && parts[1] === "quote") {
+        const q = (k: string): string => url.searchParams.get(k) ?? "";
+        return { quote: await home.swaps.quote({ chain: q("chain"), sell: q("sell"), buy: q("buy"), amount: q("amount") }) };
+      }
+      if (method === "POST" && parts[1] === "swaps" && parts.length === 2) {
+        const b = await body(req);
+        return { swap: await home.swaps.ask({ by: null, chain: text(b, "chain"), sell: text(b, "sell"), buy: text(b, "buy"), amount: text(b, "amount") }) };
+      }
+      if (method === "POST" && parts[1] === "swaps" && parts.length === 4) {
+        const b = await body(req);
+        if (parts[3] === "answer") return { swap: home.swaps.answer(id(2), b.yes === true) };
+        if (parts[3] === "build") return await home.swaps.build(id(2), text(b, "from"));
+        if (parts[3] === "sent") return { swap: home.swaps.sent(id(2), text(b, "tx")) };
+        if (parts[3] === "unsent") return { swap: home.swaps.notSent(id(2), typeof b.why === "string" ? b.why : "the wallet did not send it") };
+      }
+    } catch (e) {
+      if (e instanceof HttpError) throw e;
+      no(e instanceof DeskError || e instanceof SwapError || e instanceof WalletError ? 409 : 502, e);
+    }
+  }
+  // the little things found in the office, kept
+  if (method === "GET" && url.pathname === "/me/keepsakes") return { keepsakes: home.about.keepsakes() };
+  if (method === "PUT" && url.pathname === "/me/keepsakes") {
+    try {
+      return { keepsakes: home.about.keep(text(await body(req), "id")) };
+    } catch (e) {
+      throw new HttpError(400, e instanceof Error ? e.message : String(e));
     }
   }
   // the recruiter (PLAN 5.8): the positions you are hiring for, who applied, an interview, hire or pass

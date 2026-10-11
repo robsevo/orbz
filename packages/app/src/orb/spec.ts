@@ -11,6 +11,7 @@ import { earsUnder, faceOf, frameOf, hasEars, headOf } from "./hats/heads.ts";
 import { glowOf, hatMesh } from "./hats/models.ts";
 import { glassOf, hexOf, rgb01 } from "./colour.ts";
 import { type Dna, dnaOf, dnaSays, leansOf } from "./dna.ts";
+import { NAMES } from "../floor/props.ts";
 import { ORB_TURNS } from "./hues.ts";
 import type { Gesture } from "./life.ts";
 import type { OrbLook } from "./renderer.ts";
@@ -383,7 +384,7 @@ type Lean = [number, number, number, number, number, number, number, number]; //
 // owner, 10-07: "add a few more positions and its own category and restructure things just a bit ... restructure it so it
 // fits this makes things easier to see": the Executive first (every department's head), and Finance (every money orb, the
 // CFO's) beside Business
-export const FAMILIES = { exec: "Executive", build: "Build", think: "Think", make: "Make", finance: "Finance", business: "Business", life: "Life" } as const;
+export const FAMILIES = { exec: "Executive", build: "Build", think: "Think", make: "Make", finance: "Finance", business: "Business", life: "Life", desk: NAMES.dept } as const;
 export type Family = keyof typeof FAMILIES;
 
 type Specialty = { family: Family; label: string; title: string; focus: string; lean: Lean; hat: HatName; glasses: GlassesName; limits?: string };
@@ -463,8 +464,21 @@ export const SPECIALTIES = {
   // owner, 10-07: "add a Sports stats and odds skill too". A reader of the numbers and of the odds, never a tipster: a
   // bet is money, so it is always the person's (the floor, rule 9)
   sports: { family: "think", label: "Sports stats & odds", title: "Sports Analyst", focus: "games, teams and players by the numbers: form, injuries, matchups, and the odds the bookmakers give, and where they look off", lean: [3, 1, 5, 1, 3, 5, 3, 1], hat: "cap", glasses: "sport", limits: "Not a tipster or a bookmaker: reads the numbers and the odds; every bet is yours to make, and only what you can afford to lose." },
+  // owner, 10-10: "add reverse engineering capabilities to orbz as a persona" (PLAN 4.8): REA's logic made ours. New
+  // specialties go last: a DNA strand keeps a specialty by its place in this list
+  reverse: { family: "build", label: "Reverse engineering", title: "Reverse Engineer", focus: "how software works without its source: programs, apps, contracts and their traffic, read with evidence, then how to build the same", lean: [2, 4, 3, 1, 2, 5, 1, 1], hat: "beanie", glasses: "goggles", limits: "Reads only what you hand it, for lawful work: your own software, or what you may study; nothing it reads is run." },
+  // the desk (PLAN 5.25): its own department, opened by its head; last in the list. Their words are kept with the
+  // floor's small things (floor/props.ts)
+  deskhead: { family: "desk", ...NAMES.jobs.deskhead, lean: [5, 1, 5, 1, 3, 3, 5, 2], hat: "bowler", glasses: "aviators" },
+  dealer: { family: "desk", ...NAMES.jobs.dealer, lean: [3, 1, 5, 1, 2, 3, 5, 1], hat: "headset", glasses: "shades" },
+  quant: { family: "desk", ...NAMES.jobs.quant, lean: [3, 3, 5, 1, 2, 4, 4, 1], hat: "none", glasses: "bold round" },
+  onchain: { family: "desk", ...NAMES.jobs.onchain, lean: [3, 2, 5, 1, 3, 5, 4, 1], hat: "antenna", glasses: "hexagon" },
+  risk: { family: "desk", ...NAMES.jobs.risk, lean: [4, 1, 5, 1, 3, 3, 5, 2], hat: "hard hat", glasses: "half-rims" },
 } satisfies Record<string, Specialty>;
 export type SpecialtyName = keyof typeof SPECIALTIES;
+/** What a seed's dice can come up as when nothing fixes its specialty: the 56 there were before 10-10, kept so (a seed keeps
+ * its orb, as the retired deerstalker keeps its slot); a specialty added since is chosen, never rolled. */
+const ROLLED_SPECIALTIES = (Object.keys(SPECIALTIES) as SpecialtyName[]).slice(0, 56);
 
 // ── the character sheet ────────────────────────────────────────────────────────────────────────
 /** Traits, 1..5: flavour from his personality (and a little of his seed), shown as bars. */
@@ -741,7 +755,7 @@ export function surprise(seed: number, o: { specialty?: SpecialtyName } = {}): C
   const personality = pickOne(Object.keys(PERSONALITIES).filter((p) => p !== "steady") as PersonalityName[], r);
   const P = PERSONALITIES[personality];
   const hue = pickOne(HUES.map((h) => h.name), r);
-  const rolled = pickOne(Object.keys(SPECIALTIES) as SpecialtyName[], r); // drawn either way, so the rest of a seed's orb is the same
+  const rolled = pickOne(ROLLED_SPECIALTIES, r); // drawn either way, so the rest of a seed's orb is the same
   const specialty = o.specialty ?? rolled;
   const c: Character = {
     name: orbName(r),

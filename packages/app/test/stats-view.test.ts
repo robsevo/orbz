@@ -18,6 +18,7 @@ import { findChrome, launch, measure } from "./harness.ts";
 import { Home } from "../../home/src/home.ts";
 import { serve } from "../../home/src/api.ts";
 import { FakeClock } from "../../home/src/clock.ts";
+import { XP } from "../../home/src/gym/xp.ts";
 
 const APP = fileURLToPath(new URL("..", import.meta.url));
 const skip = findChrome() ? false : "no Chromium on this machine";
@@ -52,18 +53,18 @@ test("the home page's numbers open their charts: the brains' tokens by day, mode
   h.inbox.addOrb("ada", "Ada", "frontend", { shape: "bean", eyes: "classic", hue: "coral" });
   const spend = (orb: string | null, conversation: string | null, model: string, turn: string | null, input: number, cached: number, output: number): void =>
     void h.events.append("brain.spend", { tier: "big", model, ...(turn && { turn }), prompt_tokens: input, cached_tokens: cached, completion_tokens: output, cost_usd: null, cost_source: "none" }, { orb, conversation });
-  const xp = (orb: string, amount: number): void => void h.events.append(amount >= 0 ? "xp.earned" : "xp.lost", { amount, reason: "work", source: 1, at: clock.now() }, { orb });
+  const xp = (orb: string, amount: number, tier?: string): void => void h.events.append(amount >= 0 ? "xp.earned" : "xp.lost", { amount, reason: "work", source: 1, at: clock.now(), ...(tier && { tier }) }, { orb });
   // two days ago a session's lead; yesterday a chat and a call no orb made, XP earned and taken back; today a chat
   spend("ada", "team:1:brainstorm", "gpt-5.1", "lead", 10_000, 4_000, 1_000);
   xp("ada", 30);
   clock.suspend(DAY);
   spend("pip", "chat:pip", "gpt-5.1-mini", null, 2_000, 0, 500);
   spend(null, null, "gpt-5.1-mini", null, 1_000, 0, 200);
-  xp("pip", 20);
+  xp("pip", 20, "standard");
   xp("ada", -5);
   clock.suspend(now - clock.now());
   spend("pip", "chat:pip", "gpt-5.1", null, 3_000, 1_500, 300);
-  xp("pip", 10);
+  xp("pip", 10, "easy");
   const d = await serve(h, { port: 0, appDir: dist });
   t.after(() => d.close());
 
@@ -107,6 +108,10 @@ test("the home page's numbers open their charts: the brains' tokens by day, mode
   assert.match(await stat("earned"), /\+60[\s\S]*\+10 today/);
   assert.match(await stat("lost"), /−5/);
   assert.deepEqual(await bars(page, "XP by orb"), [["pip", "Pip", "30"], ["ada", "Ada", "25"]], "the most kept first");
+  // by how hard the work was (PLAN 3.13): the four tiers, each with its jobs and what one earns, the home's own numbers
+  assert.deepEqual(await bars(page, "XP by how hard the work was"), [["easy", "Easy", "10"], ["standard", "Standard", "20"], ["hard", "Hard", "0"], ["expert", "Expert", "0"]]);
+  const each = await page.locator("[data-xp-tiers] [data-bar]").evaluateAll((rows) => rows.map((r) => r.lastElementChild!.textContent));
+  assert.deepEqual(each, [`1 job · ${XP.job.easy} XP each`, `1 job · ${XP.job.standard} XP each`, `0 jobs · ${XP.job.hard} XP each`, `0 jobs · ${XP.job.expert} XP each`], "what one job earns, as the home gives it");
   assert.deepEqual(await measure(page), [], "the XP's charts at desk size");
   await page.evaluate(() => (location.hash = "#/home"));
   await page.locator('[data-tile="xp"]').click();

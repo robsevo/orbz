@@ -114,7 +114,7 @@ export type TokenCount = { calls: number; input: number; cached: number; output:
 export type StatsState = {
   days: string[];
   brain: { total: TokenCount; byDay: TokenCount[]; byModel: (TokenCount & { model: string })[]; byKind: (TokenCount & { kind: string })[]; byOrb: (TokenCount & { orb: string | null; name: string })[] };
-  xp: { total: { earned: number; lost: number }; byDay: { earned: number; lost: number }[]; byOrb: { orb: string; name: string; earned: number; lost: number }[] };
+  xp: { total: { earned: number; lost: number }; byDay: { earned: number; lost: number }[]; byOrb: { orb: string; name: string; earned: number; lost: number }[]; byTier?: { tier: "easy" | "standard" | "hard" | "expert"; jobs: number; earned: number }[] };
 };
 export type BoardState = {
   size: number;
@@ -215,6 +215,31 @@ export type ComputerState = { awake: boolean; takenOver: boolean; screen: { url:
 export const tabOf = (id: number, tab: Tab): string => `team:${id}:${tab}`;
 
 /** What the app needs from wherever its office lives. */
+// ── the desk (PLAN 5.22-5.27), as the home's door gives it ─────────────────────────────────────────
+export type DeskCandle = { t: number; o: number; h: number; l: number; c: number; v: number };
+export type DeskTicker = { symbol: string; price: number; changePct: number; high: number; low: number; volume: number; at: number; stale: boolean };
+export type DeskSeries = { kind: string; field?: string; period?: number; k?: number; fast?: number; slow?: number; signal?: number; value?: number };
+export type DeskCondition = { left: DeskSeries; op: string; right: DeskSeries };
+export type DeskRules = { all: DeskCondition[] } | { any: DeskCondition[] };
+export type DeskSpec = { name: string; symbol: string; timeframe: string; entry: DeskRules; exit?: DeskRules; stopLossPct?: number; takeProfitPct?: number; trailingStopPct?: number; sizePct: number; feeBps?: number; slippageBps?: number };
+export type DeskMetrics = { returnPct: number; holdPct: number; maxDrawdownPct: number; trades: number; winRate: number | null; profitFactor: number | null; avgTradePct: number | null; exposurePct: number; feesPaid: number };
+export type DeskTrade = { entryT: number; entryPx: number; exitT: number; exitPx: number; qty: number; pnl: number; pnlPct: number; fees: number; why: string };
+export type DeskStrategy = { id: number; name: string; by: string | null; spec: DeskSpec; words: string; backtest: DeskMetrics | null; createdAt: number };
+export type DeskBook = { id: number; orb: string; strategy: number | null; symbol: string | null; cashStart: number; cash: number; qty: number; entryPx: number; entryT: number; fees: number; state: "live" | "stopped"; startedAt: number; stoppedAt: number | null; holdings: { symbol: string; qty: number; cost: number; since: number }[]; equity: number };
+export type DeskQuote = { amountIn: string; amountOut: string; out: string; priceImpactPct: number | null; feeUsd: number | null; route: string[]; router: string | null };
+export type DeskSwap = { id: number; orb: string | null; chain: string; sell: string; buy: string; amount: string; usd: number; why: string; quote: DeskQuote | null; state: "asked" | "approved" | "built" | "sent" | "confirmed" | "failed" | "denied" | "expired"; tx: string | null; error: string | null; createdAt: number; settledAt: number | null };
+export type DeskWallet = { id: number; chain: "evm" | "solana" | "bitcoin"; address: string; label: string; wallet: string | null; addedAt: number };
+export type DeskHolding = { chain: string; symbol: string; amount: string; usd: number | null };
+export type DeskChain = { id: string; name: string; kind: "evm" | "solana"; chainId?: number; explorer: string; tokens: { symbol: string; decimals: number }[] };
+export type DeskSettings = { perTradeUsd: number; perDayUsd: number; slippageBps: number; off: boolean };
+export type DeskEvent = { seq: number; at: number; orb: string | null } & Record<string, unknown>;
+export type DeskState = {
+  now: number; market: { source: string; ok: boolean; lastOk: number | null; error: string | null; restingUntil: number | null }; prices: DeskTicker[];
+  strategies: DeskStrategy[]; books: DeskBook[]; notes: { id: number; orb: string; symbol: string; title: string; text: string; at: number }[]; settings: DeskSettings;
+  fills: DeskEvent[]; trades: DeskEvent[]; wallets: DeskWallet[]; swaps: DeskSwap[]; chains: DeskChain[];
+};
+export type DeskBuilt = { kind: "evm"; chainId: number; approve: { to: string; data: string } | null; tx: { to: string; data: string; value: string; gas: string | null } } | { kind: "solana"; transaction: string };
+
 export interface Office {
   readonly kind: "home" | "preview";
   orbs(): Promise<Character[] | null>;
@@ -244,6 +269,29 @@ export interface Office {
   dashboard(): Promise<DashboardState>;
   /** The numbers behind the home page, as charts (PLAN 2.19): the last 7, 14 or 30 days. */
   stats(days: number): Promise<StatsState>;
+  /** The desk (PLAN 5.22-5.27): its state, a market's bars, a backtest, strategies kept, archived and run on
+   * paper by an orb, a book stopped, its settings; your wallets (public addresses) and what they hold; a quote; a swap
+   * of yours, your answer to an orb's, its transaction built for your wallet, and what your wallet did with it. */
+  desk(): Promise<DeskState>;
+  candles(symbol: string, tf: string, n?: number): Promise<DeskCandle[]>;
+  backtest(spec: DeskSpec): Promise<{ metrics: DeskMetrics; trades: DeskTrade[]; equity: { t: number; equity: number }[] }>;
+  saveStrategy(spec: DeskSpec): Promise<DeskStrategy>;
+  archiveStrategy(id: number): Promise<void>;
+  runStrategy(id: number, orb: string): Promise<DeskBook>;
+  stopBook(id: number): Promise<DeskBook>;
+  setDeskSettings(s: Partial<DeskSettings>): Promise<DeskSettings>;
+  addWallet(address: string, o?: { label?: string; wallet?: string | null }): Promise<DeskWallet>;
+  removeWallet(id: number): Promise<void>;
+  holdings(id: number): Promise<{ holdings: DeskHolding[]; errors: string[]; at: number }>;
+  quote(o: { chain: string; sell: string; buy: string; amount: string }): Promise<DeskQuote & { usd: number | null }>;
+  swap(o: { chain: string; sell: string; buy: string; amount: string }): Promise<DeskSwap>;
+  answerSwap(id: number, yes: boolean): Promise<DeskSwap>;
+  buildSwap(id: number, from: string): Promise<{ swap: DeskSwap; built: DeskBuilt }>;
+  sentSwap(id: number, tx: string): Promise<DeskSwap>;
+  unsentSwap(id: number, why: string): Promise<DeskSwap>;
+  /** The little things found in the office, kept by the home (every device sees them). */
+  keepsakes(): Promise<string[]>;
+  keep(id: string): Promise<string[]>;
   /** The board (PLAN 5.16), a proposal put to it, an election now. */
   board(): Promise<BoardState>;
   /** The board's reports, newest first; one made now; your verdict on an idea (approved gives its orb XP). */
@@ -549,6 +597,64 @@ export function doorOffice(base: Character): Office {
     },
     async stats(days) {
       return call<StatsState>(`../stats?days=${days}`);
+    },
+    async desk() {
+      return call<DeskState>("../desk");
+    },
+    async candles(symbol, tf, n = 200) {
+      return (await call<{ candles: DeskCandle[] }>(`../desk/candles?symbol=${encodeURIComponent(symbol)}&tf=${encodeURIComponent(tf)}&n=${n}`)).candles;
+    },
+    async backtest(spec) {
+      return (await call<{ backtest: { metrics: DeskMetrics; trades: DeskTrade[]; equity: { t: number; equity: number }[] } }>("../desk/backtest", { method: "POST", body: JSON.stringify({ strategy: spec }) })).backtest;
+    },
+    async saveStrategy(spec) {
+      return (await call<{ strategy: DeskStrategy }>("../desk/strategies", { method: "POST", body: JSON.stringify({ strategy: spec }) })).strategy;
+    },
+    async archiveStrategy(id) {
+      await call(`../desk/strategies/${id}`, { method: "DELETE" });
+    },
+    async runStrategy(id, orb) {
+      return (await call<{ book: DeskBook }>("../desk/runs", { method: "POST", body: JSON.stringify({ strategy: id, orb }) })).book;
+    },
+    async stopBook(id) {
+      return (await call<{ book: DeskBook }>(`../desk/books/${id}/stop`, { method: "POST" })).book;
+    },
+    async setDeskSettings(next) {
+      return (await call<{ settings: DeskSettings }>("../desk/settings", { method: "PUT", body: JSON.stringify(next) })).settings;
+    },
+    async addWallet(address, o = {}) {
+      return (await call<{ wallet: DeskWallet }>("../desk/wallets", { method: "POST", body: JSON.stringify({ address, ...o }) })).wallet;
+    },
+    async removeWallet(id) {
+      await call(`../desk/wallets/${id}`, { method: "DELETE" });
+    },
+    async holdings(id) {
+      return call<{ holdings: DeskHolding[]; errors: string[]; at: number }>(`../desk/wallets/${id}/holdings`);
+    },
+    async quote(o) {
+      const q = new URLSearchParams(o);
+      return (await call<{ quote: DeskQuote & { usd: number | null } }>(`../desk/quote?${q}`)).quote;
+    },
+    async swap(o) {
+      return (await call<{ swap: DeskSwap }>("../desk/swaps", { method: "POST", body: JSON.stringify(o) })).swap;
+    },
+    async answerSwap(id, yes) {
+      return (await call<{ swap: DeskSwap }>(`../desk/swaps/${id}/answer`, { method: "POST", body: JSON.stringify({ yes }) })).swap;
+    },
+    async buildSwap(id, from) {
+      return call<{ swap: DeskSwap; built: DeskBuilt }>(`../desk/swaps/${id}/build`, { method: "POST", body: JSON.stringify({ from }) });
+    },
+    async sentSwap(id, tx) {
+      return (await call<{ swap: DeskSwap }>(`../desk/swaps/${id}/sent`, { method: "POST", body: JSON.stringify({ tx }) })).swap;
+    },
+    async unsentSwap(id, why) {
+      return (await call<{ swap: DeskSwap }>(`../desk/swaps/${id}/unsent`, { method: "POST", body: JSON.stringify({ why }) })).swap;
+    },
+    async keepsakes() {
+      return (await call<{ keepsakes: string[] }>("../me/keepsakes")).keepsakes;
+    },
+    async keep(id) {
+      return (await call<{ keepsakes: string[] }>("../me/keepsakes", { method: "PUT", body: JSON.stringify({ id }) })).keepsakes;
     },
     async dashboard() {
       return call<DashboardState>("../dashboard");

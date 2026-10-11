@@ -313,6 +313,8 @@ function staticVars(): string {
   // the office as a camera room (owner, 10-07): the camera's REC light, the same in every theme; no glass over the
   // floor since 10-08 ("we want to see them")
   Object.assign(v, { "--cam-rec": "#ff4a4a" });
+  // a coin's orange, the same in every theme: what one screen on the floor rests on, and the desk's own
+  Object.assign(v, { "--coin": "#f7931a" });
   for (const [k, px] of Object.entries(SPACE)) v[`--s${k}`] = `${px}px`;
   for (const [k, px] of Object.entries(RADIUS)) v[`--r-${k}`] = `${px}px`;
   for (const [k, [size, line, weight]] of Object.entries(TYPE)) v[`--t-${k}`] = `${weight} ${size}px/${line}px ${FONT}`;
@@ -346,6 +348,9 @@ export function stylesheet(fontUrl = "fonts/Nunito.ttf"): string {
     `*, *::before, *::after { box-sizing: border-box; }`,
     `html, body { margin: 0; background: var(--ground); color: var(--text-2); font: var(--t-body); -webkit-font-smoothing: antialiased; text-size-adjust: 100%; }`,
     `body { overflow-x: hidden; text-wrap: pretty; }`,
+    // a dropdown's own list (owner, 10-11: "when we drop down everything else is white"): the browser draws it on white
+    // under a field's see-through fill, so every choice wears the theme's raised surface and its words
+    `option, optgroup { background-color: var(--raised); color: var(--text-1); }`,
     // titles, labels and anything in a button wrap balanced: no word left alone on a last line
     `h1, h2, h3, h4, button, label { text-wrap: balance; }`,
     `.one-line > * { flex: 0 0 auto; }`,

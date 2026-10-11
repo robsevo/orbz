@@ -27,8 +27,8 @@ test("through the door: an orb's XP and where it lies, the night's candidates, t
     return { status: r.status, json: (await r.json()) as Record<string, unknown> };
   };
   const pia = (await get("/orbs/pia/xp")).json as { xp: { total: number }; radar: Record<string, { xp: number; runs: number }> };
-  assert.equal(pia.xp.total, 3 * XP.approvedStep);
-  assert.deepEqual([pia.radar.frontend!.xp, pia.radar.frontend!.runs], [3 * XP.approvedStep, 3]);
+  assert.equal(pia.xp.total, 3 * XP.job.easy);
+  assert.deepEqual([pia.radar.frontend!.xp, pia.radar.frontend!.runs], [3 * XP.job.easy, 3]);
   const c = (await get("/gym/candidates")).json.candidates as { orb: string; trigger: string; runs: number[] }[];
   assert.deepEqual(c.map((x) => [x.orb, x.trigger, x.runs]), [["pia", "schedule:s1", [901, 902, 903]]]);
   assert.equal((await get("/card")).json.card, null, "all of it today: yesterday was quiet");

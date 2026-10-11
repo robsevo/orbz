@@ -101,6 +101,10 @@ test("the app opens on the home page: the splash awake, a greeting, the home's n
   assert.match(await home.locator('[data-coming="bill"]').innerText(), /Rent · \$1,200[\s\S]*Tomorrow/);
   assert.deepEqual(await home.locator("[data-top]").evaluateAll((ls) => ls.map((l) => l.getAttribute("data-top"))), h.ranking().slice(0, 5).map((r) => r.orb), "the top of the office, the most XP first");
   assert.match(await home.locator('[data-lately="beatrix"]').innerText(), /Beatrix[\s\S]*Mystery kits sell for \$39 to \$60\./);
+  // the name underlined, so it reads at a glance (owner, 10-11); the control: its words are not
+  const underline = (sel: string) => home.locator(sel).evaluate((el) => getComputedStyle(el).textDecorationLine);
+  assert.equal(await underline('[data-lately="beatrix"] b'), "underline", "who did it, underlined");
+  assert.equal(await underline('[data-lately="beatrix"] > span:last-child'), "none", "what it did, not");
   assert.match(await home.locator("[data-session]").first().innerText(), /Mystery night kits[\s\S]*2 orbs/);
   assert.match(await home.locator('[data-meeting="ideas"]').innerText(), /Beatrix and Darius traded ideas at the bistro table[\s\S]*Beatrix brought: Mystery kits/);
   assert.equal(await home.getByRole("button", { name: "Hiring: 2 applicants ›" }).count(), 1);
