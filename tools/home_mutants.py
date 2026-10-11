@@ -462,6 +462,33 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("a losing trade counted as a win", "src/desk/desk.ts", [
         ("      if (pnl > 0) p.wins++;", "      if (pnl !== 0) p.wins++;"),
     ], ["dex.test.ts"]),
+    # GeckoTerminal held to its minute (10-11: "api.geckoterminal.com answered 429")
+    ("a busy source blanks the chart", "src/desk/dex.ts", [
+        ("      if (have && this.#now() - have.at < Dex.STALE_MS) return have.v as T;\n      throw e;", "      throw e;"),
+    ], ["dex.test.ts"]),
+    ("GeckoTerminal asked past its minute", "src/desk/dex.ts", [
+        ('      if (o.budget && rest.resting === null && !o.budget.take(o.low)) throw new Error("its asks for this minute are spent: again in a moment");\n', ""),
+    ], ["dex.test.ts"]),
+    ("a 429 rests only the usual two seconds", "src/desk/dex.ts", [
+        ("      this.#until = this.now() + (asked === undefined ? back : Math.max(20_000, asked, back));", "      this.#until = this.now() + (asked === undefined ? back : back);"),
+    ], ["dex.test.ts"]),
+    ("what trends takes a chart's turn", "src/desk/dex.ts", [
+        ("if (this.#at.length >= (low ? Math.floor(this.perMinute * 0.75) : this.perMinute)) return false;", "if (this.#at.length >= this.perMinute + (low ? 0 : 0)) return false;"),
+    ], ["dex.test.ts"]),
+    # a Solana wallet read whatever its endpoints refuse (10-11: "Indexed requests require a personal token")
+    ("Token-2022's coins asked by their owner again", "src/desk/wallets.ts", [
+        ('const newer = (await rpc(sol.rpcs, "getProgramAccounts", [PROGRAMS[1], { encoding: "jsonParsed", filters: [{ memcmp: { offset: 32, bytes: address } }] }], { fetch: get })) as Parsed[] | null;',
+         'const newer = ((await rpc(sol.rpcs, "getTokenAccountsByOwner", [address, { programId: PROGRAMS[1] }, { encoding: "jsonParsed" }], { fetch: get })) as { value?: Parsed[] } | null)?.value;'),
+    ], ["dex.test.ts"]),
+    ("one token program refused fails the whole wallet", "src/desk/wallets.ts", [
+        ("      } else notes.push(`Solana's Token-2022 coins: ${e instanceof Error ? e.message : String(e)}`);", "      } else throw e;"),
+    ], ["dex.test.ts"]),
+    ("Jupiter's balances never stand in", "src/desk/wallets.ts", [
+        ("      const j = await this.#jupiter(address, get).catch(() => null);\n      if (!j) throw e;", "      const j = null as Awaited<ReturnType<typeof this.#jupiter>> | null;\n      if (!j) throw e;"),
+    ], ["dex.test.ts"]),
+    ("a coin's accounts not summed", "src/desk/wallets.ts", [
+        ("coins.set(mint, { amount: (had?.amount ?? 0n) + BigInt(amount), decimals: decimals as number });", "coins.set(mint, { amount: BigInt(amount) + (had ? 0n : 0n), decimals: decimals as number });"),
+    ], ["dex.test.ts"]),
     # what a chart draws (PLAN 5.32): a strategy on the chart's own closed bars; what was really done on a market
     ("a strategy drawn on the bar still forming", "src/desk/chart.ts", [
         ("  const closed = bars.filter((b) => b.t + TIMEFRAME_MS[s.timeframe] <= now);", "  const closed = bars.filter(() => now > 0);"),

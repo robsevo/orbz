@@ -71,14 +71,29 @@ export function standInRouters(o: { outPer: () => number }): Routers & { built: 
 }
 
 /** A chain's JSON-RPC as a test sets it: each method's answer by a function of its params. */
-export function standInChains(answers: Record<string, (params: unknown[]) => unknown>): typeof fetch & { calls: string[] } {
+/** Stand-in chains: each JSON-RPC method answered by its handler, which is told which endpoint was asked and refuses by
+ * throwing (a JSON-RPC error, as an endpoint that will not answer gives one); "GET /path" handlers answer a plain GET
+ * whose path starts so (Jupiter's balances), with their value as the body, and anything else a GET asks is a 404. */
+export function standInChains(answers: Record<string, (params: unknown[], url: string) => unknown>): typeof fetch & { calls: string[] } {
   const calls: string[] = [];
-  const f = (async (_url: string | URL | Request, init?: RequestInit) => {
-    const { method, params } = JSON.parse(String(init?.body ?? "{}")) as { method: string; params: unknown[] };
+  const json = (v: unknown, status = 200): Response => new Response(JSON.stringify(v), { status, headers: { "content-type": "application/json" } });
+  const f = (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (!init?.body) {
+      const path = new URL(url).pathname;
+      const route = Object.keys(answers).find((k) => k.startsWith("GET ") && path.startsWith(k.slice(4)));
+      calls.push(route ?? `GET ${path}`);
+      return route ? json(answers[route]!([], url)) : json({ error: "no such page" }, 404);
+    }
+    const { method, params } = JSON.parse(String(init.body)) as { method: string; params: unknown[] };
     calls.push(method);
     const answer = answers[method];
-    const body = answer ? { jsonrpc: "2.0", id: 1, result: answer(params) } : { jsonrpc: "2.0", id: 1, error: { message: `no ${method} here` } };
-    return new Response(JSON.stringify(body), { headers: { "content-type": "application/json" } });
+    if (!answer) return json({ jsonrpc: "2.0", id: 1, error: { message: `no ${method} here` } });
+    try {
+      return json({ jsonrpc: "2.0", id: 1, result: answer(params, url) });
+    } catch (e) {
+      return json({ jsonrpc: "2.0", id: 1, error: { code: -32602, message: e instanceof Error ? e.message : String(e) } });
+    }
   }) as typeof fetch & { calls: string[] };
   f.calls = calls;
   return f;

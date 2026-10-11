@@ -74,6 +74,44 @@ test("a search: each token once on its most liquid pair, the most liquid first; 
   assert.equal(dex.status().ok, true);
 });
 
+test("GeckoTerminal held to its minute (owner, 10-11: \"api.geckoterminal.com answered 429\"): a chart's bars may use all of it, what trends three quarters; a 429 rests as long as it asks; while it rests or its minute is spent, what it said last stands in", async () => {
+  let now = START;
+  let busy = false; // it answers 429, asking for 45 seconds
+  const asked: string[] = [];
+  const source: DexSource = {
+    name: "stand-in", search: async () => [], pairs: async () => [], trades: async () => [],
+    candles: async (_c, pool) => {
+      asked.push(pool);
+      if (busy) throw Object.assign(new Error("api.geckoterminal.com asked us to slow down (429)"), { slowDown: 45_000 });
+      return [{ t: START, o: 1, h: 1, l: 1, c: Number(pool.slice(1)) || 1, v: 1 }];
+    },
+    trending: async (chain) => (asked.push(`trending ${chain}`), []),
+  };
+  const dex = new Dex(source, () => now);
+  for (let i = 0; i < 18; i++) await dex.candles("solana", `p${i}`, MINT, "15m");
+  await assert.rejects(() => dex.trending("solana"), /this minute are spent/, "what trends waits once three quarters of the minute are asked");
+  for (let i = 18; i < Dex.GECKO_PER_MINUTE; i++) await dex.candles("solana", `p${i}`, MINT, "15m");
+  await assert.rejects(() => dex.candles("solana", "p99", MINT, "15m"), /this minute are spent/, "a chart's bars stop at the minute's limit");
+  assert.equal(asked.length, Dex.GECKO_PER_MINUTE, "nothing over the limit was asked");
+  assert.equal((await dex.candles("solana", "p3", MINT, "15m"))[0]!.c, 3, "a chart already read still answers");
+  now += 61_000; // a minute on: room again, and every chart's minute kept is up
+  assert.deepEqual(await dex.trending("solana"), []);
+  busy = true;
+  assert.equal((await dex.candles("solana", "p5", MINT, "15m"))[0]!.c, 5, "asked too often: what it said last stands in");
+  assert.ok(dex.status().restingUntil! >= now + 45_000, "resting as long as it asked");
+  await assert.rejects(() => dex.candles("solana", "p77", MINT, "15m"), /resting/, "a chart it never answered has nothing to stand in");
+  const before = asked.length;
+  now += 30_000;
+  await dex.candles("solana", "p6", MINT, "15m");
+  assert.equal(asked.length, before, "still resting: not asked");
+  now += 16_000;
+  busy = false;
+  assert.equal((await dex.candles("solana", "p77", MINT, "15m"))[0]!.c, 77, "rested: asked again");
+  now += Dex.STALE_MS + 61_000;
+  busy = true;
+  await assert.rejects(() => dex.candles("solana", "p8", MINT, "15m"), /429/, "an answer half an hour old does not stand in");
+});
+
 test("a token's key and address: a pump.fun mint, a Solana token, an EVM token; what is not one", () => {
   assert.ok(isTokenAddress("solana", MINT), "a pump.fun mint is a Solana address like any other");
   assert.ok(isTokenAddress("solana", BONK));
@@ -125,6 +163,50 @@ test("a swap in any token by its address: its decimals read from its own chain o
   assert.equal(chains.calls.filter((c) => c === "getTokenSupply").length, before, "its decimals read once, then kept");
   await assert.rejects(() => home.swaps.quote({ chain: "solana", sell: "SOL", buy: BONK, amount: "0.5" }), /no decimals|not a token/, "an address that answers no decimals is no token to swap");
   await assert.rejects(() => home.swaps.quote({ chain: "solana", sell: "SOL", buy: "not-an-address", amount: "0.5" }), /any token by its address/);
+});
+
+test("a Solana wallet its endpoints will not fully read: Token-2022's coins by the program's accounts; the rest standing, and said, when those fail too; Jupiter's free balances when the chain cannot be read", async (t) => {
+  const OWNER = "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU";
+  const USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+  const parsed = (mint: string, amount: string, decimals: number) => ({ pubkey: "x", account: { data: { parsed: { type: "account", info: { mint, tokenAmount: { amount, decimals } } } } } });
+  let chain = true; // the chain's endpoints answer at all
+  let scan = true; // and Token-2022's accounts by their owner
+  let jupiter = false; // Jupiter's free balances answer
+  const { home, clock } = await tokenHome(t, {
+    chains: {
+      getBalance: () => {
+        if (!chain) throw new Error("Request blocked");
+        return { value: 1_000_000_000 };
+      },
+      getTokenAccountsByOwner: (p) => {
+        if (!chain || !(p[1] as { programId: string }).programId.startsWith("Tokenkeg")) throw new Error(chain ? "INVALID_PARAMS" : "Request blocked");
+        return { value: [parsed(USDC, "25000000", 6)] };
+      },
+      getProgramAccounts: () => {
+        if (!chain || !scan) throw new Error("Indexed requests require a personal token");
+        return [parsed(BONK, "500000", 5)];
+      },
+      "GET /ultra/v1/holdings/": () => {
+        if (!jupiter) throw new Error("Jupiter is down");
+        return { amount: "2000000000", tokens: { [USDC]: [{ amount: "5000000", decimals: 6, programId: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" }], [BONK]: [{ amount: "400000", decimals: 5, programId: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PE6ZnmXR6Hn1zf" }, { amount: "300000", decimals: 5, programId: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PE6ZnmXR6Hn1zf" }] } };
+      },
+    },
+  });
+  const w = home.wallets.add(OWNER);
+  const read = async () => {
+    clock.suspend(61_000); // past a wallet's minute
+    const r = await home.wallets.holdings(w.id);
+    return { coins: Object.fromEntries(r.holdings.map((h) => [h.key === `solana:${BONK}` ? "BONK" : h.symbol, h.amount])), errors: r.errors };
+  };
+  assert.deepEqual(await read(), { coins: { SOL: "1", USDC: "25", BONK: "5" }, errors: [] }, "the chain read: Token-2022's coins by the program's accounts");
+  scan = false;
+  assert.deepEqual(await read(), { coins: { SOL: "1", USDC: "25" }, errors: ["Solana's Token-2022 coins: Indexed requests require a personal token"] }, "those refused: the rest stands, and the gap is said");
+  jupiter = true;
+  assert.deepEqual(await read(), { coins: { SOL: "1", USDC: "25", BONK: "7" }, errors: [] }, "Jupiter's balances for Token-2022's coins only (a coin's accounts summed), the chain's for the rest");
+  chain = false;
+  assert.deepEqual(await read(), { coins: { SOL: "2", USDC: "5", BONK: "7" }, errors: [] }, "the chain refusing: Jupiter's balances, every coin");
+  jupiter = false;
+  assert.deepEqual(await read(), { coins: {}, errors: ["Solana: Request blocked"] }, "neither: not read, said so");
 });
 
 const evmCode = (name: string): string => `0x${readFileSync(join(HERE, `fixtures/contracts/${name}.hex`), "utf8").replace(/\s+/g, "").replace(/^0x/i, "")}`;
@@ -239,17 +321,24 @@ test("a coin's picture through the home: from an image host only, kept, never an
 // and each orb pnl"); a swap on BNB Chain ("coin swap in general")
 test("a wallet's every coin: on Solana both token programs, a coin the desk does not know at its pair's price; on an EVM chain a coin swapped through Orbz", async (t) => {
   const OWNER = "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU";
-  const account = (mint: string, amount: string, decimals: number) => ({ account: { data: { parsed: { info: { mint, tokenAmount: { amount, decimals } } } } } });
+  const account = (mint: string, amount: string, decimals: number, type = "account") => ({ account: { data: { parsed: { type, info: { mint, tokenAmount: { amount, decimals } } } } } });
   const programs: string[] = [];
   const { home, chains } = await tokenHome(t, {
     chains: {
       getBalance: () => ({ value: 2_000_000_000 }),
+      // as the official endpoint answers (10-11): the classic program's coins by their owner, Token-2022's refused
       getTokenAccountsByOwner: (p) => {
         const program = (p[1] as { programId: string }).programId;
+        if (!program.startsWith("Tokenkeg")) throw new Error("INVALID_PARAMS");
         programs.push(program);
-        return program.startsWith("Tokenkeg")
-          ? { value: [account("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", "25000000", 6), account(MINT, "1000000000", 6), account(BONK, "0", 5)] }
-          : { value: [account(BONK, "500000", 5)] };
+        return { value: [account("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", "25000000", 6), account(MINT, "1000000000", 6), account(BONK, "0", 5)] };
+      },
+      // Token-2022's: the program's accounts whose owner (at byte 32) is this wallet; a mint of its own is no coin held
+      getProgramAccounts: (p) => {
+        const [program, o] = p as [string, { filters: { memcmp: { offset: number; bytes: string } }[] }];
+        assert.deepEqual(o.filters, [{ memcmp: { offset: 32, bytes: OWNER } }]);
+        programs.push(program);
+        return [account(BONK, "500000", 5), account(BONK, "0", 5, "mint")];
       },
       getTokenSupply: () => ({ value: { decimals: 18, amount: "1", uiAmountString: "1" } }),
       eth_getBalance: () => "0x0",
@@ -263,7 +352,8 @@ test("a wallet's every coin: on Solana both token programs, a coin the desk does
   });
   const sol = home.wallets.add(OWNER);
   const got = (await home.wallets.holdings(sol.id)).holdings;
-  assert.deepEqual(programs.sort(), ["TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", "TokenzQdBNbLqP5VEhdkAS6EPFLC1PE6ZnmXR6Hn1zf"], "both token programs read");
+  assert.deepEqual(programs.sort(), ["TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", "TokenzQdBNbLqP5VEhdkAS6EPFLC1PE6ZnmXR6Hn1zf"], "both token programs read: the classic by owner, Token-2022 by its accounts' owner");
+  assert.deepEqual((await home.wallets.holdings(sol.id)).errors, [], "nothing left unread");
   const by = new Map(got.map((h) => [h.symbol, h]));
   assert.equal(by.get("USDC")!.usd, 25, "a coin the desk knows, at its price");
   const fart = by.get("Fartcoin")!;

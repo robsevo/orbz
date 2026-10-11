@@ -129,6 +129,11 @@ export function publicDex(o: { fetch?: typeof fetch; screener?: string; gecko?: 
   const get = o.fetch ?? fetch;
   const json = async (url: string): Promise<unknown> => {
     const r = await get(url, { signal: AbortSignal.timeout(10_000), headers: { accept: "application/json" } });
+    if (r.status === 429) {
+      // asked too often: as long as it says to wait (Retry-After, in seconds), or the rest's own wait
+      const wait = Number(r.headers.get("retry-after"));
+      throw Object.assign(new Error(`${new URL(url).host} asked us to slow down (429)`), { slowDown: Number.isFinite(wait) && wait > 0 ? wait * 1000 : 0 });
+    }
     if (!r.ok) throw new Error(`${new URL(url).host} answered ${r.status}`);
     return r.json();
   };
@@ -179,7 +184,8 @@ export function publicDex(o: { fetch?: typeof fetch; screener?: string; gecko?: 
 }
 
 // ── the desk's one copy ────────────────────────────────────────────────────────────────────────────
-/** A source's health and its rest after failing, kept apart for each of the two. */
+/** A source's health and its rest after failing, kept apart for each of the two. A source that says it is asked too
+ * often (a 429) rests at least 20 seconds, or as long as it asks: its limit is counted by the minute. */
 class Rest {
   #failures = 0;
   #until = 0;
@@ -200,12 +206,35 @@ class Rest {
     } catch (e) {
       this.#failures++;
       this.error = e instanceof Error ? e.message : String(e);
-      this.#until = this.now() + Math.min(300_000, 2_000 * 2 ** (this.#failures - 1));
+      const back = Math.min(300_000, 2_000 * 2 ** (this.#failures - 1));
+      const asked = (e as { slowDown?: number }).slowDown;
+      this.#until = this.now() + (asked === undefined ? back : Math.max(20_000, asked, back));
       throw e;
     }
   }
   get resting(): number | null {
     return this.#until > this.now() ? this.#until : null;
+  }
+}
+
+/** A source's asks in the last minute, kept under its limit (GeckoTerminal's free API takes about 30 a minute from one
+ * machine; 10-11, the owner: "api.geckoterminal.com answered 429"): a chart's bars and a coin's trades may use all of it,
+ * what is trending only three quarters, so it never takes a chart's turn. */
+export class Budget {
+  readonly #at: number[] = [];
+  readonly perMinute: number;
+  readonly #now: () => number;
+  constructor(perMinute: number, now: () => number) {
+    this.perMinute = perMinute;
+    this.#now = now;
+  }
+  /** One ask, if the minute has room for it. */
+  take(low = false): boolean {
+    const t = this.#now();
+    while (this.#at.length && t - this.#at[0]! >= 60_000) this.#at.shift();
+    if (this.#at.length >= (low ? Math.floor(this.perMinute * 0.75) : this.perMinute)) return false;
+    this.#at.push(t);
+    return true;
   }
 }
 
@@ -217,14 +246,22 @@ export class Dex {
   readonly #screener: Rest;
   readonly #gecko: Rest;
   readonly #kept = new Map<string, { at: number; v: unknown }>();
-  /** How long each kind of answer is kept: a search and a token's pairs move fast; what is trending, slower. */
-  static readonly KEEP_MS = { search: 20_000, pairs: 15_000, candles: 30_000, trades: 15_000, trending: 60_000 } as const;
+  readonly #geckoBudget: Budget;
+  /** How long each kind of answer is kept: a search and a token's pairs move fast; a minute's bars (a chart of 1-minute
+   * bars) for 20 seconds, any other bars a minute; what is trending, five. GeckoTerminal's (bars, trades, trending) are
+   * also held to its budget. */
+  static readonly KEEP_MS = { search: 20_000, pairs: 15_000, candles: 60_000, minuteCandles: 20_000, trades: 30_000, trending: 300_000 } as const;
+  /** How old an answer may be and still stand in while its source rests or its minute is spent. */
+  static readonly STALE_MS = 30 * 60_000;
+  /** GeckoTerminal's asks a minute, under its 30. */
+  static readonly GECKO_PER_MINUTE = 24;
 
   constructor(source: DexSource, now: () => number) {
     this.#source = source;
     this.#now = now;
     this.#screener = new Rest(now);
     this.#gecko = new Rest(now);
+    this.#geckoBudget = new Budget(Dex.GECKO_PER_MINUTE, now);
   }
 
   status(): DexStatus {
@@ -232,13 +269,20 @@ export class Dex {
     return { source: this.#source.name, ok: error === null, error, restingUntil: this.#screener.resting ?? this.#gecko.resting };
   }
 
-  async #keep<T>(key: string, ms: number, rest: Rest, what: () => Promise<T>): Promise<T> {
+  async #keep<T>(key: string, ms: number, rest: Rest, what: () => Promise<T>, o: { budget?: Budget; low?: boolean } = {}): Promise<T> {
     const have = this.#kept.get(key);
     if (have && this.#now() - have.at < ms) return have.v as T;
-    const v = await rest.ask(what);
-    this.#kept.set(key, { at: this.#now(), v });
-    if (this.#kept.size > 500) this.#kept.delete(this.#kept.keys().next().value!); // the oldest first
-    return v;
+    try {
+      if (o.budget && rest.resting === null && !o.budget.take(o.low)) throw new Error("its asks for this minute are spent: again in a moment");
+      const v = await rest.ask(what);
+      this.#kept.set(key, { at: this.#now(), v });
+      if (this.#kept.size > 500) this.#kept.delete(this.#kept.keys().next().value!); // the oldest first
+      return v;
+    } catch (e) {
+      // what it said last, while it rests or its minute is spent: a chart never goes blank for a busy source
+      if (have && this.#now() - have.at < Dex.STALE_MS) return have.v as T;
+      throw e;
+    }
   }
 
   /** What a search finds, by name, symbol or address: each token once, on its most liquid pair, the most liquid first.
@@ -289,7 +333,7 @@ export class Dex {
 
   /** A pool's bars for a token in dollars, oldest first, the forming one last. */
   async candles(chain: DexChain, pool: string, token: string, tf: Timeframe, limit = 300): Promise<Candle[]> {
-    const bars = await this.#keep(`candles:${chain}:${pool}:${token}:${tf}:${limit}`, Dex.KEEP_MS.candles, this.#gecko, () => this.#source.candles(chain, pool, token, tf, limit));
+    const bars = await this.#keep(`candles:${chain}:${pool}:${token}:${tf}:${limit}`, tf === "1m" ? Dex.KEEP_MS.minuteCandles : Dex.KEEP_MS.candles, this.#gecko, () => this.#source.candles(chain, pool, token, tf, limit), { budget: this.#geckoBudget });
     return bars.filter((b) => [b.t, b.o, b.h, b.l, b.c, b.v].every(Number.isFinite)).sort((a, b) => a.t - b.t).slice(-limit);
   }
 
@@ -302,7 +346,7 @@ export class Dex {
 
   /** A pool's last trades for a token, the newest first. */
   async trades(chain: DexChain, pool: string, token: string): Promise<DexTrade[]> {
-    const list = await this.#keep(`trades:${chain}:${pool}:${token}`, Dex.KEEP_MS.trades, this.#gecko, () => this.#source.trades(chain, pool, token));
+    const list = await this.#keep(`trades:${chain}:${pool}:${token}`, Dex.KEEP_MS.trades, this.#gecko, () => this.#source.trades(chain, pool, token), { budget: this.#geckoBudget });
     return [...list].sort((a, b) => b.at - a.at).slice(0, 100);
   }
 
@@ -320,7 +364,7 @@ export class Dex {
 
   /** The pools trending on a chain now. */
   async trending(chain: DexChain): Promise<DexPair[]> {
-    const pools = await this.#keep(`trending:${chain}`, Dex.KEEP_MS.trending, this.#gecko, () => this.#source.trending(chain));
+    const pools = await this.#keep(`trending:${chain}`, Dex.KEEP_MS.trending, this.#gecko, () => this.#source.trending(chain), { budget: this.#geckoBudget, low: true });
     // each coin once, where it first trends (a coin on two pools is one coin)
     const seen = new Set<string>();
     return pools.filter((p) => {

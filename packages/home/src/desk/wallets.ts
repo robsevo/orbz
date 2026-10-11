@@ -125,24 +125,18 @@ export class Wallets {
     } else if (w.chain === "solana") {
       const sol = CHAINS.find((c) => c.id === "solana")!;
       try {
-        const lamports = (await rpc(sol.rpcs, "getBalance", [w.address], { fetch: get })) as { value: number };
-        if (lamports.value > 0) {
-          const amount = fromUnits(BigInt(lamports.value), 9);
+        const found = await this.#solana(w.address, get, errors);
+        if (found.lamports > 0n) {
+          const amount = fromUnits(found.lamports, 9);
           holdings.push({ chain: "Solana", symbol: "SOL", amount, usd: value(amount, sol.tokens[0]!), key: tokenKey("solana", sol.tokens[0]!.address), change24h: moved.get("SOL") ?? null });
         }
-        const accounts = { value: [] as { account: { data: { parsed: { info: { mint: string; tokenAmount: { amount: string; decimals: number } } } } } }[] };
-        for (const programId of PROGRAMS) {
-          const r = (await rpc(sol.rpcs, "getTokenAccountsByOwner", [w.address, { programId }, { encoding: "jsonParsed" }], { fetch: get })) as typeof accounts | null;
-          accounts.value.push(...(r?.value ?? []));
-        }
         const others: [string, string][] = [];
-        for (const a of accounts.value) {
-          const info = a.account.data.parsed.info;
-          if (info.tokenAmount.amount === "0") continue;
-          const amount = fromUnits(BigInt(info.tokenAmount.amount), info.tokenAmount.decimals);
-          const t = sol.tokens.find((x) => x.address === info.mint);
+        for (const [mint, c] of found.coins) {
+          if (c.amount === 0n) continue;
+          const amount = fromUnits(c.amount, c.decimals);
+          const t = sol.tokens.find((x) => x.address === mint);
           if (t) holdings.push({ chain: "Solana", symbol: t.symbol, amount, usd: value(amount, t), key: tokenKey("solana", t.address), change24h: t.stable ? 0 : t.market ? moved.get(t.market) ?? null : null });
-          else others.push([info.mint, amount]);
+          else others.push([mint, amount]);
         }
         // every other coin it holds, a pump.fun one too, at its pair's price (one ask for 30 of them)
         if (others.length) {
@@ -169,5 +163,56 @@ export class Wallets {
     const out = { holdings, errors, at: this.#now() };
     this.#cache.set(id, out);
     return out;
+  }
+
+  /** What a Solana wallet holds, read from its chain: its SOL, and each coin of both token programs (a coin's accounts
+   * summed). The public endpoints do not answer Token-2022's coins by their owner (10-11: the official one refuses the
+   * program, PublicNode asks for a key), so those are the program's accounts whose owner is this wallet. When the chain
+   * cannot be read, Jupiter's free balances (the swaps' own router) stand in; when only Token-2022's coins cannot be,
+   * the rest stands and `notes` says so. */
+  async #solana(address: string, get: typeof fetch | undefined, notes: string[]): Promise<{ lamports: bigint; coins: Map<string, { amount: bigint; decimals: number }> }> {
+    const sol = CHAINS.find((c) => c.id === "solana")!;
+    type Parsed = { account: { data: { parsed?: { type?: string; info?: { mint?: string; tokenAmount?: { amount?: string; decimals?: number } } } } } };
+    const coins = new Map<string, { amount: bigint; decimals: number }>();
+    const add = (mint: unknown, amount: unknown, decimals: unknown): void => {
+      if (typeof mint !== "string" || typeof amount !== "string" || !/^\d+$/.test(amount) || !Number.isInteger(decimals)) return;
+      const had = coins.get(mint);
+      coins.set(mint, { amount: (had?.amount ?? 0n) + BigInt(amount), decimals: decimals as number });
+    };
+    const addParsed = (a: Parsed): void => {
+      const info = a.account?.data?.parsed?.info;
+      add(info?.mint, info?.tokenAmount?.amount, info?.tokenAmount?.decimals);
+    };
+    let lamports: bigint;
+    try {
+      lamports = BigInt(((await rpc(sol.rpcs, "getBalance", [address], { fetch: get })) as { value: number }).value);
+      const classic = (await rpc(sol.rpcs, "getTokenAccountsByOwner", [address, { programId: PROGRAMS[0] }, { encoding: "jsonParsed" }], { fetch: get })) as { value?: Parsed[] } | null;
+      for (const a of classic?.value ?? []) addParsed(a);
+    } catch (e) {
+      const j = await this.#jupiter(address, get).catch(() => null);
+      if (!j) throw e;
+      for (const c of j.coins) add(c.mint, c.amount, c.decimals);
+      return { lamports: j.lamports, coins };
+    }
+    try {
+      const newer = (await rpc(sol.rpcs, "getProgramAccounts", [PROGRAMS[1], { encoding: "jsonParsed", filters: [{ memcmp: { offset: 32, bytes: address } }] }], { fetch: get })) as Parsed[] | null;
+      for (const a of newer ?? []) if (a.account?.data?.parsed?.type === "account") addParsed(a);
+    } catch (e) {
+      const j = await this.#jupiter(address, get).catch(() => null);
+      if (j) {
+        for (const c of j.coins) if (c.program === PROGRAMS[1]) add(c.mint, c.amount, c.decimals);
+      } else notes.push(`Solana's Token-2022 coins: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    return { lamports, coins };
+  }
+
+  /** A Solana wallet's balances from Jupiter's free API (no key): its lamports and each token account. */
+  async #jupiter(address: string, get: typeof fetch | undefined): Promise<{ lamports: bigint; coins: { mint: string; amount: string; decimals: number; program: string }[] }> {
+    const r = await (get ?? fetch)(`https://lite-api.jup.ag/ultra/v1/holdings/${address}`, { signal: AbortSignal.timeout(12_000) });
+    if (!r.ok) throw new Error(`Jupiter answered ${r.status}`);
+    const j = (await r.json()) as { amount?: unknown; tokens?: Record<string, { amount?: string; decimals?: number; programId?: string }[]> };
+    if (typeof j.amount !== "string" || !/^\d+$/.test(j.amount)) throw new Error("Jupiter gave no balance");
+    const coins = Object.entries(j.tokens ?? {}).flatMap(([mint, list]) => (Array.isArray(list) ? list : []).map((a) => ({ mint, amount: String(a.amount ?? ""), decimals: Number(a.decimals), program: String(a.programId ?? "") })));
+    return { lamports: BigInt(j.amount), coins };
   }
 }
