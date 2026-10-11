@@ -44,9 +44,13 @@ export function standInDexFetch(o: { price?: () => string; fail?: () => boolean 
     }
     const tokens = /^\/tokens\/v1\/([a-z]+)\/(.+)$/.exec(url.pathname);
     if (tokens) {
-      if (tokens[2] === MINT) return json([screener({ pair: THIN, dex: "pumpfun", base: [MINT, "Fartcoin", "Fartcoin"], price: "0.15", liq: 5_000, created: START - 3600_000 }), fart]);
-      if (tokens[2] === EVM_TOKEN) return json([screener({ chain: "base", dex: "uniswap", pair: "0x2222222222222222222222222222222222222222", base: [EVM_TOKEN, "Test", "TST"], price: "2", liq: 50_000 })]);
-      return json([]);
+      // one address, or several by commas: each one's pairs, together
+      const out: unknown[] = [];
+      for (const a of decodeURIComponent(tokens[2]!).split(",")) {
+        if (a === MINT) out.push(screener({ pair: THIN, dex: "pumpfun", base: [MINT, "Fartcoin", "Fartcoin"], price: "0.15", liq: 5_000, created: START - 3600_000 }), fart);
+        if (a === EVM_TOKEN) out.push(screener({ chain: "base", dex: "uniswap", pair: "0x2222222222222222222222222222222222222222", base: [EVM_TOKEN, "Test", "TST"], price: "2", liq: 50_000 }));
+      }
+      return json(out);
     }
     const ohlcv = /^\/networks\/([a-z_]+)\/pools\/([^/]+)\/ohlcv\/(minute|hour|day)$/.exec(url.pathname);
     if (ohlcv) {

@@ -25,6 +25,8 @@ export type Settings = { perTradeUsd: number; perDayUsd: number; slippageBps: nu
 export const DEFAULT_SETTINGS: Settings = { perTradeUsd: 100, perDayUsd: 300, slippageBps: 50, off: false };
 
 export class DeskError extends Error {}
+/** An orb's closed trades on paper, summed (PLAN 5.31). */
+export type OrbPnl = { orb: string; trades: number; wins: number; realized: number; today: number; best: number | null; worst: number | null; fees: number; last: number | null };
 
 type BookRow = { id: number; orb: string; strategy: number | null; symbol: string | null; cash_start: number; cash: number; qty: number; entry_px: number; entry_t: number; best: number; fees: number; pending: string | null; last_bar: number | null; state: "live" | "stopped"; started_at: number; stopped_at: number | null };
 
@@ -229,6 +231,29 @@ export class Desk {
     const trade = { book: b.id, strategy: null, symbol, timeframe: null, paper: true, entryPx: cost / qty, exitPx: fill, qty, pnl, pnlPct: (pnl / cost) * 100, fees: fee, held: at - held.since, why: "own" };
     this.#events.append("desk.trade_closed", trade, { orb });
     return { book: this.book(b.id)!, px: fill, trade };
+  }
+
+  /** Each orb's closed trades on paper, summed (owner, 10-11: "each orb pnl"): its realized P&L after fees, today's, its
+   * wins, its best and worst trade, and when it last closed one; the best first. */
+  pnl(): OrbPnl[] {
+    const d = new Date(this.#now());
+    const midnight = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    const by = new Map<string, OrbPnl>();
+    for (const e of this.#events.ofType("desk.trade_closed")) {
+      const pnl = Number(e.data.pnl);
+      if (!e.orb || !Number.isFinite(pnl)) continue;
+      const p = by.get(e.orb) ?? { orb: e.orb, trades: 0, wins: 0, realized: 0, today: 0, best: null, worst: null, fees: 0, last: null };
+      p.trades++;
+      if (pnl > 0) p.wins++;
+      p.realized += pnl;
+      if (e.at >= midnight) p.today += pnl;
+      p.best = p.best === null ? pnl : Math.max(p.best, pnl);
+      p.worst = p.worst === null ? pnl : Math.min(p.worst, pnl);
+      p.fees += Number(e.data.fees) || 0;
+      p.last = e.at;
+      by.set(e.orb, p);
+    }
+    return [...by.values()].sort((a, b) => b.realized - a.realized);
   }
 
   // ── notes ───────────────────────────────────────────────────────────────────────────────────────

@@ -445,6 +445,23 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("an orb sent for real is not told to ask you", "src/api.ts", [
         ("            : `When you see an entry, ask me for it with propose_swap", "            : `When you see an entry, buy it with paper_trade"),
     ], ["dex.test.ts"]),
+    # your wallets' worth and each orb's P&L (PLAN 5.31; owner, 10-11: "users can see wallet balance and analytics as well.
+    # and each orb pnl")
+    ("a Token-2022 coin is never looked for", "src/desk/wallets.ts", [
+        ('const PROGRAMS = ["TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", "TokenzQdBNbLqP5VEhdkAS6EPFLC1PE6ZnmXR6Hn1zf"];', 'const PROGRAMS = ["TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"];'),
+    ], ["dex.test.ts"]),
+    ("a coin the desk does not know is left out of a wallet", "src/desk/wallets.ts", [
+        ("          else others.push([info.mint, amount]);\n", ""),
+    ], ["dex.test.ts"]),
+    ("a coin swapped through Orbz is not looked for in a wallet", "src/desk/wallets.ts", [
+        (".slice(0, 20);", ".slice(0, 0);"),
+    ], ["dex.test.ts"]),
+    ("an orb's P&L counts its closed trades twice", "src/api.ts", [
+        ("              ...r, start, equity, pnl: equity - start,", "              ...r, start, equity, pnl: equity - start + r.realized,"),
+    ], ["dex.test.ts"]),
+    ("a losing trade counted as a win", "src/desk/desk.ts", [
+        ("      if (pnl > 0) p.wins++;", "      if (pnl !== 0) p.wins++;"),
+    ], ["dex.test.ts"]),
     # the app opened in this machine's own browser, for a wallet (owner, 10-11)
     ("a browser opens here for another device", "src/api.ts", [
         ('    if (door.remote) throw new HttpError(403, "a browser is opened only on the machine the home runs on");\n', ""),
@@ -3300,6 +3317,13 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("the names in Lately not underlined", "src/rooms/Home.tsx", [
         ('fontWeight: 800, textDecoration: "underline", textDecorationThickness: 1.5, textUnderlineOffset: 3 }}>{w.name}</b>', "fontWeight: 800 }}>{w.name}</b>"),
     ], ["home-view.test.ts"]),
+    # a wallet's coin pressed opens on the screen; the swap form takes any coin by its address (owner, 10-11)
+    ("a wallet's coin opens nothing", "src/desk/Worth.tsx", [
+        ("onClick={() => openCoin(c.key!)}", "onClick={() => undefined}"),
+    ], ["desk-view.test.ts"]),
+    ("the swap form's any coin is ignored", "src/desk/Trade.tsx", [
+        ("  const to = buy === ANY ? buyAt.trim() : buy;", "  const to = buy;"),
+    ], ["desk-view.test.ts"]),
     # the war room's screen (owner, 10-11): pressed it opens; an address pasted opens its coin; Connect wallet connects
     ("the war room's screen opens nothing", "src/desk/Room.tsx", [
         ("onScreen={() => setScreen(true)}", "onScreen={() => undefined}"),

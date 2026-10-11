@@ -148,7 +148,8 @@ export function publicDex(o: { fetch?: typeof fetch; screener?: string; gecko?: 
       return (d.pairs ?? []).map(fromScreener).filter((p): p is DexPair => p !== null);
     },
     async pairs(chain, address) {
-      const d = (await json(`${screener}/tokens/v1/${chain}/${encodeURIComponent(address)}`)) as Record<string, unknown>[];
+      // one address, or up to 30 of them by commas
+      const d = (await json(`${screener}/tokens/v1/${chain}/${address.split(",").map(encodeURIComponent).join(",")}`)) as Record<string, unknown>[];
       return (Array.isArray(d) ? d : []).map(fromScreener).filter((p): p is DexPair => p !== null);
     },
     async candles(chain, pool, token, tf, limit) {
@@ -262,6 +263,22 @@ export class Dex {
     if (!isTokenAddress(chain, address)) throw new Error(`not a ${chain} token address`);
     const pairs = await this.#keep(`pairs:${chain}:${address}`, Dex.KEEP_MS.pairs, this.#screener, () => this.#source.pairs(chain, address));
     return pairs.filter((p) => p.base.address.toLowerCase() === address.toLowerCase()).sort((a, b) => (b.liquidityUsd ?? -1) - (a.liquidityUsd ?? -1));
+  }
+
+  /** Each of these coins on its most liquid pair, 30 to an ask: its price, name and picture (a wallet's worth). */
+  async best(chain: DexChain, addresses: readonly string[]): Promise<Map<string, DexPair>> {
+    const out = new Map<string, DexPair>();
+    const want = [...new Set(addresses.filter((a) => isTokenAddress(chain, a)))];
+    for (let i = 0; i < want.length; i += 30) {
+      const part = want.slice(i, i + 30).join(",");
+      const pairs = await this.#keep(`pairs:${chain}:${part}`, Dex.KEEP_MS.pairs, this.#screener, () => this.#source.pairs(chain, part));
+      for (const p of pairs) {
+        const k = p.base.address.toLowerCase();
+        const was = out.get(k);
+        if (!was || (p.liquidityUsd ?? -1) > (was.liquidityUsd ?? -1)) out.set(k, p);
+      }
+    }
+    return out;
   }
 
   /** A token's price in dollars on its most liquid pair, or null when no pair says one. */

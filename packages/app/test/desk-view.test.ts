@@ -22,7 +22,7 @@ import { Home } from "../../home/src/home.ts";
 import { serve } from "../../home/src/api.ts";
 import { fakeModel } from "../../home/test/fakes/model.ts";
 import { standInChains, standInMarket, standInRouters } from "../../home/test/fakes/market.ts";
-import { MINT, standInDexFetch } from "../../home/test/fakes/dex.ts";
+import { EVM_TOKEN, MINT, standInDexFetch } from "../../home/test/fakes/dex.ts";
 import { publicDex } from "../../home/src/desk/dex.ts";
 import { keptBy, TURNS } from "../src/floor/props.ts";
 
@@ -328,6 +328,38 @@ test("the desk: the floor and its tabs at desk and phone sizes; a strategy kept 
   await page.locator("[data-token-close]").click();
   await page.locator("[data-token-desk]").waitFor({ state: "detached" });
   await page.locator('[data-desk-orb="Kit"][data-at="poi:whiteboard"]').waitFor({ timeout: 20_000 });
+
+  // your wallets' worth (owner, 10-11: "users can see wallet balance and analytics as well"): what the wallets kept hold,
+  // valued, how it is spread; a coin pressed opens on the war room's screen
+  await tab(page, "trade");
+  await page.locator("[data-worth-total]").waitFor({ timeout: 30_000 });
+  assert.match(await page.locator("[data-worth-total]").innerText(), /^\$[\d,]+\.\d\d$/);
+  await page.locator("[data-spread]").waitFor();
+  const wsol = "solana:So11111111111111111111111111111111111111112";
+  await page.locator(`[data-coin="${wsol}"]`).click();
+  await page.locator(`[data-token-page="${wsol}"]`).waitFor({ timeout: 20_000 });
+  await page.locator("[data-token-close]").click();
+  await page.locator("[data-token-desk]").waitFor({ state: "detached" });
+  // each orb's P&L (owner, 10-11: "each orb pnl"): a paper trade of Kit's closed, its card says so
+  await h.desk.paperTrade("kit", "BTC", "buy", 100);
+  await h.desk.paperTrade("kit", "BTC", "sell", 1_000);
+  // on the wallet's dashboard too (owner, 10-11: "a wallet dashboard also where like we said we can see the orbs pnl")
+  await page.locator('[data-orbs-glance] [data-orb-glance="Kit"]').waitFor({ timeout: 20_000 });
+  await page.locator("[data-orbs-more]").click();
+  await page.locator('[data-desk-tab="desk"][aria-selected="true"]').waitFor();
+  await page.locator('[data-orb-pnl="Kit"]', { hasText: /\d+ trades/ }).waitFor({ timeout: 20_000 });
+  assert.match(await page.locator('[data-orb-pnl="Kit"] [data-pnl]').innerText(), /^[+−]\$[\d,]+\.\d\d/);
+  assert.match(await page.locator("[data-desk-pnl]").innerText(), /on paper, the whole desk/);
+  assert.deepEqual(await measure(page), [], "each orb's P&L, at desk size");
+  // a swap of any coin, by its address (owner, 10-11: "coin swap in general, not just pump.fun")
+  await tab(page, "trade");
+  await page.locator("[data-trade-chain]").selectOption("base");
+  await page.locator("[data-trade-sell]").selectOption("USDC");
+  await page.locator("[data-trade-buy]").selectOption("any");
+  await page.locator("[data-trade-buy-at]").fill(EVM_TOKEN);
+  await page.getByLabel("How much USDC to sell").fill("10");
+  await page.locator("[data-quote]").click();
+  await page.locator("[data-quote-result]", { hasText: "About" }).waitFor({ timeout: 20_000 });
 
   // every tab at phone size
   const phone = await open({ width: 390, height: 844 });

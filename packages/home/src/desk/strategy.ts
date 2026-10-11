@@ -46,7 +46,7 @@ export type Strategy = {
 };
 
 /** The symbols a strategy can trade, as the market feed names them. */
-export const SYMBOLS = ["BTC", "ETH", "SOL", "LINK", "DOGE", "AVAX", "UNI", "AAVE"] as const;
+export const SYMBOLS = ["BTC", "ETH", "SOL", "BNB", "LINK", "DOGE", "AVAX", "UNI", "AAVE"] as const;
 
 // ── checking ──────────────────────────────────────────────────────────────────────────────────────
 const int = (v: unknown, lo: number, hi: number): boolean => Number.isInteger(v) && (v as number) >= lo && (v as number) <= hi;

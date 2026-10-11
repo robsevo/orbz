@@ -142,8 +142,8 @@ test("what a token can do: a Solana mint that can freeze or mint, a fee on every
   assert.deepEqual(weth.flags, [], "the control: WETH's code has nothing against it");
   const none = await safetyOf("base", EVM_TOKEN, null, { now: START, fetch: standInChains({ eth_getCode: () => "0x" }) });
   assert.match(none.flags[0]!.words, /no code/);
-  const thin = await safetyOf("bsc", EVM_TOKEN, pair({ liquidityUsd: 4_000, createdAt: START - 3600_000, dex: "pumpfun" }), { now: START });
-  assert.deepEqual(thin.flags.map((f) => f.level), ["warn", "warn", "note"], "thin, new, still on its curve: from its pair alone on a chain the desk does not swap on");
+  const thin = await safetyOf("bsc", EVM_TOKEN, pair({ liquidityUsd: 4_000, createdAt: START - 3600_000, dex: "pumpfun" }), { now: START, fetch: standInChains({ eth_getCode: () => evmCode("weth-base") }) });
+  assert.deepEqual(thin.flags.map((f) => f.level), ["warn", "warn", "note"], "thin, new, still on its curve: its pair's own facts (its code clean)");
 });
 /** A plain pair to change a field of. */
 function plainPair(): DexPair {
@@ -233,4 +233,76 @@ test("a coin's picture through the home: from an image host only, kept, never an
   assert.deepEqual([ok.status, ok.headers.get("content-type"), ok.headers.get("content-security-policy")], [200, "image/png", "default-src 'none'; sandbox"]);
   assert.equal((await ok.arrayBuffer()).byteLength, 8);
   assert.equal((await get("https://evil.example/coin.png")).status, 404);
+});
+
+// your wallets' worth and each orb's P&L (PLAN 5.31; owner, 10-11: "users can see wallet balance and analytics as well.
+// and each orb pnl"); a swap on BNB Chain ("coin swap in general")
+test("a wallet's every coin: on Solana both token programs, a coin the desk does not know at its pair's price; on an EVM chain a coin swapped through Orbz", async (t) => {
+  const OWNER = "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU";
+  const account = (mint: string, amount: string, decimals: number) => ({ account: { data: { parsed: { info: { mint, tokenAmount: { amount, decimals } } } } } });
+  const programs: string[] = [];
+  const { home, chains } = await tokenHome(t, {
+    chains: {
+      getBalance: () => ({ value: 2_000_000_000 }),
+      getTokenAccountsByOwner: (p) => {
+        const program = (p[1] as { programId: string }).programId;
+        programs.push(program);
+        return program.startsWith("Tokenkeg")
+          ? { value: [account("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", "25000000", 6), account(MINT, "1000000000", 6), account(BONK, "0", 5)] }
+          : { value: [account(BONK, "500000", 5)] };
+      },
+      getTokenSupply: () => ({ value: { decimals: 18, amount: "1", uiAmountString: "1" } }),
+      eth_getBalance: () => "0x0",
+      // the coin swapped through Orbz holds 3 of 18 decimals; nothing else is held
+      eth_call: (p) => {
+        const { to, data } = p[0] as { to: string; data: string };
+        if (to.toLowerCase() !== EVM_TOKEN) return "0x0";
+        return data.startsWith("0x313ce567") ? "0x12" : `0x${(3n * 10n ** 18n).toString(16)}`;
+      },
+    },
+  });
+  const sol = home.wallets.add(OWNER);
+  const got = (await home.wallets.holdings(sol.id)).holdings;
+  assert.deepEqual(programs.sort(), ["TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", "TokenzQdBNbLqP5VEhdkAS6EPFLC1PE6ZnmXR6Hn1zf"], "both token programs read");
+  const by = new Map(got.map((h) => [h.symbol, h]));
+  assert.equal(by.get("USDC")!.usd, 25, "a coin the desk knows, at its price");
+  const fart = by.get("Fartcoin")!;
+  assert.deepEqual([fart.amount, fart.usd, fart.key], ["1000", 160, `solana:${MINT}`], "a pump.fun coin, at its pair's price, with its key");
+  assert.ok(got.some((h) => h.key === `solana:${BONK}` && h.usd === null && Number(h.amount) === 5), "a Token-2022 coin with no pair: held, no price");
+  assert.ok(!got.some((h) => h.key === `solana:${BONK}` && Number(h.amount) === 0), "an empty account is nothing held");
+  // an EVM wallet: the coins the desk knows, and one swapped through Orbz (asked of you, kept by its address)
+  await home.swaps.ask({ by: "tess", chain: "base", sell: "USDC", buy: EVM_TOKEN, amount: "10" });
+  const evm = home.wallets.add("0x52908400098527886E0F7030069857D2E4169EE7");
+  const held = (await home.wallets.holdings(evm.id)).holdings;
+  assert.deepEqual(held.map((h) => [h.symbol, h.amount, h.usd, h.key]), [["TST", "3", 6, `base:${EVM_TOKEN}`]], "the coin it swapped, its decimals read from its chain");
+  const decimalsAsks = chains.calls.length;
+  home.wallets.remove(evm.id);
+  const again = home.wallets.add("0x52908400098527886E0F7030069857D2E4169EE7");
+  await home.wallets.holdings(again.id);
+  assert.ok(chains.calls.length > decimalsAsks, "read again after a minute's cache is gone");
+});
+
+test("each orb's P&L: its closed trades summed (a win, a loss), its books against what they started with; a swap quoted on BNB Chain", async (t) => {
+  let price = "0.16";
+  const { home, clock } = await tokenHome(t, { price: () => price, chains: { getTokenSupply: () => ({ value: { decimals: 6, amount: "1", uiAmountString: "1" } }) } });
+  const key = `solana:${MINT}`;
+  await home.desk.paperTrade("tess", key, "buy", 1000);
+  price = "0.20";
+  clock.suspend(20_000);
+  await home.desk.paperTrade("tess", key, "sell", 1_000_000); // a win
+  await home.desk.paperTrade("tess", key, "buy", 500);
+  price = "0.10";
+  clock.suspend(20_000);
+  await home.desk.paperTrade("tess", key, "sell", 1_000_000); // a loss
+  const [tess] = home.desk.pnl();
+  assert.deepEqual([tess!.orb, tess!.trades, tess!.wins], ["tess", 2, 1]);
+  assert.ok(tess!.best! > 0 && tess!.worst! < 0 && tess!.today === tess!.realized, "its best and worst; today all of it");
+  const door = await serve(home, { port: 0 });
+  t.after(() => door.close());
+  const snap = (await (await fetch(`http://127.0.0.1:${door.port}/desk`, { headers: { authorization: `Bearer ${door.token}` } })).json()) as { orbs: { orb: string; pnl: number; start: number; equity: number; trades: number; open: number }[] };
+  const row = snap.orbs.find((o) => o.orb === "tess")!;
+  assert.ok(Math.abs(row.pnl - tess!.realized) < 1e-6, "its P&L: its book against what it started with, the same as its closed trades when nothing is open (each counted once)");
+  assert.deepEqual([row.start, row.open, row.trades], [10_000, 0, 2]);
+  const q = await home.swaps.quote({ chain: "bsc", sell: "USDT", buy: "BNB", amount: "10" });
+  assert.equal(q.usd, 10, "BNB Chain: USDT at a dollar");
 });

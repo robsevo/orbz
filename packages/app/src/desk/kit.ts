@@ -45,7 +45,7 @@ export function ema(xs: readonly number[], n: number): number[] {
   return out;
 }
 
-export const SYMBOLS = ["BTC", "ETH", "SOL", "LINK", "DOGE", "AVAX", "UNI", "AAVE"] as const;
+export const SYMBOLS = ["BTC", "ETH", "SOL", "BNB", "LINK", "DOGE", "AVAX", "UNI", "AAVE"] as const;
 export const TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "1d"] as const;
 
 /** The strategies a builder starts from, each a known setup with its two numbers to tune. */

@@ -11,7 +11,7 @@
 // asked and again when it is built.
 import type { DatabaseSync } from "node:sqlite";
 import type { EventLog } from "../events.ts";
-import { call, chainOf, fromUnits, NATIVE, rpc, toUnits, tokenOf, type Chain, type Token } from "./chains.ts";
+import { call, chainOf, CHAINS, fromUnits, NATIVE, rpc, toUnits, tokenOf, type Chain, type Token } from "./chains.ts";
 import { isDexChain, isTokenAddress, tokenKey, type Dex } from "./dex.ts";
 import type { Desk } from "./desk.ts";
 import type { Market } from "./market.ts";
@@ -189,7 +189,7 @@ export class Swaps {
   /** Asks for a swap: `by` an orb (it then waits for you) or null (yours: approved as you ask). A quote comes with it. */
   async ask(o: { by: string | null; chain: string; sell: string; buy: string; amount: string; why?: string }): Promise<Swap> {
     const chain = chainOf(o.chain);
-    if (!chain) throw new SwapError(`no chain "${o.chain}": ${["base", "ethereum", "arbitrum", "optimism", "polygon", "solana"].join(", ")}`);
+    if (!chain) throw new SwapError(`no chain "${o.chain}": ${CHAINS.map((c) => c.id).join(", ")}`);
     const sell = await this.#tokenOf(chain, o.sell);
     const buy = await this.#tokenOf(chain, o.buy);
     if (!sell || !buy) throw new SwapError(`on ${chain.name} the desk swaps ${chain.tokens.map((t) => t.symbol).join(", ")}, or any token by its address`);

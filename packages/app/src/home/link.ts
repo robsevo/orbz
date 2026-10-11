@@ -229,7 +229,13 @@ export type DeskBook = { id: number; orb: string; strategy: number | null; symbo
 export type DeskQuote = { amountIn: string; amountOut: string; out: string; priceImpactPct: number | null; feeUsd: number | null; route: string[]; router: string | null };
 export type DeskSwap = { id: number; orb: string | null; chain: string; sell: string; buy: string; amount: string; usd: number; why: string; quote: DeskQuote | null; state: "asked" | "approved" | "built" | "sent" | "confirmed" | "failed" | "denied" | "expired"; tx: string | null; error: string | null; createdAt: number; settledAt: number | null };
 export type DeskWallet = { id: number; chain: "evm" | "solana" | "bitcoin"; address: string; label: string; wallet: string | null; addedAt: number };
-export type DeskHolding = { chain: string; symbol: string; amount: string; usd: number | null };
+export type DeskHolding = { chain: string; symbol: string; amount: string; usd: number | null; key?: string | null; name?: string; image?: string | null; change24h?: number | null };
+/** An orb's P&L (PLAN 5.31): every book it has had against what it started with; its closed trades' numbers; the real
+ * trades it asked you for. */
+export type DeskOrbPnl = {
+  orb: string; trades: number; wins: number; realized: number; today: number; best: number | null; worst: number | null; fees: number; last: number | null;
+  start: number; equity: number; pnl: number; open: number; real: { asked: number; yes: number; sentUsd: number };
+};
 export type DeskChain = { id: string; name: string; kind: "evm" | "solana"; chainId?: number; explorer: string; tokens: { symbol: string; decimals: number }[] };
 export type DeskSettings = { perTradeUsd: number; perDayUsd: number; slippageBps: number; off: boolean };
 export type DeskEvent = { seq: number; at: number; orb: string | null } & Record<string, unknown>;
@@ -240,6 +246,7 @@ export type DeskState = {
   /** Any token a book holds or a swap names, by its key ("solana:<mint>"), and how the DEX data is (PLAN 5.28). */
   tokens?: Record<string, { symbol: string; name: string; image: string | null; priceUsd: number | null }>;
   dex?: { source: string; ok: boolean; error: string | null; restingUntil: number | null };
+  orbs?: DeskOrbPnl[];
 };
 // ── any token on a DEX (PLAN 5.28), as the home's door gives it ─────────────────────────────────────
 export type DexChain = "solana" | "ethereum" | "base" | "arbitrum" | "optimism" | "polygon" | "bsc";

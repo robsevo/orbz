@@ -104,6 +104,7 @@ const ADD: Record<number, { chainName: string; rpcUrls: string[]; nativeCurrency
   8453: { chainName: "Base", rpcUrls: ["https://mainnet.base.org"], nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 }, blockExplorerUrls: ["https://basescan.org"] },
   42161: { chainName: "Arbitrum One", rpcUrls: ["https://arb1.arbitrum.io/rpc"], nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 }, blockExplorerUrls: ["https://arbiscan.io"] },
   10: { chainName: "OP Mainnet", rpcUrls: ["https://mainnet.optimism.io"], nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 }, blockExplorerUrls: ["https://optimistic.etherscan.io"] },
+  56: { chainName: "BNB Smart Chain", rpcUrls: ["https://bsc-dataseed.bnbchain.org"], nativeCurrency: { name: "BNB", symbol: "BNB", decimals: 18 }, blockExplorerUrls: ["https://bscscan.com"] },
   137: { chainName: "Polygon", rpcUrls: ["https://polygon-bor-rpc.publicnode.com"], nativeCurrency: { name: "POL", symbol: "POL", decimals: 18 }, blockExplorerUrls: ["https://polygonscan.com"] },
 };
 

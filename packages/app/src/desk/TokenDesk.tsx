@@ -156,12 +156,15 @@ function Finder({ home, q, prices, pick, wide }: { home: Office; q: string; pric
 }
 
 /** The screen, over the floor: a search on top, the list or a coin's page under it. */
-export function TokenDesk({ home, prices, chains, crew, wallet, openWallet, close }: {
+export function TokenDesk({ home, prices, chains, crew, wallet, openWallet, close, start = null }: {
   home: Office; prices: DeskTicker[]; chains: DeskChain[]; crew: Character[]; wallet: WalletHere; openWallet: (kind: "evm" | "solana") => void; close: () => void;
+  /** A coin to open on (one of your wallet's, pressed); else the coin last open here, or the list. */
+  start?: Picked | null;
 }) {
   const phone = useCramped("(max-width: 760px)");
   const [q, setQ] = useState("");
   const [picked, setPicked] = useState<Picked | null>(() => {
+    if (start) return start;
     try {
       return JSON.parse(globalThis.localStorage?.getItem(LAST) ?? "null") as Picked | null;
     } catch {

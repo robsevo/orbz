@@ -306,7 +306,11 @@ export class Home {
     this.dex = new Dex(opts.desk?.dex ?? (this.#deskOn ? publicDex({ fetch: deskFetch }) : offlineDex()), now);
     this.market = new Market(opts.desk?.source ?? (this.#deskOn ? binanceSource() : offlineSource()), now, this.dex);
     this.desk = new Desk(db, this.events, this.market, now);
-    this.wallets = new Wallets(db, this.events, this.market, now, { fetch: deskFetch });
+    // a wallet's every coin (PLAN 5.31): on Solana all it holds; on the EVM chains also the coins swapped through Orbz
+    this.wallets = new Wallets(db, this.events, this.market, now, {
+      fetch: deskFetch, dex: this.dex,
+      seen: (chain) => this.swaps.list(200).filter((x) => x.chain === chain).flatMap((x) => [x.sell, x.buy]).filter((a) => /^0x[0-9a-fA-F]{40}$/.test(a)),
+    });
     this.swaps = new Swaps(db, this.events, this.market, this.desk, opts.desk?.routers ?? publicRouters({ fetch: deskFetch }), now, { fetch: deskFetch, dex: this.dex });
     const big = opts.brain?.preset.big ?? null;
     this.chatgpt = new ChatGPT({ dataDir: this.dataDir, events: this.events, clock: this.clock, ...opts.chatgpt });

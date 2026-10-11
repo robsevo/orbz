@@ -14,7 +14,7 @@ import { changeText, priceText } from "../ui/candles.ts";
 import { NAMES } from "../floor/props.ts";
 import { DeskFloor } from "./Floor.tsx";
 import { button, card, chip, field, head, marketName, pct, shortAddress, small, strong, usd, well, ago } from "./kit.ts";
-import { TokenDesk } from "./TokenDesk.tsx";
+import { TokenDesk, type Picked } from "./TokenDesk.tsx";
 import { useWallet } from "./useWallet.ts";
 import { WalletSheet } from "./WalletSheet.tsx";
 import { useCramped } from "../ui/fill.ts";
@@ -24,7 +24,9 @@ import { TradePanel } from "./Trade.tsx";
 // no chart under the floor (owner, 10-11: "no chart on bottom of page, only if user presses the electronic chart in war
 // room"): any coin's chart is the war room's screen, over the floor (TokenDesk.tsx). On a phone the floor is a tab of its
 // own, first, so each tab is one thing on its screen
-const TABS = [["trade", "Trade"], ["books", "Books"], ["strategies", "Strategies"], ["desk", "The desk"], ["limits", "Limits"]] as const;
+// your wallet (its worth, its swaps) and each orb's P&L first (owner, 10-11: "users can see wallet balance and analytics
+// as well. and each orb pnl")
+const TABS = [["trade", "Wallet"], ["desk", "Orbs"], ["books", "Books"], ["strategies", "Strategies"], ["limits", "Limits"]] as const;
 type Tab = (typeof TABS)[number][0] | "floor";
 const TAB_KEY = "orbs.desk.tab";
 
@@ -46,6 +48,13 @@ export function DeskRoom({ home, office, moods, go, tab: opening = null }: { hom
   const tabs: readonly (readonly [Tab, string])[] = phone ? [["floor", "Floor"], ...TABS] : TABS;
   // the war room's screen open over the floor; the wallet sheet open over it all
   const [screen, setScreen] = useState(false);
+  const [screenAt, setScreenAt] = useState<Picked | null>(null);
+  /** A coin's page on the war room's screen, by its key ("solana:<mint>"): from your wallet's coins. */
+  const openCoin = (key: string): void => {
+    const at = key.indexOf(":");
+    setScreenAt({ kind: "token", chain: key.slice(0, at) as Extract<Picked, { kind: "token" }>["chain"], address: key.slice(at + 1) });
+    setScreen(true);
+  };
   const [sheet, setSheet] = useState(false);
   const wallet = useWallet(home, () => load());
   const setTab = (t: Tab): void => {
@@ -115,7 +124,7 @@ export function DeskRoom({ home, office, moods, go, tab: opening = null }: { hom
   const prices = s?.prices ?? [];
   const floor = (
     <DeskFloor crew={crew} moods={moods} events={events} prices={prices.map((p) => ({ symbol: p.symbol, up: p.changePct >= 0 }))} spark={spark.length ? spark : [1, 1]}
-      notes={s?.notes.length ?? 0} strategies={s?.strategies.length ?? 0} riskOn={!(s?.settings.off ?? false)} go={go} onScreen={() => setScreen(true)}
+      notes={s?.notes.length ?? 0} strategies={s?.strategies.length ?? 0} riskOn={!(s?.settings.off ?? false)} go={go} onScreen={() => (setScreenAt(null), setScreen(true))}
       board={board.map((b) => ({ name: b.c.name, hue: b.c.hue, bar: (Math.abs(b.pnl) / most) * 110, up: b.pnl >= 0 }))} />
   );
   const noCrew = !crew.length && (
@@ -179,15 +188,15 @@ export function DeskRoom({ home, office, moods, go, tab: opening = null }: { hom
       ) : shown === "strategies" ? (
         <StrategiesPanel home={home} crew={crew} strategies={s.strategies} books={s.books} reload={load} />
       ) : shown === "trade" ? (
-        <TradePanel home={home} crew={crew} wallets={s.wallets} swaps={s.swaps} chains={s.chains} reload={load} wallet={wallet} labels={s.tokens} />
+        <TradePanel home={home} crew={crew} wallets={s.wallets} swaps={s.swaps} chains={s.chains} reload={load} wallet={wallet} labels={s.tokens} openCoin={openCoin} connectWallet={() => openWallet()} orbs={s.orbs} people={office} openOrbs={() => setTab("desk")} />
       ) : shown === "books" ? (
         <Books s={s} crew={crew} />
       ) : shown === "desk" ? (
-        <Desk s={s} crew={crew} pnl={pnlToday} go={go} />
+        <Desk s={s} crew={crew} office={office} go={go} />
       ) : (
         <Limits home={home} settings={s.settings} reload={load} />
       )}
-      {screen && s && <TokenDesk home={home} prices={prices} chains={s.chains} crew={crew} wallet={wallet} openWallet={openWallet} close={() => setScreen(false)} />}
+      {screen && s && <TokenDesk home={home} prices={prices} chains={s.chains} crew={crew} wallet={wallet} openWallet={openWallet} start={screenAt} close={() => setScreen(false)} />}
       {sheet && <WalletSheet home={home} wallet={wallet} close={() => setSheet(false)} />}
     </div>
   );
@@ -230,29 +239,53 @@ function Books({ s, crew }: { s: DeskState; crew: Character[] }) {
   );
 }
 
-function Desk({ s, crew, pnl, go }: { s: DeskState; crew: Character[]; pnl: Map<string, number>; go: (r: Route) => void }) {
+/** Each orb's P&L (owner, 10-11: "each orb pnl"): every book it has had, against what it started with; its closed
+ * trades (today's, how many it won, its best and worst); what it still holds; the real trades it asked you for. An orb
+ * of the money kind with a book of its own is here too. */
+function Desk({ s, crew, office, go }: { s: DeskState; crew: Character[]; office: Character[]; go: (r: Route) => void }) {
+  const of = new Map((s.orbs ?? []).map((p) => [p.orb, p]));
+  const people = [...crew, ...office.filter((o) => !crew.includes(o) && of.has(idOf(o.name)))];
+  const rows = people.map((c) => ({ c, p: of.get(idOf(c.name)) ?? null })).sort((a, b) => (b.p?.pnl ?? 0) - (a.p?.pnl ?? 0));
+  const all = s.orbs ?? [];
+  const total = all.reduce((n, p) => n + p.pnl, 0);
+  const start = all.reduce((n, p) => n + p.start, 0);
+  const today = all.reduce((n, p) => n + p.today, 0);
+  const trades = all.reduce((n, p) => n + p.trades, 0);
+  const wins = all.reduce((n, p) => n + p.wins, 0);
+  const signed = (n: number): string => `${n >= 0 ? "+" : "−"}${usd(Math.abs(n))}`;
+  const tone = (n: number): CSSProperties => ({ color: n > 0 ? "var(--ok)" : n < 0 ? "var(--off)" : "var(--text-2)" });
   return (
     <div data-desk style={{ display: "grid", gap: "var(--s4)", minWidth: 0 }}>
-      <section aria-label="The desk's team" style={card}>
+      <section aria-label="Each orb's P&L" style={card}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-          <span style={head}>{`The desk's team (${crew.length})`}</span>
+          <span style={head}>{`Each orb's P&L (${people.length})`}</span>
           <button type="button" className="orbs-small" onClick={() => go({ room: "recruiter", family: "desk" })} style={{ ...button, padding: "4px 10px", minHeight: 30 }}>Hire</button>
         </div>
-        {!crew.length && <span style={small}>No one on the desk yet.</span>}
-        <Balanced min={220} gap={10}>
-          {crew.map((c) => {
-            const p = pnl.get(idOf(c.name)) ?? 0;
-            return (
-              <button key={c.name} type="button" data-crew={c.name} data-orb={c.hue} onClick={() => go({ room: "office", orb: c.name })} style={{ ...well, display: "flex", alignItems: "center", gap: 10, border: 0, cursor: "pointer", textAlign: "left", color: "inherit" }}>
-                <Orb character={c} size={44} poke={false} still />
+        <div data-desk-pnl style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", columnGap: 12, rowGap: 2 }}>
+          <span className="num" style={{ font: "900 26px/32px var(--font)", ...tone(total) }}>{signed(total)}</span>
+          <span className="num" style={small}>{`on paper, the whole desk${start > 0 ? ` (${pct((total / start) * 100)})` : ""} · today ${signed(today)} · ${trades} trades${trades ? `, ${Math.round((wins / trades) * 100)}% won` : ""}`}</span>
+        </div>
+        {!people.length && <span style={small}>No one on the desk yet.</span>}
+        <Balanced min={250} gap={10}>
+          {rows.map(({ c, p }) => (
+            <button key={c.name} type="button" data-orb-pnl={c.name} data-orb={c.hue} onClick={() => go({ room: "office", orb: c.name })} style={{ ...well, display: "grid", gap: 6, border: 0, color: "inherit", textAlign: "left", cursor: "pointer", minWidth: 0 }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                <Orb character={c} size={40} poke={false} still />
                 <span style={{ display: "grid", minWidth: 0 }}>
                   <b style={{ font: "800 14px/19px var(--font)", color: "var(--accent)" }}>{c.name}</b>
                   <span style={{ ...small, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{SPECIALTIES[c.specialty].title}</span>
-                  <span className="num" style={{ font: "700 12px/16px var(--font)", color: p >= 0 ? "var(--ok)" : "var(--off)" }}>{`Today on paper ${usd(p)}`}</span>
                 </span>
-              </button>
-            );
-          })}
+              </span>
+              <span className="num" data-pnl style={{ font: "900 20px/26px var(--font)", ...tone(p?.pnl ?? 0) }}>{p ? `${signed(p.pnl)}${p.start > 0 ? ` · ${pct((p.pnl / p.start) * 100)}` : ""}` : "No trades yet"}</span>
+              {p && (
+                <span className="num" style={{ ...small, display: "grid", gap: 2 }}>
+                  <span>{`Today ${signed(p.today)} · ${p.trades} trades${p.trades ? `, ${Math.round((p.wins / p.trades) * 100)}% won` : ""}`}</span>
+                  {p.trades > 0 && <span>{`Best ${signed(p.best ?? 0)} · worst ${signed(p.worst ?? 0)} · fees ${usd(p.fees)}`}</span>}
+                  <span>{`${p.open ? `${p.open} open` : "Nothing open"}${p.real.asked ? ` · real: ${p.real.yes} of ${p.real.asked} asked said yes${p.real.sentUsd ? `, ${usd(p.real.sentUsd)} sent` : ""}` : ""}`}</span>
+                </span>
+              )}
+            </button>
+          ))}
         </Balanced>
       </section>
       <section aria-label="Research" style={card}>

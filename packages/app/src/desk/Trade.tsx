@@ -5,17 +5,24 @@
 // An orb's proposed trade waits here for your yes; yours is your yes. Orbz never holds a key: your wallet signs.
 import { useEffect, useState } from "react";
 import type { Character } from "../orb/spec.ts";
-import { idOf, type DeskChain, type DeskHolding, type DeskQuote, type DeskSwap, type DeskWallet, type Office } from "../home/link.ts";
+import { idOf, type DeskChain, type DeskHolding, type DeskQuote, type DeskSwap, type DeskWallet, type Office, type DeskOrbPnl } from "../home/link.ts";
 import { Balanced } from "../ui/Balanced.tsx";
 import { Pick } from "../ui/Pick.tsx";
 import { button, card, field, head, marketName, shortAddress, small, strong, usd, well } from "./kit.ts";
 import type { Found } from "./wallet.ts";
 import type { WalletHere } from "./useWallet.ts";
 import { NoWallet } from "./WalletSheet.tsx";
+import { OrbsAtAGlance, Worth } from "./Worth.tsx";
 
 const STATE_WORDS: Record<DeskSwap["state"], string> = { asked: "Waiting for your yes", approved: "Approved: waiting for your wallet", built: "In your wallet", sent: "Sent: waiting for the chain", confirmed: "Done", failed: "Failed", denied: "You said no", expired: "Expired" };
 
-export function TradePanel({ home, crew, wallets, swaps, chains, reload, wallet, labels }: { home: Office; crew: Character[]; wallets: DeskWallet[]; swaps: DeskSwap[]; chains: DeskChain[]; reload: () => void; wallet: WalletHere; labels?: Record<string, { symbol: string }> }) {
+export function TradePanel({ home, crew, wallets, swaps, chains, reload, wallet, labels, openCoin, connectWallet, orbs = [], people = crew, openOrbs = () => undefined }: {
+  home: Office; crew: Character[]; wallets: DeskWallet[]; swaps: DeskSwap[]; chains: DeskChain[]; reload: () => void; wallet: WalletHere; labels?: Record<string, { symbol: string }>;
+  /** A coin's page on the war room's screen, by its key; Connect wallet as the desk's header has it. */
+  openCoin: (key: string) => void; connectWallet: () => void;
+  /** Your orbs' P&L, on the same dashboard; the Orbs tab for all of it. */
+  orbs?: DeskOrbPnl[]; people?: Character[]; openOrbs?: () => void;
+}) {
   const { found, linked } = wallet;
   const [paste, setPaste] = useState("");
   const [holdings, setHoldings] = useState<Record<number, { holdings: DeskHolding[]; errors: string[] }>>({});
@@ -27,12 +34,18 @@ export function TradePanel({ home, crew, wallets, swaps, chains, reload, wallet,
   const tokens = c.tokens.map((t) => t.symbol);
   const [sell, setSell] = useState("USDC");
   const [buy, setBuy] = useState("ETH");
+  // any coin, by its address, on either side (owner, 10-11: "coin swap in general, not just pump.fun")
+  const ANY = "any";
+  const [sellAt, setSellAt] = useState("");
+  const [buyAt, setBuyAt] = useState("");
+  const from = sell === ANY ? sellAt.trim() : sell;
+  const to = buy === ANY ? buyAt.trim() : buy;
   const [amount, setAmount] = useState("");
   const [quote, setQuote] = useState<(DeskQuote & { usd: number | null }) | null>(null);
   useEffect(() => {
     // a chain's own tokens: keep the choice when it trades there, or take its first two
-    if (!tokens.includes(sell)) setSell(tokens.find((t) => /^USDC$/.test(t)) ?? tokens[0] ?? "");
-    if (!tokens.includes(buy)) setBuy(tokens.find((t) => t !== sell) ?? "");
+    if (sell !== ANY && !tokens.includes(sell)) setSell(tokens.find((t) => /^USDC$/.test(t)) ?? tokens[0] ?? "");
+    if (buy !== ANY && !tokens.includes(buy)) setBuy(tokens.find((t) => t !== sell) ?? "");
     setQuote(null);
   }, [chain]);
   const act = async (fn: () => Promise<unknown>): Promise<void> => {
@@ -52,6 +65,8 @@ export function TradePanel({ home, crew, wallets, swaps, chains, reload, wallet,
   const mine = linked ? wallets.find((w) => w.address.toLowerCase() === linked.address.toLowerCase()) : null;
   return (
     <div data-trade style={{ display: "grid", gap: "var(--s4)", minWidth: 0 }}>
+      <Worth home={home} wallets={wallets} openCoin={openCoin} connect={connectWallet} />
+      <OrbsAtAGlance orbs={orbs} people={people} more={openOrbs} />
       {waiting.length > 0 && (
         <section aria-label="Waiting for your yes" style={{ ...card, boxShadow: "inset 0 0 0 1.5px var(--alert)" }}>
           <span style={head}>{`Waiting for your yes (${waiting.length})`}</span>
@@ -121,18 +136,24 @@ export function TradePanel({ home, crew, wallets, swaps, chains, reload, wallet,
         <span style={head}>A trade from your wallet</span>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, minWidth: 0 }}>
           <Pick title="Network" value={chain} onChange={setChain} options={chainList.map((x) => [x.id, x.name] as const)} data={{ "data-trade-chain": chain }} />
-          <Pick title="Sell" value={sell} onChange={(v) => (setSell(v), setQuote(null))} options={tokens.map((x) => [x, x] as const)} data={{ "data-trade-sell": sell }} />
-          <Pick title="Buy" value={buy} onChange={(v) => (setBuy(v), setQuote(null))} options={tokens.filter((x) => x !== sell).map((x) => [x, x] as const)} data={{ "data-trade-buy": buy }} />
+          <Pick title="Sell" value={sell} onChange={(v) => (setSell(v), setQuote(null))} options={[...tokens.map((x) => [x, x] as const), [ANY, "Any coin, by its address"] as const]} data={{ "data-trade-sell": sell }} />
+          <Pick title="Buy" value={buy} onChange={(v) => (setBuy(v), setQuote(null))} options={[...tokens.filter((x) => x !== sell).map((x) => [x, x] as const), [ANY, "Any coin, by its address"] as const]} data={{ "data-trade-buy": buy }} />
         </div>
-        <form onSubmit={(e) => { e.preventDefault(); void act(async () => setQuote(await home.quote({ chain, sell, buy, amount: amount.trim() }))); }} style={{ display: "flex", gap: 8, minWidth: 0 }}>
-          <input aria-label={`How much ${sell} to sell`} inputMode="decimal" value={amount} onChange={(e) => (setAmount(e.target.value), setQuote(null))} placeholder={`How much ${sell}`} size={1} style={{ ...field, flex: "1 1 auto" }} />
+        {(sell === ANY || buy === ANY) && (
+          <div style={{ display: "grid", gap: 8, minWidth: 0 }}>
+            {sell === ANY && <input aria-label="The address of the coin to sell" data-trade-sell-at value={sellAt} onChange={(e) => (setSellAt(e.target.value), setQuote(null))} placeholder="The coin's address (sell)" autoComplete="off" spellCheck={false} size={1} style={{ ...field, fontFamily: "var(--mono)" }} />}
+            {buy === ANY && <input aria-label="The address of the coin to buy" data-trade-buy-at value={buyAt} onChange={(e) => (setBuyAt(e.target.value), setQuote(null))} placeholder="The coin's address (buy)" autoComplete="off" spellCheck={false} size={1} style={{ ...field, fontFamily: "var(--mono)" }} />}
+          </div>
+        )}
+        <form onSubmit={(e) => { e.preventDefault(); void act(async () => setQuote(await home.quote({ chain, sell: from, buy: to, amount: amount.trim() }))); }} style={{ display: "flex", gap: 8, minWidth: 0 }}>
+          <input aria-label={`How much ${sell === ANY ? "of the coin" : sell} to sell`} inputMode="decimal" value={amount} onChange={(e) => (setAmount(e.target.value), setQuote(null))} placeholder={`How much ${sell === ANY ? "of it" : sell}`} size={1} style={{ ...field, flex: "1 1 auto" }} />
           <button type="submit" data-quote disabled={!amount.trim()} style={button}>Quote</button>
         </form>
         {quote && (
           <div data-quote-result style={well}>
-            <b className="num" style={{ font: "800 18px/24px var(--font)", color: "var(--text-1)" }}>{`About ${quote.out} ${buy}`}</b>
-            <span className="num" style={small}>{`For ${amount} ${sell}${quote.usd !== null ? ` (${usd(quote.usd)})` : ""}${quote.priceImpactPct !== null ? ` · price impact ${quote.priceImpactPct.toFixed(2)}%` : ""}${quote.feeUsd !== null ? ` · network fee about ${usd(quote.feeUsd)}` : ""}${quote.route.length ? ` · via ${quote.route.join(", ")}` : ""}`}</span>
-            <button type="button" data-swap-go onClick={() => void act(async () => signIt(await home.swap({ chain, sell, buy, amount: amount.trim() })))} style={strong}>
+            <b className="num" style={{ font: "800 18px/24px var(--font)", color: "var(--text-1)" }}>{`About ${quote.out} ${marketName(to, labels, chain)}`}</b>
+            <span className="num" style={small}>{`For ${amount} ${marketName(from, labels, chain)}${quote.usd !== null ? ` (${usd(quote.usd)})` : ""}${quote.priceImpactPct !== null ? ` · price impact ${quote.priceImpactPct.toFixed(2)}%` : ""}${quote.feeUsd !== null ? ` · network fee about ${usd(quote.feeUsd)}` : ""}${quote.route.length ? ` · via ${quote.route.join(", ")}` : ""}`}</span>
+            <button type="button" data-swap-go onClick={() => void act(async () => signIt(await home.swap({ chain, sell: from, buy: to, amount: amount.trim() })))} style={strong}>
               {linked ? `Swap with ${linked.f.name}` : "Connect a wallet to swap"}
             </button>
           </div>

@@ -30,6 +30,18 @@ export const CHAINS: readonly Chain[] = [
   { kind: "evm", id: "arbitrum", name: "Arbitrum", chainId: 42161, kyber: "arbitrum", explorer: "https://arbiscan.io/tx/", rpcs: ["https://arb1.arbitrum.io/rpc", "https://arbitrum-one-rpc.publicnode.com"], tokens: [eth(), { symbol: "USDC", address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", decimals: 6, stable: true }] },
   { kind: "evm", id: "optimism", name: "Optimism", chainId: 10, kyber: "optimism", explorer: "https://optimistic.etherscan.io/tx/", rpcs: ["https://mainnet.optimism.io", "https://optimism-rpc.publicnode.com"], tokens: [eth(), { symbol: "USDC", address: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85", decimals: 6, stable: true }] },
   { kind: "evm", id: "polygon", name: "Polygon", chainId: 137, kyber: "polygon", explorer: "https://polygonscan.com/tx/", rpcs: ["https://polygon-bor-rpc.publicnode.com"], tokens: [{ symbol: "POL", address: NATIVE, decimals: 18, native: true }, { symbol: "USDC", address: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", decimals: 6, stable: true }] },
+  // BNB Chain (owner, 10-11: "coin swap in general, not just pump.fun"): its tokens' symbols and decimals read from the
+  // chain itself on 10-11 (symbol() and decimals() at both RPCs, chain id 0x38), never typed from memory
+  {
+    kind: "evm", id: "bsc", name: "BNB Chain", chainId: 56, kyber: "bsc", explorer: "https://bscscan.com/tx/",
+    rpcs: ["https://bsc-dataseed.bnbchain.org", "https://bsc-rpc.publicnode.com"],
+    tokens: [
+      { symbol: "BNB", address: NATIVE, decimals: 18, native: true, market: "BNB" },
+      { symbol: "USDT", address: "0x55d398326f99059fF775485246999027B3197955", decimals: 18, stable: true },
+      { symbol: "USDC", address: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d", decimals: 18, stable: true },
+      { symbol: "WBNB", address: "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c", decimals: 18, market: "BNB" },
+    ],
+  },
   {
     kind: "solana", id: "solana", name: "Solana", explorer: "https://solscan.io/tx/",
     rpcs: ["https://api.mainnet-beta.solana.com", "https://solana-rpc.publicnode.com"],

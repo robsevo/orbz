@@ -15,7 +15,10 @@ import { button, card, chip, compact, ema, field, head, picture, shortAddress, s
 import type { WalletHere } from "./useWallet.ts";
 
 export const CHAIN_NAMES: Record<DexChain, string> = { solana: "Solana", ethereum: "Ethereum", base: "Base", arbitrum: "Arbitrum", optimism: "Optimism", polygon: "Polygon", bsc: "BNB Chain" };
+/** Where a coin is looked at on its own chain, when the desk does not swap there. */
 const EXPLORER: Partial<Record<DexChain, string>> = { solana: "https://solscan.io", bsc: "https://bscscan.com" };
+/** What a quick buy offers, in the coin it is paid with. */
+const PRESETS: Record<string, string[]> = { SOL: ["0.1", "0.25", "0.5", "1"], ETH: ["0.005", "0.01", "0.02", "0.05"], BNB: ["0.01", "0.05", "0.1", "0.25"], POL: ["10", "25", "50", "100"], USDC: ["10", "25", "50", "100"], USDT: ["10", "25", "50", "100"] };
 /** How old a pair is, as a screen of numbers says it: 40m, 5h, 12d, 1.1y. */
 export const age = (at: number | null, now: number): string => {
   if (at === null) return "–";
@@ -76,7 +79,7 @@ function Chart({ load, tfKey, label, phone }: { load: (tf: string) => Promise<De
  * your wallet after the desk's limits are kept (the Limits tab). */
 function TradeBox({ home, chain, token, symbol, chains, wallet, openWallet }: { home: Office; chain: DexChain; token: string; symbol: string; chains: DeskChain[]; wallet: WalletHere; openWallet: (kind: "evm" | "solana") => void }) {
   const desk = chains.find((c) => c.id === chain);
-  const coin = desk?.kind === "solana" ? "SOL" : desk?.tokens.find((t) => t.symbol === "ETH" || t.symbol === "POL")?.symbol ?? "ETH";
+  const coin = desk?.tokens[0]?.symbol ?? "ETH"; // the chain's own coin, first in its list
   const pays = desk ? [coin, "USDC"].filter((x) => desk.tokens.some((t) => t.symbol === x)) : [];
   const [side, setSide] = useState<"buy" | "sell">("buy");
   const [pay, setPay] = useState(pays[0] ?? "");
@@ -106,7 +109,7 @@ function TradeBox({ home, chain, token, symbol, chains, wallet, openWallet }: { 
   }
   const kind = desk.kind;
   const ready = wallet.linked !== null && wallet.linked.f.kind === kind;
-  const presets = side === "sell" ? [] : pay === "USDC" ? ["10", "25", "50", "100"] : coin === "SOL" ? ["0.1", "0.25", "0.5", "1"] : ["0.005", "0.01", "0.02", "0.05"];
+  const presets = side === "sell" ? [] : PRESETS[pay] ?? [];
   const go = async (): Promise<void> => {
     setSaid(null);
     try {
@@ -325,7 +328,8 @@ export function TokenPage({ home, chain, address, chains, crew, wallet, openWall
   }
   const sym = p.base.symbol || shortAddress(address);
   const market = `${chain}:${address}`;
-  const explorer = chain === "solana" || chain === "bsc" ? EXPLORER[chain]! : chains.find((c) => c.id === chain)?.explorer ?? null;
+  // a chain's explorer as the desk keeps it ends in /tx/: its coin page is beside it
+  const explorer = chains.find((c) => c.id === chain)?.explorer.replace(/\/tx\/?$/, "") ?? EXPLORER[chain] ?? null;
   const links: { label: string; url: string }[] = [
     ...p.links,
     ...(p.url ? [{ label: "DexScreener", url: p.url }] : []),

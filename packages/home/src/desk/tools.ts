@@ -11,6 +11,7 @@ import type { Wallets } from "./wallets.ts";
 import { OPS, problemOf, SYMBOLS, TIMEFRAMES, words, type Strategy, type Timeframe } from "./strategy.ts";
 import { DEX_CHAINS, isDexChain, isTokenAddress, readTokenKey, tokenKey, type Dex, type DexChain, type DexPair } from "./dex.ts";
 import type { Safety } from "./safety.ts";
+import { CHAINS } from "./chains.ts";
 
 const obj = (properties: Record<string, unknown>, required: string[]): Record<string, unknown> => ({ type: "object", properties, required, additionalProperties: false });
 const s = (v: unknown): string => (typeof v === "string" ? v : v === undefined || v === null ? "" : String(v));
@@ -259,7 +260,7 @@ export function deskTools(o: { desk: Desk; wallets: Wallets; swaps: Swaps; dex: 
     {
       name: "propose_swap", group: g, label: "Asking for a trade",
       description: "Ask the person for a real trade from their own wallet, a swap on a DEX (KyberSwap on base, ethereum, arbitrum, optimism, polygon; Jupiter on solana). It only asks: it waits for their yes at the desk, then their wallet's signature; the desk's limits and slippage are kept. Say why in one or two lines, with the risk.",
-      parameters: obj({ chain: { type: "string", enum: ["base", "ethereum", "arbitrum", "optimism", "polygon", "solana"] }, sell: { type: "string", description: "A token on that chain: its symbol (ETH, USDC, SOL…) or any token's address." }, buy: { type: "string", description: "The same: a symbol, or any token's address (token_search finds it)." }, amount: { type: "string", description: "Of what is sold, e.g. \"0.05\"." }, why: { type: "string" } }, ["chain", "sell", "buy", "amount", "why"]),
+      parameters: obj({ chain: { type: "string", enum: CHAINS.map((c) => c.id) }, sell: { type: "string", description: "A token on that chain: its symbol (ETH, USDC, SOL…) or any token's address." }, buy: { type: "string", description: "The same: a symbol, or any token's address (token_search finds it)." }, amount: { type: "string", description: "Of what is sold, e.g. \"0.05\"." }, why: { type: "string" } }, ["chain", "sell", "buy", "amount", "why"]),
       describe: (a) => `ask to swap ${s(a.amount)} ${s(a.sell)} for ${s(a.buy)} on ${s(a.chain)}`, decision: "allow",
       async run(a, ctx) {
         try {

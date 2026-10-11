@@ -646,9 +646,30 @@ async function handle(
           return { ...b, equity: b.cash + held };
         });
         const recent = (type: string, n: number) => home.events.ofType(type).slice(-n).reverse().map((e) => ({ seq: e.seq, at: e.at, orb: e.orb, ...e.data }));
+        // each orb's P&L (PLAN 5.31; owner, 10-11: "each orb pnl"): its closed trades, what its live books are worth now,
+        // and the real trades it asked you for (each still yours to say yes to)
+        const pnlOf = (all: typeof books) => {
+          const realized = new Map(home.desk.pnl().map((p) => [p.orb, p]));
+          const asks = home.swaps.list(500).filter((x) => x.orb !== null);
+          const ids = new Set([...realized.keys(), ...all.map((b) => b.orb), ...asks.map((x) => x.orb!)]);
+          return [...ids].map((orb) => {
+            // its P&L: every book it has had, live or stopped, worth now against what it started with (gains made and
+            // gains on paper still open, each once); its closed trades' numbers beside it
+            const its = all.filter((b) => b.orb === orb);
+            const r = realized.get(orb) ?? { orb, trades: 0, wins: 0, realized: 0, today: 0, best: null, worst: null, fees: 0, last: null };
+            const mine = asks.filter((x) => x.orb === orb);
+            const start = its.reduce((n, b) => n + b.cashStart, 0);
+            const equity = its.reduce((n, b) => n + b.equity, 0);
+            return {
+              ...r, start, equity, pnl: equity - start,
+              open: its.filter((b) => b.state === "live").reduce((n, b) => n + (b.qty > 0 ? 1 : 0) + b.holdings.filter((h) => h.qty > 0).length, 0),
+              real: { asked: mine.length, yes: mine.filter((x) => ["approved", "built", "sent", "confirmed"].includes(x.state)).length, sentUsd: mine.filter((x) => x.state === "sent" || x.state === "confirmed").reduce((n, x) => n + x.usd, 0) },
+            };
+          }).sort((a, b) => b.pnl - a.pnl);
+        };
         return {
           now, market: home.market.status(), prices, strategies: home.desk.strategies(), books, notes: home.desk.notes(), settings: home.desk.settings(),
-          fills: recent("desk.fill", 40), trades: recent("desk.trade_closed", 40), wallets: home.wallets.list(), swaps: home.swaps.list(30), tokens, dex: home.dex.status(),
+          fills: recent("desk.fill", 40), trades: recent("desk.trade_closed", 40), wallets: home.wallets.list(), swaps: home.swaps.list(30), tokens, dex: home.dex.status(), orbs: pnlOf(books),
           chains: CHAINS.map((c) => ({ id: c.id, name: c.name, kind: c.kind, ...(c.kind === "evm" && { chainId: c.chainId }), explorer: c.explorer, tokens: c.tokens.map((t) => ({ symbol: t.symbol, decimals: t.decimals })) })),
         };
       }
