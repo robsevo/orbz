@@ -8,6 +8,7 @@
 import type { Candle } from "./indicators.ts";
 import type { Timeframe } from "./strategy.ts";
 import { base58 } from "./chains.ts";
+import { memoryBars, type BarStore } from "./bars.ts";
 
 /** The chains a token is looked for on: the ones the desk can also swap on, and BNB Chain to look at. */
 export const DEX_CHAINS = ["solana", "ethereum", "base", "arbitrum", "optimism", "polygon", "bsc"] as const;
@@ -123,6 +124,8 @@ function fromGecko(chain: DexChain, p: { attributes?: Record<string, unknown>; r
 
 /** GeckoTerminal's candle size for each of the desk's timeframes. */
 const GECKO_TF: Record<Timeframe, [string, number]> = { "1m": ["minute", 1], "5m": ["minute", 5], "15m": ["minute", 15], "1h": ["hour", 1], "4h": ["hour", 4], "1d": ["day", 1] };
+/** A timeframe's bar in milliseconds, from the same table. */
+const barMs = (tf: Timeframe): number => GECKO_TF[tf][1] * ({ minute: 60_000, hour: 3_600_000, day: 86_400_000 } as Record<string, number>)[GECKO_TF[tf][0]]!;
 
 /** DexScreener's and GeckoTerminal's public APIs. */
 export function publicDex(o: { fetch?: typeof fetch; screener?: string; gecko?: string; jupiter?: string } = {}): DexSource {
@@ -262,18 +265,26 @@ export class Dex {
   readonly #geckoBudget: Budget;
   /** Jupiter's price API's own rest (a chart's live price, PLAN 5.33). */
   readonly #jupiter: Rest;
+  /** A pool's bars, kept (PLAN 5.35): across a restart in the home's database, and only what is new asked for. */
+  readonly #bars: BarStore;
+  readonly #barsAsked = new Map<string, number>();
+  /** GeckoTerminal's asks one at a time this far apart (PLAN 5.35): a burst is what it refuses first. */
+  readonly #spacingMs: number;
+  #nextAsk = 0;
   /** How long each kind of answer is kept: a search and a token's pairs move fast; a minute's bars (a chart of 1-minute
    * bars) for 20 seconds, any other bars a minute; what is trending, five. GeckoTerminal's (bars, trades, trending) are
    * also held to its budget. */
-  static readonly KEEP_MS = { search: 20_000, pairs: 15_000, candles: 60_000, minuteCandles: 20_000, trades: 30_000, trending: 300_000, live: 3_000 } as const;
+  static readonly KEEP_MS = { search: 20_000, pairs: 15_000, candles: 60_000, minuteCandles: 20_000, trades: 60_000, trending: 300_000, live: 3_000 } as const;
   /** How old an answer may be and still stand in while its source rests or its minute is spent. */
   static readonly STALE_MS = 30 * 60_000;
   /** GeckoTerminal's asks a minute, under its 30. */
   static readonly GECKO_PER_MINUTE = 24;
 
-  constructor(source: DexSource, now: () => number) {
+  constructor(source: DexSource, now: () => number, o: { bars?: BarStore; spacingMs?: number } = {}) {
     this.#source = source;
     this.#now = now;
+    this.#bars = o.bars ?? memoryBars();
+    this.#spacingMs = o.spacingMs ?? 0;
     this.#screener = new Rest(now);
     this.#gecko = new Rest(now);
     this.#geckoBudget = new Budget(Dex.GECKO_PER_MINUTE, now);
@@ -290,6 +301,7 @@ export class Dex {
     if (have && this.#now() - have.at < ms) return have.v as T;
     try {
       if (o.budget && rest.resting === null && !o.budget.take(o.low)) throw new Error("its asks for this minute are spent: again in a moment");
+      if (o.budget) await this.#space();
       const v = await rest.ask(what);
       this.#kept.set(key, { at: this.#now(), v });
       if (this.#kept.size > 500) this.#kept.delete(this.#kept.keys().next().value!); // the oldest first
@@ -299,6 +311,17 @@ export class Dex {
       if (have && this.#now() - have.at < (o.stale ?? Dex.STALE_MS)) return have.v as T;
       throw e;
     }
+  }
+
+  /** Waits for GeckoTerminal's next turn (`spacingMs` after the last ask began); a wait of more than a few seconds is
+   * no wait at all: what was kept stands in, or it says it is busy. */
+  async #space(): Promise<void> {
+    if (!this.#spacingMs) return;
+    const now = Date.now();
+    const at = Math.max(now, this.#nextAsk);
+    if (at - now > 8_000) throw new Error("it is being asked too fast: again in a moment");
+    this.#nextAsk = at + this.#spacingMs;
+    if (at > now) await new Promise((r) => setTimeout(r, at - now));
   }
 
   /** What a search finds, by name, symbol or address: each token once, on its most liquid pair, the most liquid first.
@@ -362,8 +385,29 @@ export class Dex {
 
   /** A pool's bars for a token in dollars, oldest first, the forming one last. */
   async candles(chain: DexChain, pool: string, token: string, tf: Timeframe, limit = 300): Promise<Candle[]> {
-    const bars = await this.#keep(`candles:${chain}:${pool}:${token}:${tf}:${limit}`, tf === "1m" ? Dex.KEEP_MS.minuteCandles : Dex.KEEP_MS.candles, this.#gecko, () => this.#source.candles(chain, pool, token, tf, limit), { budget: this.#geckoBudget });
-    return bars.filter((b) => [b.t, b.o, b.h, b.l, b.c, b.v].every(Number.isFinite)).sort((a, b) => a.t - b.t).slice(-limit);
+    // kept, across a restart too (PLAN 5.35): asked again a minute on at most (a 1-minute chart's, 20 seconds), and
+    // then for what has formed since the last bar kept (the last again: it was forming), never the whole again
+    const key = { chain, pool, token, tf };
+    const id = `${chain}:${pool}:${token}:${tf}`;
+    const kept = this.#bars.read(key, limit);
+    const last = kept.at(-1);
+    const ms = barMs(tf);
+    const asked = this.#barsAsked.get(id);
+    if (last && kept.length >= limit && asked !== undefined && this.#now() - asked < (tf === "1m" ? Dex.KEEP_MS.minuteCandles : Dex.KEEP_MS.candles)) return kept;
+    const want = !last || kept.length < limit ? limit : Math.min(limit, Math.max(2, Math.ceil((this.#now() - last.t) / ms) + 1));
+    try {
+      if (this.#gecko.resting === null && !this.#geckoBudget.take()) throw new Error("its asks for this minute are spent: again in a moment");
+      await this.#space();
+      const got = await this.#gecko.ask(() => this.#source.candles(chain, pool, token, tf, want));
+      this.#bars.write(key, got.filter((b) => [b.t, b.o, b.h, b.l, b.c, b.v].every(Number.isFinite)));
+      this.#barsAsked.set(id, this.#now());
+      return this.#bars.read(key, limit);
+    } catch (e) {
+      // what was kept stands in while GeckoTerminal rests (half an hour old at most, from when it was asked, or after a
+      // restart from its last bar's close): a chart never goes blank for it
+      if (last && this.#now() - (asked ?? last.t + ms) < Dex.STALE_MS) return kept;
+      throw e;
+    }
   }
 
   /** A token's bars on its most liquid pair. */

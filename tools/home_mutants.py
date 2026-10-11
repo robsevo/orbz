@@ -462,6 +462,22 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("a losing trade counted as a win", "src/desk/desk.ts", [
         ("      if (pnl > 0) p.wins++;", "      if (pnl !== 0) p.wins++;"),
     ], ["dex.test.ts"]),
+    # a pool's bars kept, GeckoTerminal's asks spaced (PLAN 5.35; owner, 10-11: "No chart now ... 429")
+    ("a restart forgets a pool's bars", "src/desk/bars.ts", [
+        ("      return (read.all(k.chain, k.pool, k.token, k.tf, limit) as Candle[]).reverse();", "      return [] as Candle[];"),
+    ], ["dex.test.ts"]),
+    ("kept bars never stand in for a resting source", "src/desk/dex.ts", [
+        ("      if (last && this.#now() - (asked ?? last.t + ms) < Dex.STALE_MS) return kept;\n", ""),
+    ], ["dex.test.ts"]),
+    ("every refresh asks for the whole chart again", "src/desk/dex.ts", [
+        ("    const want = !last || kept.length < limit ? limit : Math.min(limit, Math.max(2, Math.ceil((this.#now() - last.t) / ms) + 1));", "    const want = limit;"),
+    ], ["dex.test.ts"]),
+    ("GeckoTerminal asked in a burst", "src/desk/dex.ts", [
+        ("    if (!this.#spacingMs) return;\n    const now = Date.now();", "    if (this.#spacingMs >= 0) return;\n    const now = Date.now();"),
+    ], ["dex.test.ts"]),
+    ("a long wait for GeckoTerminal waited out", "src/desk/dex.ts", [
+        ('    if (at - now > 8_000) throw new Error("it is being asked too fast: again in a moment");\n', ""),
+    ], ["dex.test.ts"]),
     # an orb's account and its orders (PLAN 5.34; owner, 10-11: "we dont want the orbs to know the difference. money is money")
     ("a real order you denied is filled", "src/desk/orders.ts", [
         ('    if (s.state === "confirmed") {\n      const out = Number(s.quote?.out);', '    if (s.state === "confirmed" || s.state === "denied") {\n      const out = Number(s.quote?.out);'),

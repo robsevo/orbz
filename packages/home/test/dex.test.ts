@@ -11,11 +11,14 @@
 //     and its upgradeTo (real bytecode), WETH with nothing against it (the control), an address with no code.
 //   - The orbs' token_search and token_info; the door's routes, and what they refuse.
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { tmpdir } from "node:os";
 import { serve } from "../src/api.ts";
+import { openDb } from "../src/db.ts";
+import { sqliteBars } from "../src/desk/bars.ts";
 import { FakeClock } from "../src/clock.ts";
 import { Dex, isTokenAddress, publicDex, readTokenKey, tokenKey, type DexPair, type DexSource } from "../src/desk/dex.ts";
 import { safetyOf } from "../src/desk/safety.ts";
@@ -137,6 +140,51 @@ test("a market now, for a chart's forming bar (owner, 10-11: \"the candlestick f
   assert.ok(!dexFetch.urls.some((u) => u.includes("/ohlcv/") || u.includes("/trades") || u.includes("trending")), "never GeckoTerminal");
   assert.equal((await live("NOPE")).status, 400);
   assert.equal((await live("SOL", "3m")).status, 400);
+});
+
+test("a pool's bars kept (owner, 10-11: \"No chart now ... 429 can we use something else? thatsfree\"): after a restart they stand in while GeckoTerminal rests; once read, only what has formed since is asked; asks spaced apart, a wait too long refused", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "orbs-bars-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  let now = START;
+  let busy = false;
+  const limits: number[] = [];
+  const source: DexSource = {
+    name: "stand-in", search: async () => [], pairs: async () => [], trades: async () => [], trending: async () => [],
+    candles: async (_c, _p, _t, _tf, limit) => {
+      limits.push(limit);
+      if (busy) throw Object.assign(new Error("api.geckoterminal.com asked us to slow down (429)"), { slowDown: 30_000 });
+      // the bars up to the one forming now, 5 minutes apart
+      const last = Math.floor(now / 300_000) * 300_000;
+      return Array.from({ length: limit }, (_, i) => ({ t: last - (limit - 1 - i) * 300_000, o: 1, h: 2, l: 0.5, c: 1 + i / 1000, v: 10 }));
+    },
+  };
+  const db1 = openDb(dir);
+  const first = new Dex(source, () => now, { bars: sqliteBars(db1) });
+  assert.equal((await first.candles("solana", POOL, MINT, "5m", 100)).length, 100);
+  db1.close();
+  // a restart: a new home on the same database, and GeckoTerminal resting
+  busy = true;
+  now += 2 * 60_000;
+  const db2 = openDb(dir);
+  t.after(() => db2.close());
+  const second = new Dex(source, () => now, { bars: sqliteBars(db2) });
+  const kept = await second.candles("solana", POOL, MINT, "5m", 100);
+  assert.equal(kept.length, 100, "after a restart, what was kept stands in while it rests");
+  busy = false;
+  now += 60 * 60_000; // past its rest, an hour of bars on
+  await second.candles("solana", POOL, MINT, "5m", 100);
+  assert.ok(limits.at(-1)! <= 15 && limits.at(-1)! >= 2, `once read, only what formed since is asked (${limits.at(-1)} bars), never the whole again`);
+  assert.equal((await second.candles("solana", POOL, MINT, "5m", 100)).at(-1)!.t, Math.floor(now / 300_000) * 300_000, "up to the bar forming now");
+  // asks one at a time, spaced; a wait too long is refused at once
+  const spaced = new Dex(source, () => now, { spacingMs: 120 });
+  const t0 = Date.now();
+  await Promise.all(["a", "b", "c"].map((p) => spaced.candles("solana", `${p}${POOL}`.slice(0, 44), MINT, "5m", 10)));
+  assert.ok(Date.now() - t0 >= 230, "three asks at least two spacings apart");
+  const slow = new Dex(source, () => now, { spacingMs: 4_500 });
+  const x = slow.candles("solana", `x${POOL}`.slice(0, 44), MINT, "5m", 10); // its turn now
+  const y = slow.candles("solana", `y${POOL}`.slice(0, 44), MINT, "5m", 10); // in 4.5 seconds
+  await assert.rejects(() => slow.candles("solana", `z${POOL}`.slice(0, 44), MINT, "5m", 10), /asked too fast/, "a turn over eight seconds off is refused at once, not waited for");
+  await Promise.all([x, y]);
 });
 
 test("a token's key and address: a pump.fun mint, a Solana token, an EVM token; what is not one", () => {

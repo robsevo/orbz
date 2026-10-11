@@ -85,6 +85,7 @@ import { Dex, offlineDex, publicDex, type DexChain, type DexSource } from "./des
 import { safetyOf, type Safety } from "./desk/safety.ts";
 import { publicRouters, Swaps, type Routers } from "./desk/swaps.ts";
 import { Orders } from "./desk/orders.ts";
+import { sqliteBars } from "./desk/bars.ts";
 import { deskTools } from "./desk/tools.ts";
 import { Wallets } from "./desk/wallets.ts";
 import { Loops, type LoopsOptions } from "./loops.ts";
@@ -306,7 +307,9 @@ export class Home {
     const now = (): number => this.clock.now();
     const deskFetch = opts.desk?.fetch ?? (this.#deskOn ? undefined : offlineFetch);
     this.#deskFetch = deskFetch;
-    this.dex = new Dex(opts.desk?.dex ?? (this.#deskOn ? publicDex({ fetch: deskFetch }) : offlineDex()), now);
+    // a pool's bars kept in the database (PLAN 5.35: across a restart, only what is new asked); the public APIs' asks
+    // spaced 2.2 s apart (a stand-in's are not)
+    this.dex = new Dex(opts.desk?.dex ?? (this.#deskOn ? publicDex({ fetch: deskFetch }) : offlineDex()), now, { bars: sqliteBars(db), spacingMs: opts.desk?.dex ? 0 : 2_200 });
     this.market = new Market(opts.desk?.source ?? (this.#deskOn ? binanceSource() : offlineSource()), now, this.dex);
     this.desk = new Desk(db, this.events, this.market, now);
     // a wallet's every coin (PLAN 5.31): on Solana all it holds; on the EVM chains also the coins swapped through Orbz

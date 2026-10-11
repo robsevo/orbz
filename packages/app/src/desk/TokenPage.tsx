@@ -433,7 +433,7 @@ export function TokenPage({ home, chain, address, chains, crew, strategies, acco
     let live = true;
     const get = (): void => void home.dexTrades(chain, p.pair, address).then((x) => live && setTrades(x), () => live && setTrades([]));
     get();
-    const t = window.setInterval(get, 20_000);
+    const t = window.setInterval(get, 30_000); // GeckoTerminal's: its minute is shared by every chart (PLAN 5.35)
     return () => {
       live = false;
       window.clearInterval(t);

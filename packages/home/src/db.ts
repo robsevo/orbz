@@ -585,6 +585,23 @@ const MIGRATIONS: string[] = [
   CREATE INDEX desk_orders_orb ON desk_orders (orb, id);
   CREATE UNIQUE INDEX desk_orders_swap ON desk_orders (swap) WHERE swap IS NOT NULL;
   `,
+  // v19 (PLAN 5.35; owner, 10-11: "No chart now: ... api.geckoterminal.com asked us to slow down (429) can we use
+  // something else? thatsfree"): a pool's bars kept, so a chart has them across a restart and only what is new is asked
+  `
+  CREATE TABLE desk_bars (
+    chain  TEXT    NOT NULL,
+    pool   TEXT    NOT NULL,
+    token  TEXT    NOT NULL,
+    tf     TEXT    NOT NULL,
+    t      INTEGER NOT NULL,
+    o      REAL    NOT NULL,
+    h      REAL    NOT NULL,
+    l      REAL    NOT NULL,
+    c      REAL    NOT NULL,
+    v      REAL    NOT NULL,
+    PRIMARY KEY (chain, pool, token, tf, t)
+  ) WITHOUT ROWID;
+  `,
 ];
 
 /** The home's data is the person's: the folder is theirs alone (0700) and so is the database
