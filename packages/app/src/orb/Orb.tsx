@@ -30,12 +30,14 @@ export type OrbProps = {
   pop?: boolean;
   /** With `still`: the moment of a gesture he holds (the app's icon). */
   pose?: { gesture: Gesture; into: number };
+  /** The light behind him, in his colour (owner, 10-11: "like a background light"); off where a page lights him itself. */
+  light?: boolean;
   style?: CSSProperties;
 };
 
 const seedOf = (s: string): number => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 9973, 7) / 97;
 
-export function Orb({ character, size = 120, state = "idle", gesture = null, fidget = true, poke = true, tint = 0.8, every = 1, still = false, framing = "window", pose, pop = true, style }: OrbProps) {
+export function Orb({ character, size = 120, state = "idle", gesture = null, fidget = true, poke = true, tint = 0.8, every = 1, still = false, framing = "window", pose, pop = true, light = true, style }: OrbProps) {
   // the close-up: cut to his width, his hat kept in (spec.ts closeUp)
   const frame: Framing = useMemo(() => (framing === "portrait" ? closeUp(PORTRAIT, character) : DESIGN), [framing, character.shape, character.hat]);
   const ref = useRef<HTMLCanvasElement>(null);
@@ -110,13 +112,14 @@ export function Orb({ character, size = 120, state = "idle", gesture = null, fid
   return (
     <canvas
       ref={ref}
-      className={rank ? `orb-rank orb-rank-${rank}` : undefined}
+      className={[light && "orb-light", rank && `orb-rank orb-rank-${rank}`].filter(Boolean).join(" ") || undefined}
       data-rank={rank ?? undefined}
+      data-light={light ? character.hue : undefined}
       role="img"
       aria-label={`${describe(character)}, ${state}`}
       onClick={poke ? () => play(Math.random() < 0.65 ? "hop" : "squish") : undefined}
       data-sound={poke ? "poke" : undefined}
-      style={{ width: size, height: (size * frame.h) / frame.w, display: "block", cursor: poke ? "pointer" : undefined, ...style }}
+      style={{ width: size, height: (size * frame.h) / frame.w, display: "block", cursor: poke ? "pointer" : undefined, ...(light && ({ "--orb-cy": `${frame.cy * 100}%` } as CSSProperties)), ...style }}
     />
   );
 }
