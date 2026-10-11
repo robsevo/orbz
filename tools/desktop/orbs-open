@@ -46,12 +46,14 @@ if [ "${1:-}" = "--restart" ] && alive; then
   kill -TERM "$PID" 2>/dev/null
   # it finishes what it is doing first (an orb's turn, the night's school): 30 s was too short
   # once (10-04), and the home was left stopped. Up to two minutes, saying so after five seconds.
+  # stopped once it is gone, or once it is a zombie its parent has not reaped (kill -0 still finds one; 10-11)
+  gone() { local s; s=$(ps -o stat= -p "$1" 2>/dev/null) || return 0; case "$s" in Z*) return 0 ;; esac; return 1; }
   for i in $(seq 1 240); do
-    kill -0 "$PID" 2>/dev/null || break
+    gone "$PID" && break
     [ "$i" = 10 ] && say "the home is finishing what it is doing, then it starts again"
     sleep 0.5
   done
-  kill -0 "$PID" 2>/dev/null && { say "the home (pid $PID) did not stop in two minutes"; exit 1; }
+  gone "$PID" || { say "the home (pid $PID) did not stop in two minutes"; exit 1; }
 fi
 
 if ! alive; then
@@ -64,8 +66,10 @@ if ! alive; then
     esac
   fi
   mkdir -p "$DATA"
-  # in the background with nothing of ours open (its output to the log), so no caller waits on it
-  ( cd "$REPO" && exec setsid "$NODE" packages/home/src/main.ts ) >> "$DATA/home.log" 2>&1 < /dev/null &
+  # in the background with nothing of ours open (its output to the log), so no caller waits on it; forked off
+  # (setsid -f), so its parent is never the window this script becomes below, which would not reap it when it
+  # stops (10-11: a restart waited two minutes on that zombie, and left the home stopped)
+  ( cd "$REPO" && exec setsid -f "$NODE" packages/home/src/main.ts ) >> "$DATA/home.log" 2>&1 < /dev/null &
   for _ in $(seq 1 120); do alive && break; sleep 0.5; done
   alive || { say "the home did not start: see $DATA/home.log"; exit 1; }
 fi
