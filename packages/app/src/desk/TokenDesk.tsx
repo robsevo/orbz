@@ -205,7 +205,7 @@ export function TokenDesk({ home, prices, chains, crew, strategies, accounts, re
           {picked?.kind === "token" ? (
             <TokenPage home={home} chain={picked.chain} address={picked.address} chains={chains} crew={crew} strategies={strategies} accounts={accounts} reload={reload} wallet={wallet} openWallet={openWallet} phone={phone} back={() => pick(null)} />
           ) : picked?.kind === "major" ? (
-            <MajorPage home={home} symbol={picked.symbol} ticker={prices.find((t) => t.symbol === picked.symbol) ?? null} crew={crew} strategies={strategies} accounts={accounts} reload={reload} phone={phone} back={() => pick(null)} />
+            <MajorPage home={home} symbol={picked.symbol} ticker={prices.find((t) => t.symbol === picked.symbol) ?? null} crew={crew} strategies={strategies} accounts={accounts} reload={reload} chains={chains} wallet={wallet} openWallet={openWallet} phone={phone} back={() => pick(null)} />
           ) : (
             <Finder home={home} q={q} prices={prices} wide={!phone} pick={(p) => (pick(p), setQ(""))} />
           )}

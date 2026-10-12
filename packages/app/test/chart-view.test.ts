@@ -121,6 +121,15 @@ test("the desk's chart: the bar's clock; indicators from its right-click menu, k
   // a coin on it pressed (pressed as a button is, not aimed at: the tape moves, and a coin may be under the menu's edge)
   await page.locator('[data-tick="ETH"]').dispatchEvent("click");
   await page.locator('[data-major-page="ETH"] [data-candles]').waitFor({ timeout: 20_000 });
+  // the top 10 traded from their pages (owner, 10-11: "add the ability to trade the top 10 too"): ETH swapped from your
+  // wallet on Base; XRP, with no market on the chains a wallet here trades on, says so
+  await page.locator('[data-major-page="ETH"] [data-token-trade]:not([data-no-route])').waitFor();
+  assert.match(await page.locator('[data-major-page="ETH"] [data-token-trade]').innerText(), /Buy ETH/);
+  await page.locator("[data-token-close]").click();
+  await page.locator("[data-token-desk]").waitFor({ state: "detached" });
+  await page.locator('[data-tick="XRP"]').dispatchEvent("click");
+  await page.locator('[data-major-page="XRP"] [data-no-route]').waitFor({ timeout: 20_000 });
+  assert.match(await page.locator('[data-major-page="XRP"] [data-no-route]').innerText(), /XRP has no market on the chains your wallet trades on/);
   await page.locator("[data-token-close]").click();
   await page.locator("[data-token-desk]").waitFor({ state: "detached" });
   // the screen's list: the majors first, then what trends (owner: "put the majors on top")
@@ -181,6 +190,22 @@ test("the desk's chart: the bar's clock; indicators from its right-click menu, k
   assert.equal(room, -Math.floor(span / 2), "dragged left as far as it goes: half the chart is room after the latest bar");
   await page.mouse.dblclick(at.x, at.y);
   assert.deepEqual(await view(), [fit, start], "a double-click: as it was");
+  // the price scale pressed and dragged (owner, 10-11: "press and hold on the price to the right and be able to size the
+  // graph, make it smaller bigger"): down squeezes the bars, up stretches them, a double-click puts it back
+  const scale = async (): Promise<number> => Number(await svg.getAttribute("data-yscale"));
+  const grip = (await page.locator("[data-token-page] [data-price-scale]").boundingBox())!;
+  const drag = async (dy: number): Promise<void> => {
+    await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2 + dy, { steps: 6 });
+    await page.mouse.up();
+  };
+  await drag(120);
+  assert.ok((await scale()) > 1.5, `dragged down: squeezed (${await scale()})`);
+  await drag(-300);
+  assert.ok((await scale()) < 1, `dragged up: stretched (${await scale()})`);
+  await page.mouse.dblclick(grip.x + grip.width / 2, grip.y + grip.height / 2);
+  assert.equal(await scale(), 1, "a double-click: as it was");
   await page.mouse.click(at.x, at.y, { button: "right" });
   const dialog = page.locator("[data-chart-menu] [role=dialog]");
   await dialog.waitFor();

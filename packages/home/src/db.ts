@@ -602,6 +602,11 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY (chain, pool, token, tf, t)
   ) WITHOUT ROWID;
   `,
+  // v20 (PLAN 5.37; owner, 10-11: "why cant we choose how much paper cash we have?"): an account's paper amount, yours to
+  // set as its budget of real money is (none: the $10,000 every paper account began with)
+  `
+  ALTER TABLE desk_accounts ADD COLUMN paper REAL;
+  `,
 ];
 
 /** The home's data is the person's: the folder is theirs alone (0700) and so is the database

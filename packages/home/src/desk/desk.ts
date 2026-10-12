@@ -28,7 +28,7 @@ export type Book = {
 };
 /** An orb's account (PLAN 5.34; owner, 10-11: "money is money"): on paper, or real money up to the budget you set; the
  * orb trades it one way whichever it is, and is never told which. */
-export type Account = { orb: string; mode: "paper" | "real"; budget: number; book: Book };
+export type Account = { orb: string; mode: "paper" | "real"; budget: number; paper: number; book: Book };
 export type Settings = { perTradeUsd: number; perDayUsd: number; slippageBps: number; off: boolean };
 export const DEFAULT_SETTINGS: Settings = { perTradeUsd: 100, perDayUsd: 300, slippageBps: 50, off: false };
 
@@ -109,15 +109,17 @@ export class Desk {
   }
 
   /** Runs a strategy live on paper, by an orb (training it: its trades are its XP). From the last closed bar on. */
-  async run(strategyId: number, orb: string, cash = PAPER_START): Promise<Book> {
+  async run(strategyId: number, orb: string, cash?: number): Promise<Book> {
     const s = this.strategy(strategyId);
     if (!s) throw new DeskError(`no strategy ${strategyId}`);
     if (this.books().some((b) => b.strategy === strategyId && b.orb === orb && b.state === "live")) throw new DeskError(`${s.name} is already running for that orb`);
     const bars = await this.#market.closed(s.spec.symbol, s.spec.timeframe, 2);
     const at = this.#now();
     // on a real account the run trades the account itself (its orders, orders.ts): a book of no cash of its own
-    const real = this.account(orb).mode === "real";
-    if (real) cash = 0;
+    // on paper a run begins with the orb's paper amount (yours to set; $10,000 till you do)
+    const acct = this.account(orb);
+    const real = acct.mode === "real";
+    cash = real ? 0 : cash ?? acct.paper;
     const { lastInsertRowid } = this.#db.prepare("INSERT INTO desk_books (orb, strategy, symbol, cash_start, cash, state, started_at, last_bar, real) VALUES (?, ?, ?, ?, ?, 'live', ?, ?, ?)").run(orb, strategyId, s.spec.symbol, cash, cash, at, bars.at(-1)?.t ?? null, real ? 1 : 0);
     const id = Number(lastInsertRowid);
     this.#events.append("desk.run_started", { book: id, strategy: strategyId, name: s.name, symbol: s.spec.symbol, timeframe: s.spec.timeframe, cash, real }, { orb });
@@ -209,18 +211,19 @@ export class Desk {
   ownBook(orb: string, real = false): Book {
     const r = this.#db.prepare("SELECT * FROM desk_books WHERE orb = ? AND strategy IS NULL AND state = 'live' AND real = ?").get(orb, real ? 1 : 0) as BookRow | undefined;
     if (r) return this.#book(r);
-    const cash = real ? this.#accountRow(orb)?.budget ?? 0 : PAPER_START;
+    const row = this.#accountRow(orb);
+    const cash = real ? row?.budget ?? 0 : row?.paper ?? PAPER_START;
     const { lastInsertRowid } = this.#db.prepare("INSERT INTO desk_books (orb, strategy, symbol, cash_start, cash, state, started_at, real) VALUES (?, NULL, NULL, ?, ?, 'live', ?, ?)").run(orb, cash, cash, this.#now(), real ? 1 : 0);
     return this.book(Number(lastInsertRowid))!;
   }
 
-  #accountRow(orb: string): { mode: "paper" | "real"; budget: number } | undefined {
-    return this.#db.prepare("SELECT mode, budget FROM desk_accounts WHERE orb = ?").get(orb) as { mode: "paper" | "real"; budget: number } | undefined;
+  #accountRow(orb: string): { mode: "paper" | "real"; budget: number; paper: number | null } | undefined {
+    return this.#db.prepare("SELECT mode, budget, paper FROM desk_accounts WHERE orb = ?").get(orb) as { mode: "paper" | "real"; budget: number; paper: number | null } | undefined;
   }
 
   /** Every account you have set: each orb's mode, budget and what its real money has left to spend. */
-  accounts(): { orb: string; mode: "paper" | "real"; budget: number; cash: number | null }[] {
-    return (this.#db.prepare("SELECT orb, mode, budget FROM desk_accounts ORDER BY orb").all() as { orb: string; mode: "paper" | "real"; budget: number }[]).map((r) => {
+  accounts(): { orb: string; mode: "paper" | "real"; budget: number; paper: number; cash: number | null }[] {
+    return (this.#db.prepare("SELECT orb, mode, budget, COALESCE(paper, ?) AS paper FROM desk_accounts ORDER BY orb").all(PAPER_START) as { orb: string; mode: "paper" | "real"; budget: number; paper: number }[]).map((r) => {
       const real = this.#db.prepare("SELECT cash FROM desk_books WHERE orb = ? AND strategy IS NULL AND state = 'live' AND real = 1").get(r.orb) as { cash: number } | undefined;
       return { ...r, cash: real?.cash ?? null };
     });
@@ -230,23 +233,32 @@ export class Desk {
   account(orb: string): Account {
     const r = this.#accountRow(orb);
     const mode = r?.mode ?? "paper";
-    return { orb, mode, budget: r?.budget ?? 0, book: this.ownBook(orb, mode === "real") };
+    return { orb, mode, budget: r?.budget ?? 0, paper: r?.paper ?? PAPER_START, book: this.ownBook(orb, mode === "real") };
   }
 
-  /** Yours alone to set (never an orb's tool): an orb's account on paper, or real money up to `budget` dollars. A
-   * budget raised adds to what its account can spend; lowered, takes from it, never below what it has spent. */
-  setAccount(orb: string, mode: "paper" | "real", budget?: number): Account {
+  /** Yours alone to set (never an orb's tool): an orb's account on paper, or real money up to `budget` dollars; and
+   * how much its paper is (`paper`; owner, 10-11: "why cant we choose how much paper cash we have?"). Either raised adds
+   * to what it can spend; lowered, takes from it, never below what it has spent. */
+  setAccount(orb: string, mode: "paper" | "real", budget?: number, paper?: number): Account {
     const was = this.#accountRow(orb);
     const next = budget ?? was?.budget ?? 0;
     if (!(Number.isFinite(next) && next >= 0 && next <= 1_000_000)) throw new DeskError("a budget is $0 to $1,000,000");
+    const paperNext = paper ?? was?.paper ?? null;
+    if (paper !== undefined) {
+      if (!(Number.isFinite(paper) && paper >= 0 && paper <= 1_000_000)) throw new DeskError("paper is $0 to $1,000,000");
+      const book = this.ownBook(orb, false);
+      const diff = paper - book.cashStart;
+      if (book.cash + diff < -1e-9) throw new DeskError(`its paper has spent $${(book.cashStart - book.cash).toFixed(2)}: an amount under that cannot be`);
+      if (diff) this.#db.prepare("UPDATE desk_books SET cash = cash + ?, cash_start = cash_start + ? WHERE id = ?").run(diff, diff, book.id);
+    }
     if (mode === "real" || was?.mode === "real" || next !== (was?.budget ?? 0)) {
       const book = this.ownBook(orb, true);
       const diff = next - (was?.budget ?? book.cashStart);
       if (book.cash + diff < -1e-9) throw new DeskError(`its account has spent $${(book.cashStart - book.cash).toFixed(2)} of its budget: a budget under that cannot be`);
       if (diff) this.#db.prepare("UPDATE desk_books SET cash = cash + ?, cash_start = cash_start + ? WHERE id = ?").run(diff, diff, book.id);
     }
-    this.#db.prepare("INSERT INTO desk_accounts (orb, mode, budget, at) VALUES (?, ?, ?, ?) ON CONFLICT(orb) DO UPDATE SET mode = excluded.mode, budget = excluded.budget, at = excluded.at").run(orb, mode, next, this.#now());
-    this.#events.append("desk.account", { mode, budget: next }, { orb });
+    this.#db.prepare("INSERT INTO desk_accounts (orb, mode, budget, paper, at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(orb) DO UPDATE SET mode = excluded.mode, budget = excluded.budget, paper = excluded.paper, at = excluded.at").run(orb, mode, next, paperNext, this.#now());
+    this.#events.append("desk.account", { mode, budget: next, paper: paperNext }, { orb });
     return this.account(orb);
   }
 

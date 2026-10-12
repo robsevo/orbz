@@ -462,6 +462,13 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("a losing trade counted as a win", "src/desk/desk.ts", [
         ("      if (pnl > 0) p.wins++;", "      if (pnl !== 0) p.wins++;"),
     ], ["dex.test.ts"]),
+    # its paper, as much as you say (PLAN 5.37; owner, 10-11: "why cant we choose how much paper cash we have?")
+    ("an orb's paper amount moves nothing", "src/desk/desk.ts", [
+        ('      if (diff) this.#db.prepare("UPDATE desk_books SET cash = cash + ?, cash_start = cash_start + ? WHERE id = ?").run(diff, diff, book.id);\n    }\n    if (mode === "real"', '    }\n    if (mode === "real"'),
+    ], ["orders.test.ts"]),
+    ("a paper run begins with $10,000 whatever its paper", "src/desk/desk.ts", [
+        ("    cash = real ? 0 : cash ?? acct.paper;", "    cash = real ? 0 : cash ?? PAPER_START;"),
+    ], ["orders.test.ts"]),
     # a pool's bars kept, GeckoTerminal's asks spaced (PLAN 5.35; owner, 10-11: "No chart now ... 429")
     ("a restart forgets a pool's bars", "src/desk/bars.ts", [
         ("      return (read.all(k.chain, k.pool, k.token, k.tf, limit) as Candle[]).reverse();", "      return [] as Candle[];"),
@@ -3425,6 +3432,16 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("the new orb's card colours before it is shown", "src/orbs.tsx", [
         ("          <div data-orb={seen.hue} data-cradle data-maker-hero", "          <div data-orb={me.hue} data-cradle data-maker-hero"),
     ], ["creator.test.ts"]),
+    # the price scale, the top 10's swaps, an orb's paper (PLAN 5.37, owner 10-11)
+    ("the price scale stretches nothing", "src/ui/Candles.tsx", [
+        ("          if (g) setYScale(Math.min(8, Math.max(0.15, g.s * Math.exp((e.clientY - g.y) / 160))));", "          void g;"),
+    ], ["chart-view.test.ts"]),
+    ("a major with a market has no swap", "src/desk/TokenPage.tsx", [
+        ("  const route = MAJOR_ROUTES[symbol];", "  const route = null as (typeof MAJOR_ROUTES)[string] | null;"),
+    ], ["chart-view.test.ts"]),
+    ("an orb's paper is set nowhere", "src/desk/Account.tsx", [
+        ("onClick={() => void set(mode, undefined, Number(paper))}", "onClick={() => setAsking(null)}"),
+    ], ["desk-view.test.ts"]),
     # an orb's account, yours to set (PLAN 5.34)
     ("the account switch sets nothing", "src/desk/Account.tsx", [
         ("      await home.setDeskAccount(orb, m, b);\n", ""),

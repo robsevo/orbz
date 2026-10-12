@@ -14,7 +14,7 @@ import { ChartMenu } from "./ChartMenu.tsx";
 import { orbLayer, strategyLayer, studyLayer, whoTradedHere, type Mode, type Who } from "./layers.ts";
 import { Balanced, OneLine } from "../ui/Balanced.tsx";
 import { Pick } from "../ui/Pick.tsx";
-import { button, card, chip, compact, field, head, picture, shortAddress, small, strong, TIMEFRAMES, well } from "./kit.ts";
+import { button, card, chip, compact, field, head, MAJOR_ROUTES, picture, shortAddress, small, strong, TIMEFRAMES, well } from "./kit.ts";
 import type { WalletHere } from "./useWallet.ts";
 import { AccountSwitch } from "./Account.tsx";
 
@@ -209,7 +209,7 @@ function Chart({ home, load, tfKey, market, label, phone, strategies, crew, onPr
 function TradeBox({ home, chain, token, symbol, chains, wallet, openWallet }: { home: Office; chain: DexChain; token: string; symbol: string; chains: DeskChain[]; wallet: WalletHere; openWallet: (kind: "evm" | "solana") => void }) {
   const desk = chains.find((c) => c.id === chain);
   const coin = desk?.tokens[0]?.symbol ?? "ETH"; // the chain's own coin, first in its list
-  const pays = desk ? [coin, "USDC"].filter((x) => desk.tokens.some((t) => t.symbol === x)) : [];
+  const pays = desk ? [coin, "USDC"].filter((x) => x !== token && desk.tokens.some((t) => t.symbol === x)) : []; // never what it buys
   const [side, setSide] = useState<"buy" | "sell">("buy");
   const [pay, setPay] = useState(pays[0] ?? "");
   const [amount, setAmount] = useState("");
@@ -545,7 +545,10 @@ export function TokenPage({ home, chain, address, chains, crew, strategies, acco
 }
 
 /** A major (BTC, ETH, SOL and the rest): its chart from the market, its day, an orb sent to it on paper. */
-export function MajorPage({ home, symbol, ticker, crew, strategies, accounts, reload, phone, back }: { home: Office; symbol: string; ticker: DeskTicker | null; crew: Character[]; strategies: DeskStrategy[]; accounts: DeskAccount[]; reload: () => void; phone: boolean; back: () => void }) {
+export function MajorPage({ home, symbol, ticker, crew, strategies, accounts, reload, chains, wallet, openWallet, phone, back }: {
+  home: Office; symbol: string; ticker: DeskTicker | null; crew: Character[]; strategies: DeskStrategy[]; accounts: DeskAccount[]; reload: () => void;
+  chains: DeskChain[]; wallet: WalletHere; openWallet: (kind: "evm" | "solana") => void; phone: boolean; back: () => void;
+}) {
   const [livePrice, setLivePrice] = useState<number | null>(null);
   useEffect(() => {
     setLivePrice(null);
@@ -563,12 +566,23 @@ export function MajorPage({ home, symbol, ticker, crew, strategies, accounts, re
   );
   const chart = <Chart home={home} load={(tf) => home.candles(symbol, tf, 200)} tfKey={symbol} market={symbol} label={symbol} phone={phone} strategies={strategies} crew={crew} onPrice={setLivePrice} />;
   const send = <SendOrb home={home} crew={crew} market={symbol} label={symbol} accounts={accounts} reload={reload} />;
+  // a swap from your wallet where the major has a market on a chain the desk swaps on (owner, 10-11: "add the ability to
+  // trade the top 10 too"); where it has none, said so, and an orb can still trade it on paper
+  const route = MAJOR_ROUTES[symbol];
+  const trade = route ? (
+    <TradeBox home={home} chain={route.chain as DexChain} token={route.token} symbol={symbol} chains={chains} wallet={wallet} openWallet={openWallet} />
+  ) : (
+    <section data-token-trade data-no-route aria-label="Swap it" style={card}>
+      <span style={head}>Swap</span>
+      <span style={small}>{`${symbol} has no market on the chains your wallet trades on (Solana, Base, Ethereum, BNB Chain and the rest), so it cannot be swapped from here. Send an orb to trade it on paper, or watch it here.`}</span>
+    </section>
+  );
   return phone ? (
-    <div data-major-page={symbol} style={{ display: "grid", gap: "var(--s3)", minWidth: 0 }}>{head1}{chart}{send}</div>
+    <div data-major-page={symbol} style={{ display: "grid", gap: "var(--s3)", minWidth: 0 }}>{head1}{chart}{trade}{send}</div>
   ) : (
     <div data-major-page={symbol} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 340px", gap: "var(--s4)", alignItems: "start", minWidth: 0 }}>
       <div style={{ display: "grid", gap: "var(--s3)", minWidth: 0 }}>{head1}{chart}</div>
-      <div style={{ display: "grid", gap: "var(--s3)", minWidth: 0 }}>{send}</div>
+      <div style={{ display: "grid", gap: "var(--s3)", minWidth: 0 }}>{trade}{send}</div>
     </div>
   );
 }

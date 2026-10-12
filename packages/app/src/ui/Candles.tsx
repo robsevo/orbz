@@ -6,7 +6,7 @@
 // MACD), on the same bars and the same crosshair; the last price with the time left before its bar closes; the bar under
 // your finger read out above, each layer's value with it. A right-click, or a long press on a phone, asks the page for
 // its menu. Its arithmetic is ui/candles.ts.
-import { useEffect, useRef, useState, type MouseEvent, type PointerEvent } from "react";
+import { useEffect, useId, useRef, useState, type MouseEvent, type PointerEvent } from "react";
 import type { HueName } from "../design/tokens.ts";
 import type { DeskCandle } from "../home/link.ts";
 import { OneLine } from "./Balanced.tsx";
@@ -68,6 +68,11 @@ export function Candles({ candles: all, tf, layers = [], height = 300, paneHeigh
   // a little room after it, following it as it forms); a drag, the wheel, two fingers, the buttons
   const [view, setView] = useState<{ span: number | null; end: number | null }>({ span: null, end: null });
   const drag = useRef<{ x: number; end: number; moved: boolean } | null>(null);
+  // the price scale stretched or squeezed (owner, 10-11: "press and hold on the price to the right and be able to size
+  // the graph, make it smaller bigger"): its range times this, about its middle (1: as the bars and lines need)
+  const [yScale, setYScale] = useState(1);
+  const scaling = useRef<{ y: number; s: number } | null>(null);
+  const clip = `price-${useId().replace(/:/g, "")}`; // the price pane's edge: a stretched chart is cut there
   const fingers = useRef(new Map<number, number>());
   const pinch = useRef<{ d: number; span: number; end: number } | null>(null);
   const grew = useRef(all.length);
@@ -144,7 +149,10 @@ export function Candles({ candles: all, tf, layers = [], height = 300, paneHeigh
     ...candles.flatMap((c) => [c.l, c.h]),
     ...layers.flatMap((l) => [...(l.lines ?? []).flatMap((x) => shownOf(x.values)), ...(l.band ? [...shownOf(l.band[0]), ...shownOf(l.band[1])] : [])]),
   ]);
-  const y = (p: number): number => ((hi - p) / (hi - lo)) * priceH;
+  const mid = (hi + lo) / 2;
+  const top = mid + ((hi - lo) / 2) * yScale; // the price at the top of the pane, stretched or squeezed
+  const bottomPx = mid - ((hi - lo) / 2) * yScale;
+  const y = (p: number): number => ((top - p) / (top - bottomPx)) * priceH;
   const slot = plotW / Math.max(1, span); // a slot for each bar in view, and for the room after the latest
   const x = (i: number): number => slot * (i + 0.5);
   const body = Math.max(1, Math.min(14, slot * 0.62));
@@ -189,7 +197,7 @@ export function Candles({ candles: all, tf, layers = [], height = 300, paneHeigh
   // the crosshair's level, on the price or in a pane, and what it reads there
   const level = ((): { y: number; text: string } | null => {
     if (!hover) return null;
-    if (hover.y >= 0 && hover.y <= priceH) return { y: hover.y, text: priceText(hi - (hover.y / priceH) * (hi - lo)) };
+    if (hover.y >= 0 && hover.y <= priceH) return { y: hover.y, text: priceText(top - (hover.y / priceH) * (top - bottomPx)) };
     return null;
   })();
   /** a line's value at the bar read out: the latest it has at or before it (a strategy's is not read on the bar still forming) */
@@ -242,7 +250,7 @@ export function Candles({ candles: all, tf, layers = [], height = 300, paneHeigh
           : <div data-chart-legend style={{ display: "flex", flexWrap: "wrap", gap: 6, minWidth: 0 }}>{chips}</div>;
       })()}
       <div style={{ position: "relative", minWidth: 0 }}>
-      <svg ref={svg} role="img" aria-label={label} viewBox={`0 0 ${w} ${total}`} width="100%" height={total} data-panes={panes.length} data-view={`${span}:${end}`}
+      <svg ref={svg} role="img" aria-label={label} viewBox={`0 0 ${w} ${total}`} width="100%" height={total} data-panes={panes.length} data-view={`${span}:${end}`} data-yscale={yScale.toFixed(3)}
         style={{ display: "block", touchAction: "pan-y", WebkitTouchCallout: "none", userSelect: "none", cursor: drag.current?.moved ? "grabbing" : "crosshair" }}
         onPointerMove={(e) => {
           const p = spot(e);
@@ -306,7 +314,7 @@ export function Candles({ candles: all, tf, layers = [], height = 300, paneHeigh
           menu({ x: e.clientX, y: e.clientY });
         }}>
         {/* the price grid and its labels; a round price under the last price's own label is left unsaid */}
-        {ticksOf(lo, hi, 5).map((p) => (
+        {ticksOf(bottomPx, top, 5).map((p) => (
           <g key={p}>
             <line x1={0} x2={plotW} y1={y(p)} y2={y(p)} style={{ stroke: "var(--sep)", strokeWidth: 1 }} />
             {!(last && y(p) > tagY - 6 && y(p) < tagY + tagH + 6) && <text x={plotW + 6} y={y(p) + 4} style={label11} className="num">{priceText(p)}</text>}
@@ -316,11 +324,16 @@ export function Candles({ candles: all, tf, layers = [], height = 300, paneHeigh
         {candles.map((c, i) => (
           <rect key={`v${c.t}`} x={x(i) - body / 2} y={volTop + volH - (c.v / vmax) * volH} width={body} height={Math.max(0.5, (c.v / vmax) * volH)} style={{ fill: c.c >= c.o ? "var(--ok)" : "var(--off)" }} opacity={0.32} />
         ))}
+        <defs>
+          <clipPath id={clip}>
+            <rect x={0} y={0} width={plotW} height={priceH} />
+          </clipPath>
+        </defs>
         {/* the layers' bands and levels, under the bars */}
         {layers.map((l) => (
-          <g key={`under-${l.id}`} data-orb={l.hue}>
+          <g key={`under-${l.id}`} data-orb={l.hue} clipPath={`url(#${clip})`}>
             {l.band && <path d={band(l.band[0], l.band[1])} style={{ fill: "var(--accent)" }} opacity={0.08} />}
-            {(l.levels ?? []).filter((v) => v > lo && v < hi).map((v) => (
+            {(l.levels ?? []).filter((v) => v > bottomPx && v < top).map((v) => (
               <line key={v} data-level={v} x1={0} x2={plotW} y1={y(v)} y2={y(v)} style={{ stroke: "var(--accent)", strokeWidth: 1, strokeDasharray: "6 4" }} opacity={0.7} />
             ))}
           </g>
@@ -330,7 +343,7 @@ export function Candles({ candles: all, tf, layers = [], height = 300, paneHeigh
           const up = c.c >= c.o;
           const colour = up ? "var(--ok)" : "var(--off)";
           return (
-            <g key={c.t} data-up={up ? "1" : "0"}>
+            <g key={c.t} data-up={up ? "1" : "0"} clipPath={`url(#${clip})`}>
               <line x1={x(i)} x2={x(i)} y1={y(c.h)} y2={y(c.l)} style={{ stroke: colour, strokeWidth: 1.2 }} />
               <rect x={x(i) - body / 2} y={y(Math.max(c.o, c.c))} width={body} height={Math.max(1, Math.abs(y(c.o) - y(c.c)))} rx={1} style={{ fill: colour }} />
             </g>
@@ -338,7 +351,7 @@ export function Candles({ candles: all, tf, layers = [], height = 300, paneHeigh
         })}
         {/* the layers' lines over the price */}
         {layers.flatMap((l) => (l.lines ?? []).map((ln) => (
-          <g key={`${l.id}:${ln.label}`} data-orb={ln.hue} data-line={`${l.id}:${ln.label}`}>
+          <g key={`${l.id}:${ln.label}`} data-orb={ln.hue} data-line={`${l.id}:${ln.label}`} clipPath={`url(#${clip})`}>
             <path d={path(ln.values, y)} style={{ stroke: "var(--accent)", strokeWidth: 1.6, fill: "none", strokeDasharray: ln.dash }} />
           </g>
         )))}
@@ -346,7 +359,7 @@ export function Candles({ candles: all, tf, layers = [], height = 300, paneHeigh
         {layers.map((l) => {
           let lastLabel = -Infinity;
           return (
-            <g key={`marks-${l.id}`} data-orb={l.hue} data-layer-marks={l.id}>
+            <g key={`marks-${l.id}`} data-orb={l.hue} data-layer-marks={l.id} clipPath={`url(#${clip})`}>
               {(l.starts ?? []).map((s) => {
                 const i = iOf(s.t);
                 if (i < 0) return null;
@@ -433,7 +446,7 @@ export function Candles({ candles: all, tf, layers = [], height = 300, paneHeigh
         {/* the last price, and the time its bar has left (owner, 10-11: "time before a bar closes too") */}
         {last && (
           <g ref={tag} data-last={last.c}>
-            <line x1={0} x2={plotW} y1={y(last.c)} y2={y(last.c)} style={{ stroke: last.c >= last.o ? "var(--ok)" : "var(--off)", strokeWidth: 1, strokeDasharray: "3 4" }} />
+            <line x1={0} x2={plotW} y1={y(last.c)} y2={y(last.c)} clipPath={`url(#${clip})`} style={{ stroke: last.c >= last.o ? "var(--ok)" : "var(--off)", strokeWidth: 1, strokeDasharray: "3 4" }} />
             <rect x={plotW + 2} y={tagY} width={AXIS - 4} height={tagH} rx={5} style={{ fill: last.c >= last.o ? "var(--ok)" : "var(--off)" }} />
             <text x={plotW + 6} y={tagY + 13} style={{ fill: "var(--ground)", font: "800 11px var(--font)" }} className="num">{priceText(last.c)}</text>
             {clock && <BarClock tf={tf} x={plotW + 6} y={tagY + 25} />}
@@ -453,6 +466,23 @@ export function Candles({ candles: all, tf, layers = [], height = 300, paneHeigh
           <text key={i} x={x(i)} y={total - 4} textAnchor="middle" style={label11} className="num">{text}</text>
         ))}
       </svg>
+      {/* the price scale: drag it down to squeeze the bars, up to stretch them; a double-click puts it back */}
+      <div data-price-scale role="slider" aria-label="The price scale: drag up or down to stretch or squeeze the chart" aria-valuenow={Math.round(yScale * 100)} aria-valuemin={15} aria-valuemax={800} tabIndex={0}
+        onPointerDown={(e) => {
+          e.currentTarget.setPointerCapture(e.pointerId);
+          scaling.current = { y: e.clientY, s: yScale };
+        }}
+        onPointerMove={(e) => {
+          const g = scaling.current;
+          if (g) setYScale(Math.min(8, Math.max(0.15, g.s * Math.exp((e.clientY - g.y) / 160))));
+        }}
+        onPointerUp={() => void (scaling.current = null)}
+        onPointerCancel={() => void (scaling.current = null)}
+        onDoubleClick={(e) => (e.stopPropagation(), setYScale(1))}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowUp" || e.key === "ArrowDown") (e.preventDefault(), setYScale((v) => Math.min(8, Math.max(0.15, v * (e.key === "ArrowDown" ? 1.15 : 1 / 1.15)))));
+        }}
+        style={{ position: "absolute", right: 0, top: 0, width: AXIS, height: priceH, cursor: "ns-resize", touchAction: "none" }} />
       {/* zoom, and back to the latest bar when looking back (a double-click puts the view back too) */}
       <div style={{ position: "absolute", left: 6, top: Math.max(0, priceH - 36), display: "flex", gap: 4 }}>
         {end > 0 && <button type="button" className="orbs-small" data-zoom="latest" aria-label="Back to the latest bar" title="Back to the latest bar" onClick={() => setView({ span: view.span, end: null })} style={zoomButton}>⇥</button>}

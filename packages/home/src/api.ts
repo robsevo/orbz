@@ -765,8 +765,9 @@ async function handle(
         const b = await body(req);
         if (b.mode !== "paper" && b.mode !== "real") no(400, "an account is on paper or real money");
         const budget = b.budget === undefined || b.budget === null || b.budget === "" ? undefined : Number(b.budget);
-        const a = home.desk.setAccount(orb, b.mode as "paper" | "real", budget);
-        return { account: { orb, mode: a.mode, budget: a.budget, cash: a.book.cash } };
+        const paper = b.paper === undefined || b.paper === null || b.paper === "" ? undefined : Number(b.paper);
+        const a = home.desk.setAccount(orb, b.mode as "paper" | "real", budget, paper);
+        return { account: { orb, mode: a.mode, budget: a.budget, paper: a.paper, cash: a.book.cash } };
       }
       if (method === "POST" && parts[1] === "backtest" && parts.length === 2) {
         const b = await body(req);

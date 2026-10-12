@@ -35,6 +35,14 @@ export const ago = (at: number, now = Date.now()): string => {
   return s < 60 ? `${s}s ago` : s < 3600 ? `${Math.round(s / 60)}m ago` : s < 86_400 ? `${Math.round(s / 3600)}h ago` : `${Math.round(s / 86_400)}d ago`;
 };
 
+/** Where a major is swapped from your wallet (as the home's orders.ts ROUTES; held alike by test/majors.test.ts): its
+ * own coin on a chain the desk swaps on. The rest of the top 10 have no market there (owner, 10-11: "add the ability to
+ * trade the top 10 too"). */
+export const MAJOR_ROUTES: Record<string, { chain: string; token: string }> = {
+  BTC: { chain: "base", token: "cbBTC" }, ETH: { chain: "base", token: "ETH" }, SOL: { chain: "solana", token: "SOL" }, BNB: { chain: "bsc", token: "BNB" },
+  LINK: { chain: "ethereum", token: "LINK" }, UNI: { chain: "ethereum", token: "UNI" }, AAVE: { chain: "ethereum", token: "AAVE" },
+};
+
 /** The majors, as the home keeps them (home desk/strategy.ts; held alike by test/majors.test.ts). */
 export const SYMBOLS = ["BTC", "ETH", "BNB", "XRP", "SOL", "TRX", "DOGE", "ZEC", "HYPE", "XMR", "LINK", "ADA", "NEAR", "XLM", "BCH", "LTC", "UNI", "AVAX", "SUI", "TON", "DOT", "HBAR", "AAVE", "SHIB", "PEPE"] as const;
 export const TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "1d"] as const;

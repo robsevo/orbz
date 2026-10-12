@@ -276,7 +276,7 @@ export type DeskFill = {
 };
 export type DeskLive = { market: string; at: number; price: number | null; bar: DeskCandle | null };
 /** An orb's account (PLAN 5.34): on paper, or real money up to its budget (`cash`: what it has left of it). */
-export type DeskAccount = { orb: string; mode: "paper" | "real"; budget: number; cash: number | null };
+export type DeskAccount = { orb: string; mode: "paper" | "real"; budget: number; paper: number; cash: number | null };
 export type DeskMarks = { fills: DeskFill[]; runs: { book: number; orb: string; strategy: number; startedAt: number; stoppedAt: number | null; state: "live" | "stopped" }[] };
 export type TokenSafety = { checked: string[]; flags: { level: "warn" | "note"; words: string }[] };
 export type DeskBuilt = { kind: "evm"; chainId: number; approve: { to: string; data: string } | null; tx: { to: string; data: string; value: string; gas: string | null } } | { kind: "solana"; transaction: string };
@@ -327,7 +327,7 @@ export interface Office {
    * of you): told in its chat, it walks to the war room's screen. */
   sendOrb(o: { orb: string; market: string; budget?: number | null; note?: string }): Promise<{ orb: string; market: string; label: string; mode: string; budget: number | null }>;
   /** An orb's account on paper or real money (and real money's budget): yours alone to set (PLAN 5.34). */
-  setDeskAccount(orb: string, mode: "paper" | "real", budget?: number): Promise<DeskAccount>;
+  setDeskAccount(orb: string, mode: "paper" | "real", budget?: number, paper?: number): Promise<DeskAccount>;
   backtest(spec: DeskSpec): Promise<{ metrics: DeskMetrics; trades: DeskTrade[]; equity: { t: number; equity: number }[] }>;
   /** A strategy over a chart's own bars (the bar still forming left out by the home), and what was done on a market:
    * each orb's paper fills, the real trades that went, the strategies run on it (PLAN 5.32). */
@@ -679,8 +679,8 @@ export function doorOffice(base: Character): Office {
     async dexTrades(chain, pool, token) {
       return (await call<{ trades: DexTrade[] }>(`../desk/dex/trades/${chain}/${encodeURIComponent(pool)}?token=${encodeURIComponent(token)}`)).trades;
     },
-    async setDeskAccount(orb, mode, budget) {
-      return (await call<{ account: DeskAccount }>(`../desk/accounts/${encodeURIComponent(orb)}`, { method: "PUT", body: JSON.stringify({ mode, budget }) })).account;
+    async setDeskAccount(orb, mode, budget, paper) {
+      return (await call<{ account: DeskAccount }>(`../desk/accounts/${encodeURIComponent(orb)}`, { method: "PUT", body: JSON.stringify({ mode, budget, paper }) })).account;
     },
     async sendOrb(o) {
       return (await call<{ sent: { orb: string; market: string; label: string; mode: string; budget: number | null } }>("../desk/send", { method: "POST", body: JSON.stringify(o) })).sent;

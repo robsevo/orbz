@@ -364,6 +364,12 @@ test("the desk: the floor and its tabs at desk and phone sizes; a strategy kept 
   await kit.locator("[data-account-paper]").click();
   await page.locator('[data-account="kit"][data-account-mode="paper"]').waitFor({ timeout: 20_000 });
   assert.equal(h.desk.account("kit").mode, "paper");
+  // its paper, as much as you say (owner, 10-11: "why cant we choose how much paper cash we have?")
+  await kit.locator("[data-account-change-paper]").click();
+  await kit.locator("[data-account-paper-amount]").fill("2500");
+  await kit.locator("[data-account-set-paper]").click();
+  await kit.locator("[data-account-words]", { hasText: "Paper: $2,500.00 of practice money" }).waitFor({ timeout: 20_000 });
+  assert.equal(h.desk.account("kit").paper, 2_500);
   // a swap of any coin, by its address (owner, 10-11: "coin swap in general, not just pump.fun")
   await tab(page, "trade");
   await page.locator("[data-trade-chain]").selectOption("base");
