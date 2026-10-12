@@ -607,6 +607,46 @@ const MIGRATIONS: string[] = [
   `
   ALTER TABLE desk_accounts ADD COLUMN paper REAL;
   `,
+  // v21 (PLAN 5.42; owner, 10-12: "investigate where we lead them ... like ZachXBT does"): the desk's cases (the coins
+  // looked into, what was read of each, the money as a graph, the write-up), the findings with their evidence, the
+  // wallets labelled, and the things you have noticed, which every case is checked for
+  `
+  CREATE TABLE desk_cases (
+    id         INTEGER PRIMARY KEY,
+    title      TEXT    NOT NULL,
+    question   TEXT    NOT NULL,
+    orb        TEXT,
+    opened_at  INTEGER NOT NULL,
+    closed_at  INTEGER,
+    summary    TEXT,
+    play       TEXT,
+    coins      TEXT    NOT NULL,
+    graph      TEXT    NOT NULL
+  );
+  CREATE TABLE desk_findings (
+    id         INTEGER PRIMARY KEY,
+    case_id    INTEGER NOT NULL REFERENCES desk_cases (id),
+    by         TEXT    NOT NULL,
+    words      TEXT    NOT NULL,
+    evidence   TEXT    NOT NULL,
+    weight     TEXT    NOT NULL,
+    at         INTEGER NOT NULL
+  );
+  CREATE INDEX desk_findings_case ON desk_findings (case_id, id);
+  CREATE TABLE desk_labels (
+    address    TEXT    PRIMARY KEY,
+    label      TEXT    NOT NULL,
+    exit       INTEGER NOT NULL,
+    by         TEXT    NOT NULL,
+    at         INTEGER NOT NULL
+  );
+  CREATE TABLE desk_noticed (
+    id         INTEGER PRIMARY KEY,
+    words      TEXT    NOT NULL,
+    by         TEXT    NOT NULL,
+    at         INTEGER NOT NULL
+  );
+  `,
 ];
 
 /** The home's data is the person's: the folder is theirs alone (0700) and so is the database

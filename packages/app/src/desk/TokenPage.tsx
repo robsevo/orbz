@@ -17,6 +17,7 @@ import { Pick } from "../ui/Pick.tsx";
 import { amountChip, button, card, chip, compact, field, head, MAJOR_ROUTES, moneyChip, picture, shortAddress, small, strong, TIMEFRAMES, usd, well } from "./kit.ts";
 import type { WalletHere } from "./useWallet.ts";
 import { AccountSwitch, YourPaper } from "./Account.tsx";
+import { NAMES } from "../floor/props.ts";
 
 export const CHAIN_NAMES: Record<DexChain, string> = { solana: "Solana", ethereum: "Ethereum", base: "Base", arbitrum: "Arbitrum", optimism: "Optimism", polygon: "Polygon", bsc: "BNB Chain" };
 /** Where a coin is looked at on its own chain, when the desk does not swap there. */
@@ -493,6 +494,28 @@ function SendOrb({ home, crew, market, label, accounts, reload }: { home: Office
   );
 }
 
+/** The desk's investigator sent to look into it (PLAN 5.42): who launched it and funded them, who bought first, where
+ * the money went; a case opened, its page on the Cases tab. */
+function LookInto({ crew, label, go }: { crew: Character[]; label: string; go: (orb: string) => Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  const [said, setSaid] = useState<string | null>(null);
+  const orb = crew.find((c) => c.specialty === "onchain") ?? crew.find((c) => c.specialty === "deskhead");
+  return (
+    <section data-look-into aria-label="Look into it" style={card}>
+      <span style={head}>Look into it</span>
+      <span style={small}>Who launched it and who funded them, who bought first, where the money went, and the same hands in other coins.</span>
+      {orb ? (
+        <button type="button" data-look-go disabled={busy} onClick={() => (setBusy(true), setSaid(null), void go(idOf(orb.name)).catch((e: Error) => setSaid(e.message)).finally(() => setBusy(false)))} style={{ ...strong, minHeight: 44 }}>
+          {`Send ${orb.name} to look into ${label}`}
+        </button>
+      ) : (
+        <span style={small}>{`No ${NAMES.jobs.onchain.title} on the desk yet: hire one to look into coins.`}</span>
+      )}
+      {said && <span role="alert" style={{ ...small, color: "var(--alert)" }}>{said}</span>}
+    </section>
+  );
+}
+
 /** The flags against a coin, read from its own chain and its pair. */
 function Safety({ safety }: { safety: TokenSafety | null }) {
   return (
@@ -542,8 +565,10 @@ function Recent({ trades, symbol, now }: { trades: DexTrade[] | null; symbol: st
 }
 
 /** A coin on a DEX: its pairs read every 20 s, its safety once, its last trades every 20 s. */
-export function TokenPage({ home, chain, address, chains, crew, strategies, accounts, you, reload, wallet, openWallet, phone, back }: {
+export function TokenPage({ home, chain, address, chains, crew, strategies, accounts, you, reload, wallet, openWallet, phone, back, investigate }: {
   home: Office; chain: DexChain; address: string; chains: DeskChain[]; crew: Character[]; strategies: DeskStrategy[]; accounts: DeskAccount[]; you: DeskYou | null; reload: () => void; wallet: WalletHere; openWallet: (kind: "evm" | "solana") => void; phone: boolean; back: () => void;
+  /** A case opened on this coin and the investigator sent to it (PLAN 5.42): its case opens on the Cases tab. */
+  investigate?: (orb: string, market: string) => Promise<void>;
 }) {
   const [pairs, setPairs] = useState<DexPair[] | null>(null);
   const [at, setAt] = useState(0);
@@ -655,6 +680,7 @@ export function TokenPage({ home, chain, address, chains, crew, strategies, acco
   const chart = <Chart home={home} load={(tf) => home.dexCandles(chain, p.pair, address, tf, 300)} tfKey={`${p.pair}`} market={market} label={sym} phone={phone} strategies={strategies} crew={crew} onPrice={setLivePrice} />;
   const trade = <TradeBox home={home} market={market} chain={chain} token={address} symbol={sym} price={livePrice ?? p.priceUsd} chains={chains} wallet={wallet} openWallet={openWallet} you={you} reload={reload} />;
   const send = <SendOrb home={home} crew={crew} market={market} label={sym} accounts={accounts} reload={reload} />;
+  const look = chain === "solana" && investigate ? <LookInto crew={crew} label={sym} go={(orb) => investigate(orb, market)} /> : null;
   if (phone) {
     return (
       <div data-token-page={market} style={{ display: "grid", gap: "var(--s3)", minWidth: 0 }}>
@@ -664,6 +690,7 @@ export function TokenPage({ home, chain, address, chains, crew, strategies, acco
         {trade}
         {stats}
         {send}
+        {look}
         <Safety safety={safety} />
         <Recent trades={trades} symbol={sym} now={now} />
       </div>
@@ -680,6 +707,7 @@ export function TokenPage({ home, chain, address, chains, crew, strategies, acco
       <div style={{ display: "grid", gap: "var(--s3)", minWidth: 0 }}>
         {trade}
         {send}
+        {look}
         <section aria-label="Its numbers" style={card}>{stats}</section>
         <Safety safety={safety} />
       </div>

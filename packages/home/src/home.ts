@@ -81,13 +81,16 @@ import { TOOLS } from "./agent/tools.ts";
 import { reverseTools } from "./reverse/tools.ts";
 import { Desk } from "./desk/desk.ts";
 import { binanceSource, Market, offlineFetch, offlineSource, type MarketSource } from "./desk/market.ts";
-import { Dex, offlineDex, publicDex, type DexChain, type DexSource } from "./desk/dex.ts";
+import { Dex, offlineDex, publicDex, readTokenKey, type DexChain, type DexSource } from "./desk/dex.ts";
 import { safetyOf, type Safety } from "./desk/safety.ts";
 import { publicRouters, Swaps, type Routers } from "./desk/swaps.ts";
 import { Orders } from "./desk/orders.ts";
 import { sqliteBars } from "./desk/bars.ts";
 import { deskTools } from "./desk/tools.ts";
 import { researchTools } from "./desk/research-tools.ts";
+import { Casebook } from "./desk/casebook.ts";
+import { traceTools, type Sleuth } from "./desk/trace-tools.ts";
+import { Trail } from "./desk/trail.ts";
 import { Wallets } from "./desk/wallets.ts";
 import { Loops, type LoopsOptions } from "./loops.ts";
 import { cronOf, Schedules } from "./schedule.ts";
@@ -260,6 +263,8 @@ export class Home {
   readonly dex: Dex;
   readonly #deskFetch: typeof fetch | undefined;
   readonly desk: Desk;
+  /** The desk's cases (PLAN 5.42): coins looked into, the money as a graph, findings with their evidence. */
+  readonly cases: Casebook;
   readonly wallets: Wallets;
   readonly swaps: Swaps;
   /** An orb's orders on its account, paper or real money alike to it (PLAN 5.34). */
@@ -322,6 +327,7 @@ export class Home {
     // an orb's orders, one way whatever its account (PLAN 5.34): a real one filled, or not, when its swap is done
     this.orders = new Orders(db, this.events, this.desk, this.swaps, this.market, now);
     this.swaps.onSettled = (s) => this.orders.settled(s);
+    this.cases = new Casebook(db, this.events, now);
     const big = opts.brain?.preset.big ?? null;
     this.chatgpt = new ChatGPT({ dataDir: this.dataDir, events: this.events, clock: this.clock, ...opts.chatgpt });
     const chatgptReady = this.chatgpt.load().then(() => {}, () => {}); // a home never signed in does not touch the keychain
@@ -429,6 +435,8 @@ export class Home {
       // the desk (PLAN 5.25): prices, strategies on paper, notes, your wallets read, a real swap only asked
       ...deskTools({ desk: this.desk, wallets: this.wallets, orders: this.orders, dex: this.dex, safety: (c, a) => this.tokenSafety(c, a), now: () => this.clock.now(), nameOf: (orb) => this.inbox.orb(orb)?.name ?? orb }),
       ...researchTools({ desk: this.desk, nameOf: (orb) => this.inbox.orb(orb)?.name ?? orb }),
+      // the desk's investigations (PLAN 5.42): a case's coins read from their chain, the money followed
+      ...traceTools({ book: this.cases, sleuth: this.sleuth(), nameOf: (orb) => this.inbox.orb(orb)?.name ?? orb }),
       // the reading library (PLAN 3.12): the sites the office follows, beside web search
       ...readingTools(this.reading, (orb) => this.inbox.orb(orb)?.name ?? orb),
       // how the org works (PLAN 5.4): who fits a row, and a Senior passing a habit on (your yes first)
@@ -842,6 +850,24 @@ export class Home {
   }
 
   /** What a token can do to whoever holds it (PLAN 5.28, desk/safety.ts): read from its chain and its top pair. */
+  /** What an investigation reads with (PLAN 5.42): Solana's chain for each step on its own budget (its calls spaced on
+   * the public RPC, not a stand-in's), the desk's labels, a coin's price and name now. */
+  sleuth(): Sleuth {
+    return {
+      trail: () => new Trail({ fetch: this.#deskFetch, spacingMs: this.#deskFetch && this.#deskFetch !== offlineFetch ? 0 : 300, budget: 150 }),
+      labels: () => {
+        const ls = this.cases.labels();
+        return { names: new Map(ls.map((l) => [l.address, l.label])), exits: new Set(ls.filter((l) => l.exit).map((l) => l.address)) };
+      },
+      priceOf: async (key) => {
+        const t = readTokenKey(key);
+        if (!t) return { price: null, label: null };
+        const p = (await this.dex.token(t.chain, t.address))[0];
+        return { price: p?.priceUsd ?? null, label: p?.base.symbol ?? null };
+      },
+    };
+  }
+
   async tokenSafety(chain: DexChain, address: string): Promise<Safety> {
     const top = (await this.dex.token(chain, address).catch(() => []))[0] ?? null;
     return safetyOf(chain, address, top, { now: this.clock.now(), fetch: this.#deskFetch });

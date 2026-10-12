@@ -216,6 +216,37 @@ export const tabOf = (id: number, tab: Tab): string => `team:${id}:${tab}`;
 
 /** What the app needs from wherever its office lives. */
 // ── the desk (PLAN 5.22-5.27), as the home's door gives it ─────────────────────────────────────────
+/** The desk's cases (PLAN 5.42; the home's desk/casebook.ts and desk/trace.ts): coins looked into, the money as a graph
+ * (wallets and the transfers between them, summed, with their signatures), findings with their evidence, the write-up. */
+export type CaseRole = "deployer" | "funder" | "first" | "holder" | "pool" | "busy" | "exit" | "wallet";
+export type CaseNode = { address: string; roles: CaseRole[]; label: string | null; coins: string[] };
+export type CaseEdge = { from: string; to: string; asset: string; amount: number; count: number; first: number; last: number; sigs: string[] };
+export type CaseFinding = { id: number; by: string; words: string; evidence: string[]; weight: "strong" | "likely" | "hunch"; at: number };
+export type CaseFirstHands = { slots: number; wallets: string[]; buys: number; tokens: number; share: number; sol: number; deployerShare: number; inLaunchSlot: number };
+export type CaseFacts = {
+  coin: string; first?: CaseFirstHands; fresh?: number;
+  concentration?: { holders: number; top10: number; pools: number; groups: { root: string; wallets: string[]; share: number }[] };
+  devSoldShare?: number | null; soldTogether?: number; roundTrips?: number; cashOut?: number; seenBefore?: number;
+};
+export type CaseCoin = {
+  key: string; label: string | null; priceAtOpen: number | null;
+  launch: { deployer: string; sig: string; slot: number; at: number; pool: string | null; supply: number; reachedStart: boolean; txs: number } | null;
+  facts: CaseFacts | null;
+  /** its patterns by name, each with what it means (the home's desk/trace.ts PATTERNS) */
+  patterns: { id: string; words: string }[];
+  holders: { accounts: number; at: number } | null;
+};
+export type DeskCase = {
+  id: number; title: string; question: string; orb: string | null; openedAt: number; closedAt: number | null; summary: string | null; play: string | null;
+  coins: CaseCoin[]; graph: { nodes: CaseNode[]; edges: CaseEdge[] }; findings: CaseFinding[];
+};
+/** A case as the list shows it: how much it holds, not its graph. */
+export interface DeskCaseRow { id: number; title: string; orb: string | null; openedAt: number; closedAt: number | null; coins: string[]; wallets: number; transfers: number; findings: number }
+/** A wallet labelled for every case, and whether it is a way out. */
+export interface DeskLabel { address: string; label: string; exit: boolean; by: string; at: number }
+/** A thing you noticed, checked on every case. */
+export interface DeskNoticed { id: number; words: string; by: string; at: number }
+
 export type DeskCandle = { t: number; o: number; h: number; l: number; c: number; v: number };
 export type DeskTicker = { symbol: string; price: number; changePct: number; high: number; low: number; volume: number; at: number; stale: boolean };
 export type DeskSeries = { kind: string; field?: string; period?: number; k?: number; fast?: number; slow?: number; signal?: number; value?: number };
@@ -351,6 +382,16 @@ export interface Office {
   /** An orb sent to a market (a major, or a token as "solana:<mint>"), on paper or for real (each real trade still asked
    * of you): told in its chat, it walks to the war room's screen. */
   sendOrb(o: { orb: string; market: string; budget?: number | null; note?: string }): Promise<{ orb: string; market: string; label: string; mode: string; budget: number | null }>;
+  /** The desk's cases (PLAN 5.42): every case with the wallets labelled and what you have noticed; one case whole; a
+   * case opened on coins and the orb sent to work it; a finding of yours; a wallet labelled; a thing you noticed, kept
+   * and forgotten. */
+  deskCases(): Promise<{ cases: DeskCaseRow[]; noticed: DeskNoticed[]; labels: DeskLabel[] }>;
+  deskCase(id: number): Promise<DeskCase>;
+  openCase(o: { orb: string; coins: string[]; question?: string }): Promise<DeskCase>;
+  caseFinding(id: number, words: string, weight?: CaseFinding["weight"]): Promise<CaseFinding>;
+  labelWallet(address: string, label: string, exit: boolean): Promise<DeskLabel>;
+  notice(words: string): Promise<DeskNoticed>;
+  forgetNoticed(id: number): Promise<DeskNoticed[]>;
   /** An orb's account on paper or real money (and real money's budget): yours alone to set (PLAN 5.34). */
   setDeskAccount(orb: string, mode: "paper" | "real", budget?: number, paper?: number): Promise<DeskAccount>;
   /** A paper trade of your own (PLAN 5.38): `usd` dollars of `market` bought, or that many dollars' worth sold. */
@@ -690,6 +731,27 @@ export function doorOffice(base: Character): Office {
     },
     async desk() {
       return call<DeskState>("../desk");
+    },
+    async deskCases() {
+      return call<{ cases: DeskCaseRow[]; noticed: DeskNoticed[]; labels: DeskLabel[] }>("../desk/cases");
+    },
+    async deskCase(id) {
+      return (await call<{ case: DeskCase }>(`../desk/cases/${id}`)).case;
+    },
+    async openCase(o) {
+      return (await call<{ case: DeskCase }>("../desk/cases", { method: "POST", body: JSON.stringify(o) })).case;
+    },
+    async caseFinding(id, words, weight = "hunch") {
+      return (await call<{ finding: CaseFinding }>(`../desk/cases/${id}/findings`, { method: "POST", body: JSON.stringify({ words, weight }) })).finding;
+    },
+    async labelWallet(address, label, exit) {
+      return (await call<{ label: DeskLabel }>("../desk/labels", { method: "POST", body: JSON.stringify({ address, label, exit }) })).label;
+    },
+    async notice(words) {
+      return (await call<{ noticed: DeskNoticed }>("../desk/noticed", { method: "POST", body: JSON.stringify({ words }) })).noticed;
+    },
+    async forgetNoticed(id) {
+      return (await call<{ noticed: DeskNoticed[] }>(`../desk/noticed/${id}`, { method: "DELETE" })).noticed;
     },
     async dexSearch(q) {
       return (await call<{ pairs: DexPair[] }>(`../desk/dex/search?q=${encodeURIComponent(q)}`)).pairs;

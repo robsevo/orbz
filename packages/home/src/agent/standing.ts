@@ -11,7 +11,7 @@
 // specialty's sections, morals left out), with the lines the person approved for him.
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { composeConstitution, FUNDAMENTALS_METHOD, loads, RESEARCH_METHOD, RESEARCHERS, SECTION_MAP, sectioned, type Specialty } from "../brain/constitution.ts";
+import { composeConstitution, FUNDAMENTALS_METHOD, INVESTIGATION_METHOD, loads, RESEARCH_METHOD, RESEARCHERS, SECTION_MAP, sectioned, type Specialty } from "../brain/constitution.ts";
 import { SEARCH_BRIEF, valuesBrief, valuesFor } from "../brain/values.ts";
 
 /** What kind of turn an orb has in a session (owner, 10-06: the lead plans and pulls others in, and
@@ -114,6 +114,7 @@ export function standingContext(o: { orbName: string; brainDir: string; workspac
   if (role !== "chime" && !(cut && !light && loads(SECTION_MAP.knowledge_and_search, o.specialty ?? "general", { kinds: o.kinds, used: o.used }))) parts.push(SEARCH_BRIEF);
   if (role === "asked" && RESEARCHERS.includes(o.specialty ?? "general")) parts.push(RESEARCH_METHOD); // asked to find something out
   if (role === "asked" && o.specialty === "fundamentals") parts.push(FUNDAMENTALS_METHOD); // asked to look at a company or a coin
+  if (role !== "chime" && o.kinds?.has("trace")) parts.push(INVESTIGATION_METHOD); // the desk's investigations (PLAN 5.42), with their tools
   if (!cut && o.learned?.length) parts.push(`What you have learned (each line approved by the person):\n${o.learned.map((l) => `- ${l}`).join("\n")}`);
   // school (PLAN 5.7): each note was kept only because the exam scored higher with it
   if (!cut && o.notebook?.length) parts.push(`What you learned at school (your notebook):\n${o.notebook.map((n) => `- ${n.subject}: ${n.text}`).join("\n")}`);

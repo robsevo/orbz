@@ -27,7 +27,7 @@ test("an orb starts with the shared tools and its department's; an all-rounder w
   for (const n of ["shell", "read_file", "web_search", "web_fetch", "ask_orb", "ask_owner", "propose_lesson", "teach"]) assert.ok(tia.includes(n), `shared: ${n}`);
   for (const n of ["remind", "schedule_job", "open_page", "check_page"]) assert.ok(tia.includes(n), `Life's: ${n}`);
   for (const n of ["follow_source", "propose_plan", "start_row", "claim_rows", "who_fits"]) assert.ok(!tia.includes(n), `not to hand: ${n}`);
-  assert.deepEqual(more(model.bodies[0]!)!.parameters.properties!.group!.enum!.sort(), ["desk", "plans", "quant", "reading", "reverse", "risk", "team"], "every kind it lacks, the reverse engineer's and the desk's too, its research and its risk (PLAN 4.8, 5.25, 5.40)");
+  assert.deepEqual(more(model.bodies[0]!)!.parameters.properties!.group!.enum!.sort(), ["desk", "plans", "quant", "reading", "reverse", "risk", "team", "trace"], "every kind it lacks, the reverse engineer's and the desk's too, its research, its risk and its investigations (PLAN 4.8, 5.25, 5.40, 5.42)");
   assert.match(more(model.bodies[0]!)!.description, /reading: the office's reading library/);
   assert.ok(!all.includes("more_tools") && ["follow_source", "propose_plan", "claim_rows", "open_page", "remind"].every((n) => all.includes(n)), "control: an all-rounder has every kind, and no more_tools");
   const size = (b: Record<string, unknown>): number => JSON.stringify(b.tools).length;
@@ -72,5 +72,6 @@ test("a session's turn has the plans and the team; the kinds are consistent", ()
   const start = (specialty: string): string[] => [...startingGroups({ family: "desk", specialty, session: false })].sort();
   assert.deepEqual([start("quant"), start("quantres"), start("quantdev")], [["desk", "quant"], ["desk", "quant"], ["desk", "quant"]]);
   assert.deepEqual([start("risk"), start("riskanalyst")], [["desk", "risk"], ["desk", "risk"]]);
-  assert.deepEqual([start("deskhead"), start("dealer"), start("onchain")], [["desk", "quant", "risk"], ["desk"], ["desk"]]);
+  // the investigations (PLAN 5.42): the on-chain job's and its head's
+  assert.deepEqual([start("deskhead"), start("dealer"), start("onchain")], [["desk", "quant", "risk", "trace"], ["desk"], ["desk", "trace"]]);
 });

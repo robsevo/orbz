@@ -18,6 +18,8 @@ import { barsProblem, drawn, marksOn } from "./desk/chart.ts";
 import { deskStats } from "./desk/stats.ts";
 import { problemOf, SYMBOLS, TIMEFRAMES, type Strategy, type Timeframe } from "./desk/strategy.ts";
 import { WalletError } from "./desk/wallets.ts";
+import { CaseError, MAX_COINS, type Weight } from "./desk/casebook.ts";
+import { PATTERNS, patternsOf } from "./desk/trace.ts";
 import { recentWork } from "./worklog.ts";
 import { spawn } from "node:child_process";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
@@ -734,6 +736,61 @@ async function handle(
         if (parts[2] === "trades") return { trades: (await home.dex.trades(c, at, token)).slice(0, 60) };
         no(404, "no such thing on the desk");
       }
+      // the desk's cases (PLAN 5.42; owner, 10-12: "investigate where we lead them (can be a pump coin or 5 or how many
+      // we ask it) ... like ZachXBT does"): the cases, one case whole, a case opened on coins and the orb you choose sent
+      // to work it, your own findings, the wallets labelled, and the things you notice, which every case is checked for
+      if (method === "GET" && parts[1] === "cases" && parts.length === 2) return { cases: home.cases.list(), noticed: home.cases.noticed(), labels: home.cases.labels() };
+      if (method === "GET" && parts[1] === "cases" && parts.length === 3) {
+        const c = home.cases.get(id(2)) ?? no(404, "no such case");
+        // each coin as read, its patterns named (the reads' bulk, every buy and funding, stays in the home)
+        const coins = c.coins.map(({ buys: _b, sells: _s, fundings: _f, holders, ...k }) => ({ ...k, holders: holders ? { accounts: holders.accounts, at: holders.at } : null, patterns: k.facts ? patternsOf(k.facts).map((x) => ({ id: x, words: PATTERNS[x] })) : [] }));
+        return { case: { ...c, coins } };
+      }
+      if (method === "POST" && parts[1] === "cases" && parts.length === 2) {
+        const b = await body(req);
+        const orb = text(b, "orb");
+        if (!home.inbox.orb(orb)) no(404, `no orb "${orb}"`);
+        const raw = Array.isArray(b.coins) ? b.coins.map((x) => String(x).trim()).filter(Boolean) : [];
+        if (!raw.length || raw.length > MAX_COINS) no(400, `1 to ${MAX_COINS} coins, as "solana:<mint>"`);
+        for (const k of raw) {
+          const t = readTokenKey(k);
+          if (!t) no(400, `${k} is not a coin as "solana:<mint>"`);
+          if (t!.chain !== "solana") no(400, `${k}: only Solana's coins are traced yet`);
+        }
+        const question = typeof b.question === "string" && b.question.trim() ? b.question.trim().slice(0, 1000) : "What happened with these coins, who is behind them, and how could it be played?";
+        const sleuth = home.sleuth();
+        const coins = [];
+        for (const k of [...new Set(raw)]) {
+          const p = await sleuth.priceOf(k).catch(() => ({ price: null, label: null }));
+          coins.push({ key: k, label: p.label, price: p.price });
+        }
+        const c = home.cases.open({ coins, question, orb });
+        const brief = [
+          `Investigate case ${c.id}: ${c.coins.map((k) => `${k.label ?? ""} (${k.key})`.trim()).join(", ")}.`,
+          `My question: ${question}`,
+          "Read each coin's launch (trace_launch) and who holds it (trace_holders); follow anything that looks off (trace_wallet) a hop at a time, as far as the money goes; check case_patterns; keep each finding with its evidence (case_finding); then close the case (close_case) with the trail step by step and how it could be played.",
+          "Tell me what you found as you go.",
+        ].join(" ");
+        const item = home.inbox.send(orb, `chat:${orb}`, brief);
+        home.events.append("desk.sent", { market: c.coins[0]!.key, label: c.title, case: c.id }, { orb });
+        return { case: c, item };
+      }
+      if (method === "POST" && parts[1] === "cases" && parts.length === 4 && parts[3] === "findings") {
+        const b = await body(req);
+        const weight = (["strong", "likely", "hunch"] as const).includes(b.weight as Weight) ? (b.weight as Weight) : "hunch";
+        return { finding: home.cases.find(id(2), YOU, text(b, "words"), [], weight) };
+      }
+      if (method === "POST" && parts[1] === "labels" && parts.length === 2) {
+        const b = await body(req);
+        const address = text(b, "address").trim();
+        if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address)) no(400, "a Solana address");
+        return { label: home.cases.label(address, text(b, "label"), b.exit === true, YOU) };
+      }
+      if (method === "POST" && parts[1] === "noticed" && parts.length === 2) return { noticed: home.cases.notice(text(await body(req), "words"), YOU) };
+      if (method === "DELETE" && parts[1] === "noticed" && parts.length === 3) {
+        home.cases.forget(id(2));
+        return { noticed: home.cases.noticed() };
+      }
       // an orb sent to a token or a major (owner, 10-11: "user can input the contract address and view the coin + trade
       // manually or send a certain orb to trade it"): told in its chat to trade it from its account, in the same words
       // whether its account is on paper or real money ("we dont want the orbs to know the difference. money is money";
@@ -839,7 +896,7 @@ async function handle(
       }
     } catch (e) {
       if (e instanceof HttpError) throw e;
-      no(e instanceof DeskError || e instanceof SwapError || e instanceof WalletError ? 409 : 502, e);
+      no(e instanceof CaseError ? 400 : e instanceof DeskError || e instanceof SwapError || e instanceof WalletError ? 409 : 502, e);
     }
   }
   // the little things found in the office, kept

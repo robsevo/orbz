@@ -509,6 +509,43 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("value at risk is read from the best tail", "src/desk/risk.ts", [
         ("losses[Math.ceil(losses.length * 0.95) - 1]!", "losses[Math.ceil(losses.length * 0.05) - 1]!"),
     ], ["research.test.ts"]),
+    # the desk's investigations (PLAN 5.42; owner, 10-12: "investigate where we lead them ... like ZachXBT does")
+    ("an exchange's withdrawals make its customers one group", "src/desk/trace.ts", [
+        ("    if (!f.funder || busy.has(f.funder)) continue;", "    if (!f.funder) continue;"),
+    ], ["trace.test.ts"]),
+    ("a coin's first hands are counted a slot past their slots", "src/desk/trace.ts", [
+        ("b.slot >= l.slot && b.slot <= l.slot + slots && b.wallet !== l.pool", "b.slot >= l.slot && b.slot <= l.slot + slots + 1 && b.wallet !== l.pool"),
+    ], ["trace.test.ts"]),
+    ("a pattern's record is read from the cases without it", "src/desk/trace.ts", [
+        ("    const w = priced.filter((c) => c.patterns.includes(p)).map((c) => c.change);", "    const w = priced.filter((c) => !c.patterns.includes(p)).map((c) => c.change);"),
+    ], ["trace.test.ts"]),
+    ("a trade through a pool reads as a way out", "src/desk/trace.ts", [
+        ('        if (seen.has(e.to) || role(e.to, "pool")) continue;', "        if (seen.has(e.to)) continue;"),
+    ], ["trace.test.ts"]),
+    ("an orb's finding is kept on evidence the case never read", "src/desk/casebook.ts", [
+        ("      if (unknown.length) throw new CaseError(", "      if (unknown.length && false) throw new CaseError("),
+    ], ["desk-cases.test.ts"]),
+    ("the fee a transaction paid reads as a transfer", "src/desk/trail.ts", [
+        ("(meta.preBalances[i] ?? 0) + (i === 0 ? meta.fee : 0);", "(meta.preBalances[i] ?? 0);"),
+    ], ["trail.test.ts"]),
+    ("a pool that never signed reads as a buyer or seller", "src/desk/trail.ts", [
+        ("    if (!k.signer || skip.has(k.key)) continue;", "    if (skip.has(k.key)) continue;"),
+    ], ["trail.test.ts"]),
+    ("a busy wallet's first money is looked for in a page that is not its first", "src/desk/trail.ts", [
+        ("    if (!reachedStart) return { wallet, funder: null, at: null, sig: null, sol: 0, born: null, busy: true };", "    if (false) return { wallet, funder: null, at: null, sig: null, sol: 0, born: null, busy: true };"),
+    ], ["trail.test.ts"]),
+    ("a holder's owner is read a byte off", "src/desk/trail.ts", [
+        ("      const owner = toBase58(bytes.subarray(0, 32));", "      const owner = toBase58(bytes.subarray(1, 33));"),
+    ], ["trail.test.ts"]),
+    ("a newer transaction version is never asked for", "src/desk/trail.ts", [
+        ("      if (!v || Number(v[1]) <= this.#version) throw e;", "      throw e;"),
+    ], ["trail.test.ts"]),
+    ("a long history's refused page fails the whole read", "src/desk/trail.ts", [
+        ("        if (before && !(e instanceof BudgetSpent) && /not found/i.test((e as Error).message)) return { sigs, reachedStart: false };", "        if (false) return { sigs, reachedStart: false };"),
+    ], ["trail.test.ts"]),
+    ("the investigation's method comes without its tools", "src/agent/standing.ts", [
+        ('  if (role !== "chime" && o.kinds?.has("trace")) parts.push(INVESTIGATION_METHOD);', '  if (role !== "chime") parts.push(INVESTIGATION_METHOD);'),
+    ], ["desk-cases.test.ts"]),
     # a pool's bars kept, GeckoTerminal's asks spaced (PLAN 5.35; owner, 10-11: "No chart now ... 429")
     ("a restart forgets a pool's bars", "src/desk/bars.ts", [
         ("      return (read.all(k.chain, k.pool, k.token, k.tf, limit) as Candle[]).reverse();", "      return [] as Candle[];"),
@@ -2121,6 +2158,22 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
 
 # the app (PLAN 2.x): paths are inside packages/app
 APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
+    # a case's money drawn as ZachXBT draws it (PLAN 5.42)
+    ("a funder is drawn right of what it funded", "src/desk/flow.ts", [
+        ("        col.set(i.key, to.length ? Math.min(...to) : 1);", "        col.set(i.key, to.length ? Math.max(...to) + 2 : 1);"),
+    ], ["flow.test.ts"]),
+    ("the pools are drawn, every buy a line through them", "src/desk/flow.ts", [
+        ('  const drawn = nodes.filter((n) => mainRole(n) !== "pool");', "  const drawn = nodes.filter(() => true);"),
+    ], ["flow.test.ts"]),
+    ("an exchange is drawn once, its withdrawals looping back", "src/desk/flow.ts", [
+        ("      if (sends) items.push({ key: `${n.address}>`, node: n, side: \"out\" });", "      if (false) items.push({ key: `${n.address}>`, node: n, side: \"out\" });"),
+    ], ["flow.test.ts"]),
+    ("a line's words are laid on another's", "src/desk/flow.ts", [
+        ("      const c = cover(m);", "      const c = 0 * cover(m);"),
+    ], ["flow.test.ts"]),
+    ("a mint is read out of the inside of a longer word", "src/desk/flow.ts", [
+        ("text.matchAll(/(?<![0-9A-Za-z])([1-9A-HJ-NP-Za-km-z]{32,44})(?![0-9A-Za-z])/g)", "text.matchAll(/([1-9A-HJ-NP-Za-km-z]{32,44})/g)"),
+    ], ["flow.test.ts"]),
     # the living orb's moods (PLAN 2.3)
     ("your no makes him hop", "src/orb/mood.ts", [
         ('        return d.status === "denied" ? "pout"', '        return d.status === "denied" ? "hop"'),

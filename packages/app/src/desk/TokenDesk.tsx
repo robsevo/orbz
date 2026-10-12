@@ -156,8 +156,10 @@ function Finder({ home, q, prices, pick, wide }: { home: Office; q: string; pric
 }
 
 /** The screen, over the floor: a search on top, the list or a coin's page under it. */
-export function TokenDesk({ home, prices, chains, crew, strategies, accounts, you, reload, wallet, openWallet, close, start = null }: {
+export function TokenDesk({ home, prices, chains, crew, strategies, accounts, you, reload, wallet, openWallet, close, start = null, investigate }: {
   home: Office; prices: DeskTicker[]; chains: DeskChain[]; crew: Character[]; strategies: DeskStrategy[]; accounts: DeskAccount[]; you: DeskYou | null; reload: () => void; wallet: WalletHere; openWallet: (kind: "evm" | "solana") => void; close: () => void;
+  /** A coin's case opened (PLAN 5.42). */
+  investigate?: (orb: string, market: string) => Promise<void>;
   /** A coin to open on (one of your wallet's, pressed); else the coin last open here, or the list. */
   start?: Picked | null;
 }) {
@@ -203,7 +205,7 @@ export function TokenDesk({ home, prices, chains, crew, strategies, accounts, yo
         </div>
         <div data-token-body style={{ overflowY: "auto", overscrollBehavior: "contain", padding: phone ? "12px 12px 28px" : "18px", minWidth: 0 }}>
           {picked?.kind === "token" ? (
-            <TokenPage home={home} chain={picked.chain} address={picked.address} chains={chains} crew={crew} strategies={strategies} accounts={accounts} you={you} reload={reload} wallet={wallet} openWallet={openWallet} phone={phone} back={() => pick(null)} />
+            <TokenPage home={home} chain={picked.chain} address={picked.address} chains={chains} crew={crew} strategies={strategies} accounts={accounts} you={you} reload={reload} wallet={wallet} openWallet={openWallet} phone={phone} back={() => pick(null)} investigate={investigate} />
           ) : picked?.kind === "major" ? (
             <MajorPage home={home} symbol={picked.symbol} ticker={prices.find((t) => t.symbol === picked.symbol) ?? null} crew={crew} strategies={strategies} accounts={accounts} you={you} reload={reload} chains={chains} wallet={wallet} openWallet={openWallet} phone={phone} back={() => pick(null)} />
           ) : (

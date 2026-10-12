@@ -24,6 +24,9 @@ export const GROUPS = {
   // risk, and its head
   quant: { id: "quant", about: "the desk's research: what followed a condition on a market's history (an event study), strategies compared on history a choice among them never saw, a strategy stress-tested", families: [], specialties: ["quant", "quantres", "quantdev", "deskhead"] },
   risk: { id: "risk", about: "the desk's risk: every account's exposure, how much rides on its largest coin, a day's value at risk, the worst day replayed", families: [], specialties: ["risk", "riskanalyst", "deskhead"] },
+  // the desk's investigations (PLAN 5.42; owner, 10-12: "investigate ... like ZachXBT does"), by specialty: its on-chain
+  // analyst's, and its head's
+  trace: { id: "trace", about: "the desk's investigations: a case on coins, each coin's launch (who deployed and funded it, its first hands), who holds it grouped by who funded them, a wallet's money followed, the patterns across coins and cases, findings kept with their evidence", families: [], specialties: ["onchain", "deskhead"] },
   // the desk (PLAN 5.25): its department's, and the money orbs' by specialty
   desk: { id: "desk", about: "the desk: prices and charts of the majors and of any token on a DEX by its name or address (pump.fun's too), what a token can do to its holders, strategies backtested and run on its account, orders placed on that account, notes on a coin, the person's wallets (read only)", families: ["desk"], specialties: ["investor", "crypto", "fundamentals", "cfo"] },
 } as const satisfies Record<string, ToolGroup>;

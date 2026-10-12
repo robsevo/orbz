@@ -14,6 +14,7 @@ import { changeText, priceText } from "../ui/candles.ts";
 import { NAMES } from "../floor/props.ts";
 import { DeskFloor } from "./Floor.tsx";
 import { button, card, chip, field, head, marketName, pct, shortAddress, small, strong, usd, well, ago, YOU } from "./kit.ts";
+import { CasesPanel } from "./Cases.tsx";
 import { TokenDesk, type Picked } from "./TokenDesk.tsx";
 import { AccountSwitch, YourPaper } from "./Account.tsx";
 import { activeOn, keepMoney, keptMoney, MoneySwitch, OrbStats, resultOf, signed, tone, type Money } from "./Stats.tsx";
@@ -28,7 +29,8 @@ import { TradePanel } from "./Trade.tsx";
 // own, first, so each tab is one thing on its screen
 // your wallet (its worth, its swaps) and each orb's P&L first (owner, 10-11: "users can see wallet balance and analytics
 // as well. and each orb pnl")
-const TABS = [["trade", "Wallet"], ["desk", "Orbs"], ["books", "Books"], ["strategies", "Strategies"], ["limits", "Limits"]] as const;
+// the cases (PLAN 5.42; owner, 10-12: "investigate where we lead them ... like ZachXBT does")
+const TABS = [["trade", "Wallet"], ["desk", "Orbs"], ["books", "Books"], ["strategies", "Strategies"], ["cases", "Cases"], ["limits", "Limits"]] as const;
 type Tab = (typeof TABS)[number][0] | "floor";
 const TAB_KEY = "orbs.desk.tab";
 
@@ -63,6 +65,15 @@ export function DeskRoom({ home, office, moods, go, tab: opening = null }: { hom
     setScreen(true);
   };
   const [sheet, setSheet] = useState(false);
+  /** A case just opened from a coin's page: the Cases tab opens on it. */
+  const [caseOpening, setCaseOpening] = useState<number | null>(null);
+  const investigate = async (orb: string, market: string): Promise<void> => {
+    if (!home) return;
+    const c = await home.openCase({ orb, coins: [market] });
+    setScreen(false);
+    setCaseOpening(c.id);
+    setTab("cases");
+  };
   const wallet = useWallet(home, () => load());
   const setTab = (t: Tab): void => {
     setTabState(t);
@@ -208,10 +219,12 @@ export function DeskRoom({ home, office, moods, go, tab: opening = null }: { hom
         <Books home={home} s={s} crew={crew} reload={() => void load()} />
       ) : shown === "desk" ? (
         <Desk home={home} s={s} crew={crew} office={office} go={go} reload={() => void load()} />
+      ) : shown === "cases" ? (
+        <CasesPanel home={home} crew={crew} opening={caseOpening} opened={() => setCaseOpening(null)} />
       ) : (
         <Limits home={home} settings={s.settings} reload={load} />
       )}
-      {screen && s && <TokenDesk home={home} prices={tape} chains={s.chains} crew={crew} strategies={s.strategies} accounts={s.accounts ?? []} you={s.you ?? null} reload={() => void load()} wallet={wallet} openWallet={openWallet} start={screenAt} close={() => setScreen(false)} />}
+      {screen && s && <TokenDesk home={home} prices={tape} chains={s.chains} crew={crew} strategies={s.strategies} accounts={s.accounts ?? []} you={s.you ?? null} reload={() => void load()} wallet={wallet} openWallet={openWallet} start={screenAt} close={() => setScreen(false)} investigate={investigate} />}
       {sheet && <WalletSheet home={home} wallet={wallet} close={() => setSheet(false)} />}
     </div>
   );
