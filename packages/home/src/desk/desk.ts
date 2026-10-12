@@ -33,6 +33,12 @@ export type Settings = { perTradeUsd: number; perDayUsd: number; slippageBps: nu
 export const DEFAULT_SETTINGS: Settings = { perTradeUsd: 100, perDayUsd: 300, slippageBps: 50, off: false };
 
 export class DeskError extends Error {}
+/** A router's quote for a paper trade's size (PLAN 5.38): the coins bought (or sold), the dollars paid (or brought),
+ * the network's fee in dollars, its price impact. */
+export type PaperQuote = { qty: number; usd: number; feeUsd: number; impact: number | null };
+/** Your own paper account (PLAN 5.38; owner, 10-11: "still cant decide what amount we want to paper trade"): kept as an
+ * orb's is, under a name no orb can have (an orb's id is letters, digits and dashes). */
+export const YOU = "~you";
 /** An orb's closed trades on paper, summed (PLAN 5.31). */
 export type OrbPnl = { orb: string; trades: number; wins: number; realized: number; today: number; best: number | null; worst: number | null; fees: number; last: number | null };
 
@@ -296,37 +302,62 @@ export class Desk {
     }
   }
 
-  /** A paper trade on an orb's own book at the price now, a swap's fee and slippage paid: buy for `usd` dollars, or sell
-   * `usd` dollars' worth (all of it when that is more than it holds). */
-  async paperTrade(orb: string, symbol: string, side: "buy" | "sell", usd: number): Promise<{ book: Book; px: number; qty: number; trade: Record<string, unknown> | null }> {
+  /** A paper trade on an orb's own book (or yours, YOU), filled as the market would fill it now (PLAN 5.38; owner, 10-11:
+   * "simulate slippage etc."): given `quoted`, the router's own quote for this size (the coins the dollars buy, or the
+   * dollars a sale brings: its pools' slippage and price impact; and its network fee, paid too); else the market's price,
+   * the desk's usual slippage and fee. Buy for `usd` dollars, or sell `usd` dollars' worth (all of it when that is more
+   * than it holds). */
+  async paperTrade(orb: string, symbol: string, side: "buy" | "sell", usd: number, quoted?: PaperQuote): Promise<{ book: Book; px: number; qty: number; trade: Record<string, unknown> | null; quoted: boolean; impact: number | null; feeUsd: number }> {
     if (!(usd >= 1 && usd <= 1_000_000)) throw new DeskError("an order is $1 to $1,000,000");
-    const px = await this.#market.price(symbol);
-    if (px === null) throw new DeskError(`no live price for ${symbol} now`);
     const b = this.ownBook(orb);
     const at = this.#now();
     const held = this.#db.prepare("SELECT qty, cost, since FROM desk_holdings WHERE book = ? AND symbol = ?").get(b.id, symbol) as { qty: number; cost: number; since: number } | undefined;
+    const said = { quoted: Boolean(quoted), impact: quoted?.impact ?? null };
+    const price = async (): Promise<number> => {
+      const px = await this.#market.price(symbol);
+      if (px === null) throw new DeskError(`no live price for ${symbol} now`);
+      return px;
+    };
     if (side === "buy") {
-      if (usd > b.cash) throw new DeskError(`the account has $${b.cash.toFixed(2)} to spend`);
-      const fill = px * (1 + OWN_SLIP);
-      const qty = (usd * (1 - OWN_FEE)) / fill;
-      this.#db.prepare("INSERT INTO desk_holdings (book, symbol, qty, cost, since) VALUES (?, ?, ?, ?, ?) ON CONFLICT(book, symbol) DO UPDATE SET qty = qty + excluded.qty, cost = cost + excluded.cost").run(b.id, symbol, qty, usd, at);
-      this.#db.prepare("UPDATE desk_books SET cash = cash - ?, fees = fees + ? WHERE id = ?").run(usd, usd * OWN_FEE, b.id);
-      this.#events.append("desk.fill", { book: b.id, symbol, side: "buy", qty, px: fill, usd, paper: true }, { orb });
-      return { book: this.book(b.id)!, px: fill, qty, trade: null };
+      // what it costs (the dollars and the network's fee) and the coins it brings
+      let spend: number;
+      let fee: number;
+      let qty: number;
+      if (quoted) [spend, fee, qty] = [usd + quoted.feeUsd, quoted.feeUsd, quoted.qty];
+      else {
+        const fill = (await price()) * (1 + OWN_SLIP);
+        [spend, fee, qty] = [usd, usd * OWN_FEE, (usd * (1 - OWN_FEE)) / fill];
+      }
+      if (!(qty > 0)) throw new DeskError(`no ${symbol} for $${usd.toFixed(2)} now`);
+      if (spend > b.cash + 1e-9) throw new DeskError(`the account has $${b.cash.toFixed(2)} to spend`);
+      this.#db.prepare("INSERT INTO desk_holdings (book, symbol, qty, cost, since) VALUES (?, ?, ?, ?, ?) ON CONFLICT(book, symbol) DO UPDATE SET qty = qty + excluded.qty, cost = cost + excluded.cost").run(b.id, symbol, qty, spend, at);
+      this.#db.prepare("UPDATE desk_books SET cash = cash - ?, fees = fees + ? WHERE id = ?").run(spend, fee, b.id);
+      this.#events.append("desk.fill", { book: b.id, symbol, side: "buy", qty, px: spend / qty, usd: spend, paper: true, ...said, fee }, { orb });
+      return { book: this.book(b.id)!, px: spend / qty, qty, trade: null, ...said, feeUsd: fee };
     }
     if (!held || held.qty <= 0) throw new DeskError(`the account holds no ${symbol}`);
-    const fill = px * (1 - OWN_SLIP);
-    const qty = Math.min(held.qty, usd / fill);
-    const got = qty * fill;
-    const fee = got * OWN_FEE;
+    // what it sells, and the dollars it brings after the fee
+    let qty: number;
+    let got: number;
+    let fee: number;
+    if (quoted) {
+      qty = Math.min(held.qty, quoted.qty);
+      fee = quoted.feeUsd;
+      got = quoted.usd * (qty / quoted.qty) - fee;
+    } else {
+      const fill = (await price()) * (1 - OWN_SLIP);
+      qty = Math.min(held.qty, usd / fill);
+      fee = qty * fill * OWN_FEE;
+      got = qty * fill - fee;
+    }
     const cost = held.cost * (qty / held.qty);
-    const pnl = got - fee - cost;
+    const pnl = got - cost;
     this.#db.prepare("UPDATE desk_holdings SET qty = qty - ?, cost = cost - ? WHERE book = ? AND symbol = ?").run(qty, cost, b.id, symbol);
-    this.#db.prepare("UPDATE desk_books SET cash = cash + ?, fees = fees + ? WHERE id = ?").run(got - fee, fee, b.id);
-    this.#events.append("desk.fill", { book: b.id, symbol, side: "sell", qty, px: fill, usd: got, paper: true }, { orb });
-    const trade = { book: b.id, strategy: null, symbol, timeframe: null, paper: true, entryPx: cost / qty, exitPx: fill, qty, pnl, pnlPct: (pnl / cost) * 100, fees: fee, held: at - held.since, why: "own" };
+    this.#db.prepare("UPDATE desk_books SET cash = cash + ?, fees = fees + ? WHERE id = ?").run(got, fee, b.id);
+    this.#events.append("desk.fill", { book: b.id, symbol, side: "sell", qty, px: got / qty, usd: got, paper: true, ...said, fee }, { orb });
+    const trade = { book: b.id, strategy: null, symbol, timeframe: null, paper: true, entryPx: cost / qty, exitPx: got / qty, qty, pnl, pnlPct: (pnl / cost) * 100, fees: fee, held: at - held.since, why: "own" };
     this.#events.append("desk.trade_closed", trade, { orb });
-    return { book: this.book(b.id)!, px: fill, qty, trade };
+    return { book: this.book(b.id)!, px: got / qty, qty, trade, ...said, feeUsd: fee };
   }
 
   /** Each orb's closed trades on paper, summed (owner, 10-11: "each orb pnl"): its realized P&L after fees, today's, its

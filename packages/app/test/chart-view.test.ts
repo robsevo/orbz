@@ -123,13 +123,20 @@ test("the desk's chart: the bar's clock; indicators from its right-click menu, k
   await page.locator('[data-major-page="ETH"] [data-candles]').waitFor({ timeout: 20_000 });
   // the top 10 traded from their pages (owner, 10-11: "add the ability to trade the top 10 too"): ETH swapped from your
   // wallet on Base; XRP, with no market on the chains a wallet here trades on, says so
-  await page.locator('[data-major-page="ETH"] [data-token-trade]:not([data-no-route])').waitFor();
-  assert.match(await page.locator('[data-major-page="ETH"] [data-token-trade]').innerText(), /Buy ETH/);
+  await page.locator('[data-major-page="ETH"] [data-token-trade]').waitFor();
+  assert.equal(await page.locator('[data-major-page="ETH"] [data-no-route]').count(), 0, "ETH has a market here");
+  await page.locator('[data-major-page="ETH"] [data-trade-mode="real"]').click();
+  assert.match(await page.locator('[data-major-page="ETH"] [data-token-trade]').innerText(), /Buy ETH[\s\S]*Pay with/, "its swap, from your wallet");
   await page.locator("[data-token-close]").click();
   await page.locator("[data-token-desk]").waitFor({ state: "detached" });
   await page.locator('[data-tick="XRP"]').dispatchEvent("click");
   await page.locator('[data-major-page="XRP"] [data-no-route]').waitFor({ timeout: 20_000 });
   assert.match(await page.locator('[data-major-page="XRP"] [data-no-route]').innerText(), /XRP has no market on the chains your wallet trades on/);
+  // on paper, any of them (PLAN 5.38): XRP's real money closed, its paper open, filled at the market's price
+  assert.equal(await page.locator('[data-major-page="XRP"] [data-trade-mode="real"]').isDisabled(), true, "no real money where it has no market");
+  await page.locator('[data-major-page="XRP"] [data-paper-preset="10"]').click();
+  await page.locator('[data-major-page="XRP"] [data-paper-go]').click();
+  await page.locator('[data-major-page="XRP"] [data-paper-said]', { hasText: /^Bought .* at the market's price, less the desk's usual fee and slippage\.$/ }).waitFor({ timeout: 20_000 });
   await page.locator("[data-token-close]").click();
   await page.locator("[data-token-desk]").waitFor({ state: "detached" });
   // the screen's list: the majors first, then what trends (owner: "put the majors on top")

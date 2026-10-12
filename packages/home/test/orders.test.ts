@@ -90,13 +90,48 @@ test("its paper, as much as you say (owner, 10-11: \"why cant we choose how much
   assert.deepEqual([(await put({ mode: "paper", paper: 500 })).json.account!.paper, home.desk.account("tess").book.cash], [500, 500], "its paper is $500 now");
   assert.match(await use("place_order", { market: KEY, side: "buy", usd: 600, why: "too much" }), /has \$500\.00 to spend/, "an order over it refused");
   await use("place_order", { market: KEY, side: "buy", usd: 300, why: "the dip" });
-  assert.equal(home.desk.account("tess").book.cash, 200);
-  assert.equal((await put({ mode: "paper", paper: 1_000 })).json.account!.cash, 700, "raised: $500 more to spend");
+  const near = (a: number, b: number) => Math.abs(a - b) < 1e-9;
+  assert.ok(near(home.desk.account("tess").book.cash, 199.99), "$300 and the router's network fee, a cent here");
+  assert.ok(near((await put({ mode: "paper", paper: 1_000 })).json.account!.cash, 699.99), "raised: $500 more to spend");
   const under = await put({ mode: "paper", paper: 200 });
-  assert.deepEqual([under.status, /spent \$300\.00/.test(under.json.error ?? "")], [409, true], "never under what it has spent");
+  assert.deepEqual([under.status, /spent \$300\.01/.test(under.json.error ?? "")], [409, true], "never under what it has spent");
   assert.equal((await put({ mode: "paper", paper: -5 })).status, 409);
   const kept = home.desk.save({ name: "Any", symbol: "SOL", timeframe: "1h", sizePct: 10, entry: { all: [{ left: { kind: "price", field: "close" }, op: ">", right: { kind: "value", value: 0 } }] }, exit: { all: [{ left: { kind: "price", field: "close" }, op: "<", right: { kind: "value", value: 0 } }] } }, "tess");
   assert.equal((await home.desk.run(kept.id, "tess")).cashStart, 1_000, "a strategy run on paper begins with its paper");
+});
+
+test("your own paper (owner, 10-11: \"still cant decide what amount we want to paper trade... simulate slippage etc.\"): as much as you say; filled at the router's quote for its size (its coins, its impact, its network fee paid), a coin with no route at the market's price and the usual cost; never real money, never an orb's; an orb's paper quoted alike", async (t) => {
+  const { home, use, setRate } = await deskHome(t);
+  const door = await serve(home, { port: 0 });
+  t.after(() => door.close());
+  const ask = async (path: string, method: string, b: unknown) => {
+    const r = await fetch(`http://127.0.0.1:${door.port}${path}`, { method, headers: { authorization: `Bearer ${door.token}`, "content-type": "application/json" }, body: JSON.stringify(b) });
+    return { status: r.status, json: (await r.json()) as Record<string, any> };
+  };
+  assert.equal((await ask("/desk/accounts/~you", "PUT", { mode: "paper", paper: 1_000 })).status, 200);
+  const bought = await ask("/desk/paper", "POST", { market: KEY, side: "buy", usd: 100 });
+  assert.equal(bought.status, 200);
+  assert.deepEqual([bought.json.fill.quoted, bought.json.fill.qty, bought.json.fill.impact, bought.json.fill.feeUsd], [true, 100 * 6.25, 0.05, 0.01], "the router's quote for $100: the coins it brings, its impact, its network fee");
+  assert.ok(Math.abs(bought.json.you.cash - (1_000 - 100.01)) < 1e-9, "what it cost, the fee too");
+  setRate(0.2); // the coin now brings 20 cents each
+  const sold = await ask("/desk/paper", "POST", { market: KEY, side: "sell", usd: 50 });
+  assert.equal(sold.json.fill.quoted, true);
+  assert.ok(Math.abs(sold.json.fill.qty - 50 / 0.16) < 1e-6, "as many as $50 is at the market's price");
+  const xrp = await ask("/desk/paper", "POST", { market: "XRP", side: "buy", usd: 10 });
+  assert.deepEqual([xrp.status, xrp.json.fill.quoted], [200, false], "no route: the market's price and the usual cost");
+  assert.equal((await ask("/desk/accounts/~you", "PUT", { mode: "real", budget: 50 })).status, 400, "yours here is paper: your real money is your wallet's");
+  assert.equal((await ask("/desk/paper", "POST", { market: "NOPE", side: "buy", usd: 10 })).status, 400);
+  const snap = (await (await fetch(`http://127.0.0.1:${door.port}/desk`, { headers: { authorization: `Bearer ${door.token}` } })).json()) as { orbs: { orb: string }[]; you: { paper: number; holdings: { symbol: string }[] } };
+  assert.ok(!snap.orbs.some((o) => o.orb === "~you"), "you are not one of the orbs");
+  assert.deepEqual([snap.you.paper, snap.you.holdings.map((h) => h.symbol).sort()], [1_000, [KEY, "XRP"].sort()]);
+  assert.equal(home.events.ofType("xp.earned").filter((e) => e.orb === "~you").length, 0, "no XP for yours");
+  const marks = (await (await fetch(`http://127.0.0.1:${door.port}/desk/marks?market=${encodeURIComponent(KEY)}`, { headers: { authorization: `Bearer ${door.token}` } })).json()) as { fills: { kind: string; orb: string | null }[] };
+  assert.deepEqual(marks.fills.filter((f) => f.kind === "paper").map((f) => f.orb), [null, null], "on the chart, yours: as your real trades are");
+  // an orb's paper order: the same quote
+  setRate(6.25);
+  await use("place_order", { market: KEY, side: "buy", usd: 20, why: "the dip" });
+  const fill = home.events.ofType("desk.fill").filter((e) => e.orb === "tess").at(-1)!;
+  assert.deepEqual([fill.data.quoted, fill.data.qty], [true, 20 * 6.25], "an orb's paper filled as the market would");
 });
 
 test("an order, the one way: on paper it fills at the price now; on real money a swap asked of you, filled when its chain confirms it; denied, it does not fill and its dollars are free; a winning sale is XP either way", async (t) => {

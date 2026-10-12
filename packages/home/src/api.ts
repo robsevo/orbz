@@ -12,7 +12,7 @@
 // or a passkey, each a device that can be revoked.
 import { CHAINS } from "./desk/chains.ts";
 import { DEX_CHAINS, isDexChain, isTokenAddress, readTokenKey, tokenKey } from "./desk/dex.ts";
-import { DeskError, type Settings } from "./desk/desk.ts";
+import { DeskError, YOU, type Settings } from "./desk/desk.ts";
 import { SwapError } from "./desk/swaps.ts";
 import { barsProblem, drawn, marksOn } from "./desk/chart.ts";
 import { problemOf, SYMBOLS, TIMEFRAMES, type Strategy, type Timeframe } from "./desk/strategy.ts";
@@ -652,7 +652,8 @@ async function handle(
         const pnlOf = (all: typeof books) => {
           const realized = new Map(home.desk.pnl().map((p) => [p.orb, p]));
           const asks = home.swaps.list(500).filter((x) => x.orb !== null);
-          const ids = new Set([...realized.keys(), ...all.map((b) => b.orb), ...asks.map((x) => x.orb!)]);
+          // the orbs' (yours, YOU, is shown as yours)
+          const ids = new Set([...realized.keys(), ...all.map((b) => b.orb), ...asks.map((x) => x.orb!)].filter((x) => x !== YOU));
           return [...ids].map((orb) => {
             // its P&L: every book it has had, live or stopped, worth now against what it started with (gains made and
             // gains on paper still open, each once); its closed trades' numbers beside it
@@ -672,7 +673,7 @@ async function handle(
           }).sort((a, b) => b.pnl - a.pnl);
         };
         return {
-          now, market: home.market.status(), prices, top: await home.market.top(10), strategies: home.desk.strategies(), accounts: home.desk.accounts(), books, notes: home.desk.notes(), settings: home.desk.settings(),
+          now, market: home.market.status(), prices, top: await home.market.top(10), strategies: home.desk.strategies(), accounts: home.desk.accounts(), you: youOf(home), books, notes: home.desk.notes(), settings: home.desk.settings(),
           fills: recent("desk.fill", 40), trades: recent("desk.trade_closed", 40), wallets: home.wallets.list(), swaps: home.swaps.list(30), tokens, dex: home.dex.status(), orbs: pnlOf(books),
           chains: CHAINS.map((c) => ({ id: c.id, name: c.name, kind: c.kind, ...(c.kind === "evm" && { chainId: c.chainId }), explorer: c.explorer, tokens: c.tokens.map((t) => ({ symbol: t.symbol, decimals: t.decimals })) })),
         };
@@ -758,12 +759,23 @@ async function handle(
         home.events.append("desk.sent", { market, label, mode, budget }, { orb });
         return { sent: { orb, market, label, mode, budget }, item };
       }
+      // your own paper trade (PLAN 5.38; owner, 10-11: "still cant decide what amount we want to paper trade... simulate
+      // slippage etc."): as much as you say, filled as the market would fill it now (the router's quote for its size)
+      if (method === "POST" && parts[1] === "paper" && parts.length === 2) {
+        const b = await body(req);
+        const market = text(b, "market").trim();
+        if (!((SYMBOLS as readonly string[]).includes(market) || readTokenKey(market))) no(400, "a market the desk knows: a major by its symbol, or a coin as chain:address");
+        if (b.side !== "buy" && b.side !== "sell") no(400, "a paper trade buys or sells");
+        const r = await home.orders.paper(YOU, { market, side: b.side as "buy" | "sell", usd: Number(b.usd) });
+        return { fill: { side: b.side, qty: r.qty, px: r.px, quoted: r.quoted, impact: r.impact, feeUsd: r.feeUsd, pnl: (r.trade as { pnl?: number } | null)?.pnl ?? null }, you: youOf(home) };
+      }
       // an orb's account (PLAN 5.34): on paper, or real money up to the budget you give it; yours alone to set, here
       if (method === "PUT" && parts[1] === "accounts" && parts.length === 3) {
         const orb = decodeURIComponent(parts[2]!);
-        if (!home.inbox.orb(orb)) no(404, `no orb "${orb}"`);
+        if (orb !== YOU && !home.inbox.orb(orb)) no(404, `no orb "${orb}"`);
         const b = await body(req);
         if (b.mode !== "paper" && b.mode !== "real") no(400, "an account is on paper or real money");
+        if (orb === YOU && b.mode !== "paper") no(400, "your own account here is paper: your real money is your wallet's");
         const budget = b.budget === undefined || b.budget === null || b.budget === "" ? undefined : Number(b.budget);
         const paper = b.paper === undefined || b.paper === null || b.paper === "" ? undefined : Number(b.paper);
         const a = home.desk.setAccount(orb, b.mode as "paper" | "real", budget, paper);
@@ -1484,6 +1496,12 @@ async function rawBody(req: IncomingMessage, cap: number): Promise<Buffer> {
     chunks.push(c as Buffer);
   }
   return Buffer.concat(chunks);
+}
+
+/** Your own paper account (PLAN 5.38): how much it is, what it has to spend, what it holds and what that cost. */
+function youOf(home: Home): { paper: number; cash: number; start: number; holdings: { symbol: string; qty: number; cost: number }[] } {
+  const a = home.desk.account(YOU);
+  return { paper: a.paper, cash: a.book.cash, start: a.book.cashStart, holdings: a.book.holdings.map((h) => ({ symbol: h.symbol, qty: h.qty, cost: h.cost })) };
 }
 
 async function body(req: IncomingMessage): Promise<Record<string, unknown>> {

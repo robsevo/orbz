@@ -253,6 +253,8 @@ export type DeskState = {
   tokens?: Record<string, { symbol: string; name: string; image: string | null; priceUsd: number | null }>;
   dex?: { source: string; ok: boolean; error: string | null; restingUntil: number | null };
   orbs?: DeskOrbPnl[];
+  /** Your own paper (PLAN 5.38): how much you gave it, what is left, what it holds. */
+  you?: DeskYou;
 };
 // ── any token on a DEX (PLAN 5.28), as the home's door gives it ─────────────────────────────────────
 export type DexChain = "solana" | "ethereum" | "base" | "arbitrum" | "optimism" | "polygon" | "bsc";
@@ -277,6 +279,12 @@ export type DeskFill = {
 export type DeskLive = { market: string; at: number; price: number | null; bar: DeskCandle | null };
 /** An orb's account (PLAN 5.34): on paper, or real money up to its budget (`cash`: what it has left of it). */
 export type DeskAccount = { orb: string; mode: "paper" | "real"; budget: number; paper: number; cash: number | null };
+/** Your own paper (PLAN 5.38; owner, 10-11: "still cant decide what amount we want to paper trade... simulate slippage
+ * etc."): the amount you gave it, what is left, what it holds. */
+export type DeskYou = { paper: number; cash: number; start: number; holdings: { symbol: string; qty: number; cost: number }[] };
+/** A paper trade of yours, filled as the market would: at the router's quote for its size (`quoted`; its price impact
+ * and network fee), else at the market's price and the desk's usual cost. */
+export type DeskPaperFill = { side: "buy" | "sell"; qty: number; px: number; quoted: boolean; impact: number | null; feeUsd: number; pnl: number | null };
 export type DeskMarks = { fills: DeskFill[]; runs: { book: number; orb: string; strategy: number; startedAt: number; stoppedAt: number | null; state: "live" | "stopped" }[] };
 export type TokenSafety = { checked: string[]; flags: { level: "warn" | "note"; words: string }[] };
 export type DeskBuilt = { kind: "evm"; chainId: number; approve: { to: string; data: string } | null; tx: { to: string; data: string; value: string; gas: string | null } } | { kind: "solana"; transaction: string };
@@ -328,6 +336,8 @@ export interface Office {
   sendOrb(o: { orb: string; market: string; budget?: number | null; note?: string }): Promise<{ orb: string; market: string; label: string; mode: string; budget: number | null }>;
   /** An orb's account on paper or real money (and real money's budget): yours alone to set (PLAN 5.34). */
   setDeskAccount(orb: string, mode: "paper" | "real", budget?: number, paper?: number): Promise<DeskAccount>;
+  /** A paper trade of your own (PLAN 5.38): `usd` dollars of `market` bought, or that many dollars' worth sold. */
+  paperTrade(o: { market: string; side: "buy" | "sell"; usd: number }): Promise<{ fill: DeskPaperFill; you: DeskYou }>;
   backtest(spec: DeskSpec): Promise<{ metrics: DeskMetrics; trades: DeskTrade[]; equity: { t: number; equity: number }[] }>;
   /** A strategy over a chart's own bars (the bar still forming left out by the home), and what was done on a market:
    * each orb's paper fills, the real trades that went, the strategies run on it (PLAN 5.32). */
@@ -681,6 +691,9 @@ export function doorOffice(base: Character): Office {
     },
     async setDeskAccount(orb, mode, budget, paper) {
       return (await call<{ account: DeskAccount }>(`../desk/accounts/${encodeURIComponent(orb)}`, { method: "PUT", body: JSON.stringify({ mode, budget, paper }) })).account;
+    },
+    async paperTrade(o) {
+      return call<{ fill: DeskPaperFill; you: DeskYou }>("../desk/paper", { method: "POST", body: JSON.stringify(o) });
     },
     async sendOrb(o) {
       return (await call<{ sent: { orb: string; market: string; label: string; mode: string; budget: number | null } }>("../desk/send", { method: "POST", body: JSON.stringify(o) })).sent;

@@ -11,6 +11,7 @@
 // than a day's worth. The values are a start, to be tuned (PLAN: after Phase 0).
 import type { EventLog, HomeEvent } from "../events.ts";
 import { difficulty, type Tier } from "./difficulty.ts";
+import { YOU } from "../desk/desk.ts";
 
 export const XP = {
   /** A job you approved, by how hard it was in its own area (owner, 10-10: "different weights based on difficulty in their
@@ -155,7 +156,8 @@ export class Xp {
       case "desk.trade_closed": {
         // graded by the market (rule 8): a trade that made money after its costs, paper or real alike (money is money,
         // and the line says neither: an orb may read it); a loss earns nothing
-        if (!e.orb || typeof e.data.paper !== "boolean" || !(Number(e.data.pnl) > 0)) return;
+        // yours (YOU, PLAN 5.38) is not an orb's: no XP
+        if (!e.orb || e.orb === YOU || typeof e.data.paper !== "boolean" || !(Number(e.data.pnl) > 0)) return;
         const tier = tradeTier(e.data);
         const where = `${String(e.data.symbol)}${typeof e.data.timeframe === "string" ? ` ${e.data.timeframe}` : ""}`;
         this.#give(e.orb, XP.trade[tier], `${aOrAn(tier)} ${tier} trade won (${where}, +${Number(e.data.pnlPct).toFixed(2)}% after its costs)`, e, { tier, area: "desk" });

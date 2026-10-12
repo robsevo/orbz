@@ -145,7 +145,7 @@ export function orbLayer(o: { orb: string | null; mode: Mode; marks: DeskMarks |
   };
 }
 
-/** Who has traded here, and how: each orb's paper fills and real trades counted (yours, real only). */
+/** Who has traded here, and how: each orb's paper fills and real trades counted, and yours (PLAN 5.38: your paper too). */
 export function whoTradedHere(marks: DeskMarks | null): { orb: string | null; paper: number; real: number }[] {
   const by = new Map<string | null, { orb: string | null; paper: number; real: number }>();
   for (const f of marks?.fills ?? []) {

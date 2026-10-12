@@ -311,6 +311,23 @@ test("the desk: the floor and its tabs at desk and phone sizes; a strategy kept 
   await page.locator("[data-safety]", { hasText: "Nothing found against it" }).waitFor({ timeout: 20_000 });
   await page.locator("[data-trade-row]").first().waitFor({ timeout: 20_000 });
   assert.deepEqual(await measure(page), [], "a coin's page, at desk size");
+  // your own paper (PLAN 5.38; owner, 10-11: "still cant decide what amount we want to paper trade... simulate slippage
+  // etc."): the trade box opens on paper; $100 of it, quoted by the router as you choose it, bought as the router would
+  // fill it and held; your paper's amount yours to change
+  assert.equal(await page.locator("[data-token-trade]").getAttribute("data-trade"), "paper", "paper till you say");
+  await page.locator('[data-paper-preset="100"]').click();
+  await page.locator("[data-paper-quote]", { hasText: "≈" }).waitFor({ timeout: 20_000 });
+  await page.locator("[data-paper-go]").click();
+  await page.locator("[data-paper-said]", { hasText: /^Bought .* as the router would fill it now/ }).waitFor({ timeout: 20_000 });
+  await page.locator("[data-paper-held]", { hasText: "on paper" }).waitFor({ timeout: 20_000 });
+  assert.ok(h.events.ofType("desk.fill").some((e) => e.orb === "~you" && e.data.symbol === `solana:${MINT}` && e.data.quoted === true), "yours, filled at the router's quote");
+  await page.locator("[data-your-paper-change]").click();
+  await page.locator("[data-your-paper-amount]").fill("2500");
+  await page.locator("[data-your-paper-set]").click();
+  await page.locator("[data-your-paper-words]", { hasText: "of $2,500.00" }).waitFor({ timeout: 10_000 });
+  assert.deepEqual(await measure(page), [], "your paper, at desk size");
+  // and real money, from your wallet
+  await page.locator('[data-trade-mode="real"]').click();
   await page.locator("[data-swap-token]", { hasText: "Test Sol" }).waitFor({ timeout: 10_000 });
   await page.locator('[data-preset="0.5"]').click();
   await page.locator("[data-token-quote]", { hasText: "≈" }).waitFor({ timeout: 20_000 });
@@ -394,6 +411,7 @@ test("the desk: the floor and its tabs at desk and phone sizes; a strategy kept 
   assert.ok(Number(await phone.locator("[data-candles]").getAttribute("data-candles")) < 100, "a phone's chart: fewer bars, each readable");
   await phone.waitForTimeout(400);
   assert.deepEqual(await measure(phone), [], "a coin's page, at phone size");
+  await phone.locator('[data-trade-mode="real"]').click();
   await phone.locator("[data-swap-connect]", { hasText: "Connect a Solana wallet" }).click();
   await phone.locator("[data-swap-token]", { hasText: "Test Sol" }).waitFor({ timeout: 10_000 });
   await phone.locator("[data-token-close]").click();

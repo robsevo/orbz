@@ -7,15 +7,15 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 import { SPECIALTIES, type Character } from "../orb/spec.ts";
 import { Orb } from "../orb/Orb.tsx";
 import type { Mood } from "../orb/mood.ts";
-import { idOf, type DeskEvent, type DeskSettings, type DeskState, type Office } from "../home/link.ts";
+import { idOf, type DeskBook, type DeskEvent, type DeskSettings, type DeskState, type Office } from "../home/link.ts";
 import type { Route } from "../ui/nav.ts";
 import { Balanced, OneLine } from "../ui/Balanced.tsx";
 import { changeText, priceText } from "../ui/candles.ts";
 import { NAMES } from "../floor/props.ts";
 import { DeskFloor } from "./Floor.tsx";
-import { button, card, chip, field, head, marketName, pct, shortAddress, small, strong, usd, well, ago } from "./kit.ts";
+import { button, card, chip, field, head, marketName, pct, shortAddress, small, strong, usd, well, ago, YOU } from "./kit.ts";
 import { TokenDesk, type Picked } from "./TokenDesk.tsx";
-import { AccountSwitch } from "./Account.tsx";
+import { AccountSwitch, YourPaper } from "./Account.tsx";
 import { useWallet } from "./useWallet.ts";
 import { WalletSheet } from "./WalletSheet.tsx";
 import { useCramped } from "../ui/fill.ts";
@@ -204,24 +204,38 @@ export function DeskRoom({ home, office, moods, go, tab: opening = null }: { hom
       ) : shown === "trade" ? (
         <TradePanel home={home} crew={crew} wallets={s.wallets} swaps={s.swaps} chains={s.chains} reload={load} wallet={wallet} labels={s.tokens} openCoin={openCoin} connectWallet={() => openWallet()} orbs={s.orbs} people={office} openOrbs={() => setTab("desk")} />
       ) : shown === "books" ? (
-        <Books s={s} crew={crew} />
+        <Books home={home} s={s} crew={crew} reload={() => void load()} />
       ) : shown === "desk" ? (
         <Desk home={home} s={s} crew={crew} office={office} go={go} reload={() => void load()} />
       ) : (
         <Limits home={home} settings={s.settings} reload={load} />
       )}
-      {screen && s && <TokenDesk home={home} prices={tape} chains={s.chains} crew={crew} strategies={s.strategies} accounts={s.accounts ?? []} reload={() => void load()} wallet={wallet} openWallet={openWallet} start={screenAt} close={() => setScreen(false)} />}
+      {screen && s && <TokenDesk home={home} prices={tape} chains={s.chains} crew={crew} strategies={s.strategies} accounts={s.accounts ?? []} you={s.you ?? null} reload={() => void load()} wallet={wallet} openWallet={openWallet} start={screenAt} close={() => setScreen(false)} />}
       {sheet && <WalletSheet home={home} wallet={wallet} close={() => setSheet(false)} />}
     </div>
   );
 }
 
-function Books({ s, crew }: { s: DeskState; crew: Character[] }) {
-  const nameOf = (orb: string | null): string => crew.find((c) => idOf(c.name) === orb)?.name ?? orb ?? "?";
-  const live = s.books.filter((b) => b.state === "live");
+function Books({ home, s, crew, reload }: { home: Office; s: DeskState; crew: Character[]; reload: () => void }) {
+  const nameOf = (orb: string | null): string => (orb === YOU ? "You" : crew.find((c) => idOf(c.name) === orb)?.name ?? orb ?? "?");
+  // on paper only here: an orb's real money is its P&L's (the Orbs tab); yours is your own, above them
+  const live = s.books.filter((b) => b.state === "live" && !b.real && b.orb !== YOU);
+  const mine = s.books.find((b) => b.orb === YOU && b.strategy === null) ?? null;
+  const paperTrades = s.trades.filter((t) => t.paper !== false);
+  const held = (b: DeskBook): string =>
+    b.qty > 0 ? `Holding ${b.qty.toPrecision(4)} ${marketName(b.symbol ?? "", s.tokens)}, paid ${usd(b.entryPx)} each` : b.holdings.length ? `Holding ${b.holdings.map((h) => `${h.qty.toPrecision(4)} ${marketName(h.symbol, s.tokens)}`).join(", ")}` : `All cash: ${usd(b.cash)}`;
   const row: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, minWidth: 0, font: "600 13px/18px var(--font)", color: "var(--text-2)" };
   return (
     <div data-books style={{ display: "grid", gap: "var(--s4)", minWidth: 0 }}>
+      {/* your own paper (PLAN 5.38): what it is worth, what it holds, its amount yours to change */}
+      <section aria-label="Your paper" data-books-you style={card}>
+        <span style={head}>Your paper</span>
+        {mine && (
+          <span className="num" style={{ font: "800 20px/26px var(--font)", color: mine.equity >= mine.cashStart ? "var(--ok)" : "var(--off)" }}>{`${usd(mine.equity)} · ${pct(((mine.equity - mine.cashStart) / mine.cashStart) * 100)}`}</span>
+        )}
+        <span className="num" style={small}>{mine ? held(mine) : "Trade any coin on paper from its page in the war room: as much as you say, filled as the market would."}</span>
+        <YourPaper home={home} you={s.you ?? null} changed={reload} />
+      </section>
       <section aria-label="Paper books" style={card}>
         <span style={head}>{`Paper books (${live.length})`}</span>
         {!live.length && <span style={small}>{NAMES.noBook}</span>}
@@ -233,7 +247,7 @@ function Books({ s, crew }: { s: DeskState; crew: Character[] }) {
               <article key={b.id} data-book={b.id} style={well}>
                 <span style={{ font: "800 14px/19px var(--font)", color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{`${nameOf(b.orb)} · ${name}`}</span>
                 <span className="num" style={{ font: "800 20px/26px var(--font)", color: ch >= 0 ? "var(--ok)" : "var(--off)" }}>{`${usd(b.equity)} · ${pct(ch)}`}</span>
-                <span className="num" style={small}>{b.qty > 0 ? `Holding ${b.qty.toPrecision(4)} ${marketName(b.symbol ?? "", s.tokens)}, paid ${usd(b.entryPx)} each` : b.holdings.length ? `Holding ${b.holdings.map((h) => `${h.qty.toPrecision(4)} ${marketName(h.symbol, s.tokens)}`).join(", ")}` : `All cash: ${usd(b.cash)}`}</span>
+                <span className="num" style={small}>{held(b)}</span>
               </article>
             );
           })}
@@ -241,8 +255,8 @@ function Books({ s, crew }: { s: DeskState; crew: Character[] }) {
       </section>
       <section aria-label="Trades closed" style={card}>
         <span style={head}>Trades closed, on paper</span>
-        {!s.trades.length && <span style={small}>None yet.</span>}
-        {s.trades.slice(0, 20).map((t) => (
+        {!paperTrades.length && <span style={small}>None yet.</span>}
+        {paperTrades.slice(0, 20).map((t) => (
           <div key={t.seq} data-trade-closed={t.seq} style={row} className="num">
             <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{`${nameOf(t.orb)} · ${marketName(String(t.symbol), s.tokens)}${t.timeframe ? ` ${String(t.timeframe)}` : ""} · ${String(t.why)} · ${ago(t.at, s.now)}`}</span>
             <b style={{ color: Number(t.pnl) > 0 ? "var(--ok)" : "var(--off)", whiteSpace: "nowrap" }}>{`${pct(Number(t.pnlPct))} (${usd(Number(t.pnl))})`}</b>

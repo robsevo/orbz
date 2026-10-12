@@ -6,7 +6,7 @@
 // home's, from the public DEX data; nothing here is advice.
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { Character } from "../orb/spec.ts";
-import { idOf, type DeskCandle, type DeskChain, type DeskAccount, type DeskDrawn, type DeskLive, type DeskMarks, type DeskQuote, type DeskStrategy, type DeskTicker, type DexChain, type DexPair, type DexTrade, type Office, type TokenSafety } from "../home/link.ts";
+import { idOf, type DeskCandle, type DeskChain, type DeskAccount, type DeskDrawn, type DeskLive, type DeskMarks, type DeskQuote, type DeskStrategy, type DeskTicker, type DeskYou, type DexChain, type DexPair, type DexTrade, type Office, type TokenSafety } from "../home/link.ts";
 import { Candles, type Layer } from "../ui/Candles.tsx";
 import { changeText, priceText, TF_MS, withLive } from "../ui/candles.ts";
 import { keep, loadKept, withStudy, type Kept } from "../ui/studies.ts";
@@ -14,9 +14,9 @@ import { ChartMenu } from "./ChartMenu.tsx";
 import { orbLayer, strategyLayer, studyLayer, whoTradedHere, type Mode, type Who } from "./layers.ts";
 import { Balanced, OneLine } from "../ui/Balanced.tsx";
 import { Pick } from "../ui/Pick.tsx";
-import { button, card, chip, compact, field, head, MAJOR_ROUTES, picture, shortAddress, small, strong, TIMEFRAMES, well } from "./kit.ts";
+import { button, card, chip, compact, field, head, MAJOR_ROUTES, picture, shortAddress, small, strong, TIMEFRAMES, usd, well } from "./kit.ts";
 import type { WalletHere } from "./useWallet.ts";
-import { AccountSwitch } from "./Account.tsx";
+import { AccountSwitch, YourPaper } from "./Account.tsx";
 
 export const CHAIN_NAMES: Record<DexChain, string> = { solana: "Solana", ethereum: "Ethereum", base: "Base", arbitrum: "Arbitrum", optimism: "Optimism", polygon: "Polygon", bsc: "BNB Chain" };
 /** Where a coin is looked at on its own chain, when the desk does not swap there. */
@@ -204,12 +204,162 @@ function Chart({ home, load, tfKey, market, label, phone, strategies, crew, onPr
   );
 }
 
+/** Where you trade it, on paper or with real money (owner, 10-11: "still cant decide what amount we want to paper trade...
+ * simulate slippage etc."): your choice kept on this device, paper till you say; real money only where the desk swaps
+ * it, and why not where it does not. */
+function TradeBox({ home, market, chain, token, symbol, price, chains, wallet, openWallet, you, reload, noRoute }: {
+  home: Office; market: string; chain: DexChain | null; token: string | null; symbol: string; price: number | null; chains: DeskChain[]; wallet: WalletHere; openWallet: (kind: "evm" | "solana") => void;
+  you: DeskYou | null; reload: () => void;
+  /** why it cannot be swapped from here, where it cannot */
+  noRoute?: string;
+}) {
+  const desk = chain ? chains.find((c) => c.id === chain) : undefined;
+  const [mode, setMode] = useState<"paper" | "real">(keptMode);
+  const can = desk !== undefined && token !== null;
+  const now = can ? mode : "paper";
+  const choose = (m: "paper" | "real"): void => {
+    setMode(m);
+    keepMode(m);
+  };
+  const why = noRoute ?? (chain && !desk ? `Swaps on ${CHAIN_NAMES[chain]} are not here yet: trade it on paper, watch it here, or send an orb to it.` : null);
+  return (
+    <section data-token-trade data-trade={now} aria-label="Trade it" style={card}>
+      <div role="radiogroup" aria-label="Paper or real money" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+        <button type="button" className="orbs-small" role="radio" aria-checked={now === "paper"} data-trade-mode="paper" onClick={() => choose("paper")} style={chip(now === "paper")}>Paper</button>
+        <button type="button" className="orbs-small" role="radio" aria-checked={now === "real"} data-trade-mode="real" disabled={!can} onClick={() => choose("real")} style={{ ...chip(now === "real"), opacity: can ? 1 : 0.5 }}>Real money</button>
+      </div>
+      {why && <span data-no-route style={{ ...small, fontSize: 12 }}>{why}</span>}
+      {now === "paper" ? (
+        <PaperBox home={home} market={market} desk={desk} token={token} symbol={symbol} price={price} you={you} reload={reload} />
+      ) : (
+        <SwapBox home={home} desk={desk!} token={token!} symbol={symbol} wallet={wallet} openWallet={openWallet} />
+      )}
+    </section>
+  );
+}
+
+/** Paper or real money in the trade box, as you last chose it on this device. */
+const TRADE_MODE = "orbs.desk.trade";
+function keptMode(): "paper" | "real" {
+  try {
+    return globalThis.localStorage?.getItem(TRADE_MODE) === "real" ? "real" : "paper";
+  } catch {
+    return "paper";
+  }
+}
+function keepMode(m: "paper" | "real"): void {
+  try {
+    globalThis.localStorage?.setItem(TRADE_MODE, m);
+  } catch {
+    // a private window: kept for as long as the page is open
+  }
+}
+
+/** What a quick paper trade offers, in dollars. */
+const PAPER_PRESETS = ["10", "25", "50", "100", "500"];
+/** A coin's count as a fill says it: five figures at most, no trailing zeros. */
+const qtyText = (q: number): string => Number(q.toPrecision(5)).toLocaleString("en-US", { maximumFractionDigits: 10 });
+/** An amount of a coin a quote takes: six decimals at most, cut down (never more than is held). */
+const cut6 = (q: number): string => (Math.floor(q * 1e6) / 1e6).toFixed(6).replace(/\.?0+$/, "");
+
+/** A paper trade of yours (PLAN 5.38): dollars of it bought, or that many dollars' worth of what you hold sold, filled as
+ * the market would fill it now: at the router's own quote for its size where the desk swaps it (its pools' slippage, its
+ * price impact, its network fee), else at the market's price less the desk's usual fee and slippage. The same quote is
+ * shown as the amount settles. No wallet, no money. */
+function PaperBox({ home, market, desk, token, symbol, price, you, reload }: { home: Office; market: string; desk: DeskChain | undefined; token: string | null; symbol: string; price: number | null; you: DeskYou | null; reload: () => void }) {
+  const [side, setSide] = useState<"buy" | "sell">("buy");
+  const [amount, setAmount] = useState("");
+  const [quote, setQuote] = useState<(DeskQuote & { usd: number | null }) | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [said, setSaid] = useState<{ ok: boolean; words: string } | null>(null);
+  const held = you?.holdings.find((h) => h.symbol === market && h.qty > 0) ?? null;
+  const dollars = Number(amount);
+  // what of it a sale's dollars are, at the price now
+  const selling = side === "sell" && held && price ? cut6(Math.min(held.qty, dollars / price)) : null;
+  useEffect(() => {
+    setQuote(null);
+    if (!desk || !token || !(dollars > 0) || (side === "sell" && !(Number(selling) > 0))) return;
+    let live = true;
+    const o = side === "buy" ? { chain: desk.id, sell: "USDC", buy: token, amount: dollars.toFixed(2) } : { chain: desk.id, sell: token, buy: "USDC", amount: selling! };
+    const t = window.setTimeout(() => void home.quote(o).then((q) => live && setQuote(q), () => undefined), 450);
+    return () => {
+      live = false;
+      window.clearTimeout(t);
+    };
+  }, [side, amount, token, selling]);
+  const cash = you?.cash ?? 10_000;
+  const over = side === "buy" && dollars + (quote?.feeUsd ?? 0) > cash + 1e-9;
+  const none = side === "sell" && !held;
+  const go = async (): Promise<void> => {
+    setBusy(true);
+    setSaid(null);
+    try {
+      const { fill: f } = await home.paperTrade({ market, side, usd: dollars });
+      const how = f.quoted
+        ? `as the router would fill it now${f.impact !== null ? `: price impact ${f.impact.toFixed(2)}%` : ""}${f.feeUsd > 0 ? `${f.impact !== null ? "," : ":"} network fee ${usd(f.feeUsd)}` : ""}`
+        : "at the market's price, less the desk's usual fee and slippage";
+      const made = f.pnl === null ? "" : ` ${f.pnl >= 0 ? "Made" : "Lost"} ${usd(Math.abs(f.pnl))} on it.`;
+      setSaid({ ok: true, words: `${f.side === "buy" ? "Bought" : "Sold"} ${qtyText(f.qty)} ${symbol} at ${money(f.px)} each, ${how}.${made}` });
+      setAmount("");
+      reload();
+    } catch (e) {
+      setSaid({ ok: false, words: (e as Error).message });
+    } finally {
+      setBusy(false);
+    }
+  };
+  const preview = !(dollars > 0)
+    ? "What it fills at shows as you type."
+    : none
+      ? `You hold no ${symbol} on paper.`
+      : over
+        ? `More than your paper has: ${usd(cash)} to spend.`
+        : quote
+          ? side === "buy"
+            ? `≈ ${quote.out} ${symbol}${quote.priceImpactPct !== null ? ` · impact ${quote.priceImpactPct.toFixed(2)}%` : ""}${quote.feeUsd ? ` · network fee ${usd(quote.feeUsd)}` : ""}${quote.route.length ? ` · via ${quote.route.slice(0, 3).join(", ")}` : ""}`
+            : `≈ ${usd(Number(quote.out))} for ${selling} ${symbol}${quote.priceImpactPct !== null ? ` · impact ${quote.priceImpactPct.toFixed(2)}%` : ""}${quote.feeUsd ? ` · network fee ${usd(quote.feeUsd)}` : ""}`
+          : desk && token
+            ? "Quoting…"
+            : `At the market's price${price !== null ? ` (${money(price)})` : ""}, less the desk's usual fee and slippage.`;
+  return (
+    <>
+      <div role="tablist" aria-label="Buy or sell on paper" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+        {(["buy", "sell"] as const).map((x) => (
+          <button key={x} type="button" role="tab" aria-selected={side === x} data-side={x} onClick={() => (setSide(x), setAmount(""), setSaid(null))}
+            style={{ ...(side === x ? strong : button), minHeight: 40, font: "800 15px/20px var(--font)", ...(side === x ? { background: "var(--fill-2)", color: `var(--${x === "buy" ? "ok" : "off"})`, boxShadow: `inset 0 0 0 1.5px var(--${x === "buy" ? "ok" : "off"})` } : {}) }}>
+            {x === "buy" ? `Buy ${symbol}` : `Sell ${symbol}`}
+          </button>
+        ))}
+      </div>
+      <label style={{ display: "grid", gap: 4, minWidth: 0 }}>
+        <span style={head}>{side === "buy" ? "Dollars of paper" : `Dollars of ${symbol} to sell`}</span>
+        <input data-paper-amount inputMode="decimal" autoComplete="off" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))} placeholder="$0" size={1}
+          style={{ ...field, font: "800 20px/28px var(--font)" }} />
+      </label>
+      <Balanced min={60} gap={6}>
+        {[...PAPER_PRESETS, ...(side === "sell" && held && price ? ["all"] : [])].map((x) => {
+          const v = x === "all" ? String(Math.ceil(held!.qty * price! * 100) / 100) : x;
+          return <button key={x} type="button" className="orbs-small" data-paper-preset={x} onClick={() => setAmount(v)} style={chip(amount === v)}>{x === "all" ? "All" : `$${x}`}</button>;
+        })}
+      </Balanced>
+      <span data-paper-quote className="num" style={{ ...small, minHeight: 18, ...(over || none ? { color: "var(--alert)" } : {}) }}>{preview}</span>
+      <button type="button" data-paper-go disabled={busy || !(dollars >= 1) || over || none} onClick={() => void go()}
+        style={{ ...strong, minHeight: 46, font: "800 15px/20px var(--font)", opacity: busy || !(dollars >= 1) || over || none ? 0.6 : 1 }}>
+        {busy ? "Filling…" : side === "buy" ? "Buy on paper" : "Sell on paper"}
+      </button>
+      {said && <span role={said.ok ? "status" : "alert"} data-paper-said style={{ ...small, color: said.ok ? "var(--ok)" : "var(--alert)" }}>{said.words}</span>}
+      {held && <span className="num" data-paper-held style={small}>{`You hold ${qtyText(held.qty)} ${symbol} on paper, paid ${usd(held.cost)}${price !== null ? `, worth ${usd(held.qty * price)} now` : ""}.`}</span>}
+      <YourPaper home={home} you={you} changed={reload} />
+      <span style={{ ...small, fontSize: 12 }}>{desk && token ? "Paper: no wallet, no money. It fills as the market would now: the router's own quote for its size (its slippage and price impact) and its network fee." : "Paper: no wallet, no money. It fills at the market's price now, less the desk's usual fee and slippage."}</span>
+    </>
+  );
+}
+
 /** A swap from your wallet: buy with the chain's coin or USDC, or sell for one; quoted as the amount settles; signed by
  * your wallet after the desk's limits are kept (the Limits tab). */
-function TradeBox({ home, chain, token, symbol, chains, wallet, openWallet }: { home: Office; chain: DexChain; token: string; symbol: string; chains: DeskChain[]; wallet: WalletHere; openWallet: (kind: "evm" | "solana") => void }) {
-  const desk = chains.find((c) => c.id === chain);
-  const coin = desk?.tokens[0]?.symbol ?? "ETH"; // the chain's own coin, first in its list
-  const pays = desk ? [coin, "USDC"].filter((x) => x !== token && desk.tokens.some((t) => t.symbol === x)) : []; // never what it buys
+function SwapBox({ home, desk, token, symbol, wallet, openWallet }: { home: Office; desk: DeskChain; token: string; symbol: string; wallet: WalletHere; openWallet: (kind: "evm" | "solana") => void }) {
+  const coin = desk.tokens[0]?.symbol ?? "ETH"; // the chain's own coin, first in its list
+  const pays = [coin, "USDC"].filter((x) => x !== token && desk.tokens.some((t) => t.symbol === x)); // never what it buys
   const [side, setSide] = useState<"buy" | "sell">("buy");
   const [pay, setPay] = useState(pays[0] ?? "");
   const [amount, setAmount] = useState("");
@@ -220,7 +370,7 @@ function TradeBox({ home, chain, token, symbol, chains, wallet, openWallet }: { 
   const buy = side === "buy" ? token : pay;
   useEffect(() => {
     setQuote(null);
-    if (!desk || !(Number(amount) > 0)) return;
+    if (!(Number(amount) > 0)) return;
     let live = true;
     const t = window.setTimeout(() => void home.quote({ chain: desk.id, sell, buy, amount }).then((q) => live && (setQuote(q), setSaid(null)), (e: Error) => live && setSaid({ ok: false, words: e.message })), 450);
     return () => {
@@ -228,14 +378,6 @@ function TradeBox({ home, chain, token, symbol, chains, wallet, openWallet }: { 
       window.clearTimeout(t);
     };
   }, [side, pay, amount, token]);
-  if (!desk) {
-    return (
-      <section data-token-trade aria-label="Swap it" style={card}>
-        <span style={head}>Swap</span>
-        <span style={small}>{`Swaps on ${CHAIN_NAMES[chain]} are not here yet: watch it here, or send an orb to it on paper.`}</span>
-      </section>
-    );
-  }
   const kind = desk.kind;
   const ready = wallet.linked !== null && wallet.linked.f.kind === kind;
   const presets = side === "sell" ? [] : PRESETS[pay] ?? [];
@@ -253,7 +395,7 @@ function TradeBox({ home, chain, token, symbol, chains, wallet, openWallet }: { 
     }
   };
   return (
-    <section data-token-trade aria-label="Swap it" style={card}>
+    <>
       <div role="tablist" aria-label="Buy or sell" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
         {(["buy", "sell"] as const).map((x) => (
           <button key={x} type="button" role="tab" aria-selected={side === x} data-side={x} onClick={() => (setSide(x), setAmount(""))}
@@ -294,7 +436,7 @@ function TradeBox({ home, chain, token, symbol, chains, wallet, openWallet }: { 
       )}
       {said && <span role={said.ok ? "status" : "alert"} style={{ ...small, color: said.ok ? "var(--ok)" : "var(--alert)" }}>{said.words}</span>}
       <span style={{ ...small, fontSize: 12 }}>Your own swap: your wallet asks you to sign it, inside the desk's limits (the Limits tab). Not advice: a token can go to nothing.</span>
-    </section>
+    </>
   );
 }
 
@@ -399,8 +541,8 @@ function Recent({ trades, symbol, now }: { trades: DexTrade[] | null; symbol: st
 }
 
 /** A coin on a DEX: its pairs read every 20 s, its safety once, its last trades every 20 s. */
-export function TokenPage({ home, chain, address, chains, crew, strategies, accounts, reload, wallet, openWallet, phone, back }: {
-  home: Office; chain: DexChain; address: string; chains: DeskChain[]; crew: Character[]; strategies: DeskStrategy[]; accounts: DeskAccount[]; reload: () => void; wallet: WalletHere; openWallet: (kind: "evm" | "solana") => void; phone: boolean; back: () => void;
+export function TokenPage({ home, chain, address, chains, crew, strategies, accounts, you, reload, wallet, openWallet, phone, back }: {
+  home: Office; chain: DexChain; address: string; chains: DeskChain[]; crew: Character[]; strategies: DeskStrategy[]; accounts: DeskAccount[]; you: DeskYou | null; reload: () => void; wallet: WalletHere; openWallet: (kind: "evm" | "solana") => void; phone: boolean; back: () => void;
 }) {
   const [pairs, setPairs] = useState<DexPair[] | null>(null);
   const [at, setAt] = useState(0);
@@ -510,7 +652,7 @@ export function TokenPage({ home, chain, address, chains, crew, strategies, acco
     </Balanced>
   );
   const chart = <Chart home={home} load={(tf) => home.dexCandles(chain, p.pair, address, tf, 300)} tfKey={`${p.pair}`} market={market} label={sym} phone={phone} strategies={strategies} crew={crew} onPrice={setLivePrice} />;
-  const trade = <TradeBox home={home} chain={chain} token={address} symbol={sym} chains={chains} wallet={wallet} openWallet={openWallet} />;
+  const trade = <TradeBox home={home} market={market} chain={chain} token={address} symbol={sym} price={livePrice ?? p.priceUsd} chains={chains} wallet={wallet} openWallet={openWallet} you={you} reload={reload} />;
   const send = <SendOrb home={home} crew={crew} market={market} label={sym} accounts={accounts} reload={reload} />;
   if (phone) {
     return (
@@ -545,8 +687,8 @@ export function TokenPage({ home, chain, address, chains, crew, strategies, acco
 }
 
 /** A major (BTC, ETH, SOL and the rest): its chart from the market, its day, an orb sent to it on paper. */
-export function MajorPage({ home, symbol, ticker, crew, strategies, accounts, reload, chains, wallet, openWallet, phone, back }: {
-  home: Office; symbol: string; ticker: DeskTicker | null; crew: Character[]; strategies: DeskStrategy[]; accounts: DeskAccount[]; reload: () => void;
+export function MajorPage({ home, symbol, ticker, crew, strategies, accounts, you, reload, chains, wallet, openWallet, phone, back }: {
+  home: Office; symbol: string; ticker: DeskTicker | null; crew: Character[]; strategies: DeskStrategy[]; accounts: DeskAccount[]; you: DeskYou | null; reload: () => void;
   chains: DeskChain[]; wallet: WalletHere; openWallet: (kind: "evm" | "solana") => void; phone: boolean; back: () => void;
 }) {
   const [livePrice, setLivePrice] = useState<number | null>(null);
@@ -567,15 +709,11 @@ export function MajorPage({ home, symbol, ticker, crew, strategies, accounts, re
   const chart = <Chart home={home} load={(tf) => home.candles(symbol, tf, 200)} tfKey={symbol} market={symbol} label={symbol} phone={phone} strategies={strategies} crew={crew} onPrice={setLivePrice} />;
   const send = <SendOrb home={home} crew={crew} market={symbol} label={symbol} accounts={accounts} reload={reload} />;
   // a swap from your wallet where the major has a market on a chain the desk swaps on (owner, 10-11: "add the ability to
-  // trade the top 10 too"); where it has none, said so, and an orb can still trade it on paper
+  // trade the top 10 too"); where it has none, said so; on paper, any of them (PLAN 5.38)
   const route = MAJOR_ROUTES[symbol];
-  const trade = route ? (
-    <TradeBox home={home} chain={route.chain as DexChain} token={route.token} symbol={symbol} chains={chains} wallet={wallet} openWallet={openWallet} />
-  ) : (
-    <section data-token-trade data-no-route aria-label="Swap it" style={card}>
-      <span style={head}>Swap</span>
-      <span style={small}>{`${symbol} has no market on the chains your wallet trades on (Solana, Base, Ethereum, BNB Chain and the rest), so it cannot be swapped from here. Send an orb to trade it on paper, or watch it here.`}</span>
-    </section>
+  const trade = (
+    <TradeBox home={home} market={symbol} chain={(route?.chain as DexChain | undefined) ?? null} token={route?.token ?? null} symbol={symbol} price={livePrice ?? ticker?.price ?? null} chains={chains} wallet={wallet} openWallet={openWallet} you={you} reload={reload}
+      noRoute={route ? undefined : `${symbol} has no market on the chains your wallet trades on (Solana, Base, Ethereum, BNB Chain and the rest), so it cannot be swapped from here: trade it on paper, or send an orb to it.`} />
   );
   return phone ? (
     <div data-major-page={symbol} style={{ display: "grid", gap: "var(--s3)", minWidth: 0 }}>{head1}{chart}{trade}{send}</div>

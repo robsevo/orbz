@@ -469,6 +469,23 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("a paper run begins with $10,000 whatever its paper", "src/desk/desk.ts", [
         ("    cash = real ? 0 : cash ?? acct.paper;", "    cash = real ? 0 : cash ?? PAPER_START;"),
     ], ["orders.test.ts"]),
+    # your own paper, filled as the market would (PLAN 5.38; owner, 10-11: "still cant decide what amount we want to paper
+    # trade... simulate slippage etc.")
+    ("a paper trade never asks the router", "src/desk/orders.ts", [
+        ("    return this.#desk.paperTrade(orb, o.market, o.side, o.usd, quote ?? undefined);", "    return this.#desk.paperTrade(orb, o.market, o.side, o.usd, undefined);"),
+    ], ["orders.test.ts"]),
+    ("a quoted buy's network fee left unpaid", "src/desk/desk.ts", [
+        ("      if (quoted) [spend, fee, qty] = [usd + quoted.feeUsd, quoted.feeUsd, quoted.qty];", "      if (quoted) [spend, fee, qty] = [usd, quoted.feeUsd, quoted.qty];"),
+    ], ["orders.test.ts"]),
+    ("your paper made real money", "src/api.ts", [
+        ('        if (orb === YOU && b.mode !== "paper") no(400, "your own account here is paper: your real money is your wallet\'s");\n', ""),
+    ], ["orders.test.ts"]),
+    ("your paper earns XP", "src/gym/xp.ts", [
+        ("e.orb === YOU || ", ""),
+    ], ["orders.test.ts"]),
+    ("your paper is someone else's on the chart", "src/desk/chart.ts", [
+        ("orb: e.orb === YOU ? null : e.orb,", "orb: e.orb,"),
+    ], ["orders.test.ts"]),
     # a pool's bars kept, GeckoTerminal's asks spaced (PLAN 5.35; owner, 10-11: "No chart now ... 429")
     ("a restart forgets a pool's bars", "src/desk/bars.ts", [
         ("      return (read.all(k.chain, k.pool, k.token, k.tf, limit) as Candle[]).reverse();", "      return [] as Candle[];"),
@@ -3442,9 +3459,22 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("an orb's paper is set nowhere", "src/desk/Account.tsx", [
         ("onClick={() => void set(mode, undefined, Number(paper))}", "onClick={() => setAsking(null)}"),
     ], ["desk-view.test.ts"]),
+    # your own paper (PLAN 5.38); the chat's orb (owner, 10-11: "chat page make orbz bigger")
+    ("the trade box opens on real money", "src/desk/TokenPage.tsx", [
+        ('    return globalThis.localStorage?.getItem(TRADE_MODE) === "real" ? "real" : "paper";', '    return globalThis.localStorage?.getItem(TRADE_MODE) === "paper" ? "paper" : "real";'),
+    ], ["desk-view.test.ts"]),
+    ("real money offered where there is no market", "src/desk/TokenPage.tsx", [
+        ('data-trade-mode="real" disabled={!can}', 'data-trade-mode="real" disabled={false}'),
+    ], ["chart-view.test.ts"]),
+    ("your paper's amount is set nowhere", "src/desk/Account.tsx", [
+        ('      await home.setDeskAccount(YOU, "paper", undefined, Number(paper));\n', ""),
+    ], ["desk-view.test.ts"]),
+    ("the chat's orb as small as it was", "src/rooms/Chat.tsx", [
+        ("          <Orb character={orb} size={88} state={face} gesture={cue} poke={false} />", "          <Orb character={orb} size={52} state={face} gesture={cue} poke={false} />"),
+    ], ["phones.test.ts"]),
     # an orb's account, yours to set (PLAN 5.34)
     ("the account switch sets nothing", "src/desk/Account.tsx", [
-        ("      await home.setDeskAccount(orb, m, b);\n", ""),
+        ("      await home.setDeskAccount(orb, m, b, p);\n", ""),
     ], ["desk-view.test.ts"]),
     # the chart live and zoomed; the top 10 on the tape; the majors first (PLAN 5.33, owner 10-11)
     ("a price now never reaches the forming bar", "src/desk/TokenPage.tsx", [

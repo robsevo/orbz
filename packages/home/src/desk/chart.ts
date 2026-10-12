@@ -7,7 +7,7 @@ import type { Candle } from "./indicators.ts";
 import { backtest, seriesOf, seriesWords, TIMEFRAME_MS, type Backtest, type Rules, type Series, type Strategy } from "./strategy.ts";
 import { chainOf, tokenOf } from "./chains.ts";
 import { readTokenKey } from "./dex.ts";
-import type { Book } from "./desk.ts";
+import { YOU, type Book } from "./desk.ts";
 import type { Swap } from "./swaps.ts";
 
 /** The most bars a chart may hand in: a coin's chart shows 300, and 400 of them fit inside the door's 64 KB body. */
@@ -79,7 +79,8 @@ export function marksOn(market: string, o: { fills: readonly FillEvent[]; swaps:
     // a fill of real money is the real trade's (its swap, below): on paper only here
     .filter((e) => e.data.symbol === market && e.data.paper !== false && (e.data.side === "buy" || e.data.side === "sell"))
     .map((e) => ({
-      kind: "paper", orb: e.orb, at: e.at, side: e.data.side as "buy" | "sell",
+      // your own paper (PLAN 5.38) is yours on the chart, as your real trades are
+      kind: "paper", orb: e.orb === YOU ? null : e.orb, at: e.at, side: e.data.side as "buy" | "sell",
       px: finite(Number(e.data.px)), qty: finite(Number(e.data.qty)), usd: typeof e.data.usd === "number" ? e.data.usd : null,
       book: Number(e.data.book), strategy: typeof e.data.strategy === "number" ? e.data.strategy : null, ...(typeof e.data.why === "string" && { why: e.data.why }),
     }));

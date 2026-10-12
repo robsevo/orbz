@@ -15,6 +15,8 @@ export const chip = (on: boolean): CSSProperties => ({ ...(on ? strong : button)
 
 export const usd = (n: number, places = 2): string => `${n < 0 ? "−" : ""}$${Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: places, maximumFractionDigits: places })}`;
 export const pct = (n: number | null | undefined, places = 2): string => (n === null || n === undefined || !Number.isFinite(n) ? "–" : `${n >= 0 ? "+" : "−"}${Math.abs(n).toFixed(places)}%`);
+/** Your own paper's account, as the home keeps it (its desk.ts YOU, PLAN 5.38): never one of the orbs. */
+export const YOU = "~you";
 export const shortAddress = (a: string): string => (a.length > 14 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a);
 /** A market as the screen names it: a major as it is, a token ("solana:<mint>", or an address a swap keeps on its chain) by
  * its symbol when the desk knows it, else its address shortened. */

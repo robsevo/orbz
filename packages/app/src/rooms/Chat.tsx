@@ -47,12 +47,13 @@ export function Chat({ orb, home, person, replies = "speak" }: { orb: Character;
   return (
     <div ref={room} data-orb={orb.hue} data-chat={conv} style={{ display: "grid", gridTemplateRows: "auto minmax(0, 1fr)", minHeight: 0, minWidth: 0 }}>
       <header style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px 12px", padding: "var(--s3) var(--s5)", boxShadow: "0 1px 0 var(--sep)", minWidth: 0 }}>
+        {/* the orb large enough to see (owner, 10-11: "chat page make orbz bigger") */}
         <span data-ears-face={face} data-cues={cue?.n ?? 0} style={{ display: "contents" }}>
-          <Orb character={orb} size={52} state={face} gesture={cue} poke={false} />
+          <Orb character={orb} size={88} state={face} gesture={cue} poke={false} />
         </span>
         <div data-chat-who style={{ display: "grid", minWidth: 0, flex: "1 1 150px" }}>
           <span style={{ font: "800 18px/24px var(--font)", color: "var(--accent)" }}>{orb.name}</span>
-          <span style={{ font: "400 13px/18px var(--font)", color: "var(--text-3)", textWrap: "balance" }}>{how === "speaking" ? "Writing…" : how ? "Working…" : `${SPECIALTIES[orb.specialty].title} · a private chat`}</span>
+          <span style={{ font: "400 13px/18px var(--font)", color: "var(--text-3)", textWrap: "balance" }}>{how === "speaking" ? "Writing…" : how ? "Working…" : `${SPECIALTIES[orb.specialty].title}\u00a0· a private chat`}</span>
         </div>
         <button onClick={() => setComputer((v) => !v)} aria-pressed={computer} style={{ marginLeft: "auto", flex: "0 0 auto", font: "600 13px/18px var(--font)", color: "var(--text-1)", background: computer ? "var(--accent-fill)" : "var(--fill)", border: 0, borderRadius: 10, padding: "6px 12px", cursor: "pointer", boxShadow: computer ? "inset 0 0 0 1.5px var(--accent)" : "inset 0 0 0 .5px var(--hairline)", minHeight: 36 }}>
           {orb.name}'s computer

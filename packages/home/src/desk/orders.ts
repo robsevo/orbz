@@ -9,7 +9,7 @@ import type { DatabaseSync } from "node:sqlite";
 import type { EventLog } from "../events.ts";
 import { chainOf, tokenOf } from "./chains.ts";
 import { readTokenKey } from "./dex.ts";
-import { DeskError, type Book, type Desk } from "./desk.ts";
+import { DeskError, type Book, type Desk, type PaperQuote } from "./desk.ts";
 import type { Market } from "./market.ts";
 import { seriesOf, signalAt, type Series } from "./strategy.ts";
 import type { Swap, Swaps } from "./swaps.ts";
@@ -81,7 +81,7 @@ export class Orders {
     const a = this.#desk.account(orb);
     const at = this.#now();
     if (a.mode === "paper") {
-      const r = await this.#desk.paperTrade(orb, o.market, o.side, o.usd);
+      const r = await this.paper(orb, o);
       return this.#insert({ orb, book: a.book.id, market: o.market, side: o.side, usd: o.usd, why, state: "filled", swap: null, strategy: o.strategy ?? null, qty: r.qty, px: r.px, reason: null, at, doneAt: at });
     }
     // real money: a swap asked of you, from the budget its account has left (what waits to be bought is spoken for)
@@ -100,6 +100,34 @@ export class Orders {
       sw = await this.#swaps.ask({ by: orb, chain: route.chain, sell: route.sell, buy: route.buy, amount: amountText(route.qty, Number(d[1])), why });
     }
     return this.#insert({ orb, book: a.book.id, market: o.market, side: o.side, usd: o.usd, why, state: "placed", swap: sw.id, strategy: o.strategy ?? null, qty: null, px: null, reason: null, at });
+  }
+
+  /** A paper trade as the market would fill it now (PLAN 5.38; owner, 10-11: "simulate slippage etc."): at the router's
+   * own quote for its size where the coin has a route (the route a real order takes: its pools' slippage, its price
+   * impact, its network fee), else at the market's price and the desk's usual cost. An orb's paper orders, and yours. */
+  async paper(orb: string, o: { market: string; side: "buy" | "sell"; usd: number }): ReturnType<Desk["paperTrade"]> {
+    const quote = await this.#quote(this.#desk.ownBook(orb), o).catch(() => null);
+    return this.#desk.paperTrade(orb, o.market, o.side, o.usd, quote ?? undefined);
+  }
+
+  /** The router's quote for a paper trade's size, or null where the coin has no route (or no quote now). */
+  async #quote(book: Book, o: { market: string; side: "buy" | "sell"; usd: number }): Promise<PaperQuote | null> {
+    const key = readTokenKey(o.market);
+    const where = key ? { chain: key.chain, token: key.address } : ROUTES[o.market];
+    const chain = where && chainOf(where.chain);
+    if (!where || !chain) return null;
+    if (o.side === "buy") {
+      const q = await this.#swaps.quote({ chain: where.chain, sell: CASH, buy: where.token, amount: o.usd.toFixed(2) });
+      const qty = Number(q.out);
+      return qty > 0 ? { qty, usd: o.usd, feeUsd: q.feeUsd ?? 0, impact: q.priceImpactPct } : null;
+    }
+    const held = book.holdings.find((h) => h.symbol === o.market);
+    const px = await this.#market.price(o.market);
+    if (!held || px === null) return null;
+    const amount = amountText(Math.min(held.qty, o.usd / px), tokenOf(chain, where.token)?.decimals ?? 6);
+    const q = await this.#swaps.quote({ chain: where.chain, sell: where.token, buy: CASH, amount });
+    const got = Number(q.out);
+    return got > 0 && Number(amount) > 0 ? { qty: Number(amount), usd: got, feeUsd: q.feeUsd ?? 0, impact: q.priceImpactPct } : null;
   }
 
   /** An orb's orders still waiting to fill. */

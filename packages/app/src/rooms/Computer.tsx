@@ -126,7 +126,7 @@ export function Computer(o: { home: Office; orb: Character; messages: Message[];
   return (
     <section data-orb={o.orb.hue} data-computer={id} aria-label={`${o.orb.name}'s computer`} style={{ position: "relative", display: "grid", gridTemplateRows: "auto auto 1fr", minWidth: 0, borderRadius: 18, background: "var(--card)", boxShadow: "inset 0 0 0 1.5px var(--accent), 0 8px 24px var(--shadow)", overflow: "hidden" }}>
       <header style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "var(--accent-wash)", minWidth: 0 }}>
-        <Orb character={o.orb} size={30} state={o.busy ?? "idle"} poke={false} />
+        <Orb character={o.orb} size={48} state={o.busy ?? "idle"} poke={false} />
         <div style={{ display: "grid", minWidth: 0 }}>
           <span style={{ font: "800 14px/18px var(--font)", color: "var(--text-1)" }}>{o.orb.name}'s computer</span>
           <span data-doing style={{ font: "500 12px/16px var(--font)", color: "var(--text-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{doing}</span>

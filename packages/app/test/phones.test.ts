@@ -126,6 +126,9 @@ for (const width of [320, 390, 768, 1280]) {
         if (room.startsWith("#/chat/")) {
           const who = await page.locator("[data-chat-who]").first().boundingBox({ timeout: 10_000 });
           if (!who || who.width < 149) problems.push(`${room}: the chat's header squeezed its name to ${who ? Math.round(who.width) : 0} px`);
+          // the orb large enough to see (owner, 10-11: "chat page make orbz bigger")
+          const face = await page.locator("[data-ears-face] canvas").first().boundingBox({ timeout: 10_000 });
+          if (!face || face.width < 80) problems.push(`${room}: the chat's orb is ${face ? Math.round(face.width) : 0} px`);
         }
       }
       if (width <= 760) {
