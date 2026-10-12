@@ -287,7 +287,10 @@ function themeVars(t: ThemeId): string {
   const base = baseOf(t);
   const v: Record<string, string> = { "--accent": hex(HUES[0]![base]) }; // Ash's, where no orb is named
   for (const [k, c] of Object.entries(s)) v[`--${k.replace(/(\d)/, "-$1")}`] = css(c);
-  return Object.entries(v).map(([k, x]) => `${k}: ${x};`).join(" ") + " " + accentVars(HUES[0]![base], base);
+  // Ash's accent again under names no orb sets, so the side menu can keep it wherever an orb is named (owner, 10-11:
+  // "the menu to the left should never change color, keep ashs color")
+  const ash = accentVars(HUES[0]![base], base);
+  return Object.entries(v).map(([k, x]) => `${k}: ${x};`).join(" ") + " " + ash + " " + ash.replace(/--accent/g, "--ash-accent");
 }
 
 /** An orb's colour and what is made of it: the wash behind your messages, a chosen control's fill, his glow. */
@@ -419,6 +422,10 @@ export function stylesheet(fontUrl = "fonts/Nunito.ttf"): string {
     // (its size the nearest edges' at rest, held as he moves: closest-side would shrink it as he hops toward an edge; its
     // middle his body's, --orb-dx/--orb-dy from his frame's sway, Orb.tsx)
     `.orb-light { background: radial-gradient(50% var(--orb-ry, 41%) at calc(50% + var(--orb-dx, 0px)) calc(var(--orb-cy, 59%) + var(--orb-dy, 0px)), var(--orb-light) 0%, var(--orb-light) 44%, var(--orb-light-edge) 56%, var(--orb-light-none) 80%); }`,
+    // the side menu always wears Ash's accent, itself and every orb's row in it, in every theme (owner, 10-11: "the menu to
+    // the left should never change color, keep ashs color for midnight for example"); important, since an orb's own
+    // rule is scoped by the theme and would win
+    `.orbs-side, .orbs-side [data-orb] { --accent: var(--ash-accent) !important; --accent-wash: var(--ash-accent-wash) !important; --accent-fill: var(--ash-accent-fill) !important; --accent-glow: var(--ash-accent-glow) !important; }`,
     `.num { font-variant-numeric: tabular-nums; }`,
     // a press you can feel (owner, 10-01): down it squishes at once, up it springs back past where
     // it was; a thing just chosen bounces. The press is `translate` and `scale`, the bounce is
