@@ -387,6 +387,23 @@ test("the desk: the floor and its tabs at desk and phone sizes; a strategy kept 
   await kit.locator("[data-account-set-paper]").click();
   await kit.locator("[data-account-words]", { hasText: "Paper: $2,500.00 of practice money" }).waitFor({ timeout: 20_000 });
   assert.equal(h.desk.account("kit").paper, 2_500);
+  // its numbers (PLAN 5.39; owner, 10-11: "you can also see their ... stats etc. in real money or paper"): on paper, its
+  // closed trade's; on real money none, then a real trade's once it has one, apart from its paper
+  assert.equal(await page.locator("[data-desk]").getAttribute("data-money"), "paper", "paper till you say");
+  await page.locator('[data-orb-pnl="Kit"] [data-stats="paper"] [data-stat="win-rate"]').waitFor({ timeout: 20_000 });
+  assert.match(await page.locator('[data-orb-pnl="Kit"] [data-stat="win-rate"]').innerText(), /\d+%/);
+  await page.locator('[data-stats-money="real"]').click();
+  await page.locator('[data-desk][data-money="real"]').waitFor();
+  assert.equal(await page.locator('[data-orb-pnl="Kit"] [data-stats-none]').innerText(), "No trades with real money yet: $50.00 in its account.");
+  h.desk.realFill({ orb: "kit", market: "BTC", side: "buy", qty: 0.001, usd: 50, strategy: null, order: 0 });
+  h.desk.realFill({ orb: "kit", market: "BTC", side: "sell", qty: 0.001, usd: 55, strategy: null, order: 0 });
+  await page.locator('[data-orb-pnl="Kit"] [data-stats="real"]').waitFor({ timeout: 20_000 });
+  assert.equal(await page.locator('[data-orb-pnl="Kit"] [data-pnl]').innerText(), "+$5.00 · +10.00%", "its real money: $50 to $55");
+  assert.match(await page.locator('[data-orb-pnl="Kit"] [data-stat="win-rate"]').innerText(), /^Win rate\s+100%\s+1 won · 0 lost$/i);
+  assert.match(await page.locator("[data-desk-pnl]").innerText(), /real money, the whole desk/);
+  assert.deepEqual(await measure(page), [], "each orb's numbers on real money, at desk size");
+  await page.locator('[data-stats-money="paper"]').click();
+  await page.locator('[data-desk][data-money="paper"]').waitFor();
   // a swap of any coin, by its address (owner, 10-11: "coin swap in general, not just pump.fun")
   await tab(page, "trade");
   await page.locator("[data-trade-chain]").selectOption("base");

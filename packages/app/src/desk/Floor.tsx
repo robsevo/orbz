@@ -124,7 +124,7 @@ export function DeskFloor({ crew, moods, events, prices, spark, notes, strategie
     if (!working && !due && s.plan) return;
     const busy = new Set<TPoiId>();
     for (const o of sims.current.values()) if (o !== s && o.plan?.kind === "poi") busy.add(o.plan.poi);
-    assign(s, nextT({ traits: s.traits, working }, busy, s.r), instant);
+    assign(s, nextT({ traits: s.traits, working, job: s.c.specialty }, busy, s.r), instant);
   };
 
   useEffect(() => {

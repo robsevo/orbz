@@ -255,6 +255,8 @@ export type DeskState = {
   orbs?: DeskOrbPnl[];
   /** Your own paper (PLAN 5.38): how much you gave it, what is left, what it holds. */
   you?: DeskYou;
+  /** Each orb's numbers, on paper and on real money apart, and yours on paper (PLAN 5.39): for you, never an orb. */
+  stats?: DeskStats[];
 };
 // ── any token on a DEX (PLAN 5.28), as the home's door gives it ─────────────────────────────────────
 export type DexChain = "solana" | "ethereum" | "base" | "arbitrum" | "optimism" | "polygon" | "bsc";
@@ -282,6 +284,21 @@ export type DeskAccount = { orb: string; mode: "paper" | "real"; budget: number;
 /** Your own paper (PLAN 5.38; owner, 10-11: "still cant decide what amount we want to paper trade... simulate slippage
  * etc."): the amount you gave it, what is left, what it holds. */
 export type DeskYou = { paper: number; cash: number; start: number; holdings: { symbol: string; qty: number; cost: number }[] };
+/** An orb's numbers on one money (PLAN 5.39; the home's desk/stats.ts): its closed trades, what they made, its profit
+ * factor and average, best and worst, deepest fall, fees and turnover, hold and streak, its books, orders and markets. */
+export type DeskStats = {
+  orb: string; money: "paper" | "real";
+  trades: number; wins: number; losses: number; winRate: number | null;
+  realized: number; today: number; week: number;
+  avgWin: number | null; avgLoss: number | null; profitFactor: number | null; expectancy: number | null;
+  best: number | null; worst: number | null; maxDrawdown: number; fees: number; volume: number;
+  avgHeldMs: number | null; streak: number;
+  start: number; equity: number; pnl: number; returnPct: number | null; open: number;
+  orders: { placed: number; filled: number; notFilled: number; waiting: number };
+  markets: { market: string; trades: number; pnl: number }[];
+  curve: { at: number; pnl: number }[];
+  last: number | null;
+};
 /** A paper trade of yours, filled as the market would: at the router's quote for its size (`quoted`; its price impact
  * and network fee), else at the market's price and the desk's usual cost. */
 export type DeskPaperFill = { side: "buy" | "sell"; qty: number; px: number; quoted: boolean; impact: number | null; feeUsd: number; pnl: number | null };

@@ -15,6 +15,7 @@ import { DEX_CHAINS, isDexChain, isTokenAddress, readTokenKey, tokenKey } from "
 import { DeskError, YOU, type Settings } from "./desk/desk.ts";
 import { SwapError } from "./desk/swaps.ts";
 import { barsProblem, drawn, marksOn } from "./desk/chart.ts";
+import { deskStats } from "./desk/stats.ts";
 import { problemOf, SYMBOLS, TIMEFRAMES, type Strategy, type Timeframe } from "./desk/strategy.ts";
 import { WalletError } from "./desk/wallets.ts";
 import { recentWork } from "./worklog.ts";
@@ -675,6 +676,8 @@ async function handle(
         return {
           now, market: home.market.status(), prices, top: await home.market.top(10), strategies: home.desk.strategies(), accounts: home.desk.accounts(), you: youOf(home), books, notes: home.desk.notes(), settings: home.desk.settings(),
           fills: recent("desk.fill", 40), trades: recent("desk.trade_closed", 40), wallets: home.wallets.list(), swaps: home.swaps.list(30), tokens, dex: home.dex.status(), orbs: pnlOf(books),
+          // each orb's numbers on paper and on real money apart, and yours on paper (PLAN 5.39): for you, never an orb
+          stats: deskStats({ closed: home.events.ofType("desk.trade_closed"), fills: home.events.ofType("desk.fill"), books, orders: home.orders.all(), now }),
           chains: CHAINS.map((c) => ({ id: c.id, name: c.name, kind: c.kind, ...(c.kind === "evm" && { chainId: c.chainId }), explorer: c.explorer, tokens: c.tokens.map((t) => ({ symbol: t.symbol, decimals: t.decimals })) })),
         };
       }

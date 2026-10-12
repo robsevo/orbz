@@ -60,6 +60,10 @@ export class Orders {
     const r = this.#db.prepare("SELECT * FROM desk_orders WHERE id = ?").get(id) as Row | undefined;
     return r ? this.#of(r) : null;
   }
+  /** Every order, the oldest first: for the numbers you see (stats.ts), never an orb's. */
+  all(): Order[] {
+    return (this.#db.prepare("SELECT * FROM desk_orders ORDER BY id").all() as Row[]).map((r) => this.#of(r));
+  }
   /** An orb's orders, the newest first. */
   list(orb: string, limit = 20): Order[] {
     return (this.#db.prepare("SELECT * FROM desk_orders WHERE orb = ? ORDER BY id DESC LIMIT ?").all(orb, limit) as Row[]).map((r) => this.#of(r));

@@ -127,7 +127,7 @@ export function seriesWords(s: Series): string {
   }
 }
 const OP_WORDS: Record<Op, string> = { ">": "is above", "<": "is below", ">=": "is at or above", "<=": "is at or below", crosses_above: "crosses above", crosses_below: "crosses below" };
-const rulesWords = (r: Rules): string => {
+export const rulesWords = (r: Rules): string => {
   const list = "all" in r ? r.all : r.any;
   return list.map((c) => `${seriesWords(c.left)} ${OP_WORDS[c.op]} ${seriesWords(c.right)}`).join("all" in r ? " and " : " or ");
 };
@@ -166,7 +166,7 @@ export function seriesOf(s: Series, c: readonly Candle[]): number[] {
 }
 
 /** Whether rules hold at bar i, from series computed once over the bars up to and including i. */
-function holds(r: Rules, at: (s: Series) => number[], i: number): boolean {
+export function holds(r: Rules, at: (s: Series) => number[], i: number): boolean {
   const test = (c: Condition): boolean => {
     const L = at(c.left);
     const R = at(c.right);

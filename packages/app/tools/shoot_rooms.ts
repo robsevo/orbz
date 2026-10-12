@@ -85,6 +85,8 @@ const desk = async (): Promise<void> => {
   const crew = [
     ["vic", "Vic", "deskhead", "lime", "bean", "bowler"], ["kit", "Kit", "dealer", "amber", "kitty", "headset"], ["quinn", "Quinn", "quant", "violet", "owl", "none"],
     ["oz", "Oz", "onchain", "teal", "drop", "antenna"], ["rae", "Rae", "risk", "coral", "cub", "hard hat"],
+    // three more of its jobs (PLAN 5.40)
+    ["ren", "Ren", "quantres", "cornflower", "fox", "grad cap"], ["dev", "Dev", "quantdev", "mint", "pebble", "headphones"], ["sol", "Sol", "riskanalyst", "rose", "egg", "eyeshade"],
   ] as const;
   for (const [id, name, sp, hue, shape, hat] of crew) h.inbox.addOrb(id, name, sp, { shape, eyes: "big", hue, hat } as never);
   const ema = (a: number, b: number, op: string) => ({ all: [{ left: { kind: "ema", period: a }, op, right: { kind: "ema", period: b } }] }) as never;
@@ -93,6 +95,12 @@ const desk = async (): Promise<void> => {
   drawnStrategy = row.id;
   await h.desk.run(row.id, "kit");
   await h.desk.paperTrade("vic", "ETH", "buy", 1_500);
+  // a few trades closed, for each orb's numbers (PLAN 5.39)
+  await h.desk.paperTrade("vic", "ETH", "sell", 600);
+  for (const [sym, usd] of [["SOL", 400], ["BTC", 250]] as const) {
+    await h.desk.paperTrade("oz", sym, "buy", usd);
+    await h.desk.paperTrade("oz", sym, "sell", usd);
+  }
   h.desk.note("oz", "SOL", "Unlocks this month", "About 2% of the supply unlocks on the 28th; the last two unlocks were sold into within a week.");
   for (const t of TURNS) h.about.keep(keptBy(t));
 };

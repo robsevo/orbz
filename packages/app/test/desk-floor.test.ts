@@ -60,6 +60,24 @@ test("a free orb goes only where it is free to; working, it is at its screens", 
   assert.ok(went.size >= 6, `it goes about the floor: ${[...went].join(", ")}`);
 });
 
+test("each job leans where its work is (PLAN 5.40): the two on risk to the risk desk, research to the shelf and the whiteboard, development to its screens", () => {
+  let n = 7;
+  const r = (): number => ((n = (n * 9301 + 49297) % 233280) / 233280);
+  const where = (job: string): Map<string, number> => {
+    const m = new Map<string, number>();
+    for (let i = 0; i < 2_000; i++) {
+      const p = nextT({ traits, working: false, job }, new Set(), r);
+      const k = p.kind === "desk" ? "desk" : p.poi;
+      m.set(k, (m.get(k) ?? 0) + 1);
+    }
+    return m;
+  };
+  const [dealer, analyst, researcher, developer] = ["dealer", "riskanalyst", "quantres", "quantdev"].map(where) as Map<string, number>[];
+  assert.ok(analyst!.get("risk")! > 2 * (dealer!.get("risk") ?? 0), `the risk desk: ${analyst!.get("risk")} against ${dealer!.get("risk")}`);
+  assert.ok(researcher!.get("shelf")! + researcher!.get("whiteboard")! > 2 * ((dealer!.get("shelf") ?? 0) + (dealer!.get("whiteboard") ?? 0)), "the shelf and the whiteboard");
+  assert.ok(developer!.get("desk")! > dealer!.get("desk")!, "its screens");
+});
+
 test("the desk's events as moments: a win rings the bell, a loss is a coffee, a fill flashes, a note is pinned, an ask goes to the head", () => {
   const won = momentOf({ type: "desk.trade_closed", pnl: 12.5, seq: 3 })!;
   assert.deepEqual([won.poi, won.ring], ["bell", true]);

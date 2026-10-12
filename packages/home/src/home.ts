@@ -87,6 +87,7 @@ import { publicRouters, Swaps, type Routers } from "./desk/swaps.ts";
 import { Orders } from "./desk/orders.ts";
 import { sqliteBars } from "./desk/bars.ts";
 import { deskTools } from "./desk/tools.ts";
+import { researchTools } from "./desk/research-tools.ts";
 import { Wallets } from "./desk/wallets.ts";
 import { Loops, type LoopsOptions } from "./loops.ts";
 import { cronOf, Schedules } from "./schedule.ts";
@@ -427,6 +428,7 @@ export class Home {
       ...reverseTools(),
       // the desk (PLAN 5.25): prices, strategies on paper, notes, your wallets read, a real swap only asked
       ...deskTools({ desk: this.desk, wallets: this.wallets, orders: this.orders, dex: this.dex, safety: (c, a) => this.tokenSafety(c, a), now: () => this.clock.now(), nameOf: (orb) => this.inbox.orb(orb)?.name ?? orb }),
+      ...researchTools({ desk: this.desk, nameOf: (orb) => this.inbox.orb(orb)?.name ?? orb }),
       // the reading library (PLAN 3.12): the sites the office follows, beside web search
       ...readingTools(this.reading, (orb) => this.inbox.orb(orb)?.name ?? orb),
       // how the org works (PLAN 5.4): who fits a row, and a Senior passing a habit on (your yes first)

@@ -127,9 +127,16 @@ export function deskSeats(orbs: { name: string; specialty: string }[]): Map<stri
 export type TPlan = { kind: "desk"; label: string; mark: string } | { kind: "poi"; poi: TPoiId; label: string; mark: string };
 type Traits = { Pace: number; Care: number; Curiosity: number; Humour: number; Focus: number; Calm: number; Nerve: number };
 
+/** Where each job leans when it is free, times what its traits say (PLAN 5.40): the two on risk to the risk desk, research
+ * to the shelf and the whiteboard, development back to its screens. */
+const LEANS: Record<string, Partial<Record<TPoiId | "desk", number>>> = {
+  risk: { risk: 3 }, riskanalyst: { risk: 3 }, quant: { whiteboard: 2 }, quantres: { shelf: 3, whiteboard: 3 }, quantdev: { desk: 1.6 },
+};
+
 /** Where a free orb of the desk goes, by its traits (Focus back to its screens, Curiosity to the research corner and the
- * wall, Pace to the coffee, Nerve to the tape, Calm to the window, Care to the risk desk, Humour to the leaderboard). */
-export function nextT(o: { traits: Traits; working: boolean }, busy: Set<TPoiId>, r: () => number): TPlan {
+ * wall, Pace to the coffee, Nerve to the tape, Calm to the window, Care to the risk desk, Humour to the leaderboard) and
+ * its job's lean. */
+export function nextT(o: { traits: Traits; working: boolean; job?: string }, busy: Set<TPoiId>, r: () => number): TPlan {
   if (o.working) return { kind: "desk", label: NAMES.dept, mark: "📊" };
   const t = o.traits;
   const pick: [TPoiId | "desk", number][] = [
@@ -138,7 +145,8 @@ export function nextT(o: { traits: Traits; working: boolean }, busy: Set<TPoiId>
     ["coffee", t.Pace / 2], ["fridge", t.Pace / 3], ["stool", t.Nerve / 2], ["window", t.Calm / 2],
     ["armchair", t.Calm / 3], ["risk", t.Care / 3], ["board", t.Humour / 2], ["whiteboard", t.Focus / 4 + t.Curiosity / 4],
   ];
-  const open = pick.filter(([id]) => id === "desk" || !busy.has(id));
+  const lean = LEANS[o.job ?? ""] ?? {};
+  const open = pick.filter(([id]) => id === "desk" || !busy.has(id)).map(([id, w]): [TPoiId | "desk", number] => [id, w * (lean[id] ?? 1)]);
   const total = open.reduce((n, [, w]) => n + w, 0);
   let x = r() * total;
   for (const [id, w] of open) {

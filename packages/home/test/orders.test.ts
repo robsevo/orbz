@@ -15,6 +15,7 @@ import { serve } from "../src/api.ts";
 import { FakeClock } from "../src/clock.ts";
 import { publicDex } from "../src/desk/dex.ts";
 import { deskTools } from "../src/desk/tools.ts";
+import { researchTools } from "../src/desk/research-tools.ts";
 import type { Strategy } from "../src/desk/strategy.ts";
 import { GROUPS } from "../src/agent/groups.ts";
 import { agentHome } from "./helpers.ts";
@@ -38,7 +39,7 @@ async function deskHome(t: Parameters<typeof agentHome>[0]) {
   });
   const { home } = await agentHome(t, [], { clock, desk: { source: standInMarket(() => clock.now()), routers: standInRouters({ outPer: () => rate }), fetch: chains, dex: publicDex({ fetch: standInDexFetch() }) } });
   home.inbox.addOrb("tess", "Tess", "dealer");
-  const tools = new Map(deskTools({ desk: home.desk, wallets: home.wallets, orders: home.orders, dex: home.dex, safety: (c, a) => home.tokenSafety(c, a), now: () => home.clock.now(), nameOf: (x) => x }).map((x) => [x.name, x]));
+  const tools = new Map([...deskTools({ desk: home.desk, wallets: home.wallets, orders: home.orders, dex: home.dex, safety: (c, a) => home.tokenSafety(c, a), now: () => home.clock.now(), nameOf: (x) => x }), ...researchTools({ desk: home.desk, nameOf: (x) => x })].map((x) => [x.name, x]));
   const use = async (name: string, a: Record<string, unknown>) => String((await tools.get(name)!.run!(a, { orb: "tess" } as never)).content);
   /** your yes, your wallet's signature, and its chain's confirmation */
   const confirm = async (swap: number) => {
@@ -134,6 +135,41 @@ test("your own paper (owner, 10-11: \"still cant decide what amount we want to p
   assert.deepEqual([fill.data.quoted, fill.data.qty], [true, 20 * 6.25], "an orb's paper filled as the market would");
 });
 
+test("the desk's research and its risk on a home (PLAN 5.40): each said in words; an account's risk read the same whichever money it is; your numbers of each orb at the door, paper and real money apart (PLAN 5.39)", async (t) => {
+  const { home, tools, use, confirm } = await deskHome(t);
+  const study = await use("signal_study", { market: "BTC", timeframe: "1h", when: { all: [{ left: { kind: "rsi", period: 14 }, op: "<", right: { kind: "value", value: 40 } }] } });
+  assert.match(study, /^BTC on 1h, 1000 closed bars from .+: the condition \(.+\) first held \d+ times?\./);
+  assert.match(study, /\n  4 bars after \(\d+\): [+-]\d+\.\d\d% on average, median [+-]\d+\.\d\d%, up \d+% of the time; any bar: [+-]\d+\.\d\d%/);
+  const sma = (name: string, n: number): Strategy => ({ name, symbol: "ETH", timeframe: "4h", sizePct: 50,
+    entry: { all: [{ left: { kind: "price", field: "close" }, op: "crosses_above", right: { kind: "sma", period: n } }] },
+    exit: { all: [{ left: { kind: "price", field: "close" }, op: "crosses_below", right: { kind: "sma", period: n } }] } });
+  const cmp = await use("compare_strategies", { strategies: [sma("SMA 10", 10), sma("SMA 30", 30), sma("SMA 50", 50)] });
+  assert.match(cmp, /^ETH on 4h: the earlier 700 bars \(to .+\) and the later 300, which no choice here saw\.\n  SMA 10: earlier [+-]\d/);
+  assert.match(cmp, /\nBest on the earlier part: SMA (10|30|50)\./);
+  assert.match(tools.get("compare_strategies")!.precheck!({ strategies: [sma("A", 10), { ...sma("B", 20), symbol: "BTC" }] }, {} as never) ?? "", /one market and timeframe/, "variants of one market: the same history for each");
+  const stressed = await use("stress_strategy", { strategy: sma("SMA 30", 30) });
+  for (const line of [/\nFees and slippage doubled: [+-]\d/, /\nThe first half: [+-]\d/, /\n  ETH on 1h: /, /\n  ETH on 1d: /, /\n  BTC on 4h: /, /\n  SOL on 4h: /, /\nIt made money on \d of 4 other timeframes and markets\./]) assert.match(stressed, line);
+  // the desk's risk: Tess's account holds XRP; read again once it is real money, holding a coin bought with it
+  await use("place_order", { market: "XRP", side: "buy", usd: 500, why: "a test" });
+  await use("place_order", { market: "XRP", side: "sell", usd: 100, why: "a test" });
+  const risk1 = await use("desk_risk", {});
+  assert.match(risk1, /^The desk, every account together: \$[\d,]+\.\d\d, \$[\d,]+\.\d\d of it dollars; \d+\.\d% in coins, the largest XRP at \d+\.\d%\. Holding: [\d.]+ XRP/);
+  assert.match(risk1, /\ntess: .+ A day's value at risk \(95%\): \$[\d,]+\.\d\d; the worst of the last 90 days, replayed on what it holds: \$[\d,]+\.\d\d\./);
+  home.desk.setAccount("tess", "real", 100);
+  await use("place_order", { market: KEY, side: "buy", usd: 50, why: "a test" });
+  await confirm(home.swaps.list().find((x) => x.orb === "tess" && x.state === "asked")!.id);
+  const risk2 = await use("desk_risk", {});
+  assert.match(risk2, /\ntess: \$[\d,]+\.\d\d, \$50\.00 of it dollars; .+ Holding: [\d.]+ solana:/, "its account as it is now, said as before");
+  for (const x of [study, cmp, stressed, risk1, risk2]) assert.doesNotMatch(x, TELLS, "nothing in research or risk says which money");
+  // your numbers of each orb (PLAN 5.39), at the door: paper and real money in rows of their own
+  const door = await serve(home, { port: 0 });
+  t.after(() => door.close());
+  const snap = (await (await fetch(`http://127.0.0.1:${door.port}/desk`, { headers: { authorization: `Bearer ${door.token}` } })).json()) as { stats: { orb: string; money: string; trades: number; orders: { placed: number; filled: number }; volume: number; start: number }[] };
+  const tess = snap.stats.filter((x) => x.orb === "tess");
+  assert.deepEqual(tess.map((x) => [x.money, x.trades, x.orders.placed, x.orders.filled]), [["paper", 1, 2, 2], ["real", 0, 1, 1]]);
+  assert.deepEqual([tess[1]!.start, tess[1]!.volume], [100, 50], "real money: the budget it began with, the $50 it bought");
+});
+
 test("an order, the one way: on paper it fills at the price now; on real money a swap asked of you, filled when its chain confirms it; denied, it does not fill and its dollars are free; a winning sale is XP either way", async (t) => {
   const { home, use, confirm, setRate } = await deskHome(t);
   const paper = await use("place_order", { market: KEY, side: "buy", usd: 25, why: "the dip" });
@@ -175,6 +211,8 @@ test("nothing an orb reads says which: no tool's name, label or description, no 
     assert.doesNotMatch(`${x.name} ${x.label} ${x.description} ${JSON.stringify(x.parameters)}`, TELLS, `${x.name}'s words`);
   }
   assert.doesNotMatch(GROUPS.desk.about, TELLS);
+  assert.doesNotMatch(GROUPS.quant.about, TELLS);
+  assert.doesNotMatch(GROUPS.risk.about, TELLS);
   const door = await serve(home, { port: 0 });
   t.after(() => door.close());
   const send = async () => {

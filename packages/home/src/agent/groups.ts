@@ -20,6 +20,10 @@ export const GROUPS = {
   reading: { id: "reading", about: "the office's reading library: follow a site, search and read what it has read, unfollow", families: ["think", "finance", "exec"] },
   // reverse engineering (PLAN 4.8; owner, 10-10): the Reverse Engineer's, and the Guardian's (security), by specialty
   reverse: { id: "reverse", about: "reverse engineering, statically: a binary's anatomy (ELF, PE, Mach-O), a JavaScript or Electron app, a smart contract's bytecode, a network capture", families: [], specialties: ["reverse", "security"] },
+  // the desk's research and its risk (PLAN 5.40), by specialty: its strategist, researcher and developer, its two on
+  // risk, and its head
+  quant: { id: "quant", about: "the desk's research: what followed a condition on a market's history (an event study), strategies compared on history a choice among them never saw, a strategy stress-tested", families: [], specialties: ["quant", "quantres", "quantdev", "deskhead"] },
+  risk: { id: "risk", about: "the desk's risk: every account's exposure, how much rides on its largest coin, a day's value at risk, the worst day replayed", families: [], specialties: ["risk", "riskanalyst", "deskhead"] },
   // the desk (PLAN 5.25): its department's, and the money orbs' by specialty
   desk: { id: "desk", about: "the desk: prices and charts of the majors and of any token on a DEX by its name or address (pump.fun's too), what a token can do to its holders, strategies backtested and run on its account, orders placed on that account, notes on a coin, the person's wallets (read only)", families: ["desk"], specialties: ["investor", "crypto", "fundamentals", "cfo"] },
 } as const satisfies Record<string, ToolGroup>;

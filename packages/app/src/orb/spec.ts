@@ -474,6 +474,11 @@ export const SPECIALTIES = {
   quant: { family: "desk", ...NAMES.jobs.quant, lean: [3, 3, 5, 1, 2, 4, 4, 1], hat: "none", glasses: "bold round" },
   onchain: { family: "desk", ...NAMES.jobs.onchain, lean: [3, 2, 5, 1, 3, 5, 4, 1], hat: "antenna", glasses: "hexagon" },
   risk: { family: "desk", ...NAMES.jobs.risk, lean: [4, 1, 5, 1, 3, 3, 5, 2], hat: "hard hat", glasses: "half-rims" },
+  // three more of the desk's jobs, as a real firm has them (PLAN 5.40; owner, 10-11): its research and its development
+  // beside the strategist, and a second on its risk; last, as every addition is
+  quantres: { family: "desk", ...NAMES.jobs.quantres, lean: [2, 3, 5, 1, 3, 5, 4, 1], hat: "grad cap", glasses: "round" },
+  quantdev: { family: "desk", ...NAMES.jobs.quantdev, lean: [2, 5, 5, 1, 2, 3, 3, 1], hat: "headphones", glasses: "rectangle" },
+  riskanalyst: { family: "desk", ...NAMES.jobs.riskanalyst, lean: [3, 1, 5, 1, 3, 4, 5, 2], hat: "eyeshade", glasses: "square" },
 } satisfies Record<string, Specialty>;
 export type SpecialtyName = keyof typeof SPECIALTIES;
 /** What a seed's dice can come up as when nothing fixes its specialty: the 56 there were before 10-10, kept so (a seed keeps

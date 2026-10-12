@@ -22,7 +22,7 @@ const pct = (n: number | null): string => (n === null || !Number.isFinite(n) ? "
 const fail = (e: unknown): ToolResult => ({ content: e instanceof Error ? e.message : String(e), isError: true });
 const majorParam = { type: "string", enum: [...SYMBOLS] };
 /** A market: one of the majors, or any token on a DEX by its chain and address (PLAN 5.28). */
-const symbolParam = { type: "string", description: `${SYMBOLS.join(", ")}; or any token by its chain and address, as "solana:<mint>" or "base:0x…" (token_search finds them; a pump.fun token's mint ends in "pump")` };
+export const symbolParam = { type: "string", description: `${SYMBOLS.join(", ")}; or any token by its chain and address, as "solana:<mint>" or "base:0x…" (token_search finds them; a pump.fun token's mint ends in "pump")` };
 /** A market as given, or why it is not one. */
 const marketOf = (v: unknown): string | Error => {
   const x = s(v).trim();
@@ -43,8 +43,8 @@ const SERIES = {
   type: "object",
   description: "A series: {kind:'price', field:'close'|'open'|'high'|'low'|'volume'}, {kind:'sma'|'ema'|'rsi'|'atr'|'change', period}, {kind:'macd'|'macd_signal'|'macd_hist'}, {kind:'bb_upper'|'bb_middle'|'bb_lower', period, k}, {kind:'highest'|'lowest', period, field}: of the bars BEFORE, or {kind:'value', value}.",
 };
-const RULES = { type: "object", description: `{all:[conditions]} or {any:[conditions]}, 1 to 8; a condition is {left: series, op: one of ${OPS.join(", ")}, right: series}.`, properties: { all: { type: "array", items: { type: "object", properties: { left: SERIES, op: { type: "string", enum: [...OPS] }, right: SERIES } } }, any: { type: "array", items: { type: "object" } } } };
-const STRATEGY = {
+export const RULES = { type: "object", description: `{all:[conditions]} or {any:[conditions]}, 1 to 8; a condition is {left: series, op: one of ${OPS.join(", ")}, right: series}.`, properties: { all: { type: "array", items: { type: "object", properties: { left: SERIES, op: { type: "string", enum: [...OPS] }, right: SERIES } } }, any: { type: "array", items: { type: "object" } } } };
+export const STRATEGY = {
   type: "object",
   description: "A long-only strategy: a signal read at a bar's close fills at the next bar's open, a swap's fee and slippage paid both ways.",
   properties: {
