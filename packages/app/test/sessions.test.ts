@@ -153,7 +153,8 @@ test("a session: the orbs you bring in, the Brainstorm's turns and what was agre
   await page.locator('[data-computer="milo"]').waitFor();
   assert.equal(await page.locator("[data-computer]").count(), 1, "one computer big at a time");
   await page.getByRole("button", { name: "Bring someone in" }).click();
-  await page.locator("header").getByRole("button", { name: "Milo" }).click();
+  // the crew's own pick (an orb's computer has buttons named for it too: its picture in picture, its full screen)
+  await page.locator('header [data-crew-pick="milo"]').click();
   for (let i = 0; i < 40 && h.team.get(1)!.floor.length !== 1; i++) await page.waitForTimeout(50);
   assert.deepEqual(h.team.get(1)!.floor, ["hazel"], "who works a tab is the home's");
   assert.deepEqual(h.team.get(1)!.brainstorm, ["hazel", "milo"], "and only that tab's");
