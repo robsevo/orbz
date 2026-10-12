@@ -411,6 +411,11 @@ export function stylesheet(fontUrl = "fonts/Nunito.ttf"): string {
     `@media (prefers-reduced-motion: reduce) { .orb-rank { animation: none; } }`,
     // the light behind every orb (owner, 10-11): its colour, round its body (the canvas's --orb-cy, its middle), strongest
     // just past its edge and gone before the canvas's own edge, so it never shows a square (orb/Orb.tsx)
+    // a close-up (framing "portrait") fills its box, so the light behind it is hidden by its body: there it glows round
+    // its outline instead, past the box's edge (owner, 10-11: "we also want their glows as well"); the CEO's and the
+    // CFO's own glow stands in for it
+    `.orb-light.orb-close { background: none; }`,
+    `.orb-light.orb-close:not(.orb-rank) { filter: drop-shadow(0 0 calc(var(--orb-glow, 4px) * 0.45) var(--orb-light)) drop-shadow(0 0 var(--orb-glow, 4px) var(--orb-light-edge)); }`,
     `.orb-light { background: radial-gradient(closest-side at 50% var(--orb-cy, 59%), var(--orb-light) 0%, var(--orb-light) 44%, var(--orb-light-edge) 56%, var(--orb-light-none) 80%); }`,
     `.num { font-variant-numeric: tabular-nums; }`,
     // a press you can feel (owner, 10-01): down it squishes at once, up it springs back past where

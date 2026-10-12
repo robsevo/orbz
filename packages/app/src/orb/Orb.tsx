@@ -112,14 +112,14 @@ export function Orb({ character, size = 120, state = "idle", gesture = null, fid
   return (
     <canvas
       ref={ref}
-      className={[light && "orb-light", rank && `orb-rank orb-rank-${rank}`].filter(Boolean).join(" ") || undefined}
+      className={[light && "orb-light", light && framing === "portrait" && "orb-close", rank && `orb-rank orb-rank-${rank}`].filter(Boolean).join(" ") || undefined}
       data-rank={rank ?? undefined}
       data-light={light ? character.hue : undefined}
       role="img"
       aria-label={`${describe(character)}, ${state}`}
       onClick={poke ? () => play(Math.random() < 0.65 ? "hop" : "squish") : undefined}
       data-sound={poke ? "poke" : undefined}
-      style={{ width: size, height: (size * frame.h) / frame.w, display: "block", cursor: poke ? "pointer" : undefined, ...(light && ({ "--orb-cy": `${frame.cy * 100}%` } as CSSProperties)), ...style }}
+      style={{ width: size, height: (size * frame.h) / frame.w, display: "block", cursor: poke ? "pointer" : undefined, ...(light && ({ "--orb-cy": `${frame.cy * 100}%`, "--orb-glow": `${Math.max(3, Math.round(size * 0.12))}px` } as CSSProperties)), ...style }}
     />
   );
 }
