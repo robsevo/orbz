@@ -158,7 +158,9 @@ export function HomeRoom({ home, office, person, moods, go }: { home: Office | n
           return (
             <li key={r.orb} data-top={r.orb} data-orb={c?.hue} style={{ display: "grid", gridTemplateColumns: "2ch auto minmax(0, 1fr) auto", gap: 8, alignItems: "center" }}>
               <b className="num" style={{ ...small, fontWeight: 800, color: "var(--text-2)" }}>{i + 1}</b>
-              {c ? <Orb character={c} size={28} poke={false} every={3} fidget={false} /> : <span style={{ width: 28 }} />}
+              {/* its face close, not its whole window (owner, 10-11: "make orbz picture bigger"): the window's frame is mostly
+                  air at this size */}
+              {c ? <Orb character={c} size={40} poke={false} every={3} fidget={false} framing="portrait" /> : <span style={{ width: 40 }} />}
               <span style={{ display: "grid", gap: 3, minWidth: 0 }}>
                 <span style={{ ...small, fontWeight: 700, color: i === 0 ? "var(--accent)" : "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.name}</span>
                 <span style={{ display: "block", height: 5, borderRadius: 3, background: "var(--fill-2)", overflow: "hidden" }}>

@@ -1635,7 +1635,8 @@ function App() {
                 style={{ display: "flex", alignItems: "center", gap: 10, padding: "4px 8px", border: 0, borderRadius: 10, cursor: "pointer", textAlign: "left", background: room === "office" && view.kind === "orb" && c.name === me.name ? "var(--accent-wash)" : "transparent", color: "var(--text-2)", font: "600 14px/20px var(--font)", minWidth: 0 }}
               >
                 <span style={{ position: "relative", flex: "0 0 auto", display: "grid" }}>
-                  <Orb character={c} size={30} poke={false} every={3} fidget={false} />
+                  {/* its face close, as the home page's top of the office (owner, 10-11: "make orbz picture bigger") */}
+                  <Orb character={c} size={38} poke={false} every={3} fidget={false} framing="portrait" />
                   {moods[idOf(c.name)] && moods[idOf(c.name)] !== "idle" && (
                     <span aria-hidden data-mood-dot={moods[idOf(c.name)]} style={{ position: "absolute", right: -1, bottom: -1, width: 10, height: 10, borderRadius: "50%", boxShadow: "0 0 0 2px var(--side)", background: moods[idOf(c.name)] === "waiting" ? "var(--alert)" : moods[idOf(c.name)] === "thinking" || moods[idOf(c.name)] === "working" || moods[idOf(c.name)] === "gym" ? "var(--accent)" : "var(--text-3)" }} />
                   )}
