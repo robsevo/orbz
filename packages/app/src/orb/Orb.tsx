@@ -1,5 +1,5 @@
 // An orb on the page (PLAN 2.2-2.3): the live glass character, drawn by the shared renderer at
-// his window's proportions (112 x 146). He looks at your pointer and leans toward it, a click is a
+// his window's proportions (112 x 146). He looks at your pointer and leans toward it where he is the page (`watch`), a click is a
 // poke (a hop, or a squish), he pops in when he appears, and at rest he fidgets on his own.
 import { useEffect, useMemo, useRef, type CSSProperties } from "react";
 import { addOrb, drawOne, now } from "./loop.ts";
@@ -32,12 +32,15 @@ export type OrbProps = {
   pose?: { gesture: Gesture; into: number };
   /** The light behind him, in his colour (owner, 10-11: "like a background light"); off where a page lights him itself. */
   light?: boolean;
+  /** He looks at your pointer and leans toward it: only where he is the page (his own, and the creator's; owner, 10-11:
+   * "on the home page, they dont need to follow my mouse lol ... or in the office etc ... only when on their personal page"). */
+  watch?: boolean;
   style?: CSSProperties;
 };
 
 const seedOf = (s: string): number => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 9973, 7) / 97;
 
-export function Orb({ character, size = 120, state = "idle", gesture = null, fidget = true, poke = true, tint = 0.8, every = 1, still = false, framing = "window", pose, pop = true, light = true, style }: OrbProps) {
+export function Orb({ character, size = 120, state = "idle", gesture = null, fidget = true, poke = true, tint = 0.8, every = 1, still = false, framing = "window", pose, pop = true, light = true, watch = false, style }: OrbProps) {
   // the close-up: cut to his width, his hat kept in (spec.ts closeUp)
   const frame: Framing = useMemo(() => (framing === "portrait" ? closeUp(PORTRAIT, character) : DESIGN), [framing, character.shape, character.hat]);
   const ref = useRef<HTMLCanvasElement>(null);
@@ -107,8 +110,10 @@ export function Orb({ character, size = 120, state = "idle", gesture = null, fid
     const away = (): void => {
       pointer.current = null;
     };
-    window.addEventListener("pointermove", move);
-    document.addEventListener("pointerleave", away);
+    if (watch) {
+      window.addEventListener("pointermove", move);
+      document.addEventListener("pointerleave", away);
+    } else away();
     if (still) {
       // a thumbnail: one frame, at a moment he looks like himself (eyes open, no gesture), redrawn when he changes
       drawOne(entry, 2.6);
@@ -121,7 +126,7 @@ export function Orb({ character, size = 120, state = "idle", gesture = null, fid
       window.removeEventListener("pointermove", move);
       document.removeEventListener("pointerleave", away);
     };
-  }, [size, seed, every, still, frame, light, ...(still ? [JSON.stringify(character)] : [])]);
+  }, [size, seed, every, still, frame, light, watch, ...(still ? [JSON.stringify(character)] : [])]);
 
   // the CEO and the CFO glow (owner, 10-07: "a special glow or smt to let you know theyre the CEO or CFO"), by their post
   const rank = character.specialty === "ceo" ? "ceo" : character.specialty === "cfo" ? "cfo" : null;
