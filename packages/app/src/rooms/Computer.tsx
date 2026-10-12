@@ -543,7 +543,8 @@ function InboxView({ inbox, mark }: { inbox: Inbox; mark: string | undefined }) 
               </span>
               <span style={{ display: "grid", justifyItems: "end", gap: 2 }}>
                 <span style={{ font: "500 11px/14px var(--font)", color: "var(--text-3)", whiteSpace: "nowrap" }}>{day(r.date)}</span>
-                {fate && inbox.state !== "shown" && (
+                {/* each message's fate while it waits for you; once done, the line over it says what was done */}
+                {fate && (inbox.state === "asking" || inbox.state === "refused") && (
                   <span data-fate-chip style={{ padding: "1px 8px", borderRadius: 999, font: "700 11px/16px var(--font)", whiteSpace: "nowrap", background: r.fate!.kind === "read" ? "var(--fill)" : "var(--accent-fill)", boxShadow: r.fate!.kind === "read" ? "inset 0 0 0 1px var(--hairline)" : "inset 0 0 0 1px var(--accent)", color: "var(--text-1)", animation: `orbs-fact 320ms ease-out ${Math.min(i, 12) * 40}ms both` }}>{fate}</span>
                 )}
               </span>
