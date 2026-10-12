@@ -5,7 +5,7 @@
 // yours to set beside the trade box.
 import { useState, type CSSProperties } from "react";
 import type { DeskAccount, DeskYou, Office } from "../home/link.ts";
-import { button, chip, field, small, usd, YOU } from "./kit.ts";
+import { button, field, moneyChip, small, usd, YOU } from "./kit.ts";
 
 /** A change asked for in words, underlined, on its own line. */
 const asLink: CSSProperties = { justifySelf: "start", border: 0, background: "none", padding: 0, font: "600 12px/18px var(--font)", color: "var(--accent)", textDecoration: "underline", cursor: "pointer", whiteSpace: "nowrap" };
@@ -35,8 +35,8 @@ export function AccountSwitch({ home, orb, name, account, changed }: { home: Off
   return (
     <div data-account={orb} data-account-mode={mode} style={{ display: "grid", gap: 6, minWidth: 0 }}>
       <div role="radiogroup" aria-label={`${name}'s account`} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-        <button type="button" className="orbs-small" role="radio" aria-checked={mode === "paper"} data-account-paper disabled={busy} onClick={() => (setAsking(null), mode !== "paper" && void set("paper"))} style={chip(mode === "paper")}>Paper</button>
-        <button type="button" className="orbs-small" role="radio" aria-checked={mode === "real"} data-account-real disabled={busy} onClick={() => setAsking("real")} style={chip(mode === "real")}>Real money</button>
+        <button type="button" className="orbs-small" role="radio" aria-checked={mode === "paper"} data-account-paper disabled={busy} onClick={() => (setAsking(null), mode !== "paper" && void set("paper"))} style={moneyChip(mode === "paper")}>Paper</button>
+        <button type="button" className="orbs-small" role="radio" aria-checked={mode === "real"} data-account-real disabled={busy} onClick={() => setAsking("real")} style={moneyChip(mode === "real")}>Real money</button>
       </div>
       {asking === "real" && (
         <div style={{ display: "flex", gap: 6, minWidth: 0 }}>

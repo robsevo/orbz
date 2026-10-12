@@ -372,20 +372,19 @@ function Strand({ c, quiet = false }: { c: Character; quiet?: boolean }) {
  * two small tags. */
 function Shaped({ c, moves }: { c: Character; moves: Move[] }) {
   const top = [...moves].sort((a, b) => Number(Boolean(b.clash)) - Number(Boolean(a.clash)) || b.n - a.n).slice(0, 5);
-  const tag: CSSProperties = { display: "inline-block", padding: "1px 7px", borderRadius: 999, font: "700 11px/16px var(--font)", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" };
-  // a line a part (owner, 10-11: "re arrange text etc so its nicer"): its name, and what it gave and took at the line's
-  // end; a name too long for the line takes it whole and its tags go under it, at the end again (never a name squeezed
-  // a word a line beside them: a phone's 320 px)
+  const tag: CSSProperties = { display: "inline-block", padding: "1px 5px", borderRadius: 999, font: "700 10px/14px var(--font)", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" };
+  // Each cause and its two moves stay one compact line (owner, 10-11). The full cause remains in its title if the
+  // narrow half-card has to elide it; on a phone the profile stacks and gives it the whole width.
   return (
     <div data-shaped style={{ display: "grid", gap: 8, alignContent: "start" }}>
       <Head>What shaped {c.name || "your orb"}</Head>
       {top.map((m, i) => (
-        <div key={i} data-move={m.clash ? "clash" : "choice"} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", columnGap: 8, rowGap: 4 }}>
-          <span style={{ flex: "1 1 auto", minWidth: 0, font: "400 13px/18px var(--font)", color: "var(--text-2)", textWrap: "balance" }}>
+        <div key={i} data-move={m.clash ? "clash" : "choice"} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", alignItems: "center", gap: 5, minWidth: 0 }}>
+          <span title={cap(m.why)} style={{ minWidth: 0, font: "400 12px/18px var(--font)", color: "var(--text-2)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             {m.clash && <span style={{ ...tag, marginRight: 6, color: "var(--ground)", background: "var(--accent)" }}>Clash</span>}
-            {cap(m.why)}
+            {cap(m.why.replace(/^(a|an|the) /i, ""))}
           </span>
-          <span style={{ display: "flex", gap: 6, marginLeft: "auto" }}>
+          <span style={{ display: "flex", gap: 3, minWidth: 0 }}>
             {/* the text in the body's colour on the orb's tint and ring: the hue itself as text fails contrast on light orbs (honey, 10-05) */}
             <span style={{ ...tag, color: "var(--text-1)", background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1px var(--accent)" }}>+{m.n} {m.to}</span>
             <span style={{ ...tag, color: "var(--text-2)", background: "var(--fill)" }}>−{m.n} {m.from}</span>

@@ -67,6 +67,36 @@ test("at phone size: watch him live, take over, press his screen, type on his pa
   await page.waitForFunction((el) => (el as HTMLImageElement).naturalWidth > 0, await live.elementHandle(), { timeout: 20_000 });
   assert.equal(await computer.getByText("live", { exact: true }).count(), 1, "it says it is live");
 
+  // a picture in picture (owner, 10-11: "resizeable pip in chat or sessions when taking control or just viewing orbs
+  // computer, full screen option"): it floats inside the phone, sized from its corner, moved by its top, never past an edge
+  await computer.locator("[data-computer-pip]").click();
+  assert.equal(await computer.getAttribute("data-floating"), "true", "his live computer floats over the chat");
+  const boxOf = async () => (await computer.boundingBox())!;
+  const b0 = await boxOf();
+  assert.ok(b0.x >= 0 && b0.y >= 0 && b0.x + b0.width <= 390.5 && b0.y + b0.height <= 844.5, `inside the phone (${JSON.stringify(b0)})`);
+  const pull = async (at: { x: number; y: number }, dx: number, dy: number): Promise<void> => {
+    await page.mouse.move(at.x, at.y);
+    await page.mouse.down();
+    await page.mouse.move(at.x + dx, at.y + dy, { steps: 5 });
+    await page.mouse.up();
+  };
+  const grip = (await computer.locator("[data-computer-grip]").boundingBox())!;
+  await pull({ x: grip.x + grip.width / 2, y: grip.y + grip.height / 2 }, -40, -120);
+  const b1 = await boxOf();
+  assert.ok(Math.abs(b1.height - (b0.height - 120)) <= 2 && b1.width < b0.width && b1.width >= 299.5, `smaller from its corner, never under its least (${JSON.stringify([b0, b1])})`);
+  const top = (await computer.locator("[data-computer-head]").boundingBox())!;
+  await pull({ x: top.x + 70, y: top.y + top.height / 2 }, -300, -200);
+  const b2 = await boxOf();
+  assert.ok(Math.abs(b2.y - (b1.y - 200)) <= 2 && Math.abs(b2.x) <= 0.5, `moved by its top, and stopped at the phone's edge (${JSON.stringify([b1, b2])})`);
+  // full screen where the browser has none for a part of a page (an iPhone): the whole window; Escape leaves it
+  await page.evaluate(() => Object.defineProperty(Element.prototype, "requestFullscreen", { value: undefined, configurable: true }));
+  await computer.locator("[data-computer-fullscreen]").click();
+  await page.locator('[data-computer="hazel"][data-fullscreen="true"]').waitFor();
+  const whole = await boxOf();
+  assert.ok(Math.abs(whole.x) < 1 && Math.abs(whole.y) < 1 && Math.abs(whole.width - 390) < 1 && Math.abs(whole.height - 844) < 1, `the whole window (${JSON.stringify(whole)})`);
+  await page.keyboard.press("Escape");
+  await page.locator('[data-computer="hazel"][data-fullscreen="false"][data-floating="true"]').waitFor();
+
   await computer.getByRole("button", { name: "Take over" }).click();
   await computer.getByText("You have Hazel's computer: a press on the screen clicks there, and Hazel waits until you hand it back.").waitFor();
   await shot(page, "taken-over");
@@ -93,7 +123,8 @@ test("at phone size: watch him live, take over, press his screen, type on his pa
   await computer.getByRole("tab", { name: "Terminal" }).click();
   await computer.getByLabel("A command for Hazel's terminal").fill("echo hi from Robin");
   await computer.getByRole("button", { name: "Run", exact: true }).click();
-  await computer.locator("[data-yours]", { hasText: "hi from Robin" }).nth(0).waitFor({ timeout: 20_000 });
+  // its output, not the command's own line (which says the same words)
+  await computer.locator("[data-yours] pre").filter({ hasText: /^hi from Robin/ }).first().waitFor({ timeout: 20_000 });
   assert.match(await computer.locator("[data-yours] pre").last().innerText(), /^hi from Robin/, "his terminal ran your command");
   assert.deepEqual(await measure(page), [], "nothing spills at phone size, in your hands");
   await shot(page, "terminal");
@@ -102,6 +133,8 @@ test("at phone size: watch him live, take over, press his screen, type on his pa
   await computer.getByRole("button", { name: "Hand back" }).click();
   await computer.getByRole("button", { name: "Take over" }).waitFor();
   assert.equal(h.computers.takenOver("hazel"), false, "handed back");
+  await computer.locator("[data-computer-pip]").click();
+  assert.equal(await computer.getAttribute("data-floating"), "false", "the computer returns to its place in chat");
   await computer.getByRole("tab", { name: "Terminal" }).click(); // on its own tab, where the line would be
   await computer.getByRole("tab", { name: "Terminal", selected: true }).waitFor();
   assert.equal(await computer.getByLabel("A command for Hazel's terminal").count(), 0, "and the terminal is his again");

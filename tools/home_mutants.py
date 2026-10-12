@@ -1226,6 +1226,9 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ('reset keeps his sign-ins', 'src/computer/browser.ts', [
         ('    rmSync(profileOf(this.#o.dataDir, orb), { recursive: true, force: true });\n', ''),
     ], ['computer-profile.test.ts']),
+    ('his browser asks sites for light mode', 'src/computer/browser.ts', [
+        ('        colorScheme: "dark", // his browser asks every site for its dark face (owner, 10-11)', '        colorScheme: "light", // planted'),
+    ], ['computer-profile.test.ts']),
     ('his browser goes round the proxy', 'src/computer/browser.ts', [
         ('        proxy: { server: proxy.server, bypass: "<-loopback>" },\n', ''),
     ], ['computer.test.ts']),
@@ -2474,6 +2477,12 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("orbs stay only seconds anywhere", "src/floor/plan.ts", [
         ("Math.round((20 + r() * 25) * (0.8 + traits.Calm / 30) * 1000)", "Math.round((7 + r() * 11) * (0.8 + traits.Calm / 30) * 1000)"),
     ], ["floor.test.ts"]),
+    ("office orbs are fully opaque again", "src/floor/motion.ts", [
+        ("export const OFFICE_ORB_OPACITY = 0.86;", "export const OFFICE_ORB_OPACITY = 1;"),
+    ], ["floor.test.ts"]),
+    ("walking orbs barely wobble", "src/floor/motion.ts", [
+        ("  const turn = Math.sin(phase) * 7;", "  const turn = Math.sin(phase);"),
+    ], ["floor.test.ts"]),
     ("a moment leaves an orb's mood alone", "src/orb/mood.ts", [
         ('    if (e.type === "social.moment" && (e.data?.a === this.#orb || e.data?.b === this.#orb)) {', '    if (false && e.type === "social.moment" && (e.data?.a === this.#orb || e.data?.b === this.#orb)) {'),
     ], ["mood.test.ts"]),
@@ -2598,6 +2607,9 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     # The personal page opens like Career: the orb and its identity share one hero (owner, 10-10).
     ("the profile hero stacks like a phone on a desk", "src/orbs.tsx", [
         ('flexDirection: phone ? "column" : "row", gap: phone ? "var(--s3)" : "var(--s7)"', 'flexDirection: "column", gap: phone ? "var(--s3)" : "var(--s7)"'),
+    ], ["profile-layout.test.ts"]),
+    ("what shaped it wraps onto two lines", "src/orbs.tsx", [
+        ('gridTemplateColumns: "minmax(0, 1fr) auto", alignItems: "center", gap: 5', 'gridTemplateColumns: "1fr", alignItems: "center", gap: 5'),
     ], ["profile-layout.test.ts"]),
     ("the career page's orb sits at the left on a phone", "src/rooms/Career.tsx", [
         ('flexDirection: phone ? "column" : "row"', 'flexDirection: "row"'),
@@ -3458,12 +3470,12 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("the names in Lately not underlined", "src/rooms/Home.tsx", [
         ('fontWeight: 800, textDecoration: "underline", textDecorationThickness: 1.5, textUnderlineOffset: 3 }}>{w.name}</b>', "fontWeight: 800 }}>{w.name}</b>"),
     ], ["home-view.test.ts"]),
-    # a wallet's coin pressed opens on the screen; the swap form takes any coin by its address (owner, 10-11)
+    # a wallet's coin pressed opens on the screen; the wallet dashboard has no duplicate trade box (owner, 10-11)
     ("a wallet's coin opens nothing", "src/desk/Worth.tsx", [
         ("onClick={() => openCoin(c.key!)}", "onClick={() => undefined}"),
     ], ["desk-view.test.ts"]),
-    ("the swap form's any coin is ignored", "src/desk/Trade.tsx", [
-        ("  const to = buy === ANY ? buyAt.trim() : buy;", "  const to = buy;"),
+    ("the duplicate wallet trade box comes back", "src/desk/Trade.tsx", [
+        ('        <span style={head}>Your wallets</span>', '        <span style={head}>Your wallets</span><span>A trade from your wallet</span>'),
     ], ["desk-view.test.ts"]),
     # Roll everything waits for the orb (owner, 10-11: "wait for the orb to show before changing menu color and everything else")
     ("the menu's colour changes before the rolled orb is shown", "src/orbs.tsx", [
@@ -3496,9 +3508,35 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("the Orbs tab's money switch always shows paper", "src/desk/Stats.tsx", [
         ('data-stats-money={m} onClick={() => set(m)}', 'data-stats-money={m} onClick={() => set("paper")}'),
     ], ["desk-view.test.ts"]),
+    ("the selected money button has no selected colour", "src/desk/kit.ts", [
+        ('...(on ? { color: "var(--ground)", background: "var(--accent)", boxShadow: "inset 0 0 0 1px var(--accent), 0 2px 8px var(--shadow)" } : {})', '...(on ? {} : {})'),
+    ], ["desk-view.test.ts"]),
+    ("a dollar preset is too wide for its button", "src/desk/TokenPage.tsx", [
+        ("      <Balanced min={64} gap={6}>", "      <Balanced min={20} gap={6}>"),
+    ], ["desk-view.test.ts"]),
+    ("a coin's amount is too wide for its button", "src/desk/TokenPage.tsx", [
+        ("        <Balanced min={88} gap={6}>", "        <Balanced min={20} gap={6}>"),
+    ], ["desk-view.test.ts"]),
+    # your own swap on Base from its coin's page: the wallet allows exactly the amount first (the wallet's own trade box gone)
+    ("a Base swap asks for no allowance first", "src/desk/wallet.ts", [
+        ("  if (built.approve) {", "  if (false) {"),
+    ], ["desk-view.test.ts"]),
     ("the chat's orb as small as it was", "src/rooms/Chat.tsx", [
         ("          <Orb character={orb} size={88} state={face} gesture={cue} poke={false} />", "          <Orb character={orb} size={52} state={face} gesture={cue} poke={false} />"),
     ], ["phones.test.ts"]),
+    # the computer as a picture in picture, and full screen (owner, 10-11)
+    ("the picture in picture's corner sizes nothing", "src/rooms/pip.ts", [
+        (": { ...from, w: Math.min(from.w + dx, vw - from.x), h: Math.min(from.h + dy, vh - from.y) }", ": from"),
+    ], ["live-view.test.ts"]),
+    ("the picture in picture goes past the window's edge", "src/rooms/pip.ts", [
+        ("  return { w, h, x: Math.min(Math.max(b.x, 0), vw - w), y: Math.min(Math.max(b.y, 0), vh - h) };", "  return { w, h, x: b.x, y: b.y };"),
+    ], ["live-view.test.ts"]),
+    ("full screen does nothing where the browser has none for a page's part", "src/rooms/Computer.tsx", [
+        ("    else setFull(true);\n", "    else void 0;\n"),
+    ], ["live-view.test.ts"]),
+    ("the browser's own full screen is never asked for", "src/rooms/Computer.tsx", [
+        ("void el.requestFullscreen().catch(() => setFull(true));", "void Promise.resolve();"),
+    ], ["browser-view.test.ts"]),
     # an orb's account, yours to set (PLAN 5.34)
     ("the account switch sets nothing", "src/desk/Account.tsx", [
         ("      await home.setDeskAccount(orb, m, b, p);\n", ""),

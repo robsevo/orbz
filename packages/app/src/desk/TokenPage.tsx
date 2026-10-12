@@ -14,7 +14,7 @@ import { ChartMenu } from "./ChartMenu.tsx";
 import { orbLayer, strategyLayer, studyLayer, whoTradedHere, type Mode, type Who } from "./layers.ts";
 import { Balanced, OneLine } from "../ui/Balanced.tsx";
 import { Pick } from "../ui/Pick.tsx";
-import { button, card, chip, compact, field, head, MAJOR_ROUTES, picture, shortAddress, small, strong, TIMEFRAMES, usd, well } from "./kit.ts";
+import { amountChip, button, card, chip, compact, field, head, MAJOR_ROUTES, moneyChip, picture, shortAddress, small, strong, TIMEFRAMES, usd, well } from "./kit.ts";
 import type { WalletHere } from "./useWallet.ts";
 import { AccountSwitch, YourPaper } from "./Account.tsx";
 
@@ -225,8 +225,8 @@ function TradeBox({ home, market, chain, token, symbol, price, chains, wallet, o
   return (
     <section data-token-trade data-trade={now} aria-label="Trade it" style={card}>
       <div role="radiogroup" aria-label="Paper or real money" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-        <button type="button" className="orbs-small" role="radio" aria-checked={now === "paper"} data-trade-mode="paper" onClick={() => choose("paper")} style={chip(now === "paper")}>Paper</button>
-        <button type="button" className="orbs-small" role="radio" aria-checked={now === "real"} data-trade-mode="real" disabled={!can} onClick={() => choose("real")} style={{ ...chip(now === "real"), opacity: can ? 1 : 0.5 }}>Real money</button>
+        <button type="button" className="orbs-small" role="radio" aria-checked={now === "paper"} data-trade-mode="paper" onClick={() => choose("paper")} style={moneyChip(now === "paper")}>Paper</button>
+        <button type="button" className="orbs-small" role="radio" aria-checked={now === "real"} data-trade-mode="real" disabled={!can} onClick={() => choose("real")} style={{ ...moneyChip(now === "real"), opacity: can ? 1 : 0.5 }}>Real money</button>
       </div>
       {why && <span data-no-route style={{ ...small, fontSize: 12 }}>{why}</span>}
       {now === "paper" ? (
@@ -336,10 +336,11 @@ function PaperBox({ home, market, desk, token, symbol, price, you, reload }: { h
         <input data-paper-amount inputMode="decimal" autoComplete="off" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))} placeholder="$0" size={1}
           style={{ ...field, font: "800 20px/28px var(--font)" }} />
       </label>
-      <Balanced min={60} gap={6}>
+      {/* columns as wide as "$500" needs (owner, 10-11: "Make USD amounts fit into button containers") */}
+      <Balanced min={64} gap={6}>
         {[...PAPER_PRESETS, ...(side === "sell" && held && price ? ["all"] : [])].map((x) => {
           const v = x === "all" ? String(Math.ceil(held!.qty * price! * 100) / 100) : x;
-          return <button key={x} type="button" className="orbs-small" data-paper-preset={x} onClick={() => setAmount(v)} style={chip(amount === v)}>{x === "all" ? "All" : `$${x}`}</button>;
+          return <button key={x} type="button" className="orbs-small" data-paper-preset={x} onClick={() => setAmount(v)} style={amountChip(amount === v)}>{x === "all" ? "All" : `$${x}`}</button>;
         })}
       </Balanced>
       <span data-paper-quote className="num" style={{ ...small, minHeight: 18, ...(over || none ? { color: "var(--alert)" } : {}) }}>{preview}</span>
@@ -416,9 +417,9 @@ function SwapBox({ home, desk, token, symbol, wallet, openWallet }: { home: Offi
           style={{ ...field, font: "800 20px/28px var(--font)" }} />
       </label>
       {presets.length > 0 && (
-        <Balanced min={60} gap={6}>
+        <Balanced min={88} gap={6}>
           {presets.map((x) => (
-            <button key={x} type="button" className="orbs-small" data-preset={x} onClick={() => setAmount(x)} style={chip(amount === x)}>{`${x} ${pay}`}</button>
+            <button key={x} type="button" className="orbs-small" data-preset={x} onClick={() => setAmount(x)} style={amountChip(amount === x)}>{`${x} ${pay}`}</button>
           ))}
         </Balanced>
       )}

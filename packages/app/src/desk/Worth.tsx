@@ -114,8 +114,9 @@ export function Worth({ home, wallets, openCoin, connect }: { home: Office; wall
                 <b style={{ font: "800 14px/19px var(--font)", color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.symbol}</b>
                 <span className="num" style={{ ...small, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{`${c.amount.toLocaleString("en-US", { maximumFractionDigits: 6 })} · ${c.chain}${share !== null ? ` · ${share.toFixed(1)}%` : ""}`}</span>
               </span>
+              {/* its value whole, never cut (a million and more said short); the coin's name gives way first */}
               <span className="num" style={{ display: "grid", justifyItems: "end", flex: "0 0 auto" }}>
-                <span style={{ font: "800 14px/19px var(--font)", color: "var(--text-1)" }}>{c.usd === null ? "no price" : `$${priceText(c.usd)}`}</span>
+                <span style={{ font: "800 14px/19px var(--font)", color: "var(--text-1)", whiteSpace: "nowrap" }}>{c.usd === null ? "no price" : c.usd >= 1e6 ? compact(c.usd) : `$${priceText(c.usd)}`}</span>
                 <span style={{ font: "700 12px/16px var(--font)", color: c.change24h === null ? "var(--text-3)" : c.change24h >= 0 ? "var(--ok)" : "var(--off)" }}>{c.change24h === null ? "–" : changeText(c.change24h)}</span>
               </span>
             </>

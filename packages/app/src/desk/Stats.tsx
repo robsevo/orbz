@@ -6,7 +6,7 @@
 import type { CSSProperties } from "react";
 import type { DeskState, DeskStats } from "../home/link.ts";
 import { Balanced } from "../ui/Balanced.tsx";
-import { chip, compact, head, marketName, small, usd, well } from "./kit.ts";
+import { compact, head, marketName, moneyChip, small, usd, well } from "./kit.ts";
 
 export type Money = "paper" | "real";
 const KEY = "orbs.desk.money";
@@ -42,7 +42,7 @@ export function MoneySwitch({ money, set }: { money: Money; set: (m: Money) => v
   return (
     <div role="radiogroup" aria-label="Paper or real money" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
       {(["paper", "real"] as const).map((m) => (
-        <button key={m} type="button" className="orbs-small" role="radio" aria-checked={money === m} data-stats-money={m} onClick={() => set(m)} style={chip(money === m)}>
+        <button key={m} type="button" className="orbs-small" role="radio" aria-checked={money === m} data-stats-money={m} onClick={() => set(m)} style={moneyChip(money === m)}>
           {m === "paper" ? "Paper" : "Real money"}
         </button>
       ))}

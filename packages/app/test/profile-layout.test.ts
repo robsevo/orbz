@@ -97,6 +97,12 @@ test("the profile uses one Career-like hero, then compact controls and DNA", { s
       // orb page buttons"): a pill's corners were half its height
       const chat = await page.locator("[data-chat-with]").evaluate((el) => ({ r: parseFloat(getComputedStyle(el).borderTopLeftRadius), h: el.getBoundingClientRect().height }));
       assert.ok(chat.r <= 10 && chat.h <= 32, `Chat small and square (${JSON.stringify(chat)})`);
+      const moves = await page.locator("[data-shaped] [data-move]").evaluateAll((rows) => rows.map((row) => {
+        const [reason, tags] = [...row.children] as HTMLElement[];
+        const r = row.getBoundingClientRect(), a = reason!.getBoundingClientRect(), b = tags!.getBoundingClientRect();
+        return { height: r.height, reasonTop: a.top, tagsTop: b.top, reasonRight: a.right, tagsLeft: b.left, scroll: row.scrollWidth, width: row.clientWidth };
+      }));
+      assert.ok(moves.length > 0 && moves.every((m) => m.height <= 18 && Math.abs(m.reasonTop - m.tagsTop) <= 2 && m.reasonRight <= m.tagsLeft + 1 && m.scroll <= m.width + 1), `each thing that shaped it is one fitted line (${JSON.stringify(moves)})`);
       assert.deepEqual(await measure(page), [], `the profile fits at ${width} px`);
     } finally {
       await ctx.close();

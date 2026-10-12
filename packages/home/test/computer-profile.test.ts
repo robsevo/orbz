@@ -64,6 +64,8 @@ test("his browser is his own: your Chrome profile and your home are untouched; h
   const { home, dataDir } = await agentHome(t, [], { computer: { executable: EXE } });
   await home.computers.open("juniper", site.url("shop.test", "/cookie"));
   assert.match((await home.computers.read("juniper")).text, /cookie: none/);
+  await home.computers.open("juniper", site.url("shop.test", "/theme"));
+  assert.match((await home.computers.read("juniper")).text, /colour scheme: dark/, "his browser asks sites for dark mode");
   if (process.platform === "linux") {
     const envs = browserEnvs(profileOf(dataDir, "juniper"));
     assert.ok(envs.length > 0, "his browser is running, on his profile");

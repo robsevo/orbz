@@ -21,6 +21,7 @@ import { LessonView } from "./Lesson.tsx";
 import { play } from "../ui/sound.ts";
 import { OneLine, SideScroll } from "../ui/Balanced.tsx";
 import { ACT_WORDS, actsOf, chartOf, docBlocks, filesOf, icsEvents, kindOf, parseCsv, type Act, type Kind } from "./work.ts";
+import { dragged, pipStart, type Box } from "./pip.ts";
 
 type Tab = "Work" | "Browser" | "Files" | "Terminal" | "Activity" | "Lesson";
 const TABS: Tab[] = ["Work", "Browser", "Files", "Terminal", "Activity"];
@@ -31,6 +32,14 @@ const hhmm = (t: number): string => new Date(t).toTimeString().slice(0, 5);
 
 export function Computer(o: { home: Office; orb: Character; messages: Message[]; busy?: "thinking" | "speaking"; big?: boolean; replies?: Replies; session?: number; open?: "Lesson" }) {
   const id = idOf(o.orb.name);
+  const shell = useRef<HTMLElement>(null);
+  // floating over the page as a picture in picture, moved by its header and sized from its corner (owner, 10-11), or
+  // full screen: the browser's own where it has one for a part of a page, else the whole window (an iPhone)
+  const [pip, setPip] = useState<Box | null>(null);
+  const floating = pip !== null;
+  const drag = useRef<{ kind: "move" | "size"; x: number; y: number; from: Box } | null>(null);
+  const [full, setFull] = useState(false);
+  const own = useRef(false); // the browser's full screen holds it (not the window's)
   const acts = actsOf(o.messages, id);
   const latest = acts[acts.length - 1];
   const written = filesOf(acts.filter((a) => a.tool === "write_file"));
@@ -55,6 +64,47 @@ export function Computer(o: { home: Office; orb: Character; messages: Message[];
   const [dir, setDir] = useState("");
   const [entries, setEntries] = useState<Entry[] | null>(null);
   const [said, setSaid] = useState<string | null>(null);
+  useEffect(() => {
+    const changed = (): void => {
+      own.current = shell.current !== null && document.fullscreenElement === shell.current;
+      setFull(own.current);
+    };
+    document.addEventListener("fullscreenchange", changed);
+    return () => document.removeEventListener("fullscreenchange", changed);
+  }, []);
+  // the window's full screen: Escape leaves it, as it leaves the browser's
+  useEffect(() => {
+    if (!full || own.current) return;
+    const key = (e: KeyboardEvent): void => void (e.key === "Escape" && setFull(false));
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  }, [full]);
+  const fullScreen = (): void => {
+    if (document.fullscreenElement) return void document.exitFullscreen().catch(() => undefined);
+    if (full) return setFull(false);
+    const el = shell.current;
+    if (el && typeof el.requestFullscreen === "function" && document.fullscreenEnabled) void el.requestFullscreen().catch(() => setFull(true));
+    else setFull(true);
+  };
+  // floating, it stays inside the window as the window changes
+  useEffect(() => {
+    if (!floating) return;
+    const fit = (): void => setPip((b) => (b ? dragged("move", b, 0, 0, window.innerWidth, window.innerHeight) : b));
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, [floating]);
+  const grab = (kind: "move" | "size") => (e: React.PointerEvent<HTMLElement>): void => {
+    if (!pip || full || (kind === "move" && (e.target as HTMLElement).closest("button"))) return; // its buttons stay buttons
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    drag.current = { kind, x: e.clientX, y: e.clientY, from: pip };
+  };
+  const moving = (e: React.PointerEvent<HTMLElement>): void => {
+    const d = drag.current;
+    if (d) setPip(dragged(d.kind, d.from, e.clientX - d.x, e.clientY - d.y, window.innerWidth, window.innerHeight));
+  };
+  const letGo = (): void => void (drag.current = null);
+  const hold = (kind: "move" | "size") => ({ onPointerDown: grab(kind), onPointerMove: moving, onPointerUp: letGo, onPointerCancel: letGo });
   // his browser's own news (a still, a sleep, your hand on it): its state is looked at again; and
   // what his commands print, as they print it (PLAN 4.6)
   const [screenNews, setScreenNews] = useState(0);
@@ -123,14 +173,22 @@ export function Computer(o: { home: Office; orb: Character; messages: Message[];
   }, [o.busy]);
 
   const doing = latest && latest.result === null ? `${ACT_WORDS[latest.tool] ?? latest.tool} ${latest.on}: waiting for your OK` : o.busy === "speaking" ? "Writing to you" : o.busy ? "Working" : acts.length ? "Done for now" : "Waiting for work";
+  const windowed: CSSProperties = full
+    ? { position: "fixed", inset: 0, width: "100%", height: "100%", maxWidth: "none", maxHeight: "none", borderRadius: 0, zIndex: 1000 }
+    : pip
+      ? { position: "fixed", left: pip.x, top: pip.y, width: pip.w, height: pip.h, zIndex: 1000 }
+      : {};
+  const windowButton: CSSProperties = { display: "grid", placeItems: "center", flex: "0 0 28px", width: 28, height: 28, padding: 0, border: 0, borderRadius: 8, background: "var(--fill)", boxShadow: "inset 0 0 0 1px var(--hairline)", color: "var(--text-1)", font: "800 14px/1 var(--font)", cursor: "pointer" };
   return (
-    <section data-orb={o.orb.hue} data-computer={id} aria-label={`${o.orb.name}'s computer`} style={{ position: "relative", display: "grid", gridTemplateRows: "auto auto 1fr", minWidth: 0, borderRadius: 18, background: "var(--card)", boxShadow: "inset 0 0 0 1.5px var(--accent), 0 8px 24px var(--shadow)", overflow: "hidden" }}>
-      <header style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "var(--accent-wash)", minWidth: 0 }}>
+    <section ref={shell} data-orb={o.orb.hue} data-computer={id} data-floating={floating ? "true" : "false"} data-fullscreen={full ? "true" : "false"} aria-label={`${o.orb.name}'s computer`} style={{ position: "relative", display: "grid", gridTemplateRows: "auto auto minmax(0, 1fr)", minWidth: 0, borderRadius: 18, background: "var(--card)", boxShadow: "inset 0 0 0 1.5px var(--accent), 0 8px 24px var(--shadow)", overflow: "hidden", ...windowed }}>
+      <header {...hold("move")} data-computer-head style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", background: "var(--accent-wash)", minWidth: 0, ...(floating && !full && { cursor: "move", touchAction: "none", userSelect: "none" }) }}>
         <Orb character={o.orb} size={48} state={o.busy ?? "idle"} poke={false} />
-        <div style={{ display: "grid", minWidth: 0 }}>
-          <span style={{ font: "800 14px/18px var(--font)", color: "var(--text-1)" }}>{o.orb.name}'s computer</span>
+        <div style={{ display: "grid", minWidth: 0, flex: "1 1 auto" }}>
+          <span style={{ font: "800 14px/18px var(--font)", color: "var(--text-1)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{o.orb.name}'s computer</span>
           <span data-doing style={{ font: "500 12px/16px var(--font)", color: "var(--text-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{doing}</span>
         </div>
+        <button type="button" data-computer-pip aria-pressed={floating} aria-label={floating ? `Return ${o.orb.name}'s computer to the page` : `Float ${o.orb.name}'s computer: move it by its top, size it from its corner`} title={floating ? "Back in the page" : "Picture in picture"} onClick={() => setPip((b) => (b ? null : pipStart(window.innerWidth, window.innerHeight)))} style={{ ...windowButton, background: floating ? "var(--accent)" : "var(--fill)", color: floating ? "var(--ground)" : "var(--text-1)" }}><WindowIcon kind="pip" /></button>
+        <button type="button" data-computer-fullscreen aria-pressed={full} aria-label={full ? `Leave full screen for ${o.orb.name}'s computer` : `${o.orb.name}'s computer full screen`} title={full ? "Leave full screen" : "Full screen"} onClick={fullScreen} style={windowButton}><WindowIcon kind={full ? "leave" : "full"} /></button>
       </header>
       {/* five tabs: on a phone the row scrolls with a fade, never wider than his panel */}
       <div role="tablist" aria-label={`${o.orb.name}'s computer`} style={{ padding: "6px 8px 0", boxShadow: "inset 0 -1px 0 var(--sep)", minWidth: 0 }}>
@@ -142,7 +200,7 @@ export function Computer(o: { home: Office; orb: Character; messages: Message[];
           ))}
         </OneLine>
       </div>
-      <div ref={panel} style={{ position: "relative", minWidth: 0, minHeight: o.big ? 320 : 200, maxHeight: o.big ? 560 : 360, overflowY: "auto", padding: 12 }}>
+      <div ref={panel} style={{ position: "relative", minWidth: 0, minHeight: floating || full ? 0 : o.big ? 320 : 200, maxHeight: floating || full ? "none" : o.big ? 560 : 360, overflowY: "auto", padding: 12 }}>
         {tab === "Work" && <Work open={open} file={file} acts={acts} touched={lastOnOpen} />}
         {tab === "Browser" && <Browser home={o.home} orb={o.orb} state={cstate} setState={setCstate} />}
         {tab === "Files" && (
@@ -169,8 +227,22 @@ export function Computer(o: { home: Office; orb: Character; messages: Message[];
           </div>
         )}
       </div>
+      {/* floating, its corner sizes it */}
+      {floating && !full && (
+        <span {...hold("size")} data-computer-grip role="separator" aria-label={`Size ${o.orb.name}'s computer`} title="Drag to size it"
+          style={{ position: "absolute", right: 0, bottom: 0, width: 26, height: 26, display: "grid", placeItems: "center", cursor: "nwse-resize", touchAction: "none", color: "var(--text-3)", zIndex: 2 }}>
+          <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden><path d="M11 3 3 11M11 7 7 11" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>
+        </span>
+      )}
     </section>
   );
+}
+
+/** The window buttons' marks, drawn (a font may not have them): a small window in a large one, four corners out, or out
+ * of them. */
+function WindowIcon({ kind }: { kind: "pip" | "full" | "leave" }) {
+  const d = kind === "pip" ? "M2 3.5h12v9H2zM8 8h4.5v3.2H8z" : kind === "full" ? "M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4" : "M6 2v4H2M10 2v4h4M14 10h-4v4M2 10h4v4";
+  return <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden><path d={d} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" /></svg>;
 }
 
 function Work({ open, file, acts, touched }: { open: string | null; file: WorkFile | null; acts: Act[]; touched: Act | undefined }) {

@@ -22,6 +22,7 @@ import type { Route } from "../ui/nav.ts";
 import { CameraFeed } from "./camera.tsx";
 import { COIN_DESK, Props } from "./Props.tsx";
 import { DeskPiece, FLOOR_CSS, MeetingTable, PingPong, Room, RoomPieces, SideTables, skyAt, type Screen } from "./art.tsx";
+import { OFFICE_ORB_OPACITY, walkWobble } from "./motion.ts";
 import { busiest, CLASS_DESKS, CORRIDOR, MARKS, PIECES, VIEWS, viewRect, WAITING, zoneOf, type ViewId } from "./plan.ts";
 import { DESKS, H, POIS, ROOMS, SEATS, W, WALL, ZONES, dice, dwell, meetPlan, meetPoi, meetSpot, momentPlan, next, route, seating, sentBy, speed, type Desk, type Plan, type PoiId, type Spot, type Traits } from "./plan.ts";
 
@@ -411,7 +412,7 @@ export function Floor({ home, office, moods, person, go, kept = [], keep, holdin
           tagEl.style.transform = `translate(${(left - s.x * k).toFixed(1)}px, -100%)`;
         }
         const bob = bobs.current.get(s.c.name);
-        if (bob) bob.style.transform = s.walking ? `translateY(${(-Math.abs(Math.sin(s.phase)) * 5 * k).toFixed(1)}px) rotate(${(Math.sin(s.phase) * 3).toFixed(1)}deg)` : "";
+        if (bob) bob.style.transform = s.walking ? walkWobble(s.phase, k) : "";
       }
       raf = requestAnimationFrame(tick);
     };
@@ -595,7 +596,7 @@ export function Floor({ home, office, moods, person, go, kept = [], keep, holdin
                       title={`${c.name} · ${words}`}
                       style={{ position: "absolute", left: -size / 2, top, width: size, height: size * 1.25, padding: 0, border: 0, background: "transparent", cursor: "pointer" }}
                     >
-                      <Orb character={c} size={size} state={talking ? "speaking" : WORN[m].state} gesture={gest[c.name] ?? null} poke={false} every={2} />
+                      <Orb character={c} size={size} state={talking ? "speaking" : WORN[m].state} gesture={gest[c.name] ?? null} poke={false} every={2} style={{ opacity: OFFICE_ORB_OPACITY }} />
                     </button>
                     {/* the name, and what it is doing as a mark */}
                     <span ref={(el) => void (el ? tags.current.set(c.name, el) : tags.current.delete(c.name))} data-orb={c.hue} aria-hidden style={{ position: "absolute", left: 0, top: above - 4, transform: "translate(-50%, -100%)", display: "flex", alignItems: "center", gap: 4, pointerEvents: "none", whiteSpace: "nowrap" }}>

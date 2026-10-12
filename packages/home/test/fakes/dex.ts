@@ -40,7 +40,10 @@ export function standInDexFetch(o: { price?: () => string; fail?: () => boolean;
       return new Response(new Uint8Array(url.pathname.includes("big") ? 500_000 : 8).fill(137), { headers: { "content-type": "image/png" } });
     }
     const fart = screener({ pair: POOL, base: [MINT, "Fartcoin", "Fartcoin"], price: o.price?.() ?? "0.16", liq: 8_000_000 });
+    const onBase = screener({ chain: "base", dex: "uniswap", pair: "0x2222222222222222222222222222222222222222", base: [EVM_TOKEN, "Test", "TST"], price: "2", liq: 50_000 });
     if (url.pathname === "/latest/dex/search") {
+      // a coin's address: its own pairs, as the real search gives them
+      if (url.searchParams.get("q")?.toLowerCase() === EVM_TOKEN) return json({ pairs: [onBase] });
       return json({ pairs: [
         screener({ pair: THIN, dex: "pumpfun", base: [MINT, "Fartcoin", "Fartcoin"], price: "0.15", liq: 5_000 }),
         fart,
@@ -54,7 +57,7 @@ export function standInDexFetch(o: { price?: () => string; fail?: () => boolean;
       const out: unknown[] = [];
       for (const a of decodeURIComponent(tokens[2]!).split(",")) {
         if (a === MINT) out.push(screener({ pair: THIN, dex: "pumpfun", base: [MINT, "Fartcoin", "Fartcoin"], price: "0.15", liq: 5_000, created: START - 3600_000 }), fart);
-        if (a === EVM_TOKEN) out.push(screener({ chain: "base", dex: "uniswap", pair: "0x2222222222222222222222222222222222222222", base: [EVM_TOKEN, "Test", "TST"], price: "2", liq: 50_000 }));
+        if (a === EVM_TOKEN) out.push(onBase);
       }
       return json(out);
     }

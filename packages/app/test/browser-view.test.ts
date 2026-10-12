@@ -90,6 +90,15 @@ test("his Browser tab: the still of his screen, its address, his face where he c
   assert.ok(cx > b.x && cx < b.x + b.width && cy > b.y && cy < b.y + b.height, `his face is on his screen, where he clicked (${Math.round(cx)},${Math.round(cy)} in ${JSON.stringify(b)})`);
   await shot(page, "after-a-click");
 
+  if (await page.evaluate(() => document.fullscreenEnabled)) {
+    await computer.locator("[data-computer-fullscreen]").click();
+    await page.locator('[data-computer="hazel"][data-fullscreen="true"]').waitFor();
+    const full = await computer.boundingBox();
+    assert.ok(full && full.width >= 1200 && full.height >= 800, "his computer fills the screen");
+    await computer.locator("[data-computer-fullscreen]").click();
+    await page.locator('[data-computer="hazel"][data-fullscreen="false"]').waitFor();
+  }
+
   await computer.getByRole("button", { name: "Take over" }).click();
   await computer.getByText("You have Hazel's computer: a press on the screen clicks there, and Hazel waits until you hand it back.").waitFor();
   assert.equal(h.computers.takenOver("hazel"), true, "your hand reached his computer");

@@ -275,6 +275,7 @@ export class Computers {
         headless: true,
         viewport: SCREEN,
         deviceScaleFactor: 1,
+        colorScheme: "dark", // his browser asks every site for its dark face (owner, 10-11)
         acceptDownloads: true,
         chromiumSandbox: sandbox, // Chromium's own sandbox, kept wherever it can start
         // everything through the guarded proxy, this machine's own addresses included

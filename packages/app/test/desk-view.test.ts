@@ -239,19 +239,34 @@ test("the desk: the floor and its tabs at desk and phone sizes; a strategy kept 
   await page.locator(`[data-holdings="${evmWallet.id}"]`).click();
   await page.locator(`[data-holdings-of="${evmWallet.id}"]`, { hasText: "ETH" }).waitFor({ timeout: 20_000 });
 
-  // your own swap on Base: a quote, then the wallet signs (Base added, exactly the amount allowed, then the swap)
-  await page.getByLabel("How much USDC to sell").fill("50");
-  await page.locator("[data-quote]").click();
-  await page.locator("[data-quote-result]", { hasText: "About 0.02 ETH" }).waitFor({ timeout: 20_000 });
-  assert.deepEqual(await measure(page), [], "the wallets and a quote, at desk size");
-  await page.locator("[data-swap-go]").click();
+  assert.equal(await page.getByText("A trade from your wallet", { exact: true }).count(), 0, "the wallet dashboard has no duplicate trade box; trades live on each coin's screen");
+  assert.deepEqual(await measure(page), [], "the wallet dashboard, at desk size");
+
+  // your own swap on Base, from its coin's page (the wallet's own trade box gone, owner 10-11): real money, 10 USDC
+  // quoted, then the wallet signs it: Base added, exactly the amount allowed, then the swap
+  await page.locator("[data-war-screen]").click();
+  await page.locator("[data-token-search]").fill(EVM_TOKEN);
+  await page.locator(`[data-token-page="base:${EVM_TOKEN}"]`).waitFor({ timeout: 20_000 });
+  await page.locator('[data-trade-mode="real"]').click();
+  await page.locator('[data-pay="USDC"]').click();
+  await page.locator('[data-preset="10"]').click();
+  assert.ok(await page.locator("[data-preset]").evaluateAll((xs) => xs.length > 0 && xs.every((x) => x.scrollWidth <= x.clientWidth)), "every amount fits inside its button, whole");
+  await page.locator("[data-token-quote]", { hasText: "≈" }).waitFor({ timeout: 20_000 });
+  await page.locator("[data-swap-token]", { hasText: "Test Wallet" }).click();
   await page.waitForFunction(() => (window as unknown as { __wallet: { evm: { method: string }[] } }).__wallet.evm.filter((a) => a.method === "eth_sendTransaction").length === 2, null, { timeout: 20_000 });
   const sends = (await asked()).filter((a) => a.method === "eth_sendTransaction").map((a) => a.params![0] as { from: string; to: string; data: string });
   assert.ok((await asked()).some((a) => a.method === "wallet_addEthereumChain" && (a.params![0] as { chainId: string }).chainId === "0x2105"), "a wallet that does not know Base is asked to add it");
   assert.match(sends[0]!.data, /^0x095ea7b3/, "the allowance first");
   assert.equal(sends[1]!.to, "0x1111111111111111111111111111111111111111", "then the swap, to the router the home's route named");
   assert.ok(sends.every((s) => s.from === EVM));
-  const mine = h.swaps.list().find((s) => s.orb === null)!;
+  await page.locator("[data-token-trade] [role=status]", { hasText: "Sent:" }).waitFor({ timeout: 20_000 });
+  const mine = h.swaps.list().find((s) => s.orb === null && s.chain === "base")!;
+  assert.deepEqual([mine.sell, mine.buy, mine.amount], ["USDC", EVM_TOKEN, "10"]);
+  await page.locator('[data-trade-mode="paper"]').click(); // paper again: this device remembers the choice
+  await page.locator("[data-token-back]").click(); // back to the list: the screen opens where it was left
+  await page.locator("[data-trending]").waitFor();
+  await page.locator("[data-token-close]").click();
+  await page.locator("[data-token-desk]").waitFor({ state: "detached" });
   await page.waitForFunction((id) => document.querySelector(`[data-swap="${id}"]`)?.getAttribute("data-state") === "sent", mine.id, { timeout: 20_000 });
   await h.swaps.due();
   await page.locator(`[data-swap="${mine.id}"][data-state="confirmed"]`).waitFor({ timeout: 20_000 });
@@ -276,23 +291,9 @@ test("the desk: the floor and its tabs at desk and phone sizes; a strategy kept 
   await page.locator(`[data-deny-swap="${no.id}"]`).click();
   await page.locator(`[data-swap="${no.id}"][data-state="denied"]`).waitFor({ timeout: 20_000 });
 
-  // Solana: the Solana wallet connected, its swap signed by it
+  // Solana: its wallet connected here, ready for the coin's own trade box
   await page.locator('[data-wallet-found="Test Sol"]').click();
   await page.locator('[data-wallet-found="Test Sol"]', { hasText: SOL.slice(0, 4) }).waitFor();
-  await page.locator("[data-trade-chain]").selectOption("solana");
-  await page.locator('[data-trade-sell="USDC"]').waitFor();
-  await page.getByLabel("How much USDC to sell").fill("10");
-  await page.locator("[data-quote]").click();
-  await page.locator("[data-quote-result]").waitFor({ timeout: 20_000 });
-  await page.locator("[data-swap-go]").click();
-  await page.waitForFunction(() => (window as unknown as { __wallet: { sol: unknown[] } }).__wallet.sol.length >= 2, null, { timeout: 20_000 });
-  const signed = (await page.evaluate(() => (window as unknown as { __wallet: { sol: unknown[] } }).__wallet.sol))[1] as { from: string; bytes: number[]; chain: string };
-  assert.deepEqual(signed, { from: SOL, bytes: [1, 0, 1], chain: "solana:mainnet" }, "the transaction the home built, signed by the Solana wallet for its own address");
-  const onSol = h.swaps.list().find((s) => s.chain === "solana")!;
-  await page.waitForFunction((id) => document.querySelector(`[data-swap="${id}"]`)?.getAttribute("data-state") === "sent", onSol.id, { timeout: 20_000 });
-  await h.swaps.due();
-  await page.locator(`[data-swap="${onSol.id}"][data-state="confirmed"]`).waitFor({ timeout: 20_000 });
-  assert.deepEqual(await measure(page), [], "the trades, at desk size");
 
   // the war room's screen (owner, 10-11: "user can press the chart in war room (electronic one) and a chart opens over
   // (modal i guess) with a search bar on top of it ... user can input the contract address and view the coin + trade
@@ -315,7 +316,10 @@ test("the desk: the floor and its tabs at desk and phone sizes; a strategy kept 
   // etc."): the trade box opens on paper; $100 of it, quoted by the router as you choose it, bought as the router would
   // fill it and held; your paper's amount yours to change
   assert.equal(await page.locator("[data-token-trade]").getAttribute("data-trade"), "paper", "paper till you say");
+  const modeColours = await page.locator('[data-token-trade] [aria-label="Paper or real money"]').evaluate((el) => [...el.querySelectorAll("button")].map((b) => getComputedStyle(b).backgroundColor));
+  assert.notEqual(modeColours[0], modeColours[1], "the selected money button has its own solid colour");
   await page.locator('[data-paper-preset="100"]').click();
+  assert.ok(await page.locator("[data-paper-preset]").evaluateAll((xs) => xs.every((x) => x.scrollWidth <= x.clientWidth)), "every dollar preset fits inside its button");
   await page.locator("[data-paper-quote]", { hasText: "≈" }).waitFor({ timeout: 20_000 });
   await page.locator("[data-paper-go]").click();
   await page.locator("[data-paper-said]", { hasText: /^Bought .* as the router would fill it now/ }).waitFor({ timeout: 20_000 });
@@ -404,15 +408,9 @@ test("the desk: the floor and its tabs at desk and phone sizes; a strategy kept 
   assert.deepEqual(await measure(page), [], "each orb's numbers on real money, at desk size");
   await page.locator('[data-stats-money="paper"]').click();
   await page.locator('[data-desk][data-money="paper"]').waitFor();
-  // a swap of any coin, by its address (owner, 10-11: "coin swap in general, not just pump.fun")
+  // the wallet page stays a dashboard: no second trade box at its bottom
   await tab(page, "trade");
-  await page.locator("[data-trade-chain]").selectOption("base");
-  await page.locator("[data-trade-sell]").selectOption("USDC");
-  await page.locator("[data-trade-buy]").selectOption("any");
-  await page.locator("[data-trade-buy-at]").fill(EVM_TOKEN);
-  await page.getByLabel("How much USDC to sell").fill("10");
-  await page.locator("[data-quote]").click();
-  await page.locator("[data-quote-result]", { hasText: "About" }).waitFor({ timeout: 20_000 });
+  assert.equal(await page.locator("[data-trade-chain]").count(), 0);
 
   // every tab at phone size
   const phone = await open({ width: 390, height: 844 });

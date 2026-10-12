@@ -12,6 +12,13 @@ export const button: CSSProperties = { font: "600 14px/20px var(--font)", color:
 export const strong: CSSProperties = { ...button, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)" };
 export const field: CSSProperties = { minWidth: 0, font: "600 15px/21px var(--font)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 10, padding: "8px 12px", outline: 0, boxShadow: "inset 0 0 0 1px var(--hairline)" };
 export const chip = (on: boolean): CSSProperties => ({ ...(on ? strong : button), padding: "6px 12px", minHeight: 32, font: "700 13px/18px var(--font)", whiteSpace: "nowrap" });
+/** The two-way Paper / Real money choice: the active side is a solid, unmistakable choice. */
+export const moneyChip = (on: boolean): CSSProperties => ({
+  ...chip(false),
+  ...(on ? { color: "var(--ground)", background: "var(--accent)", boxShadow: "inset 0 0 0 1px var(--accent), 0 2px 8px var(--shadow)" } : {}),
+});
+/** A quick amount's button: its whole amount, never cut; its grid's columns are made wide enough for it (TokenPage). */
+export const amountChip = (on: boolean): CSSProperties => ({ ...chip(on), minWidth: 0, paddingInline: 10 });
 
 export const usd = (n: number, places = 2): string => `${n < 0 ? "−" : ""}$${Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: places, maximumFractionDigits: places })}`;
 export const pct = (n: number | null | undefined, places = 2): string => (n === null || n === undefined || !Number.isFinite(n) ? "–" : `${n >= 0 ? "+" : "−"}${Math.abs(n).toFixed(places)}%`);
