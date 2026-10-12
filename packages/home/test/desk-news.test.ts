@@ -41,6 +41,11 @@ test("what a story names and what kind it is: a ticker in capitals only, Bitcoin
   assert.deepEqual(tag("Exchange hacked, $40M drained", "").kinds, ["hack"]);
   assert.deepEqual(tag("Australia proposes leverage caps for crypto-settled derivatives", "").kinds, ["regulation"], "settled is no lawsuit");
   assert.deepEqual(tag("A quiet day", "nothing happened"), { coins: [], kinds: [], weight: 0 });
+  // 10-12, seen live: a drain is a hack; strikes, oil and sanctions are the world's shocks (macro); whole words only
+  assert.deepEqual(tag("Ledger says $87M drain tied to resellers", "").kinds, ["hack"]);
+  assert.deepEqual(tag("Bitcoin drops 2.2% as Ukraine, Iran strikes send oil higher", "").kinds, ["macro"]);
+  assert.deepEqual(tag("New sanctions on exchanges", "").kinds, ["macro"]);
+  assert.deepEqual(tag("An award, a reward and a toil", "a conflict of interest, said the warden").kinds, [], "inside other words, and a conflict of interest, are not the world's shocks");
 });
 
 function feeds(o: { fail?: Set<string> } = {}) {

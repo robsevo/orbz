@@ -101,13 +101,15 @@ export const COIN_WORDS: [string, { names: string[]; tickers: string[] }][] = [
 ];
 const esc = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-/** What kind of news it is, by the words it uses; and how much each kind has tended to move prices (3 most). */
+/** What kind of news it is, by the words it uses; and how much each kind has tended to move prices (3 most). Macro
+ * takes the world's shocks too (10-12, live: "Bitcoin drops 2.2% as Ukraine, Iran strikes send oil toward ..." read
+ * as nothing), and a hack its drain ("$87M drain"). */
 export const KINDS: Record<NewsKind, { words: RegExp; weight: number }> = {
   regulation: { words: /\b(SEC|CFTC|FCA|ESMA|regulators?|regulat(?:ion|ions|ory)|watchdog|MiCA|lawmakers|Congress|Senate|bill|ban(?:s|ned)?|licen[cs]es?|stablecoin law|crackdown|central bank|leverage caps?)\b/i, weight: 3 },
   lawsuit: { words: /\b(lawsuit|sues|sued|court|judge|charged|indict(?:ed|ment)|settlement|settles with|settled with|plea)\b/i, weight: 2 },
   etf: { words: /\b(ETFs?|ETPs?|spot fund)\b/i, weight: 3 },
-  hack: { words: /\b(hack(?:ed|er|ers|s)?|exploit(?:ed|s)?|drained|stolen|breach|attackers?|rug ?pull|heist|phishing|scam(?:s|mers)?|fraud|frozen)\b/i, weight: 3 },
-  macro: { words: /\b(Fed|FOMC|Powell|rate (?:cut|hike)s?|interest rates?|CPI|inflation|jobs report|payrolls|tariffs?|recession|Treasury yields?|dollar (?:index|strength)|DXY)\b/i, weight: 3 },
+  hack: { words: /\b(hack(?:ed|er|ers|s)?|exploit(?:ed|s)?|drain(?:s|ed|er)?|stolen|breach|attackers?|rug ?pull|heist|phishing|scam(?:s|mers)?|fraud|frozen)\b/i, weight: 3 },
+  macro: { words: /\b(Fed|FOMC|Powell|rate (?:cut|hike)s?|interest rates?|CPI|inflation|jobs report|payrolls|tariffs?|recession|Treasury yields?|dollar (?:index|strength)|DXY|oil|wars?|(?:air)?strikes?|sanctions?|missiles?|invasion|ceasefire|elections?|geopolitic\w*|conflict(?! of interest))\b/i, weight: 3 },
   listing: { words: /\b(listings?|lists|listed|delist(?:s|ed|ing)?)\b/i, weight: 2 },
   unlock: { words: /\b(unlocks?|vesting|token release|airdrops?)\b/i, weight: 2 },
   buyer: { words: /\b(treasury|buys|bought|adds|scoops? up|stacking|purchases?|purchased|acquir(?:es|ed)|accumulat(?:es|ed|ion|ing)|holdings|whales?|inflows?|outflows?|BlackRock)\b/i, weight: 2 },

@@ -562,6 +562,9 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("a story's move is read from the bar after it", "src/desk/news.ts", [
         ("  const from = bars.find((b) => at >= b.t && at < b.t + barMs);", "  const from = bars.find((b) => b.t > at);"),
     ], ["desk-news.test.ts"]),
+    ("the world's shocks are never macro", "src/desk/news.ts", [
+        ("|DXY|oil|wars?|(?:air)?strikes?|sanctions?|missiles?|invasion|ceasefire|elections?|geopolitic\\w*|conflict(?! of interest))\\b/i", "|DXY)\\b/i"),
+    ], ["desk-news.test.ts"]),
     ("a summary sent as escaped HTML keeps its tags", "src/desk/news.ts", [
         ('    .replace(/<\\/?[a-z][a-z0-9]*\\b[^>]*>/gi, " ")\n', ""),
     ], ["desk-news.test.ts"]),
