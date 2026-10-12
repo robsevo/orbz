@@ -62,11 +62,27 @@ export function Orb({ character, size = 120, state = "idle", gesture = null, fid
     canvas.height = Math.round(((size * frame.h) / frame.w) * dpr);
     const own = fidgets(seed, 3600, motionOf(live.current.character));
     if (globalThis.__orbsTime === undefined && !still && pop) play("pop"); // on a held clock (a render check) the pop would hold at its peak
+    // the light behind him goes where his body goes (owner, 10-11: "when the orbs hop their glow should follow them too
+    // ... or move"): his frame's sway, in the window's units, as the canvas's CSS pixels; set only when it moves half a
+    // pixel. A close-up's glow is his own outline's, so it follows him already
+    const unit = size / frame.w;
+    let at = "";
+    const follow = light && framing !== "portrait"
+      ? (f: { sway: [number, number] }): void => {
+          const dx = Math.round(f.sway[0] * unit * 2) / 2, dy = Math.round(f.sway[1] * unit * 2) / 2;
+          const k = `${dx} ${dy}`;
+          if (k === at) return;
+          at = k;
+          canvas.style.setProperty("--orb-dx", `${dx}px`);
+          canvas.style.setProperty("--orb-dy", `${dy}px`);
+        }
+      : undefined;
     const entry = {
       canvas,
       visible: true,
       every,
       framing: frame,
+      follow,
       look: () => lookOf(live.current.character),
       input: () => ({
         ...(() => {
@@ -105,7 +121,7 @@ export function Orb({ character, size = 120, state = "idle", gesture = null, fid
       window.removeEventListener("pointermove", move);
       document.removeEventListener("pointerleave", away);
     };
-  }, [size, seed, every, still, frame, ...(still ? [JSON.stringify(character)] : [])]);
+  }, [size, seed, every, still, frame, light, ...(still ? [JSON.stringify(character)] : [])]);
 
   // the CEO and the CFO glow (owner, 10-07: "a special glow or smt to let you know theyre the CEO or CFO"), by their post
   const rank = character.specialty === "ceo" ? "ceo" : character.specialty === "cfo" ? "cfo" : null;
@@ -119,7 +135,7 @@ export function Orb({ character, size = 120, state = "idle", gesture = null, fid
       aria-label={`${describe(character)}, ${state}`}
       onClick={poke ? () => play(Math.random() < 0.65 ? "hop" : "squish") : undefined}
       data-sound={poke ? "poke" : undefined}
-      style={{ width: size, height: (size * frame.h) / frame.w, display: "block", cursor: poke ? "pointer" : undefined, ...(light && ({ "--orb-cy": `${frame.cy * 100}%`, "--orb-glow": `${Math.max(3, Math.round(size * 0.12))}px` } as CSSProperties)), ...style }}
+      style={{ width: size, height: (size * frame.h) / frame.w, display: "block", cursor: poke ? "pointer" : undefined, ...(light && ({ "--orb-cy": `${frame.cy * 100}%`, "--orb-ry": `${Math.min(frame.cy, 1 - frame.cy) * 100}%`, "--orb-glow": `${Math.max(3, Math.round(size * 0.12))}px` } as CSSProperties)), ...style }}
     />
   );
 }

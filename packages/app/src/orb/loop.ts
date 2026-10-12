@@ -2,7 +2,7 @@
 // screen, and nothing runs while the page is hidden. A render check fixes the clock
 // (`globalThis.__orbsTime`) so the same orbs draw the same frame every time.
 import { lifeFrame, type LifeInput } from "./life.ts";
-import { renderer, type Framing, type OrbLook } from "./renderer.ts";
+import { renderer, type Framing, type OrbFrame, type OrbLook } from "./renderer.ts";
 
 export type Entry = {
   canvas: HTMLCanvasElement;
@@ -12,6 +12,8 @@ export type Entry = {
   /** Draw every this many frames: a small avatar in a list need not cost what the big orb does. */
   every?: number;
   framing?: Framing;
+  /** Told each frame where he is (the light behind him follows his hops and sways, owner 10-11). */
+  follow?: (f: OrbFrame) => void;
 };
 
 const entries = new Set<Entry>();
@@ -27,7 +29,9 @@ declare global {
 export const now = (): number => globalThis.__orbsTime ?? (performance.now() - t0) / 1000;
 
 export function drawOne(e: Entry, t = now()): void {
-  renderer().draw(e.canvas, e.look(), lifeFrame(e.input(), t), t, e.framing);
+  const f = lifeFrame(e.input(), t);
+  renderer().draw(e.canvas, e.look(), f, t, e.framing);
+  e.follow?.(f);
 }
 
 function frame(): void {

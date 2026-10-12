@@ -416,7 +416,9 @@ export function stylesheet(fontUrl = "fonts/Nunito.ttf"): string {
     // CFO's own glow stands in for it
     `.orb-light.orb-close { background: none; }`,
     `.orb-light.orb-close:not(.orb-rank) { filter: drop-shadow(0 0 calc(var(--orb-glow, 4px) * 0.45) var(--orb-light)) drop-shadow(0 0 var(--orb-glow, 4px) var(--orb-light-edge)); }`,
-    `.orb-light { background: radial-gradient(closest-side at 50% var(--orb-cy, 59%), var(--orb-light) 0%, var(--orb-light) 44%, var(--orb-light-edge) 56%, var(--orb-light-none) 80%); }`,
+    // (its size the nearest edges' at rest, held as he moves: closest-side would shrink it as he hops toward an edge; its
+    // middle his body's, --orb-dx/--orb-dy from his frame's sway, Orb.tsx)
+    `.orb-light { background: radial-gradient(50% var(--orb-ry, 41%) at calc(50% + var(--orb-dx, 0px)) calc(var(--orb-cy, 59%) + var(--orb-dy, 0px)), var(--orb-light) 0%, var(--orb-light) 44%, var(--orb-light-edge) 56%, var(--orb-light-none) 80%); }`,
     `.num { font-variant-numeric: tabular-nums; }`,
     // a press you can feel (owner, 10-01): down it squishes at once, up it springs back past where
     // it was; a thing just chosen bounces. The press is `translate` and `scale`, the bounce is
