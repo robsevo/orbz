@@ -486,6 +486,29 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("your paper is someone else's on the chart", "src/desk/chart.ts", [
         ("orb: e.orb === YOU ? null : e.orb,", "orb: e.orb,"),
     ], ["orders.test.ts"]),
+    # each orb's numbers on paper or real money (PLAN 5.39; owner, 10-11)
+    ("real money is counted as paper in an orb's numbers", "src/desk/stats.ts", [
+        ('const moneyOf = (e: Ev): Money => (e.data.paper === false ? "real" : "paper");', 'const moneyOf = (_e: Ev): Money => "paper";'),
+    ], ["desk-stats.test.ts"]),
+    ("an orb's deepest fall is never measured", "src/desk/stats.ts", [
+        ("      fall = Math.max(fall, high - run);\n", ""),
+    ], ["desk-stats.test.ts"]),
+    ("an orb with no losing trade is given a profit factor", "src/desk/stats.ts", [
+        ("profitFactor: grossLoss > 0 ? won.reduce((n, p) => n + p, 0) / grossLoss : null", "profitFactor: won.length ? won.reduce((n, p) => n + p, 0) / grossLoss : null"),
+    ], ["desk-stats.test.ts"]),
+    # three more of the desk's jobs (PLAN 5.40; owner, 10-11): research, development and risk
+    ("an event is counted on every bar where its condition holds", "src/desk/research.ts", [
+        ("    if (now && !before) starts.push(i);", "    if (now) starts.push(i);"),
+    ], ["research.test.ts"]),
+    ("a fitted strategy is chosen on the bars used to judge it", "src/desk/research.ts", [
+        ("  const best = [...rows].sort((a, b) => b.fit.returnPct - a.fit.returnPct)[0] ?? null;", "  const best = [...rows].sort((a, b) => b.test.returnPct - a.test.returnPct)[0] ?? null;"),
+    ], ["research.test.ts"]),
+    ("a strategy's edge disappearing under its costs is not said", "src/desk/research.ts", [
+        ('  if (base.returnPct > 0 && costs2.returnPct <= 0) verdicts.push("Its edge is no bigger than its costs: with fees and slippage doubled it loses money.");', "  if (false) void costs2;"),
+    ], ["research.test.ts"]),
+    ("value at risk is read from the best tail", "src/desk/risk.ts", [
+        ("losses[Math.ceil(losses.length * 0.95) - 1]!", "losses[Math.ceil(losses.length * 0.05) - 1]!"),
+    ], ["research.test.ts"]),
     # a pool's bars kept, GeckoTerminal's asks spaced (PLAN 5.35; owner, 10-11: "No chart now ... 429")
     ("a restart forgets a pool's bars", "src/desk/bars.ts", [
         ("      return (read.all(k.chain, k.pool, k.token, k.tf, limit) as Candle[]).reverse();", "      return [] as Candle[];"),
@@ -3468,6 +3491,10 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ], ["chart-view.test.ts"]),
     ("your paper's amount is set nowhere", "src/desk/Account.tsx", [
         ('      await home.setDeskAccount(YOU, "paper", undefined, Number(paper));\n', ""),
+    ], ["desk-view.test.ts"]),
+    # each orb's numbers on paper or real money (PLAN 5.39; owner, 10-11)
+    ("the Orbs tab's money switch always shows paper", "src/desk/Stats.tsx", [
+        ('data-stats-money={m} onClick={() => set(m)}', 'data-stats-money={m} onClick={() => set("paper")}'),
     ], ["desk-view.test.ts"]),
     ("the chat's orb as small as it was", "src/rooms/Chat.tsx", [
         ("          <Orb character={orb} size={88} state={face} gesture={cue} poke={false} />", "          <Orb character={orb} size={52} state={face} gesture={cue} poke={false} />"),

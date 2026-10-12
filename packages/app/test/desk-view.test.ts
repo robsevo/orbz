@@ -363,7 +363,7 @@ test("the desk: the floor and its tabs at desk and phone sizes; a strategy kept 
   await page.locator('[data-orbs-glance] [data-orb-glance="Kit"]').waitFor({ timeout: 20_000 });
   await page.locator("[data-orbs-more]").click();
   await page.locator('[data-desk-tab="desk"][aria-selected="true"]').waitFor();
-  await page.locator('[data-orb-pnl="Kit"]', { hasText: /\d+ trades/ }).waitFor({ timeout: 20_000 });
+  await page.locator('[data-orb-pnl="Kit"]', { hasText: /\d+ trades?/ }).waitFor({ timeout: 20_000 });
   assert.match(await page.locator('[data-orb-pnl="Kit"] [data-pnl]').innerText(), /^[+−]\$[\d,]+\.\d\d/);
   assert.match(await page.locator("[data-desk-pnl]").innerText(), /on paper, the whole desk/);
   assert.deepEqual(await measure(page), [], "each orb's P&L, at desk size");
