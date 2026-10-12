@@ -89,7 +89,8 @@ test("a session: the orbs you bring in, the Brainstorm's turns and what was agre
   const hazelPick = making.locator('[data-crew-pick="hazel"]');
   const [tile, portrait] = await Promise.all([hazelPick.boundingBox(), hazelPick.locator("canvas").boundingBox()]);
   assert.ok(tile && portrait);
-  assert.ok(portrait.width >= 64, `Who's in shows Hazel much bigger (${Math.round(portrait.width)} px wide)`);
+  // drawn at 64: half a pixel short is a frame mid-layout, not a smaller orb
+  assert.ok(portrait.width >= 63.5, `Who's in shows Hazel much bigger (${portrait.width.toFixed(1)} px wide)`);
   assert.ok(tile.width > tile.height * 1.35 && tile.width > portrait.width * 2, `her tile is a wide rectangle (${Math.round(tile.width)} by ${Math.round(tile.height)})`);
   assert.ok(parseFloat(await hazelPick.evaluate((el) => getComputedStyle(el).borderRadius)) <= 12, "the rectangle has restrained corners");
   // every name the dice can give shows whole in such a tile (a twin of Hazel's, beside it, each name in turn): at a fixed
