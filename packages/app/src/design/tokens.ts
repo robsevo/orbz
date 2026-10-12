@@ -308,8 +308,9 @@ function staticVars(): string {
   // the light of an orb changing (Roll everything, owner 10-04): its glow, the flash and the sparks, the same in every theme
   Object.assign(v, { "--flash": "#ffffff", "--flash-glow": "rgba(255, 255, 255, 0.9)", "--flash-mid": "rgba(255, 255, 255, 0.55)", "--flash-none": "rgba(255, 255, 255, 0)" });
   // rank you can see (owner, 10-07: "maybe a special glow or smt to let you know theyre the CEO or CFO"): the CEO's gold
-  // and the CFO's green, the same in every theme
-  Object.assign(v, { "--rank-ceo": "rgba(255, 198, 66, 0.95)", "--rank-ceo-soft": "rgba(255, 198, 66, 0.42)", "--rank-cfo": "rgba(56, 214, 150, 0.95)", "--rank-cfo-soft": "rgba(56, 214, 150, 0.42)" });
+  // and the CFO's green, the same in every theme; the CEO's softer since every orb has its own light behind it (owner,
+  // 10-11: "make CEOs less bright")
+  Object.assign(v, { "--rank-ceo": "rgba(255, 198, 66, 0.6)", "--rank-ceo-soft": "rgba(255, 198, 66, 0.24)", "--rank-cfo": "rgba(56, 214, 150, 0.95)", "--rank-cfo-soft": "rgba(56, 214, 150, 0.42)" });
   // the office as a camera room (owner, 10-07): the camera's REC light, the same in every theme; no glass over the
   // floor since 10-08 ("we want to see them")
   Object.assign(v, { "--cam-rec": "#ff4a4a" });
@@ -334,7 +335,9 @@ function hueRules(t: Theme, scope: string): string {
 /** The light behind an orb (owner, 10-11: "the orbs need a bit of a shadow ... so they glow. even in the app tbh. like a
  * background light"): its own colour, soft, stronger on the dark ground than on the light one. Named on the orb's canvas
  * (`data-light`), not with `data-orb`, which names a whole room's accent. */
-export const BACKLIGHT = { dark: 0.38, light: 0.24 } as const; // three quarters of the first try (owner, 10-11: "too much glow, less", then of half: "more than that")
+// three quarters of the first try, held closer to the body (owner, 10-11: "too much glow, less", then of half: "more than
+// that", then "a bit less circumference for all")
+export const BACKLIGHT = { dark: 0.38, light: 0.24 } as const;
 function lightRules(t: Theme, scope: string): string {
   const a = BACKLIGHT[t];
   return [...HUES, DARK_ORB]
@@ -408,7 +411,7 @@ export function stylesheet(fontUrl = "fonts/Nunito.ttf"): string {
     `@media (prefers-reduced-motion: reduce) { .orb-rank { animation: none; } }`,
     // the light behind every orb (owner, 10-11): its colour, round its body (the canvas's --orb-cy, its middle), strongest
     // just past its edge and gone before the canvas's own edge, so it never shows a square (orb/Orb.tsx)
-    `.orb-light { background: radial-gradient(closest-side at 50% var(--orb-cy, 59%), var(--orb-light) 0%, var(--orb-light) 46%, var(--orb-light-edge) 60%, var(--orb-light-none) 94%); }`,
+    `.orb-light { background: radial-gradient(closest-side at 50% var(--orb-cy, 59%), var(--orb-light) 0%, var(--orb-light) 44%, var(--orb-light-edge) 56%, var(--orb-light-none) 80%); }`,
     `.num { font-variant-numeric: tabular-nums; }`,
     // a press you can feel (owner, 10-01): down it squishes at once, up it springs back past where
     // it was; a thing just chosen bounces. The press is `translate` and `scale`, the bounce is
