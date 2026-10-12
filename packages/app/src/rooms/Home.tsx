@@ -22,7 +22,10 @@ const small: CSSProperties = { font: "500 13px/18px var(--font)", color: "var(--
 const body: CSSProperties = { font: "500 14px/20px var(--font)", color: "var(--text-1)", textWrap: "pretty", overflowWrap: "anywhere" };
 const card: CSSProperties = { display: "grid", gap: 12, alignContent: "start", padding: "var(--s4)", borderRadius: 18, background: "var(--fill)", boxShadow: "inset 0 0 0 .5px var(--hairline)", minWidth: 0 };
 const button: CSSProperties = { font: "700 14px/20px var(--font)", border: 0, borderRadius: 12, padding: "10px 14px", background: "var(--fill-2)", color: "var(--text-1)", cursor: "pointer", minHeight: 40, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
-const link: CSSProperties = { font: "600 13px/18px var(--font)", border: 0, borderRadius: 999, padding: "4px 10px", background: "transparent", color: "var(--text-2)", cursor: "pointer", boxShadow: "inset 0 0 0 .5px var(--hairline)", whiteSpace: "nowrap" };
+// a section's way on (Calendar, All sessions, Org chart, the report, Hiring), in the accent so it stands out (owner, 10-11:
+// "buttons on home like calendar all sessions hiring and org chart have to stand out a bit more"), as the app's other
+// buttons that take you somewhere do (the lesson's Answer)
+const link: CSSProperties = { font: "700 13px/18px var(--font)", border: 0, borderRadius: 999, padding: "6px 12px", background: "var(--accent-fill)", color: "var(--text-1)", cursor: "pointer", boxShadow: "inset 0 0 0 1.5px var(--accent)", whiteSpace: "nowrap" };
 const MARK = `data:image/svg+xml;utf8,${encodeURIComponent(markSvg({ scale: 0.86 }))}`;
 
 const greeting = (h: number): string => (h < 5 ? "Working late" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening");
