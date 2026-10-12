@@ -252,7 +252,8 @@ function Evolving({ me, from, size, state, gesture, onDone }: { me: Character; f
     <span data-evolve={was ? "changing" : undefined} style={{ position: "relative", display: "grid", width: size, height: h }}>
       <span ref={mine} style={{ gridArea: "1 / 1", display: "block", willChange: was ? "transform, opacity, filter" : undefined }}>
         {/* no pop when he changes: the change is the show */}
-        <Orb character={me} size={size} state={state} gesture={gesture} pop={!was} />
+        {/* the one orb the page is about: it watches your pointer (the others never do) */}
+        <Orb character={me} size={size} state={state} gesture={gesture} pop={!was} watch />
       </span>
       {was && (
         // who he was, for the change: not pressable, and not read out as a second orb
@@ -372,16 +373,19 @@ function Strand({ c, quiet = false }: { c: Character; quiet?: boolean }) {
 function Shaped({ c, moves }: { c: Character; moves: Move[] }) {
   const top = [...moves].sort((a, b) => Number(Boolean(b.clash)) - Number(Boolean(a.clash)) || b.n - a.n).slice(0, 5);
   const tag: CSSProperties = { display: "inline-block", padding: "1px 7px", borderRadius: 999, font: "700 11px/16px var(--font)", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" };
+  // a line a part (owner, 10-11: "re arrange text etc so its nicer"): its name, and what it gave and took at the line's
+  // end; a name too long for the line takes it whole and its tags go under it, at the end again (never a name squeezed
+  // a word a line beside them: a phone's 320 px)
   return (
-    <div data-shaped style={{ display: "grid", gap: 8 }}>
+    <div data-shaped style={{ display: "grid", gap: 8, alignContent: "start" }}>
       <Head>What shaped {c.name || "your orb"}</Head>
       {top.map((m, i) => (
-        <div key={i} data-move={m.clash ? "clash" : "choice"} style={{ display: "grid", gap: 4 }}>
-          <span style={{ font: "400 13px/18px var(--font)", color: "var(--text-2)", textWrap: "pretty" }}>
+        <div key={i} data-move={m.clash ? "clash" : "choice"} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", columnGap: 8, rowGap: 4 }}>
+          <span style={{ flex: "1 1 auto", minWidth: 0, font: "400 13px/18px var(--font)", color: "var(--text-2)", textWrap: "balance" }}>
             {m.clash && <span style={{ ...tag, marginRight: 6, color: "var(--ground)", background: "var(--accent)" }}>Clash</span>}
             {cap(m.why)}
           </span>
-          <span style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          <span style={{ display: "flex", gap: 6, marginLeft: "auto" }}>
             {/* the text in the body's colour on the orb's tint and ring: the hue itself as text fails contrast on light orbs (honey, 10-05) */}
             <span style={{ ...tag, color: "var(--text-1)", background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1px var(--accent)" }}>+{m.n} {m.to}</span>
             <span style={{ ...tag, color: "var(--text-2)", background: "var(--fill)" }}>−{m.n} {m.from}</span>
@@ -537,20 +541,22 @@ function Sheet({ c, onRename, replies, standing, startsAs, career, applying, fri
       )}
     </>
   );
+  // the small facts as three tiles of one height, side by side where the card is wide (owner, 10-11: "so its nicer")
+  const FACT: CSSProperties = { display: "grid", gap: 4, alignContent: "start", padding: "10px 12px", borderRadius: 12, background: "var(--fill)", minWidth: 0 };
   const traits = (
     <>
       {/* the small facts side by side, and his traits beside what shaped them, where the card is wide enough (owner,
           10-10: "organize the sections much better and make them more compact"); one above the other on a phone */}
       <div className="orbs-facts" style={{ display: "grid", gap: "var(--s3)", gridTemplateColumns: "minmax(0, 1fr)" }}>
-        <div style={{ display: "grid", gap: 4, alignContent: "start" }}>
+        <div style={FACT}>
           <Head>Quirk</Head>
           <span style={{ font: "400 14px/20px var(--font)", color: "var(--text-2)" }}>{cap(sh.quirk)}.</span>
         </div>
-        <div style={{ display: "grid", gap: 4, alignContent: "start" }}>
+        <div style={FACT}>
           <Head>Says</Head>
           <span style={{ font: "italic 400 15px/20px var(--font)", color: "var(--text-1)" }}>“{sh.catchphrase}”</span>
         </div>
-        <div style={{ display: "grid", gap: 4, alignContent: "start" }}>
+        <div style={FACT}>
           <Head>Voice</Head>
           <span style={{ font: "400 14px/20px var(--font)", color: "var(--text-2)" }}>
             {c.voice === "silent" ? "Silent: writes, never speaks" : `${v.label} · ${v.accent}`}
@@ -562,11 +568,13 @@ function Sheet({ c, onRename, replies, standing, startsAs, career, applying, fri
         <div style={{ display: "grid", gap: "var(--s2)" }}>
           <Head>Traits</Head>
           <Bars items={grew ? grew.traits : sh.traits} max={Math.max(CEILING, ...(grew ? grew.traits : sh.traits).map((t) => t.value))} />
-          <span style={{ font: "400 12px/16px var(--font)", color: "var(--text-3)" }}>{TOTAL} points across them, like every orb</span>
+          {/* what the white mark on each bar is (owner, 10-11: the card explained) */}
+          <span style={{ font: "400 12px/16px var(--font)", color: "var(--text-3)", textWrap: "pretty" }}>{TOTAL} points across them, like every orb. The mark is where its personality started; the bar, where its parts moved it.</span>
+          {/* its DNA under its traits (owner, 10-11: "so its nicer"): the two columns of a height */}
+          {strand && <div style={{ marginTop: "var(--s2)" }}><Strand key={c.name + c.seed} c={c} /></div>}
         </div>
         <Shaped c={c} moves={grew ? [...grew.moves, ...sh.dna.moves] : sh.dna.moves} />
       </div>
-      {strand && <Strand key={c.name + c.seed} c={c} />}
     </>
   );
   const skills = (
