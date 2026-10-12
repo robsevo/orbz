@@ -12,7 +12,8 @@
 // they are willing to spend on infrastructure etc."; "Lets be able to change the budget as well"):
 //   - the page asks what the company can spend until you have said (control: once said, a line, not the question);
 //     chosen, the home keeps it; Change on the report and the Budget panel in Settings change it, the home keeping each;
-//   - each idea says who pays, what it costs and the first step; an idea left out for its cost is counted.
+//   - each idea says who pays, which orbs do it, the Founder's part, what it costs and the first step; an idea that does
+//     not fit the budget, office or work they can safely do is left out and counted.
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -62,10 +63,10 @@ test("the board's report: its notice and the Home page open it; each idea an orb
   h.events.append("social.friends", { a: "tia", b: "pip", names: ["Tia", "Pip"] });
   h.notices.remind({ orb: "fin", kind: "bill", title: "Hosting", due: new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10), amount: "$12" });
   model.replies.push(
-    "Idea: Sell the office's habits to small shops as a service. They already work, so each sale is nearly all profit.\nWho pays: Small shops, about $30 a month each.\nCosts: $0 to start, $0 a month.\nFirst step: List the three habits that work best.",
-    "Idea: Offer a weekly brief to founders. It costs us an hour.\nWho pays: Founders, $10 a month.\nCosts: nothing.\nFirst step: Write the first brief.",
-    "Idea: Keep small firms' books for a monthly fee.\nWho pays: Small firms.\nCosts: $500 to start.\nFirst step: Buy the software.", // more than nothing: asked again
-    "Idea: Keep small firms' books for a monthly fee, on paid software.\nWho pays: Small firms.\nCosts: $100 a month.\nFirst step: Subscribe.", // still more: left out
+    "Idea: Sell the office's habits to small shops as a service. They already work, so each sale is nearly all profit.\nWho pays: Small shops, about $30 a month each.\nWho does it: Max and Tia\nYour part: Approve or pass\nCosts: $0 to start, $0 a month.\nFirst step: List the three habits that work best.",
+    "Idea: Offer a weekly brief to founders. It costs us an hour.\nWho pays: Founders, $10 a month.\nWho does it: Pip\nYour part: Approve it\nCosts: nothing.\nFirst step: Write the first brief.",
+    "Idea: Keep small firms' books for a monthly fee.\nWho pays: Small firms.\nWho does it: Fin\nYour part: Nothing\nCosts: $500 to start.\nFirst step: Buy the software.", // more than nothing: asked again
+    "Idea: Keep small firms' books for a monthly fee, on paid software.\nWho pays: Small firms.\nWho does it: Fin\nYour part: Nothing\nCosts: $100 a month.\nFirst step: Subscribe.", // still more: left out
   );
   await h.reports.make();
   const r = h.reports.latest()!;
@@ -115,9 +116,9 @@ test("the board's report: its notice and the Home page open it; each idea an orb
   for (let i = 0; i < 50 && h.about.get().budget?.start !== 100; i++) await page.waitForTimeout(50);
   assert.deepEqual(h.about.get().budget, { start: 100, month: 30 }, "the home keeps the change");
 
-  // each idea: who pays, what it costs, the first step; the one left out for its cost, counted
-  assert.match(await room.locator('[data-idea-by="max"]').innerText(), /who pays\s*Small shops, about \$30 a month each\.[\s\S]*costs\s*Nothing: free tools and free tiers[\s\S]*first step\s*List the three habits that work best\./i);
-  assert.match(await room.locator("[data-report-left]").innerText(), /^1 idea was left out: it cost more than you can spend, or did not say what it costs\.$/);
+  // each idea: who pays, who does it, your part, what it costs, the first step; one that does not fit, counted
+  assert.match(await room.locator('[data-idea-by="max"]').innerText(), /who pays\s*Small shops, about \$30 a month each\.[\s\S]*who does it\s*Max and Tia[\s\S]*your part\s*Approve or pass[\s\S]*costs\s*Nothing: free tools and free tiers[\s\S]*first step\s*List the three habits that work best\./i);
+  assert.match(await room.locator("[data-report-left]").innerText(), /^1 idea was left out: it did not fit your budget, your office, or the work they can safely do\.$/);
 
   // each idea an orb's: Max's approved, his XP; Pip's passed, nothing
   const ideas = room.locator("[data-idea]");

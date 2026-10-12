@@ -45,7 +45,7 @@ export function Backdrop({ now, sky, prices, spark, notes, strategies, riskOn, b
   const war = areaOf("warroom").rect;
   const coffee = areaOf("coffee").rect;
   const pit = areaOf("pit").rect;
-  const { shelves, corkboard, armchair, table, whiteboard, bar, fridge, stools, headDesk, bell, board: lb, riskDesk } = TPIECES;
+  const { shelves, corkboard, armchair, table, whiteboard, bar, fridge, stools, headDesk, bell, board: lb, riskDesk, tv } = TPIECES;
   // the war room's screen: the last of the price line as candles, and the line over them
   const screen = (() => {
     const xs = spark.length > 1 ? spark.slice(-13) : [1, 1.02, 1.01, 1.04, 1.03, 1.06, 1.05, 1.08, 1.07, 1.1, 1.09, 1.12, 1.11];
@@ -168,6 +168,20 @@ export function Backdrop({ now, sky, prices, spark, notes, strategies, riskOn, b
         <rect x={armchair.x + 6} y={armchair.y + 12} width={armchair.w - 12} height={armchair.h - 18} rx={6} style={f("accent-fill")} />
       </Hue>
       <Plant x={research.x + 26} y={270} s={0.95} hue="clover" />
+      {/* the research corner's TV on its stand: the news, a red light on, its headlines and a ticker under them (pressed:
+          the news over the floor, PLAN 5.43) */}
+      <rect x={tv.x + tv.w / 2 - 5} y={tv.y + tv.h - 2} width={10} height={13} style={f("text-3")} />
+      <rect x={tv.x + tv.w / 2 - 26} y={tv.y + tv.h + 10} width={52} height={5} rx={2.5} style={f("text-3")} />
+      <rect x={tv.x} y={tv.y} width={tv.w} height={tv.h} rx={6} style={f("raised")} />
+      <rect x={tv.x + 5} y={tv.y + 5} width={tv.w - 10} height={tv.h - 10} rx={3} style={f("ground")} />
+      <Hue hue="coral">
+        <circle cx={tv.x + 14} cy={tv.y + 14} r={3.5} style={f("accent")} className="orbs-floor-glow" />
+        <rect x={tv.x + 5} y={tv.y + tv.h - 16} width={tv.w - 10} height={11} style={f("accent")} opacity={0.85} />
+      </Hue>
+      <rect x={tv.x + 22} y={tv.y + 11} width={34} height={6} rx={2} style={f("text-2")} opacity={0.85} />
+      <rect x={tv.x + 12} y={tv.y + 23} width={tv.w - 24} height={5} rx={2} style={f("text-3")} opacity={0.7} />
+      <rect x={tv.x + 12} y={tv.y + 32} width={tv.w - 44} height={5} rx={2} style={f("text-3")} opacity={0.5} />
+      <text x={tv.x + 9} y={tv.y + tv.h - 6.5} style={{ ...f("ground"), font: "900 10px var(--font)", letterSpacing: ".1em" }}>NEWS</text>
 
       {/* the war room: its screen, live (press it: any token, its chart and a trade, owner 10-11), the strategies on it a
           tile each, and the table */}

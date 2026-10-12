@@ -31,11 +31,13 @@ const seeded = (s: string): (() => number) => {
   return () => ((h = Math.imul(h ^ (h >>> 15), 2246822507) >>> 0) % 1_000_000) / 1_000_000;
 };
 
-export function DeskFloor({ crew, moods, events, prices, spark, notes, strategies, riskOn, board, go, onScreen }: {
+export function DeskFloor({ crew, moods, events, prices, spark, notes, strategies, riskOn, board, go, onScreen, onNews }: {
   crew: Character[]; moods: Record<string, Mood>; events: DeskEvent[]; prices: WallPrice[]; spark: number[]; notes: number; strategies: number; riskOn: boolean;
   board: { name: string; hue: Character["hue"]; bar: number; up: boolean }[]; go: (r: Route) => void;
   /** The war room's screen pressed: any token, its chart and a trade, over the floor (owner, 10-11). */
   onScreen?: () => void;
+  /** The research corner's TV pressed: the news that could move a coin, over the floor (PLAN 5.43). */
+  onNews?: () => void;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
@@ -251,6 +253,14 @@ export function DeskFloor({ crew, moods, events, prices, spark, notes, strategie
           )}
           {onScreen && (
             <span aria-hidden data-orb="amber" style={{ ...sign, left: px(TPIECES.whiteboard.x + TPIECES.whiteboard.w / 2), top: px(TPIECES.whiteboard.y + TPIECES.whiteboard.h - 14), translate: "-50% 0", zIndex: TPIECES.whiteboard.y + 7, pointerEvents: "none", color: "var(--accent)" }}>Any token ›</span>
+          )}
+          {/* the research corner's TV (owner, 10-12: "a news section ... like the chart, click and news modal comes up") */}
+          {onNews && (
+            <button type="button" data-news-screen data-orb="coral" className="orbs-war-screen" onClick={onNews} aria-label="The research corner's TV: the news that could move a coin"
+              style={{ position: "absolute", left: px(TPIECES.tv.x - 4), top: px(TPIECES.tv.y - 4), width: px(TPIECES.tv.w + 8), height: px(TPIECES.tv.h + 22), zIndex: TPIECES.tv.y + 6, padding: 0, border: 0, borderRadius: px(6), background: "transparent", cursor: "pointer" }} />
+          )}
+          {onNews && (
+            <span aria-hidden data-orb="coral" style={{ ...sign, left: px(TPIECES.tv.x + TPIECES.tv.w / 2), top: px(TPIECES.tv.y - 22), translate: "-50% 0", zIndex: TPIECES.tv.y + 7, pointerEvents: "none", color: "var(--accent)" }}>News ›</span>
           )}
           {TDESKS.map((d) => {
             const a = seatOf(d.n, 0);

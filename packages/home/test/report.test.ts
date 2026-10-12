@@ -10,8 +10,9 @@
 //   - the door: the reports, one made now, a verdict (twice is refused).
 // PLAN 5.20_t (owner, 10-08: "we have to keep in mind that the user may not have any money to start with. so ask how much
 // they are willing to spend on infrastructure etc."; "Lets be able to change the budget as well"):
-//   - a pitch read by code: its four lines, what it costs (free, a month, to start, a year, per sale, a range), whether
-//     it fits what the company can spend (control: exactly that fits; never said is nothing);
+//   - a pitch read by code: its six lines, what it costs (free, a month, to start, a year, per sale, a range), whether
+//     it fits what the company can spend and this office can do it without the Founder's hands, an outside hire, risky
+//     money, physical stock or licensed work (with a safe control beside every detector);
 //   - the prompt carries what the company can spend, who is in the office, the ideas approved and passed;
 //   - one that does not say what it costs, or costs more, is asked again once, then left out and counted (control:
 //     one exactly at the budget stays); the budget kept by the home and changed through the door.
@@ -19,7 +20,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { FakeClock } from "../src/clock.ts";
 import { serve } from "../src/api.ts";
-import { costsOf, officeNews, overBy, peopleNotes, pitchers, pitchPrompt, readIdea, readPitch, type ReportOrb } from "../src/report.ts";
+import { costsOf, officeNews, overBy, peopleNotes, pitchers, pitchPrompt, readIdea, readPitch, whyNotPitch, type Pitch, type ReportOrb } from "../src/report.ts";
 import { XP } from "../src/gym/xp.ts";
 import { agentHome } from "./helpers.ts";
 
@@ -49,12 +50,12 @@ test("an idea read as a pitch; who pitches, in turn; the office's news and its p
   assert.deepEqual(p.fit.map((x) => [x.name, x.why.split(":")[0]]), [["Ada", "work sent back"], ["Bo", "no work lately"]]);
 });
 
-test("a pitch read by code: its four lines, what it costs, whether it fits what the company can spend; the prompt", () => {
-  assert.deepEqual(readPitch("**Idea:** Sell a weekly digest of what the office learns to small shops.\nWho pays: small shops, about $20 a month each\nCosts: $0 to start, $0 a month\nFirst step: write the first digest this week"), {
-    text: "Sell a weekly digest of what the office learns to small shops.", who: "small shops, about $20 a month each", costs: { start: 0, month: 0 }, first: "write the first digest this week",
+test("a pitch read by code: its six lines, what it costs, whether it fits what the company can spend and do; the prompt", () => {
+  assert.deepEqual(readPitch("**Idea:** Sell a weekly digest of what the office learns to small shops.\nWho pays: small shops, about $20 a month each\nWho does it: Max and Ada\nYour part: Approve or pass\nCosts: $0 to start, $0 a month\nFirst step: write the first digest this week"), {
+    text: "Sell a weekly digest of what the office learns to small shops.", who: "small shops, about $20 a month each", does: "Max and Ada", yours: "Approve or pass", costs: { start: 0, month: 0 }, first: "write the first digest this week",
   });
   assert.equal(readPitch("Idea:\nRun a paid workshop\non our tools.\nCosts: free")!.text, "Run a paid workshop on our tools.", "a line's words run on to the next label");
-  assert.deepEqual(readPitch("Sell templates of our best plans. Each costs nothing to copy.")!.costs, { start: null, month: null }, "not in the four lines: the whole answer is the idea, its costs unknown");
+  assert.deepEqual(readPitch("Sell templates of our best plans. Each costs nothing to copy.")!.costs, { start: null, month: null }, "not in the six lines: the whole answer is the idea, its costs unknown");
   assert.equal(readPitch("Idea: ok\nCosts: $0"), null, "no idea in it");
 
   assert.deepEqual(costsOf("$0 to start, $0 a month"), { start: 0, month: 0 });
@@ -68,7 +69,7 @@ test("a pitch read by code: its four lines, what it costs, whether it fits what 
   assert.deepEqual(costsOf("$0 to start, $0 a month; later $20 a month once it earns"), { start: 0, month: 0 }, "what it costs before it earns: the first said");
   assert.deepEqual(costsOf("a little"), { start: null, month: null });
 
-  const at = (start: number | null, month: number | null) => ({ text: "Sell a weekly digest.", who: null, first: null, costs: { start, month } });
+  const at = (start: number | null, month: number | null): Pitch => ({ text: "Sell a weekly digest.", who: null, does: "Max and Ada", yours: "Approve or pass", first: null, costs: { start, month } });
   assert.equal(overBy(at(50, 20), { start: 50, month: 20 }), null, "exactly what it can spend fits (control)");
   assert.match(overBy(at(51, 20), { start: 50, month: 20 })!, /^costs \$51 to start and \$20 a month, more than the company can spend$/);
   assert.match(overBy(at(0, 21), { start: 50, month: 20 })!, /\$21 a month/);
@@ -77,15 +78,27 @@ test("a pitch read by code: its four lines, what it costs, whether it fits what 
   assert.equal(overBy(at(null, 0), { start: 50, month: 20 }), "does not say what it costs");
 
   const office = [orb("max", "ceo", 1), orb("ada", "frontend", 2)];
+  const feasible = (change: Partial<Pitch> = {}): Pitch => ({ ...at(0, 0), first: "Write the first digest.", ...change });
+  assert.equal(whyNotPitch(feasible(), null, office, "Robin"), null, "the named office does it; Robin only decides; it starts free (control)");
+  assert.equal(whyNotPitch(feasible({ does: null }), null, office, "Robin"), "does not say which orbs do it");
+  assert.equal(whyNotPitch(feasible({ does: "Max and a freelancer" }), null, office, "Robin"), "needs a freelancer from outside the office");
+  assert.equal(whyNotPitch(feasible({ text: "Hire a freelancer to design the digest." }), null, office, "Robin"), "needs someone from outside the office", "the words cannot contradict the named orbs");
+  assert.equal(whyNotPitch(feasible({ yours: "Robin writes the first issue" }), null, office, "Robin"), "needs Robin to do the work");
+  assert.equal(whyNotPitch(feasible({ first: "Robin calls the first customer." }), null, office, "Robin"), "needs Robin to do the work", "the first step cannot contradict Your part");
+  assert.equal(whyNotPitch(feasible({ text: "Borrow money to trade crypto." }), { start: 1000, month: 1000 }, office, "Robin"), "needs borrowed money or a financial bet");
+  assert.equal(whyNotPitch(feasible({ first: "Buy and ship physical products." }), { start: 1000, month: 1000 }, office, "Robin"), "needs physical stock to buy, hold or ship");
+  assert.equal(whyNotPitch(feasible({ first: "Obtain a licence, then give legal advice." }), { start: 1000, month: 1000 }, office, "Robin"), "needs licensed or permitted work");
+  assert.equal(whyNotPitch(feasible({ text: "Make inventory software and sell digital templates with no stock.", first: "Buy a software licence, then confirm the service requires no professional licence." }), null, office, "Robin"), null, "inventory software, software licences and explicit no-stock work are not caught (controls)");
+
   const ask = (budget: { start: number; month: number } | null) => pitchPrompt({ company: "Acme Orbs", founder: "Robin", me: office[1]!, office, budget, approved: ["Sell templates"], passed: ["Run paid ads"] });
   assert.match(ask(null), /your part in it: frontend\./);
   assert.match(ask(null), /Robin has not said yet what Acme Orbs can spend, so take it as nothing\. The idea has to start free: free tools and free tiers only/);
   assert.match(ask({ start: 0, month: 0 }), /Acme Orbs has no money to spend yet\. The idea has to start free/);
   assert.match(ask({ start: 50, month: 20 }), /Acme Orbs can spend up to \$50 to start and \$20 a month in all, on hosting, tools and ads\. The idea has to fit inside that/);
-  assert.match(ask(null), /The office: Max \(CEO\), Ada \(frontend\)\. Pitch work these orbs can do\./);
+  assert.match(ask(null), /The office: Max \(CEO\), Ada \(frontend\)\. Pitch work these orbs can do themselves\. Do not use outside hires, the Founder's hands, borrowing, investments or financial trades, physical inventory, or work that needs a licence or permit\./);
   assert.match(ask(null), /Robin approved these already, and the office works toward them: "Sell templates"\./);
   assert.match(ask(null), /Robin passed these, so never pitch them again: "Run paid ads"\./);
-  assert.match(ask(null), /^Idea: .*\n^Who pays: .*\n^Costs: .*\n^First step: .*$/m, "the four lines");
+  assert.match(ask(null), /^Idea: .*\n^Who pays: .*\n^Who does it: .*\n^Your part: .*\n^Costs: .*\n^First step: .*$/m, "the six lines");
 });
 
 test("the home sends it from 08:00 once a day; each idea is an orb's, its XP yours to give; the world, the office, people, hiring and money in it", async (t) => {
@@ -110,10 +123,10 @@ test("the home sends it from 08:00 once a day; each idea is an orb's, its XP you
 
   clock.suspend(30 * 60_000);
   model.replies.push(
-    "Idea: Sell the office's habits as a service to small shops. They already work, so each sale is nearly all profit.\nWho pays: Small shops, about $30 a month each.\nCosts: $0 to start, $0 a month.\nFirst step: List the three habits that work best.",
-    "Idea: Offer founders a weekly brief. It costs us an hour.\nWho pays: Founders, $10 a month.\nCosts: nothing.\nFirst step: Write the first brief.",
-    "Charge a monthly fee for bookkeeping. Steady money.", // not in the four lines: what it costs unsaid, so asked again
-    "Idea: Charge a monthly fee to keep small firms' books.\nWho pays: Small firms, $50 a month.\nCosts: $0 to start, $0 a month.\nFirst step: Draft the offer.",
+    "Idea: Sell the office's habits as a service to small shops. They already work, so each sale is nearly all profit.\nWho pays: Small shops, about $30 a month each.\nWho does it: Max and Ada\nYour part: Approve or pass\nCosts: $0 to start, $0 a month.\nFirst step: List the three habits that work best.",
+    "Idea: Offer founders a weekly brief. It costs us an hour.\nWho pays: Founders, $10 a month.\nWho does it: Pip\nYour part: Approve it\nCosts: nothing.\nFirst step: Write the first brief.",
+    "Charge a monthly fee for bookkeeping. Steady money.", // not in the six lines: what it costs unsaid, so asked again
+    "Idea: Charge a monthly fee to keep small firms' books.\nWho pays: Small firms, $50 a month.\nWho does it: Fin\nYour part: Nothing\nCosts: $0 to start, $0 a month.\nFirst step: Draft the offer.",
   );
   await home.tick();
   for (let i = 0; i < 100 && !home.events.ofType("report.made").length; i++) await new Promise((r) => setTimeout(r, 20));
@@ -122,14 +135,14 @@ test("the home sends it from 08:00 once a day; each idea is an orb's, its XP you
   assert.deepEqual(r.chair, { orb: "max", name: "Max" }, "by the Chair");
   assert.deepEqual(r.ideas.map((x) => [x.orb, x.name]), [["max", "Max"], ["pip", "Pip"], ["fin", "Fin"]], "each idea an orb's: the board first");
   assert.match(r.ideas[0]!.text, /^Sell the office's habits/);
-  assert.deepEqual([r.ideas[0]!.who, r.ideas[0]!.start, r.ideas[0]!.month, r.ideas[0]!.first], ["Small shops, about $30 a month each.", 0, 0, "List the three habits that work best."], "who pays, what it costs, the first step");
+  assert.deepEqual([r.ideas[0]!.who, r.ideas[0]!.does, r.ideas[0]!.yours, r.ideas[0]!.start, r.ideas[0]!.month, r.ideas[0]!.first], ["Small shops, about $30 a month each.", "Max and Ada", "Approve or pass", 0, 0, "List the three habits that work best."], "who pays, who does it, your part, what it costs, the first step");
   const prompts = model.said.slice(-4).map((m) => String(m[0]!.content));
   assert.match(prompts[0]!, /You work at Acme Orbs[\s\S]*your part in it: CEO[\s\S]*one idea each to make the company money/);
   assert.match(prompts[0]!, /Robin has not said yet what Acme Orbs can spend, so take it as nothing\. The idea has to start free/, "never said: nothing");
   // everyone in the office by their part (in the home's order: orbs added in one millisecond fall back to their ids)
-  const line = /^The office: (.*)\. Pitch work these orbs can do\.$/m.exec(prompts[0]!)?.[1] ?? "";
+  const line = /^The office: (.*)\. Pitch work these orbs can do themselves\./m.exec(prompts[0]!)?.[1] ?? "";
   assert.deepEqual(line.split(", ").sort(), ["Ada (frontend)", "Fin (CFO)", "Max (CEO)", "Pip (personal assistant)"]);
-  assert.match(prompts[3]!, /Your idea, "Charge a monthly fee for bookkeeping\. Steady money\.", does not say what it costs\. Answer again in the same four lines/, "asked again, once");
+  assert.match(prompts[3]!, /Your idea, "Charge a monthly fee for bookkeeping\. Steady money\.", does not say what it costs\. Answer again in the same six lines/, "asked again, once");
   assert.equal(r.ideas[2]!.text, "Charge a monthly fee to keep small firms' books.", "and the answer that fits kept");
   assert.equal(r.left, 0);
   assert.equal(home.events.ofType("brain.spend").filter((e) => e.data.turn === "report").length, 4, "each on the cheapest brain, its cost the report's, the one asked again too");
@@ -166,9 +179,9 @@ test("the home sends it from 08:00 once a day; each idea is an orb's, its XP you
   clock.suspend(24 * 3_600_000);
   home.about.setBudget({ start: 50, month: 20 });
   model.replies.push(
-    "Idea: Run a paid workshop on our tools.\nWho pays: Small teams, $40 a seat.\nCosts: $50 to start, $20 a month.\nFirst step: Write the outline.", // exactly what it can spend: kept
-    "Idea: Bundle our reports for agencies.\nWho pays: Agencies, $200 a month.\nCosts: $500 to start, $20 a month.\nFirst step: Call three agencies.", // more: asked again
-    "Idea: Bundle our reports for agencies, with ads.\nWho pays: Agencies.\nCosts: $0 to start, $300 a month.\nFirst step: Buy ads.", // still more: left out
+    "Idea: Run a paid workshop on our tools.\nWho pays: Small teams, $40 a seat.\nWho does it: Ada\nYour part: Approve or pass\nCosts: $50 to start, $20 a month.\nFirst step: Write the outline.", // exactly what it can spend: kept
+    "Idea: Bundle our reports for agencies.\nWho pays: Agencies, $200 a month.\nWho does it: Max\nYour part: Approve it\nCosts: $500 to start, $20 a month.\nFirst step: Call three agencies.", // more: asked again
+    "Idea: Bundle our reports for agencies, with ads.\nWho pays: Agencies.\nWho does it: Max\nYour part: Nothing\nCosts: $0 to start, $300 a month.\nFirst step: Buy ads.", // still more: left out
     "nope",
   );
   await home.tick();
@@ -215,7 +228,7 @@ test("the door: the reports, one made now, a verdict once", async (t) => {
   };
   assert.equal((await call("POST", "/reports")).status, 409, "no one to report yet");
   home.inbox.addOrb("max", "Max", "ceo");
-  model.replies.push("Idea: Sell templates of our best plans. Each costs nothing to copy.\nCosts: $0");
+  model.replies.push("Idea: Sell templates of our best plans. Each costs nothing to copy.\nWho pays: Small teams.\nWho does it: Max\nYour part: Approve or pass\nCosts: $0\nFirst step: Publish the first three templates.");
   assert.equal((await call("POST", "/reports")).status, 200);
   for (let i = 0; i < 100 && !home.events.ofType("report.made").length; i++) await new Promise((r) => setTimeout(r, 20));
   const { reports } = (await call("GET", "/reports")).json as { reports: { ideas: { id: string; name: string }[] }[] };

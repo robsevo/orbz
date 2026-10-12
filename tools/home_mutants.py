@@ -546,6 +546,25 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("the investigation's method comes without its tools", "src/agent/standing.ts", [
         ('  if (role !== "chime" && o.kinds?.has("trace")) parts.push(INVESTIGATION_METHOD);', '  if (role !== "chime") parts.push(INVESTIGATION_METHOD);'),
     ], ["desk-cases.test.ts"]),
+    # the news that could move a coin (PLAN 5.43; owner, 10-12: "a news section ... click and news modal comes up")
+    ("a ticker is read in lower case: a word becomes a coin", "src/desk/news.ts", [
+        ('    const ticker = new RegExp(`(?<![A-Za-z$])\\\\$?(${w.tickers.map(esc).join("|")})(?![A-Za-z])`);', '    const ticker = new RegExp(`(?<![A-Za-z$])\\\\$?(${w.tickers.map(esc).join("|")})(?![A-Za-z])`, "i");'),
+    ], ["desk-news.test.ts"]),
+    ("Bitcoin Cash is read as Bitcoin too", "src/desk/news.ts", [
+        ('      if (name) text = text.replace(new RegExp(name.source, "gi"), " "); // "Bitcoin Cash" is not Bitcoin too', "      void name;"),
+    ], ["desk-news.test.ts"]),
+    ("a feed is asked on every read", "src/desk/news.ts", [
+        ("    if (was && this.#now() - was.at < this.#keepMs) return;", "    if (false) return;"),
+    ], ["desk-news.test.ts"]),
+    ("a failing feed's stories are dropped", "src/desk/news.ts", [
+        ("      this.#kept.set(s.name, { at: this.#now(), items: was?.items ?? [] });", "      this.#kept.set(s.name, { at: this.#now(), items: [] });"),
+    ], ["desk-news.test.ts"]),
+    ("a story's move is read from the bar after it", "src/desk/news.ts", [
+        ("  const from = bars.find((b) => at >= b.t && at < b.t + barMs);", "  const from = bars.find((b) => b.t > at);"),
+    ], ["desk-news.test.ts"]),
+    ("a summary sent as escaped HTML keeps its tags", "src/desk/news.ts", [
+        ('    .replace(/<\\/?[a-z][a-z0-9]*\\b[^>]*>/gi, " ")\n', ""),
+    ], ["desk-news.test.ts"]),
     # a pool's bars kept, GeckoTerminal's asks spaced (PLAN 5.35; owner, 10-11: "No chart now ... 429")
     ("a restart forgets a pool's bars", "src/desk/bars.ts", [
         ("      return (read.all(k.chain, k.pool, k.token, k.tf, limit) as Candle[]).reverse();", "      return [] as Candle[];"),
@@ -1670,6 +1689,21 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("an idea that does not fit is never asked again", "src/report.ts", [
         ("          const again = readPitch(await this.#o.ask(o.id, ", "          const again = null && readPitch(await this.#o.ask(o.id, "),
     ], ["report.test.ts"]),
+    ("an idea can give the work to someone outside the office", "src/report.ts", [
+        ("  if (!workers.length || outside || OUTSIDE_HELP.test(work)) return `needs ${outside || \"someone\"} from outside the office`;", "  if (false) return `needs ${outside || \"someone\"} from outside the office`;"),
+    ], ["report.test.ts"]),
+    ("an idea can make the Founder do the work", "src/report.ts", [
+        ("  if (!FOUNDER_PART.test(p.yours.trim()) || founderWork.test(work)) return `needs ${founder} to do the work`;", "  if (false) return `needs ${founder} to do the work`;"),
+    ], ["report.test.ts"]),
+    ("an idea can borrow or bet the company's money", "src/report.ts", [
+        ("  if (RISKY_MONEY.test(work)) return \"needs borrowed money or a financial bet\";", "  if (false) return \"needs borrowed money or a financial bet\";"),
+    ], ["report.test.ts"]),
+    ("an idea can buy and hold physical stock", "src/report.ts", [
+        ("  if (PHYSICAL_STOCK.test(work)) return \"needs physical stock to buy, hold or ship\";", "  if (false) return \"needs physical stock to buy, hold or ship\";"),
+    ], ["report.test.ts"]),
+    ("an idea can depend on licensed work", "src/report.ts", [
+        ("  if (LICENSED_WORK.test(work)) return \"needs licensed or permitted work\";", "  if (false) return \"needs licensed or permitted work\";"),
+    ], ["report.test.ts"]),
     ("a cost a month is read as a cost to start", "src/report.ts", [
         ("monthly\\b|\\/m\\b|pm\\b)/.test(after)) month ??= Math.round(top);", "monthly\\b|\\/m\\b|pm\\b)/.test(after)) start ??= Math.round(top);"),
     ], ["report.test.ts"]),
@@ -2158,6 +2192,13 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
 
 # the app (PLAN 2.x): paths are inside packages/app
 APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
+    # the news screen (PLAN 5.43)
+    ("could move it marks a story of any kind", "src/desk/news.ts", [
+        ('    case "moving": return items.filter((x) => x.weight >= MOVING);', '    case "moving": return items.filter((x) => x.weight > 0);'),
+    ], ["desk-news.test.ts"]),
+    ("a coin's filter keeps every story", "src/desk/news.ts", [
+        ('    case "coin": return items.filter((x) => x.coins.includes(f.coin));', '    case "coin": return [...items];'),
+    ], ["desk-news.test.ts"]),
     # a case's money drawn as ZachXBT draws it (PLAN 5.42)
     ("a funder is drawn right of what it funded", "src/desk/flow.ts", [
         ("        col.set(i.key, to.length ? Math.min(...to) : 1);", "        col.set(i.key, to.length ? Math.max(...to) + 2 : 1);"),

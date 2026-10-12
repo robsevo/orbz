@@ -20,6 +20,7 @@ import { problemOf, SYMBOLS, TIMEFRAMES, type Strategy, type Timeframe } from ".
 import { WalletError } from "./desk/wallets.ts";
 import { CaseError, MAX_COINS, type Weight } from "./desk/casebook.ts";
 import { PATTERNS, patternsOf } from "./desk/trace.ts";
+import { moved } from "./desk/news.ts";
 import { recentWork } from "./worklog.ts";
 import { spawn } from "node:child_process";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
@@ -739,6 +740,14 @@ async function handle(
       // the desk's cases (PLAN 5.42; owner, 10-12: "investigate where we lead them (can be a pump coin or 5 or how many
       // we ask it) ... like ZachXBT does"): the cases, one case whole, a case opened on coins and the orb you choose sent
       // to work it, your own findings, the wallets labelled, and the things you notice, which every case is checked for
+      // the news that could move a coin (PLAN 5.43; owner, 10-12: "a news section ... like the chart, click and news modal
+      // comes up"): the stories, newest first, each with how the majors it names moved since, and how each feed is
+      if (method === "GET" && parts[1] === "news" && parts.length === 2) {
+        const coin = url.searchParams.get("coin");
+        if (coin && !(SYMBOLS as readonly string[]).includes(coin)) no(400, "a major by its symbol");
+        const r = await home.news.read({ coin, max: 80 });
+        return { items: await moved(r.items, (sym) => home.market.candles(sym, "15m", 192)), sources: r.sources, at: home.clock.now() };
+      }
       if (method === "GET" && parts[1] === "cases" && parts.length === 2) return { cases: home.cases.list(), noticed: home.cases.noticed(), labels: home.cases.labels() };
       if (method === "GET" && parts[1] === "cases" && parts.length === 3) {
         const c = home.cases.get(id(2)) ?? no(404, "no such case");

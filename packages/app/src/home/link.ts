@@ -99,9 +99,9 @@ export type BoardPost = "chair" | "vice" | "secretary" | "treasurer" | "director
 export type Report = {
   id: number; at: number; day: string;
   chair: { orb: string; name: string } | null;
-  /** each idea an orb's; since 10-08 (PLAN 5.20) who pays, what it costs (inside the budget) and the first step */
-  ideas: { id: string; orb: string; name: string; text: string; verdict: "approved" | "passed" | null; who?: string | null; start?: number; month?: number; first?: string | null }[];
-  /** pitches left out: they cost more than the company can spend, or did not say what they cost */
+  /** each idea an orb's; who pays, which orbs do it, the Founder's part, its costs and first step */
+  ideas: { id: string; orb: string; name: string; text: string; verdict: "approved" | "passed" | null; who?: string | null; does?: string | null; yours?: string | null; start?: number; month?: number; first?: string | null }[];
+  /** pitches left out: they did not fit the company's money, people or safe kinds of work */
   left?: number;
   world: { title: string; url: string; host: string; orb: string; name: string }[];
   office: { text: string; orb: string | null }[];
@@ -247,6 +247,10 @@ export interface DeskLabel { address: string; label: string; exit: boolean; by: 
 /** A thing you noticed, checked on every case. */
 export interface DeskNoticed { id: number; words: string; by: string; at: number }
 
+/** The news that could move a coin (PLAN 5.43; the home's desk/news.ts): a story, the majors it names, its kind, how
+ * much that kind tends to move prices (0 to 4), and how each named coin moved since it came out. */
+export type NewsStory = { id: string; source: string; title: string; summary: string; url: string; at: number; coins: string[]; kinds: string[]; weight: number; moves: Record<string, number | null> };
+export type NewsFeed = { name: string; ok: boolean; error: string | null; at: number | null; items: number };
 export type DeskCandle = { t: number; o: number; h: number; l: number; c: number; v: number };
 export type DeskTicker = { symbol: string; price: number; changePct: number; high: number; low: number; volume: number; at: number; stale: boolean };
 export type DeskSeries = { kind: string; field?: string; period?: number; k?: number; fast?: number; slow?: number; signal?: number; value?: number };
@@ -385,6 +389,8 @@ export interface Office {
   /** The desk's cases (PLAN 5.42): every case with the wallets labelled and what you have noticed; one case whole; a
    * case opened on coins and the orb sent to work it; a finding of yours; a wallet labelled; a thing you noticed, kept
    * and forgotten. */
+  /** The news that could move a coin (PLAN 5.43), one major's or all. */
+  deskNews(coin?: string): Promise<{ items: NewsStory[]; sources: NewsFeed[]; at: number }>;
   deskCases(): Promise<{ cases: DeskCaseRow[]; noticed: DeskNoticed[]; labels: DeskLabel[] }>;
   deskCase(id: number): Promise<DeskCase>;
   openCase(o: { orb: string; coins: string[]; question?: string }): Promise<DeskCase>;
@@ -731,6 +737,9 @@ export function doorOffice(base: Character): Office {
     },
     async desk() {
       return call<DeskState>("../desk");
+    },
+    async deskNews(coin) {
+      return call<{ items: NewsStory[]; sources: NewsFeed[]; at: number }>(`../desk/news${coin ? `?coin=${encodeURIComponent(coin)}` : ""}`);
     },
     async deskCases() {
       return call<{ cases: DeskCaseRow[]; noticed: DeskNoticed[]; labels: DeskLabel[] }>("../desk/cases");

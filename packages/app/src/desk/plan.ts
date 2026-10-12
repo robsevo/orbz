@@ -58,6 +58,8 @@ export const TPIECES = {
   bell: { x: 576, y: LOW + 70, w: 48, h: 54 },
   board: { x: 440, y: LOW + 160, w: 320, h: 34 },
   riskDesk: { x: 900, y: LOW + 100, w: 200, h: 44 },
+  // the research corner's TV: the news (PLAN 5.43; owner, 10-12: "click and news modal comes up")
+  tv: { x: 66, y: 196, w: 112, h: 60 },
 } satisfies Record<string, Rect>;
 
 export type TPoiId = "bell" | "board" | "coffee" | "fridge" | "stool" | "cork" | "shelf" | "armchair" | "whiteboard" | "wall" | "risk" | "head" | "window";

@@ -8,7 +8,8 @@
 // Since 10-08 (PLAN 5.20; owner: "we have to keep in mind that the user may not have any money to start with. so ask how
 // much they are willing to spend on infrastructure etc."; "Lets be able to change the budget as well"): the page asks
 // what the company can spend until you have said, says what the ideas fit after, with Change; each idea says who pays,
-// what it costs and the first step, and the report says how many were left out for costing more.
+// which orbs do it, the Founder's part, what it costs and the first step. Ideas that need the Founder to work, an
+// outside hire, risky money, physical stock, a licence, or more than the budget are asked again, then left out.
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { Orb } from "../orb/Orb.tsx";
 import { applicant, SPECIALTIES, type Character } from "../orb/spec.ts";
@@ -132,10 +133,12 @@ export function ReportRoom({ home, office, go, person, keep }: { home: Office | 
                     <span style={{ fontWeight: 600, color: "var(--text-3)" }}>{face(x.orb) ? ` · ${SPECIALTIES[face(x.orb)!.specialty].title}` : ""}</span>
                   </span>
                   <span style={{ font: "500 15px/21px var(--font)", color: "var(--text-1)", textWrap: "pretty" }}>{x.text}</span>
-                  {/* who pays, what it costs and the first step (since 10-08): a label beside each, never in its line */}
-                  {(x.who || x.start !== undefined || x.first) && (
+                  {/* a feasible pitch's facts: a label beside each, never in its line; old reports have fewer */}
+                  {(x.who || x.does || x.yours || x.start !== undefined || x.first) && (
                     <span data-idea-facts style={{ display: "grid", gridTemplateColumns: "auto minmax(0, 1fr)", gap: "2px 10px", alignItems: "start" }}>
                       {x.who && <><span style={factHead}>Who pays</span><span data-idea-who style={fact}>{x.who}</span></>}
+                      {x.does && <><span style={factHead}>Who does it</span><span data-idea-does style={fact}>{x.does}</span></>}
+                      {x.yours && <><span style={factHead}>Your part</span><span data-idea-yours style={fact}>{x.yours}</span></>}
                       {x.start !== undefined && <><span style={factHead}>Costs</span><span data-idea-costs style={fact}>{costWords(x.start, x.month ?? 0)}</span></>}
                       {x.first && <><span style={factHead}>First step</span><span data-idea-first style={fact}>{x.first}</span></>}
                     </span>
@@ -159,7 +162,7 @@ export function ReportRoom({ home, office, go, person, keep }: { home: Office | 
             ))}
             {r.left ? (
               <span data-report-left style={small}>
-                {r.left === 1 ? "1 idea was left out: it cost more than you can spend, or did not say what it costs." : `${r.left} ideas were left out: they cost more than you can spend, or did not say what they cost.`}
+                {r.left === 1 ? "1 idea was left out: it did not fit your budget, your office, or the work they can safely do." : `${r.left} ideas were left out: they did not fit your budget, your office, or the work they can safely do.`}
               </span>
             ) : null}
           </section>

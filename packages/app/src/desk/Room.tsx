@@ -15,6 +15,7 @@ import { NAMES } from "../floor/props.ts";
 import { DeskFloor } from "./Floor.tsx";
 import { button, card, chip, field, head, marketName, pct, shortAddress, small, strong, usd, well, ago, YOU } from "./kit.ts";
 import { CasesPanel } from "./Cases.tsx";
+import { NewsDesk } from "./NewsDesk.tsx";
 import { TokenDesk, type Picked } from "./TokenDesk.tsx";
 import { AccountSwitch, YourPaper } from "./Account.tsx";
 import { activeOn, keepMoney, keptMoney, MoneySwitch, OrbStats, resultOf, signed, tone, type Money } from "./Stats.tsx";
@@ -65,6 +66,8 @@ export function DeskRoom({ home, office, moods, go, tab: opening = null }: { hom
     setScreen(true);
   };
   const [sheet, setSheet] = useState(false);
+  /** The research corner's TV pressed: the news over the floor (PLAN 5.43). */
+  const [newsOpen, setNewsOpen] = useState(false);
   /** A case just opened from a coin's page: the Cases tab opens on it. */
   const [caseOpening, setCaseOpening] = useState<number | null>(null);
   const investigate = async (orb: string, market: string): Promise<void> => {
@@ -147,7 +150,7 @@ export function DeskRoom({ home, office, moods, go, tab: opening = null }: { hom
   const tape = top.flatMap((sym) => prices.filter((p) => p.symbol === sym));
   const floor = (
     <DeskFloor crew={crew} moods={moods} events={events} prices={prices.map((p) => ({ symbol: p.symbol, up: p.changePct >= 0 }))} spark={spark.length ? spark : [1, 1]}
-      notes={s?.notes.length ?? 0} strategies={s?.strategies.length ?? 0} riskOn={!(s?.settings.off ?? false)} go={go} onScreen={() => (setScreenAt(null), setScreen(true))}
+      notes={s?.notes.length ?? 0} strategies={s?.strategies.length ?? 0} riskOn={!(s?.settings.off ?? false)} go={go} onScreen={() => (setScreenAt(null), setScreen(true))} onNews={() => setNewsOpen(true)}
       board={board.map((b) => ({ name: b.c.name, hue: b.c.hue, bar: (Math.abs(b.pnl) / most) * 110, up: b.pnl >= 0 }))} />
   );
   const noCrew = !crew.length && (
@@ -225,6 +228,7 @@ export function DeskRoom({ home, office, moods, go, tab: opening = null }: { hom
         <Limits home={home} settings={s.settings} reload={load} />
       )}
       {screen && s && <TokenDesk home={home} prices={tape} chains={s.chains} crew={crew} strategies={s.strategies} accounts={s.accounts ?? []} you={s.you ?? null} reload={() => void load()} wallet={wallet} openWallet={openWallet} start={screenAt} close={() => setScreen(false)} investigate={investigate} />}
+      {newsOpen && <NewsDesk home={home} close={() => setNewsOpen(false)} openMajor={(s) => (setNewsOpen(false), openMajor(s))} />}
       {sheet && <WalletSheet home={home} wallet={wallet} close={() => setSheet(false)} />}
     </div>
   );

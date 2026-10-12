@@ -8,9 +8,10 @@
 //     is asked; one you approve gives its orb XP (gym/xp.ts hears `report.idea_approved`), and the orbs hear it. Since
 //     10-08 (PLAN 5.20; owner: "we have to keep in mind that the user may not have any money to start with. so ask how
 //     much they are willing to spend on infrastructure etc."), each pitch is told what the company can spend (never
-//     said is nothing), who is in the office and the ideas approved and passed, and comes in four lines (the idea, who
-//     pays, what it costs, the first step); its costs are read by code, and one that costs more than the company can
-//     spend, or does not say, is asked again once, then left out (the report says how many);
+//     said is nothing), who is in the office and the ideas approved and passed, and comes in six lines (the idea, who
+//     pays, who in the office does it, what the Founder must do, what it costs, the first step). Code refuses an idea
+//     that needs the Founder's hands, someone outside the office, risky money, physical stock or licensed work, as well
+//     as one whose costs do not fit; it is asked again once, then left out (the report says how many);
 //   - the world: what the reading library (PLAN 3.12) brought in since the last report, each with the orb who follows it;
 //   - the office: who joined and left, promotions, the board's elections and decisions, friendships, habits learned,
 //     the jobs each finished, by code from the log;
@@ -29,11 +30,11 @@ export const REPORT_HOUR = 8;
 /** How many orbs are asked for an idea each day. */
 export const PITCHERS = 3;
 
-/** An idea: its orb's, in its words; who pays, what it costs (whole dollars, inside the budget), the first step. A report
- * from before 10-08 has the words alone. */
+/** An idea: its orb's, in its words; who pays, which orbs do it, the Founder's part, what it costs (whole dollars,
+ * inside the budget), and the first step. Older reports have fewer facts. */
 export type Idea = {
   id: string; orb: string; name: string; text: string; verdict: "approved" | "passed" | null;
-  who?: string | null; start?: number; month?: number; first?: string | null;
+  who?: string | null; does?: string | null; yours?: string | null; start?: number; month?: number; first?: string | null;
 };
 export type NewsItem = { title: string; url: string; host: string; orb: string; name: string };
 export type OfficeItem = { text: string; orb: string | null };
@@ -42,7 +43,7 @@ export type Report = {
   id: number; at: number; day: string;
   chair: { orb: string; name: string } | null;
   ideas: Idea[];
-  /** Pitches left out: they cost more than the company can spend, or did not say what they cost (none before 10-08). */
+  /** Pitches left out: they did not fit the company's money, people or safe kinds of work (none before 10-08). */
   left?: number;
   world: NewsItem[];
   office: OfficeItem[];
@@ -95,8 +96,8 @@ export function readIdea(text: string | null): string | null {
 
 /** What a pitch says it costs: whole dollars to start and each month, null where it does not say. */
 export type Costs = { start: number | null; month: number | null };
-/** A pitch as read by code: the idea, who pays, what it costs, the first step. */
-export type Pitch = { text: string; who: string | null; costs: Costs; first: string | null };
+/** A pitch as read by code: the idea, who pays, which orbs do it, the Founder's part, its costs and first step. */
+export type Pitch = { text: string; who: string | null; does: string | null; yours: string | null; costs: Costs; first: string | null };
 
 /** What a pitch's Costs line says, by code: the first amount it gives to start and the first it gives a month. "Free"
  * and "nothing" are $0; an amount a year is paid at the start; one per sale comes out of what it earns, so it is no
@@ -116,9 +117,10 @@ export function costsOf(raw: string | null): Costs {
   return start === null && month === null ? { start: null, month: null } : { start: start ?? 0, month: month ?? 0 };
 }
 
-const LABEL = /^(idea|who pays|costs?|first step)\s*[:\-–—]\s*(.*)$/i;
+const LABEL = /^(idea|who pays|who does it|your part|costs?|first step)\s*[:\-–—]\s*(.*)$/i;
 
-/** A pitch read by code: the four lines asked for (Idea, Who pays, Costs, First step), each running on until the next;
+/** A pitch read by code: the six lines asked for (Idea, Who pays, Who does it, Your part, Costs, First step), each
+ * running on until the next;
  * from a brain that did not keep to them, the whole answer as the idea and its costs unknown. Null: no idea in it. */
 export function readPitch(raw: string | null): Pitch | null {
   const parts: Record<string, string[]> = {};
@@ -137,7 +139,14 @@ export function readPitch(raw: string | null): Pitch | null {
     const s = (parts[k] ?? []).join(" ").replace(/\s+/g, " ").trim();
     return !s ? null : s.length > 200 ? `${s.slice(0, 199).replace(/\s+\S*$/, "")}…` : s;
   };
-  return { text, who: said("who pays"), costs: costsOf(parts.costs ? parts.costs.join(" ") : null), first: said("first step") };
+  return {
+    text,
+    who: said("who pays"),
+    does: said("who does it"),
+    yours: said("your part"),
+    costs: costsOf(parts.costs ? parts.costs.join(" ") : null),
+    first: said("first step"),
+  };
 }
 
 /** Why a pitch cannot be kept as it is: it does not say what it costs, or costs more than the company can spend (never
@@ -150,23 +159,53 @@ export function overBy(p: Pitch, budget: Budget | null): string | null {
   return null;
 }
 
+const splitWorkers = (s: string): string[] => s.split(/\s*(?:,|&|\+|\/|\band\b)\s*/i).map((x) => x.trim()).filter(Boolean);
+const RISKY_MONEY = /\b(?:borrow(?:ed|ing)?|loans?|debt|cash advance|credit (?:card|line)|gambl(?:e|ing)|bets?|wagers?)\b|\b(?:buy|trade|invest|short|leverage|stake)\w*\b[^.!?\n]{0,50}\b(?:stocks?|shares?|securities|crypto(?:currency)?|coins?|tokens?|options?|futures?)\b/i;
+const OUTSIDE_HELP = /\b(?:hire|recruit|outsource)\w*\b|\b(?:contract|partner)\s+with\b[^.!?\n]{0,40}\b(?:freelancers?|contractors?|agenc(?:y|ies)|consultants?|suppliers?|manufacturers?|vendors?|third[- ]part(?:y|ies))\b|\b(?:use|pay|find)\w*\b[^.!?\n]{0,30}\b(?:freelancers?|outside contractors?|external consultants?)\b/i;
+const PHYSICAL_STOCK = /\b(?:buy|order|stock|store|hold|warehouse|ship|fulfil|fulfill|resell)\w*\b(?![^.!?\n]{0,40}\b(?:no|not|without)\b)[^.!?\n]{0,40}\b(?:physical\s+)?(?:inventory|stock|goods|merchandise|products?|items?|units?)\b|\b(?:manufacture|produce)\w*\b[^.!?\n]{0,40}\b(?:physical\s+)?(?:goods|merchandise|products?|items?|units?)\b|\b(?:physical\s+(?:inventory|stock|goods|merchandise)|dropship|drop-ship)\w*\b/i;
+const LICENSED_WORK = /\b(?:need|require|obtain|apply for|work under)\w*\b(?![^.!?\n]{0,40}\b(?:no|not|without)\b)[^.!?\n]{0,40}\b(?:licen[cs]e[ds]?|permits?|certification)\b|\b(?:legal advice|medical advice|diagnos(?:e|is)|prescri(?:be|ption)|represent\w*\s+[^.!?\n]{0,20}\s+in court|manage\w*\s+(?:clients?'?\s+)?investments?)\b/i;
+const FOUNDER_PART = /^(?:nothing|none|approve(?: it)?|approve or pass|decide whether to approve(?: it)?)\.?$/i;
+const escaped = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** Why a pitch cannot be done by this office as offered. The model's claim is never the gate: names, the Founder's
+ * bounded part and high-risk kinds of work are checked here. Null means it fits. */
+export function whyNotPitch(p: Pitch, budget: Budget | null, office: readonly ReportOrb[], founder: string): string | null {
+  const cost = overBy(p, budget);
+  if (cost) return cost;
+  if (!p.does) return "does not say which orbs do it";
+  const names = new Map(office.map((o) => [o.name.toLowerCase(), o.name]));
+  const workers = splitWorkers(p.does);
+  const outside = workers.find((x) => !names.has(x.toLowerCase()));
+  if (!p.yours) return `does not say what ${founder} has to do`;
+  const work = `${p.text}\n${p.first ?? ""}`;
+  if (!workers.length || outside || OUTSIDE_HELP.test(work)) return `needs ${outside || "someone"} from outside the office`;
+  const founderWork = new RegExp(`\\b(?:you|yourself|the founder|${escaped(founder)})\\b`, "i");
+  if (!FOUNDER_PART.test(p.yours.trim()) || founderWork.test(work)) return `needs ${founder} to do the work`;
+  if (RISKY_MONEY.test(work)) return "needs borrowed money or a financial bet";
+  if (PHYSICAL_STOCK.test(work)) return "needs physical stock to buy, hold or ship";
+  if (LICENSED_WORK.test(work)) return "needs licensed or permitted work";
+  return null;
+}
+
 /** Each kind of work in words, for a pitch: an officer by its post, anyone else by its kind of work. */
 const WORDS: Record<string, string> = { ceo: "CEO", cfo: "CFO", coo: "COO", cto: "CTO", cmo: "CMO", chiefofstaff: "Chief of Staff", assistant: "personal assistant", qa: "QA", ai: "AI", factcheck: "fact-checking", fundamentals: "stocks and crypto analysis" };
 const kindWords = (specialty: string): string => WORDS[specialty] ?? specialty;
 
 /** What one orb is asked for its idea (PLAN 5.18, 5.20): what the company can spend and what that asks of an idea, who
- * is in the office, the ideas you approved and passed, and the four lines a pitch comes in. */
+ * is in the office, the ideas you approved and passed, and the six lines a pitch comes in. */
 export function pitchPrompt(o: { company: string; founder: string; me: ReportOrb; office: readonly ReportOrb[]; budget: Budget | null; approved: readonly string[]; passed: readonly string[] }): string {
   const free = !o.budget || (o.budget.start === 0 && o.budget.month === 0);
   return [
     `You work at ${o.company}, an Orb startup its Founder ${o.founder} runs; your part in it: ${kindWords(o.me.specialty)}. The board's report today asks a few colleagues for one idea each to make the company money.`,
     `${budgetLine(o.budget, o)} ${free ? "The idea has to start free: free tools and free tiers only, and the office's own work; it earns before it buys anything." : "The idea has to fit inside that, and costing less is better."}`,
-    `The office: ${o.office.map((w) => `${w.name} (${kindWords(w.specialty)})`).join(", ")}. Pitch work these orbs can do.`,
+    `The office: ${o.office.map((w) => `${w.name} (${kindWords(w.specialty)})`).join(", ")}. Pitch work these orbs can do themselves. Do not use outside hires, the Founder's hands, borrowing, investments or financial trades, physical inventory, or work that needs a licence or permit.`,
     o.approved.length ? `${o.founder} approved these already, and the office works toward them: ${o.approved.map((x) => `"${x}"`).join("; ")}.` : "",
     o.passed.length ? `${o.founder} passed these, so never pitch them again: ${o.passed.map((x) => `"${x}"`).join("; ")}.` : "",
-    "Give the one idea you think is best, from what your work knows: something the office can start this week. Answer in these four lines, plain words, nothing before or after:",
+    "Give the one idea you think is best, from what your work knows: something the office can start this week. Answer in these six lines, plain words, nothing before or after:",
     "Idea: what to do, in one or two sentences.",
     "Who pays: who pays for it, and about how much.",
+    `Who does it: only the names of orbs in the office, joined by "and".`,
+    `Your part: "Approve it", "Approve or pass", or "Nothing"; never give ${o.founder} work to do.`,
     "Costs: $_ to start, $_ a month, before it earns anything.",
     "First step: what the office does first, this week.",
   ].filter(Boolean).join("\n");
@@ -327,12 +366,12 @@ export class BoardReports {
       let kept: Pitch | null = null;
       try {
         const first = readPitch(await this.#o.ask(o.id, prompt));
-        const why = first && overBy(first, budget);
+        const why = first && whyNotPitch(first, budget, office, founder);
         if (first && !why) kept = first;
         else if (first && why) {
-          // asked again, once: an idea the company cannot pay for, or one that does not say, is no use to you
-          const again = readPitch(await this.#o.ask(o.id, `${prompt}\n\nYour idea, "${first.text}", ${why}. Answer again in the same four lines, with an idea that fits what the company can spend.`));
-          const still = again ? overBy(again, budget) : "is no idea";
+          // asked again, once: an idea this office cannot do without the Founder's labour or an unsafe dependency is no use
+          const again = readPitch(await this.#o.ask(o.id, `${prompt}\n\nYour idea, "${first.text}", ${why}. Answer again in the same six lines, with an idea this office can do and that fits what the company can spend.`));
+          const still = again ? whyNotPitch(again, budget, office, founder) : "is no idea";
           if (again && !still) kept = again;
           else {
             left++;
@@ -342,7 +381,7 @@ export class BoardReports {
       } catch (e) {
         this.#events.append("report.ask_failed", { why: e instanceof Error ? e.message : String(e) }, { orb: o.id });
       }
-      if (kept) ideas.push({ orb: o.id, name: o.name, text: kept.text, who: kept.who, start: kept.costs.start!, month: kept.costs.month!, first: kept.first });
+      if (kept) ideas.push({ orb: o.id, name: o.name, text: kept.text, who: kept.who, does: kept.does, yours: kept.yours, start: kept.costs.start!, month: kept.costs.month!, first: kept.first });
     }
 
     const world = this.#o.news(since).slice(0, 6).map((n) => ({ ...n, name: nameOf(n.orb) }));

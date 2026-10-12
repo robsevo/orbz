@@ -91,6 +91,8 @@ import { researchTools } from "./desk/research-tools.ts";
 import { Casebook } from "./desk/casebook.ts";
 import { traceTools, type Sleuth } from "./desk/trace-tools.ts";
 import { Trail } from "./desk/trail.ts";
+import { News } from "./desk/news.ts";
+import { newsTools } from "./desk/news-tools.ts";
 import { Wallets } from "./desk/wallets.ts";
 import { Loops, type LoopsOptions } from "./loops.ts";
 import { cronOf, Schedules } from "./schedule.ts";
@@ -265,6 +267,8 @@ export class Home {
   readonly desk: Desk;
   /** The desk's cases (PLAN 5.42): coins looked into, the money as a graph, findings with their evidence. */
   readonly cases: Casebook;
+  /** The news that could move a coin (PLAN 5.43): the crypto press's feeds, tagged by code. */
+  readonly news: News;
   readonly wallets: Wallets;
   readonly swaps: Swaps;
   /** An orb's orders on its account, paper or real money alike to it (PLAN 5.34). */
@@ -328,6 +332,7 @@ export class Home {
     this.orders = new Orders(db, this.events, this.desk, this.swaps, this.market, now);
     this.swaps.onSettled = (s) => this.orders.settled(s);
     this.cases = new Casebook(db, this.events, now);
+    this.news = new News({ fetch: deskFetch, now });
     const big = opts.brain?.preset.big ?? null;
     this.chatgpt = new ChatGPT({ dataDir: this.dataDir, events: this.events, clock: this.clock, ...opts.chatgpt });
     const chatgptReady = this.chatgpt.load().then(() => {}, () => {}); // a home never signed in does not touch the keychain
@@ -437,6 +442,8 @@ export class Home {
       ...researchTools({ desk: this.desk, nameOf: (orb) => this.inbox.orb(orb)?.name ?? orb }),
       // the desk's investigations (PLAN 5.42): a case's coins read from their chain, the money followed
       ...traceTools({ book: this.cases, sleuth: this.sleuth(), nameOf: (orb) => this.inbox.orb(orb)?.name ?? orb }),
+      // the news that could move a coin (PLAN 5.43), each story with how its coins moved since
+      ...newsTools({ news: this.news, bars: (sym) => this.market.candles(sym, "15m", 192) }),
       // the reading library (PLAN 3.12): the sites the office follows, beside web search
       ...readingTools(this.reading, (orb) => this.inbox.orb(orb)?.name ?? orb),
       // how the org works (PLAN 5.4): who fits a row, and a Senior passing a habit on (your yes first)
