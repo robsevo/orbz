@@ -2191,6 +2191,62 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ('a light turn on Gemini stays on the flash', 'src/brain/brains.ts', [
         ('return ep.chain === "gemini" && lite ? { ...ep, model: lite } : ep;', 'return ep;'),
     ], ['brains.test.ts']),
+    # a real workbook (PLAN 4.9): every cell as a spreadsheet works it out, checked before anything is written
+    ("a formula's subtraction is worked out as an addition", 'src/sheets/xlsx.ts', [
+        ('const v = n.op === "+" ? a + b : n.op === "-" ? a - b : ',
+         'const v = n.op === "+" ? a + b : n.op === "-" ? a + b : '),
+    ], ['sheets.test.ts']),
+    ("Excel's formula drops the brackets that change it", 'src/sheets/xlsx.ts', [
+        ('return (low && (n.op === "*" || n.op === "/")) || (right && m.k === "op" && (n.op === "-" || n.op === "/") && (low || n.op === "/")) ? `(${s})` : s;',
+         'return s;'),
+    ], ['sheets.test.ts']),
+    ('the totals sum one row short', 'src/sheets/xlsx.ts', [
+        ('sums[i] = { v, f: `SUBTOTAL(${SUBTOTAL[c.total]},${colLetter(i)}${first}:${colLetter(i)}${last})` };',
+         'sums[i] = { v, f: `SUBTOTAL(${SUBTOTAL[c.total]},${colLetter(i)}${first}:${colLetter(i)}${last - 1})` };'),
+    ], ['sheets.test.ts']),
+    ('a formula naming a column that is not there is let through', 'src/sheets/xlsx.ts', [
+        ('      if (col < 0) fail(`names ${t}, which is not one of its columns`);\n',
+         ''),
+    ], ['sheets.test.ts']),
+    ('a percent written 12.5% is kept as 12.5', 'src/sheets/xlsx.ts', [
+        ('    return n / 100;\n',
+         '    return n;\n'),
+    ], ['sheets.test.ts']),
+    ("read_file reads a workbook's bytes", 'src/agent/tools.ts', [
+        ('      if (/\\.xlsx$/i.test(p)) {\n        try {\n          return { content: clip(bookText(readXlsx(readFileSync(p)))) };',
+         '      if (false) {\n        try {\n          return { content: clip(bookText(readXlsx(readFileSync(p)))) };'),
+    ], ['sheets.test.ts']),
+    # tidying an inbox (PLAN 4.10): only what was shown, only on your yes, never a delete
+    ('a tidy moves a message it was never shown', 'src/connectors/mail.ts', [
+        ('    if (never.length) return `message',
+         '    if (false) return `message'),
+    ], ['inbox-tidy.test.ts']),
+    ('a tidy no longer waits for your yes', 'src/connectors/mail.ts', [
+        ('      decision: "ask", // one press for the whole of it, and only then (owner, 10-12)\n',
+         '      decision: "allow",\n'),
+        ('      act: "send", // it changes your mailbox, outside the home, after reading it: a fresh yes, whatever a rule allows\n',
+         ''),
+    ], ['inbox-tidy.test.ts']),
+    ('a renumbered inbox is tidied anyway', 'src/connectors/mail.ts', [
+        ('      if (c.uidValidity !== shown.validity) throw',
+         '      if (false) throw'),
+    ], ['inbox-tidy.test.ts']),
+    ('a server without MOVE gets copy-and-delete', 'src/connectors/imap.ts', [
+        ('    if (!(caps ?? (await this.capabilities())).has("MOVE")) throw new ImapError("this mail server cannot move mail (it has no MOVE), so nothing was moved");',
+         '    if (!(caps ?? (await this.capabilities())).has("MOVE")) { for (const set of sets(uids)) { await this.run(`UID COPY ${set} ${quote(wire)}`); await this.run(`UID STORE ${set} +FLAGS.SILENT (\\\\Deleted)`); await this.run("EXPUNGE"); } return; }'),
+    ], ['inbox-tidy.test.ts']),
+    ("an inbox's read flags are lost", 'src/connectors/imap.ts', [
+        ('      const seen = [lines[0]!, lines.at(-1)!].some((l) => /\\\\Seen\\b/i.test(/FLAGS \\(([^)]*)\\)/i.exec(l)?.[1] ?? ""));',
+         '      const seen = false;'),
+    ], ['inbox-tidy.test.ts']),
+    ('archived mail goes to a new folder where Gmail keeps All Mail', 'src/connectors/mail.ts', [
+        ('        let box = boxes.find((b) => b.flags.some((f) => /^\\\\Archive$/i.test(f))) ?? boxes.find((b) => b.flags.some((f) => /^\\\\All$/i.test(f))) ?? find("Archive");',
+         '        let box = find("Archive");'),
+    ], ['inbox-tidy.test.ts']),
+    ('a server without MOVE still gets its read marks', 'src/connectors/mail.ts', [
+        ('      if (moving && !caps.has("MOVE")) throw new ImapError("this mail server cannot move mail (it has no MOVE), so nothing was moved");\n',
+         ''),
+    ], ['inbox-tidy.test.ts']),
 ]
 
 # the app (PLAN 2.x): paths are inside packages/app
@@ -3724,6 +3780,23 @@ APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("the desk's tab is not in its address", "src/ui/nav.ts", [
         ('  if (parts[0] === "desk") return parts[1] ? { room: "desk", tab: parts[1] } : { room: "desk" };', '  if (parts[0] === "desk") return { room: "desk" };'),
     ], ["nav.test.ts"]),
+    # office work on his computer (PLAN 4.9, 4.10): a workbook as a spreadsheet, an inbox tidied
+    ('a moved message stays in his inbox view', 'src/rooms/work.ts', [
+        ('gone: r.fate?.kind === "archive" || r.fate?.kind === "folder",',
+         'gone: false,'),
+    ], ['work.test.ts']),
+    ('a workbook he made is not a file he made', 'src/rooms/work.ts', [
+        ('export const WRITES = new Set(["write_file", "write_sheet"]);',
+         'export const WRITES = new Set(["write_file"]);'),
+    ], ['work.test.ts']),
+    ("the formula bar shows a cell's value, never its formula", 'src/rooms/Computer.tsx', [
+        ('{chosen?.f ?? chosen?.v ?? ""}',
+         '{chosen?.v ?? ""}'),
+    ], ['computer-office.test.ts']),
+    ('the tidied inbox keeps the rows it filed away', 'src/rooms/Computer.tsx', [
+        ('...(r.gone && { animation: `orbs-tidy-away 560ms var(--m-spring) ${Math.min(i, 12) * 45}ms both` })',
+         '...(r.gone && {})'),
+    ], ['computer-office.test.ts']),
 ]
 
 # the `orbs` terminal (PLAN 1.9): paths are inside packages/terminal

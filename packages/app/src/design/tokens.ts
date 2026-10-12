@@ -453,6 +453,8 @@ export function stylesheet(fontUrl = "fonts/Nunito.ttf"): string {
     // his computer (rooms/Computer.tsx): a ring where his step lands; a bar growing to its number
     `@keyframes orbs-click { from { scale: .5; opacity: 1; } to { scale: 1.5; opacity: 0; } }`,
     `@keyframes orbs-grow { from { transform: scaleX(0); } to { transform: none; } }`,
+    // an inbox's message filed away by a tidy (PLAN 4.10): it slides off and its row closes up
+    `@keyframes orbs-tidy-away { 0% { max-height: 64px; } 40% { opacity: 1; translate: 0 0; } 100% { max-height: 0; opacity: 0; translate: 48px 0; padding-top: 0; padding-bottom: 0; } }`,
     `@keyframes orbs-twinkle { 0%, 100% { scale: .4; opacity: .2; } 50% { scale: 1; opacity: 1; } }`,
     `@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }`,
   ].join("\n");

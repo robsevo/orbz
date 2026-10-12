@@ -24,6 +24,8 @@ export const BY_EXTENSION: Record<string, Area> = {
 };
 const BY_TOOL: Record<string, Area> = {
   web_search: "research", web_fetch: "research", move_reminder: "scheduling", list_reminders: "scheduling",
+  // tidying an inbox (PLAN 4.10)
+  list_mail: "inbox", tidy_mail: "inbox",
   // reverse engineering is finding out how something works, with evidence (PLAN 4.8)
   inspect_binary: "research", inspect_app: "research", inspect_contract: "research", inspect_capture: "research",
   // the desk (PLAN 5.25)

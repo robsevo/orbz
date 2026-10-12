@@ -2,9 +2,10 @@
 // through the door. Read only, and only inside it: the tools' own guard (tools.ts inWorkspace)
 // refuses "..", an absolute path, and a link that leads out. The one way in is a file you give
 // him from a chat (PLAN 2.4), kept in `from-you/` under a plain name, never over another.
-import { closeSync, lstatSync, mkdirSync, openSync, readdirSync, readSync, statSync, writeFileSync } from "node:fs";
+import { closeSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { inWorkspace } from "./agent/tools.ts";
+import { type BookView, readXlsx, SheetError } from "./sheets/xlsx.ts";
 
 export const workspaceOf = (dataDir: string, orb: string): string => join(dataDir, "orbs", orb, "workspace");
 
@@ -25,7 +26,10 @@ export class MissingError extends Error {
 }
 
 export type Entry = { path: string; dir: boolean; size: number; mtime: number };
-export type WorkFile = { path: string; size: number; mtime: number; text: string | null; truncated: boolean };
+/** `sheet`: a workbook (.xlsx, PLAN 4.9) as it shows, its sheets and cells; or why it could not be read. */
+export type WorkFile = { path: string; size: number; mtime: number; text: string | null; truncated: boolean; sheet?: BookView; sheetError?: string };
+/** A workbook is read whole for his screen, up to this big. */
+export const WORKBOOK_CAP = 10 * 1024 * 1024;
 
 const join2 = (dir: string, name: string): string => (dir ? `${dir.replace(/\/+$/, "")}/${name}` : name);
 
@@ -71,6 +75,16 @@ export function readWorkspace(dataDir: string, orb: string, path: string, root =
     throw new MissingError(path);
   }
   if (!s.isFile()) throw new MissingError(path);
+  if (/\.xlsx$/i.test(path)) {
+    const base = { path, size: s.size, mtime: s.mtimeMs, text: null, truncated: false };
+    if (s.size > WORKBOOK_CAP) return { ...base, sheetError: `it is ${Math.round(s.size / 1024 / 1024)} MB, too big to show here` };
+    try {
+      return { ...base, sheet: readXlsx(readFileSync(p)) };
+    } catch (e) {
+      if (e instanceof SheetError) return { ...base, sheetError: e.message };
+      throw e;
+    }
+  }
   const n = Math.min(s.size, READ_CAP);
   const buf = Buffer.alloc(n);
   const fd = openSync(p, "r");

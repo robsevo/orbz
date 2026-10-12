@@ -18,7 +18,10 @@ export type Choice = "approve" | "deny" | "always" | "answer";
 export type Tab = "brainstorm" | "floor";
 /** His computer (PLAN 2.8): a folder's entries and a file's text in his workspace, as the home reads them. */
 export type Entry = { path: string; dir: boolean; size: number; mtime: number };
-export type WorkFile = { path: string; size: number; mtime: number; text: string | null; truncated: boolean };
+/** A workbook (PLAN 4.9) comes as it shows: each sheet's cells, its columns' widths, the rows frozen at its top. */
+export type SheetCell = { v: string; num: boolean; f?: string; role?: "title" | "head" | "total" | "note" | "band" | "bold" };
+export type SheetView = { name: string; rows: (SheetCell | null)[][]; widths: number[]; frozen: number; truncated: boolean };
+export type WorkFile = { path: string; size: number; mtime: number; text: string | null; truncated: boolean; sheet?: { sheets: SheetView[]; truncated: boolean }; sheetError?: string };
 /** The lab (PLAN 2.13): every brainstorm and every plan shown, as the home keeps them. */
 /** The reading library (PLAN 3.12): a source the office follows, and a page read from one. */
 export type ReadingSource = {

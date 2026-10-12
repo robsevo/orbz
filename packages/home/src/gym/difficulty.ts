@@ -76,6 +76,7 @@ const hostOf = (url: string): string | null => {
     return null;
   }
 };
+const listOf = (v: unknown): unknown[] => (Array.isArray(v) ? v : []); // a list in a call's arguments, or none
 const wordCount = (t: string): number => (t.match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu) ?? []).length;
 
 /** What one run did, measured from its trace. */
@@ -116,6 +117,15 @@ export function measure(events: EventLog, run: number): Measures {
         if (c.name === "web_search" || c.name === "search_reading") m.searches++;
         if (/^inspect_(binary|app|contract|capture)$/.test(c.name)) examined.add(typeof a.path === "string" ? a.path : `${c.name}:${m.calls}`);
         if (ITEM_TOOLS.test(c.name)) m.items++;
+        // a tidy handles each message in it (PLAN 4.10): one card for forty emails is forty of the inbox's items
+        if (c.name === "tidy_mail") {
+          m.items += new Set([...listOf(a.archive), ...listOf(a.read), ...listOf(a.folders).flatMap((f) => listOf((f as { uids?: unknown })?.uids))]).size;
+        }
+        // a workbook is a file, its rows its lines (PLAN 4.9)
+        if (c.name === "write_sheet" && typeof a.path === "string") {
+          files.add(a.path);
+          m.lines += listOf(a.sheets).reduce((n: number, sh) => n + listOf((sh as { rows?: unknown })?.rows).length, 0);
+        }
       }
     } else if (s.kind === "tool") {
       const name = String(s.data.name ?? "");

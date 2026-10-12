@@ -756,7 +756,7 @@ export class AgentRunner implements Runner {
   #result(msg: Message, call: ToolCall, r: ToolResult, ctx: RunContext): void {
     this.#o.conversations.add({
       conversation: ctx.conversation, orb: ctx.orb, role: "tool", run: ctx.run, content: r.content,
-      toolCallId: call.id, meta: { tool: call.name, for: msg.id, ...(r.isError && { error: true }), ...(r.stoppedByUser && { stopped: true }) },
+      toolCallId: call.id, meta: { tool: call.name, for: msg.id, ...(r.isError && { error: true }), ...(r.stoppedByUser && { stopped: true }), ...(r.view && { view: r.view }) },
     });
   }
 

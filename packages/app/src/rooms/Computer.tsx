@@ -3,7 +3,9 @@
 // the Dots film shows it:
 //   - Work: what he is making, shown as what it is (rooms/work.ts): a dataset as its table, a page
 //     as the page (its scripts do not run here), a dashboard's numbers as bars, a document, a
-//     calendar's events, or the code;
+//     calendar's events, or the code; a workbook (PLAN 4.9) as a spreadsheet, its cells as Excel
+//     shows them, a formula bar, its sheets' tabs; an inbox he is tidying (PLAN 4.10), each
+//     message's fate beside it until you say, then the ones filed away leaving it;
 //   - Browser: his own browser (PLAN 4.1, 4.6): the last still of his screen, or his screen live,
 //     his face where he last clicked, and your hands on it (take over: clicks on his screen, typing,
 //     an address; hand back; reset);
@@ -16,17 +18,17 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type 
 import { Orb } from "../orb/Orb.tsx";
 import { PERSONALITIES, type Character, type Replies, speaks } from "../orb/spec.ts";
 import type { Gesture } from "../orb/life.ts";
-import { type ComputerState, type Hands, idOf, type Entry, type LessonState, type Message, type Office, type WorkFile } from "../home/link.ts";
+import { type ComputerState, type Hands, idOf, type Entry, type LessonState, type Message, type Office, type SheetCell, type WorkFile } from "../home/link.ts";
 import { LessonView } from "./Lesson.tsx";
 import { play } from "../ui/sound.ts";
 import { OneLine, SideScroll } from "../ui/Balanced.tsx";
-import { ACT_WORDS, actsOf, chartOf, docBlocks, filesOf, icsEvents, kindOf, parseCsv, type Act, type Kind } from "./work.ts";
+import { ACT_WORDS, actsOf, chartOf, docBlocks, filesOf, icsEvents, inboxOf, kindOf, parseCsv, WRITES, type Act, type Inbox, type Kind } from "./work.ts";
 import { dragged, pipStart, type Box } from "./pip.ts";
 
 type Tab = "Work" | "Browser" | "Files" | "Terminal" | "Activity" | "Lesson";
 const TABS: Tab[] = ["Work", "Browser", "Files", "Terminal", "Activity"];
-const MARK: Record<Kind | "folder", string> = { dataset: "▦", ui: "◧", dashboard: "▥", doc: "▤", calendar: "☷", code: "‹›", folder: "▸" };
-const KIND_WORDS: Record<Kind, string> = { dataset: "Dataset", ui: "Page", dashboard: "Dashboard", doc: "Document", calendar: "Calendar", code: "Code" };
+const MARK: Record<Kind | "folder", string> = { dataset: "▦", ui: "◧", dashboard: "▥", doc: "▤", calendar: "☷", code: "‹›", sheet: "⊞", folder: "▸" };
+const KIND_WORDS: Record<Kind, string> = { dataset: "Dataset", ui: "Page", dashboard: "Dashboard", doc: "Document", calendar: "Calendar", code: "Code", sheet: "Spreadsheet" };
 const mono: CSSProperties = { font: "500 12px/18px var(--mono)", color: "var(--text-2)", whiteSpace: "pre-wrap", overflowWrap: "anywhere", margin: 0 };
 const hhmm = (t: number): string => new Date(t).toTimeString().slice(0, 5);
 
@@ -42,7 +44,7 @@ export function Computer(o: { home: Office; orb: Character; messages: Message[];
   const own = useRef(false); // the browser's full screen holds it (not the window's)
   const acts = actsOf(o.messages, id);
   const latest = acts[acts.length - 1];
-  const written = filesOf(acts.filter((a) => a.tool === "write_file"));
+  const written = filesOf(acts.filter((a) => WRITES.has(a.tool)));
   const [tab, setTab] = useState<Tab>("Work");
   // his lesson (PLAN 4.4): a sixth tab while he is giving one, opened when it begins
   const [lesson, setLesson] = useState<LessonState | null>(null);
@@ -59,7 +61,10 @@ export function Computer(o: { home: Office; orb: Character; messages: Message[];
   const [chosen, setChosen] = useState<string | null>(null);
   const open = chosen ?? written[written.length - 1] ?? null;
   // the step that last touched the open file: a new one reloads it
-  const lastOnOpen = [...acts].reverse().find((a) => a.args.path === open && a.tool === "write_file" && a.result !== null);
+  const lastOnOpen = [...acts].reverse().find((a) => a.args.path === open && WRITES.has(a.tool) && a.result !== null);
+  // his inbox (PLAN 4.10) is on his screen while it is what he touched last, until you pick a file
+  const inbox = inboxOf(acts);
+  const showMail = inbox !== null && chosen === null && acts.findLastIndex((a) => a.tool === "list_mail" || a.tool === "tidy_mail") > acts.findLastIndex((a) => WRITES.has(a.tool));
   const [file, setFile] = useState<WorkFile | null>(null);
   const [dir, setDir] = useState("");
   const [entries, setEntries] = useState<Entry[] | null>(null);
@@ -134,7 +139,7 @@ export function Computer(o: { home: Office; orb: Character; messages: Message[];
       live = false;
     };
   }, [open, lastOnOpen?.id]);
-  const writes = acts.filter((a) => a.tool === "write_file" && a.result !== null).length;
+  const writes = acts.filter((a) => WRITES.has(a.tool) && a.result !== null).length;
   useEffect(() => {
     if (tab !== "Files") return;
     let live = true;
@@ -201,7 +206,7 @@ export function Computer(o: { home: Office; orb: Character; messages: Message[];
         </OneLine>
       </div>
       <div ref={panel} style={{ position: "relative", minWidth: 0, minHeight: floating || full ? 0 : o.big ? 320 : 200, maxHeight: floating || full ? "none" : o.big ? 560 : 360, overflowY: "auto", padding: 12 }}>
-        {tab === "Work" && <Work open={open} file={file} acts={acts} touched={lastOnOpen} />}
+        {tab === "Work" && (showMail ? <InboxView inbox={inbox!} mark={latest?.id} /> : <Work open={open} file={file} acts={acts} touched={lastOnOpen} />)}
         {tab === "Browser" && <Browser home={o.home} orb={o.orb} state={cstate} setState={setCstate} />}
         {tab === "Files" && (
           <Files
@@ -249,8 +254,8 @@ function Work({ open, file, acts, touched }: { open: string | null; file: WorkFi
   const [source, setSource] = useState(false);
   if (!open) return <Quiet>{acts.length ? "Nothing made yet: the work is under Activity." : "Nothing on the screen yet."}</Quiet>;
   if (!file || file.path !== open) return <Quiet>Opening {open}…</Quiet>;
-  if (file.text === null) return <Quiet>{open} is not a text file ({file.size} bytes).</Quiet>;
   const kind = kindOf(open, file.text);
+  if (kind !== "sheet" && file.text === null) return <Quiet>{open} is not a text file ({file.size} bytes).</Quiet>;
   const mark = touched?.id; // the part he changed last gets the cursor
   const title = (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8, minWidth: 0 }}>
@@ -259,7 +264,7 @@ function Work({ open, file, acts, touched }: { open: string | null; file: WorkFi
       </span>
       <span style={{ display: "flex", gap: 6, alignItems: "center", flex: "0 0 auto" }}>
         <span data-kind={kind} style={{ font: "700 11px/16px var(--font)", letterSpacing: ".06em", textTransform: "uppercase", color: "var(--text-3)" }}>{KIND_WORDS[kind]}</span>
-        {kind !== "code" && (
+        {kind !== "code" && kind !== "sheet" && (
           <button onClick={() => setSource((v) => !v)} aria-pressed={source} style={{ font: "600 11px/16px var(--font)", border: 0, borderRadius: 8, padding: "2px 8px", background: "var(--fill)", color: "var(--text-2)", cursor: "pointer" }}>
             Source
           </button>
@@ -267,6 +272,8 @@ function Work({ open, file, acts, touched }: { open: string | null; file: WorkFi
       </span>
     </div>
   );
+  if (kind === "sheet") return <SheetGrid title={title} file={file} mark={mark} />;
+  if (file.text === null) return null; // only a workbook comes without its text
   const cut = file.truncated && <span style={{ font: "500 11px/16px var(--font)", color: "var(--text-3)" }}>Showing the first {Math.round(file.text.length / 1024)} KB of {Math.round(file.size / 1024)} KB.</span>;
   if (source || kind === "code") {
     const lines = file.text.replace(/\n$/, "").split("\n").slice(0, 400);
@@ -387,6 +394,164 @@ function Work({ open, file, acts, touched }: { open: string | null; file: WorkFi
       })}
       {cut}
     </article>
+  );
+}
+
+const letterOf = (i: number): string => {
+  let s = "";
+  for (let n = i + 1; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + ((n - 1) % 26)) + s;
+  return s;
+};
+const ROLE: Record<NonNullable<SheetCell["role"]>, CSSProperties> = {
+  title: { font: "800 16px/22px var(--font)", color: "var(--text-1)" },
+  note: { fontStyle: "italic", color: "var(--text-3)" },
+  head: { background: "var(--accent)", color: "var(--ground)", fontWeight: 800 },
+  band: { background: "var(--fill)" },
+  // a rule over the totals and a double one under them, as an accountant draws them
+  total: { fontWeight: 800, boxShadow: "inset 0 1.5px 0 var(--text-2), inset 0 -1px 0 var(--text-2), inset 0 -3px 0 var(--card), inset 0 -4px 0 var(--text-2)" },
+  bold: { fontWeight: 800 },
+};
+
+/** A workbook (PLAN 4.9) as a spreadsheet: its columns lettered and its rows numbered, each cell as Excel shows it and
+ * styled by the part it plays (a title, the header in his colour, banded rows, the totals), a formula bar for the
+ * cell pressed (the last formula until then: the totals'), the sheets' tabs. */
+function SheetGrid({ title, file, mark }: { title: ReactNode; file: WorkFile; mark: string | undefined }) {
+  const [at, setAt] = useState(0);
+  const [picked, setPicked] = useState<{ r: number; c: number } | null>(null);
+  const book = file.sheet;
+  if (!book) return <div>{title}<Quiet>It could not be read as a workbook{file.sheetError ? `: ${file.sheetError}` : ""}.</Quiet></div>;
+  const sheet = book.sheets[Math.min(at, book.sheets.length - 1)];
+  if (!sheet) return <div>{title}<Quiet>A workbook with no sheets.</Quiet></div>;
+  const cols = Math.max(1, ...sheet.rows.map((r) => r.length));
+  const rows = sheet.rows.slice(0, 200);
+  let lastF: { r: number; c: number } | null = null;
+  rows.forEach((r, i) => r.forEach((c, j) => c?.f && (lastF = { r: i, c: j })));
+  const sel = picked ?? lastF ?? { r: 0, c: 0 };
+  const chosen = rows[sel.r]?.[sel.c] ?? null;
+  const px = (w: number | undefined): number => Math.round(Math.min(48, Math.max(6, w ?? 9)) * 7 + 14);
+  const totals = rows.findLastIndex((r) => r.some((c) => c?.role === "total"));
+  const lastRow = totals >= 0 ? totals : rows.findLastIndex((r) => r.some((c) => c && !c.role?.match(/note/)));
+  const edge = "1px solid var(--sep)";
+  const width = 36 + Array.from({ length: cols }, (_, j) => px(sheet.widths[j])).reduce((a, b) => a + b, 0);
+  return (
+    <div data-sheet style={{ display: "grid", gap: 6, minWidth: 0 }}>
+      {title}
+      <div data-formula-bar style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, padding: "4px 8px", borderRadius: 8, background: "var(--fill)", boxShadow: "inset 0 0 0 1px var(--hairline)", font: "500 12px/18px var(--mono)", color: "var(--text-1)" }}>
+        <span data-cell-ref style={{ flex: "0 0 auto", minWidth: 36, fontWeight: 700, color: "var(--text-2)" }}>{letterOf(sel.c)}{sel.r + 1}</span>
+        <span aria-hidden style={{ flex: "0 0 auto", fontStyle: "italic", color: "var(--accent)", fontWeight: 700 }}>fx</span>
+        <span data-cell-shows style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{chosen?.f ?? chosen?.v ?? ""}</span>
+      </div>
+      <div style={{ overflowX: "auto", borderRadius: 10, boxShadow: "inset 0 0 0 1px var(--hairline)", background: "var(--card)" }}>
+        <table style={{ borderCollapse: "separate", borderSpacing: 0, tableLayout: "fixed", width, font: "500 12px/18px var(--font)", color: "var(--text-1)" }}>
+          <colgroup>
+            <col style={{ width: 36 }} />
+            {Array.from({ length: cols }, (_, j) => <col key={j} style={{ width: px(sheet.widths[j]) }} />)}
+          </colgroup>
+          <thead>
+            <tr>
+              <th aria-hidden style={{ position: "sticky", top: 0, left: 0, zIndex: 2, background: "var(--raised)", borderRight: edge, borderBottom: edge }} />
+              {Array.from({ length: cols }, (_, j) => (
+                <th key={j} scope="col" style={{ position: "sticky", top: 0, zIndex: 1, background: "var(--raised)", borderRight: edge, borderBottom: edge, font: "600 11px/18px var(--font)", color: sel.c === j ? "var(--accent)" : "var(--text-3)" }}>{letterOf(j)}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => {
+              const only = r.filter(Boolean);
+              // a row of one label (a title, a note) runs across the sheet, as Excel lets it run over its empty neighbours
+              const spans = only.length === 1 && r[0] && !r[0].num && r[0].role !== "head" && r[0].role !== "total";
+              return (
+                <tr key={i} data-row={i + 1} data-act={i === lastRow ? mark : undefined} style={{ height: r[0]?.role === "title" ? 30 : 24 }}>
+                  <th scope="row" style={{ position: "sticky", left: 0, zIndex: 1, background: "var(--raised)", borderRight: edge, borderBottom: edge, font: "600 11px/18px var(--font)", color: sel.r === i ? "var(--accent)" : "var(--text-3)", textAlign: "center" }}>{i + 1}</th>
+                  {spans ? (
+                    <td colSpan={cols} onClick={() => setPicked({ r: i, c: 0 })} style={{ padding: "2px 6px", borderBottom: edge, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", ...(r[0]!.role && ROLE[r[0]!.role]) }}>{r[0]!.v}</td>
+                  ) : (
+                    Array.from({ length: cols }, (_, j) => {
+                      const c = r[j] ?? null;
+                      const on = sel.r === i && sel.c === j;
+                      return (
+                        <td key={j} data-cell={`${letterOf(j)}${i + 1}`} onClick={() => setPicked({ r: i, c: j })}
+                          style={{ padding: "2px 6px", borderRight: edge, borderBottom: edge, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", cursor: "cell", textAlign: c?.num || /^#[A-Z/0!]+[!?]?$/.test(c?.v ?? "") ? "right" : "left", fontVariantNumeric: "tabular-nums", ...(c?.role && ROLE[c.role]), ...(on && { outline: "2px solid var(--accent)", outlineOffset: -2 }) }}>
+                          {c?.v ?? ""}
+                        </td>
+                      );
+                    })
+                  )}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {book.sheets.length > 1 && (
+        <div role="tablist" aria-label="Sheets" style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+          {book.sheets.map((sh, k) => (
+            <button key={sh.name} role="tab" aria-selected={k === at} onClick={() => (setAt(k), setPicked(null))} style={{ border: 0, borderRadius: 8, padding: "4px 10px", cursor: "pointer", font: "700 12px/16px var(--font)", background: k === at ? "var(--accent-fill)" : "var(--fill)", boxShadow: k === at ? "inset 0 0 0 1.5px var(--accent)" : "none", color: k === at ? "var(--text-1)" : "var(--text-2)" }}>
+              {sh.name}
+            </button>
+          ))}
+        </div>
+      )}
+      {(sheet.truncated || sheet.rows.length > rows.length || book.truncated) && <span style={{ font: "500 11px/16px var(--font)", color: "var(--text-3)" }}>Showing its first part: open it in Excel for all of it.</span>}
+    </div>
+  );
+}
+
+const FATE_WORDS = (r: Inbox["rows"][number]): string | null =>
+  !r.fate ? null : r.fate.kind === "archive" ? "Archive" : r.fate.kind === "read" ? "Mark read" : `→ ${r.fate.folder}`;
+const day = (t: number | null): string => {
+  if (t === null) return "";
+  const d = new Date(t);
+  return d.toDateString() === new Date().toDateString() ? hhmm(t) : d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+};
+
+/** An inbox he is tidying (PLAN 4.10): as he was shown it, each message's fate beside it while it waits for your OK,
+ * then the ones filed away leaving it and what was done said over it. Its rows are the home's, never typed. */
+function InboxView({ inbox, mark }: { inbox: Inbox; mark: string | undefined }) {
+  const left = inbox.rows.filter((r) => !r.gone);
+  const fated = inbox.rows.filter((r) => r.fate);
+  const n = (k: string): number => fated.filter((r) => r.fate!.kind === k).length;
+  const folders = [...new Set(fated.flatMap((r) => (r.fate!.kind === "folder" ? [r.fate!.folder] : [])))];
+  const asking = [n("archive") ? `archive ${n("archive")}` : null, ...folders.map((f) => `file ${fated.filter((r) => r.fate!.kind === "folder" && r.fate!.folder === f).length} in ${f}`), n("read") ? `mark ${n("read")} read` : null].filter(Boolean).join(", ");
+  const lastFated = inbox.rows.findLastIndex((r) => r.fate && !r.gone);
+  return (
+    <div data-kind="inbox" data-state={inbox.state} style={{ display: "grid", gap: 8, minWidth: 0 }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, minWidth: 0 }}>
+        <span style={{ font: "700 13px/18px var(--font)", color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <span aria-hidden style={{ color: "var(--accent)" }}>✉</span> Inbox · {inbox.account}
+        </span>
+        <span data-counts style={{ flex: "0 0 auto", font: "600 12px/16px var(--font)", color: "var(--text-3)" }}>{left.length} of {inbox.total} · {inbox.unread} unread</span>
+      </div>
+      {inbox.state === "asking" && <span data-asking style={{ font: "600 12px/16px var(--font)", color: "var(--text-2)" }}>Waiting for your OK: {asking}</span>}
+      {inbox.state === "done" && (
+        <span data-tidied data-act={mark === inbox.act ? mark : undefined} style={{ justifySelf: "start", padding: "6px 12px", borderRadius: 12, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)", font: "700 13px/18px var(--font)", color: "var(--text-1)", animation: "orbs-arrive 520ms var(--m-spring) 600ms both" }}>
+          <span aria-hidden style={{ color: "var(--accent)" }}>✓</span> {inbox.summary}
+        </span>
+      )}
+      {inbox.state === "refused" && <span role="status" style={{ font: "600 12px/16px var(--font)", color: "var(--alert)" }}>{inbox.summary}</span>}
+      <div role="list" style={{ display: "grid", borderRadius: 10, boxShadow: "inset 0 0 0 1px var(--hairline)", overflow: "hidden" }}>
+        {inbox.rows.map((r, i) => {
+          const fate = FATE_WORDS(r);
+          return (
+            <div key={r.uid} role="listitem" data-uid={r.uid} data-fate={r.fate?.kind ?? "stays"} data-gone={r.gone ? "true" : undefined}
+              data-act={(inbox.state === "asking" && i === lastFated) || (inbox.state === "shown" && i === inbox.rows.length - 1) ? mark : undefined}
+              style={{ display: "grid", gridTemplateColumns: "10px minmax(0, 1fr) auto", alignItems: "center", gap: 8, padding: "6px 10px", boxShadow: "inset 0 -1px 0 var(--sep)", overflow: "hidden", ...(r.gone && { animation: `orbs-tidy-away 560ms var(--m-spring) ${Math.min(i, 12) * 45}ms both` }) }}>
+              <i aria-label={r.seen ? undefined : "unread"} style={{ width: 8, height: 8, borderRadius: 4, background: r.seen ? "transparent" : "var(--accent)" }} />
+              <span style={{ display: "grid", minWidth: 0 }}>
+                <span style={{ font: `${r.seen ? 600 : 800} 13px/18px var(--font)`, color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.from || "(no sender)"}</span>
+                <span style={{ font: "500 12px/16px var(--font)", color: "var(--text-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.subject || "(no subject)"}</span>
+              </span>
+              <span style={{ display: "grid", justifyItems: "end", gap: 2 }}>
+                <span style={{ font: "500 11px/14px var(--font)", color: "var(--text-3)", whiteSpace: "nowrap" }}>{day(r.date)}</span>
+                {fate && inbox.state !== "shown" && (
+                  <span data-fate-chip style={{ padding: "1px 8px", borderRadius: 999, font: "700 11px/16px var(--font)", whiteSpace: "nowrap", background: r.fate!.kind === "read" ? "var(--fill)" : "var(--accent-fill)", boxShadow: r.fate!.kind === "read" ? "inset 0 0 0 1px var(--hairline)" : "inset 0 0 0 1px var(--accent)", color: "var(--text-1)", animation: `orbs-fact 320ms ease-out ${Math.min(i, 12) * 40}ms both` }}>{fate}</span>
+                )}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

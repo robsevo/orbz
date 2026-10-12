@@ -1,7 +1,10 @@
 // Mail, no middleman (PLAN 4.2): a small IMAP4rev1 client of our own, for what Orbs does with a
 // mailbox and nothing more: read what is new (headers, and the start of its text) and keep a draft
 // in Drafts (APPEND). It never sends: a reply owed is drafted, never sent (PLAN 4.5), and sending
-// would be the floor's messaging in any case.
+// would be the floor's messaging in any case. Tidying (PLAN 4.10, only once you approve it): mark
+// read (STORE +FLAGS \Seen), make a folder (CREATE) and move a message into one (RFC 6851's UID
+// MOVE: one step, nothing left marked \Deleted). Nothing here deletes or expunges: a server without
+// MOVE is told no, never moved by copy-and-delete.
 //
 // TLS by default (port 993); plain only to the loopback address (a test's server). Every exchange
 // has a deadline. A message's words are someone else's: the orb reads them as from outside.
@@ -10,12 +13,53 @@ import { connect as tlsConnect } from "node:tls";
 
 /** An account by its password, or by an OAuth token (`token`: Gmail and Outlook take nothing else now). */
 export type ImapAccount = { host: string; port?: number; user: string; password: string; token?: string; tls?: boolean; mailbox?: string };
-export type Header = { uid: number; from: string; subject: string; date: number | null; messageId: string | null; automated: boolean };
+/** `seen`: read (\Seen), as its flags say. */
+export type Header = { uid: number; from: string; subject: string; date: number | null; messageId: string | null; automated: boolean; seen: boolean };
+/** A folder by its name (decoded) and how the server spells it, with its special use (\Archive, \All, \Drafts…). */
+export type Box = { name: string; wire: string; flags: string[] };
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 export class ImapError extends Error {}
 
 export const IMAP_MS = 20_000;
 const quote = (s: string): string => `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+const sets = (uids: number[], n = 200): string[] => {
+  const out: string[] = [];
+  for (let i = 0; i < uids.length; i += n) out.push(uids.slice(i, i + n).join(","));
+  return out;
+};
+
+/** A folder's name as IMAP spells it (RFC 3501 5.1.3, modified UTF-7): ASCII as itself, "&" as "&-", the rest
+ * as UTF-16 in base64 with "," for "/" between "&" and "-". */
+export function utf7(name: string): string {
+  let out = "";
+  let run = "";
+  const flush = (): void => {
+    if (!run) return;
+    const b = Buffer.alloc(run.length * 2);
+    for (let i = 0; i < run.length; i++) b.writeUInt16BE(run.charCodeAt(i), i * 2);
+    out += `&${b.toString("base64").replace(/=+$/, "").replace(/\//g, ",")}-`;
+    run = "";
+  };
+  for (const ch of name) {
+    const c = ch.codePointAt(0)!;
+    if (c >= 0x20 && c <= 0x7e) {
+      flush();
+      out += ch === "&" ? "&-" : ch;
+    } else run += ch;
+  }
+  flush();
+  return out;
+}
+/** A folder's name as IMAP spelled it, read. */
+export function fromUtf7(wire: string): string {
+  return wire.replace(/&([^-]*)-/g, (_m, b64: string) => {
+    if (!b64) return "&";
+    const b = Buffer.from(b64.replace(/,/g, "/"), "base64");
+    let s = "";
+    for (let i = 0; i + 1 < b.length; i += 2) s += String.fromCharCode(b.readUInt16BE(i));
+    return s;
+  });
+}
 
 /** RFC 2047 words (=?utf-8?B?…?= and =?utf-8?Q?…?=) as text. */
 export function decodeWords(s: string): string {
@@ -155,14 +199,17 @@ export class Imap {
   async headers(uids: number[]): Promise<Header[]> {
     if (!uids.length) return [];
     // a newsletter, a notification or an auto-reply says so in its headers: never a reply anyone owes
-    const r = await this.run(`UID FETCH ${uids.join(",")} (UID BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE MESSAGE-ID LIST-UNSUBSCRIBE AUTO-SUBMITTED PRECEDENCE)])`);
+    const r = await this.run(`UID FETCH ${uids.join(",")} (UID FLAGS BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE MESSAGE-ID LIST-UNSUBSCRIBE AUTO-SUBMITTED PRECEDENCE)])`);
     const out: Header[] = [];
     for (const part of r.split(/^\* \d+ FETCH /m).slice(1)) {
       const uid = Number(/UID (\d+)/i.exec(part)?.[1]);
       const h = headerFields(part.slice(part.indexOf("\n") + 1));
       const date = h.date ? Date.parse(h.date) : NaN;
       const automated = Boolean(h["list-unsubscribe"]) || /^auto-/i.test(h["auto-submitted"] ?? "") || /^(bulk|list|junk)$/i.test(h.precedence ?? "");
-      out.push({ uid, from: h.from ?? "", subject: h.subject ?? "", date: Number.isNaN(date) ? null : date, messageId: h["message-id"] ?? null, automated });
+      // its flags come before the header's literal or after it, as the server likes: never read inside it
+      const lines = part.split("\n");
+      const seen = [lines[0]!, lines.at(-1)!].some((l) => /\\Seen\b/i.test(/FLAGS \(([^)]*)\)/i.exec(l)?.[1] ?? ""));
+      out.push({ uid, from: h.from ?? "", subject: h.subject ?? "", date: Number.isNaN(date) ? null : date, messageId: h["message-id"] ?? null, automated, seen });
     }
     return out.sort((a, b) => a.uid - b.uid);
   }
@@ -182,20 +229,55 @@ export class Imap {
     return i < 0 ? "" : r.slice(i + 1).replace(/\n\)?$/, "");
   }
 
+  /** Every message in the mailbox, oldest first. */
+  async all(): Promise<number[]> {
+    const r = await this.run("UID SEARCH ALL");
+    const found = /\* SEARCH ?([\d ]*)/i.exec(r)?.[1] ?? "";
+    return found.split(" ").filter(Boolean).map(Number).sort((a, b) => a - b);
+  }
+
+  /** What the server can do (CAPABILITY), in capitals. */
+  async capabilities(): Promise<Set<string>> {
+    const r = await this.run("CAPABILITY");
+    return new Set((/\* CAPABILITY (.*)$/im.exec(r)?.[1] ?? "").toUpperCase().split(/\s+/).filter(Boolean));
+  }
+
+  /** The account's folders, each with its special use (RFC 6154). */
+  async boxes(): Promise<Box[]> {
+    const out: Box[] = [];
+    for (const l of (await this.run(`LIST "" "*"`)).split("\n")) {
+      const m = /^\* LIST \(([^)]*)\) (?:"(?:[^"\\]|\\.)*"|NIL) (.+)$/i.exec(l);
+      if (!m) continue;
+      const wire = m[2]!.trim().replace(/^"|"$/g, "").replace(/\\(.)/g, "$1");
+      out.push({ name: fromUtf7(wire), wire, flags: m[1]!.split(/\s+/).filter(Boolean) });
+    }
+    return out;
+  }
+
   /** The account's drafts folder, by its special use (RFC 6154: Gmail's is "[Gmail]/Drafts", named in
    * the account's language), else the one called Drafts. */
   async draftsBox(): Promise<string> {
-    let listed = "";
     try {
-      listed = await this.run(`LIST "" "*"`);
+      return (await this.boxes()).find((b) => b.flags.some((f) => /^\\Drafts$/i.test(f)))?.wire ?? "Drafts";
     } catch {
       return "Drafts";
     }
-    for (const l of listed.split("\n")) {
-      const m = /^\* LIST \(([^)]*)\) (?:"(?:[^"\\]|\\.)*"|NIL) (.+)$/i.exec(l);
-      if (m && /\\Drafts\b/i.test(m[1]!)) return m[2]!.trim().replace(/^"|"$/g, "").replace(/\\(.)/g, "$1");
-    }
-    return "Drafts";
+  }
+
+  /** Marks messages read. */
+  async markSeen(uids: number[]): Promise<void> {
+    for (const set of sets(uids)) await this.run(`UID STORE ${set} +FLAGS.SILENT (\\Seen)`);
+  }
+
+  /** Makes a folder (by its name, spelled for the server here). */
+  async create(name: string): Promise<void> {
+    await this.run(`CREATE ${quote(utf7(name))}`);
+  }
+
+  /** Moves messages into a folder (its `wire` name) in one step (RFC 6851); a server without MOVE is refused. */
+  async move(uids: number[], wire: string, caps?: Set<string>): Promise<void> {
+    if (!(caps ?? (await this.capabilities())).has("MOVE")) throw new ImapError("this mail server cannot move mail (it has no MOVE), so nothing was moved");
+    for (const set of sets(uids)) await this.run(`UID MOVE ${set} ${quote(wire)}`);
   }
 
   /** Keeps a draft in the drafts folder, marked a draft. Never sends. */

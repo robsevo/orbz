@@ -8,8 +8,9 @@
 //     calendar's events. Every number shown is one of these, read from the file: none is typed.
 import type { Message } from "../home/link.ts";
 
-/** One thing he did on his computer. `result` is null while it waits for your OK. */
-export type Act = { id: string; tool: string; on: string; args: Record<string, unknown>; result: string | null; failed: boolean; at: number };
+/** One thing he did on his computer. `result` is null while it waits for your OK; `view` is what the home kept of it
+ * for his screen (an inbox's rows, PLAN 4.10). */
+export type Act = { id: string; tool: string; on: string; args: Record<string, unknown>; result: string | null; failed: boolean; at: number; view: Record<string, unknown> | null };
 
 /** His acts in a conversation, oldest first (the last `last` of them). */
 export function actsOf(messages: Message[], orb: string, last = Infinity): Act[] {
@@ -29,7 +30,8 @@ export function actsOf(messages: Message[], orb: string, last = Infinity): Act[]
       const firstText = String(Object.values(args).find((v) => typeof v === "string") ?? "");
       const on = String(args.path ?? args.command ?? args.url ?? args.query ?? firstText);
       const r = results.get(c.id);
-      acts.push({ id: c.id, tool: c.name, on: on.length > 90 ? `${on.slice(0, 89)}…` : on, args, result: r?.content ?? null, failed: r?.meta?.error === true, at: r?.at ?? m.at });
+      const view = r?.meta?.view && typeof r.meta.view === "object" ? (r.meta.view as Record<string, unknown>) : null;
+      acts.push({ id: c.id, tool: c.name, on: on.length > 90 ? `${on.slice(0, 89)}…` : on, args, result: r?.content ?? null, failed: r?.meta?.error === true, at: r?.at ?? m.at, view });
     }
   }
   return acts.slice(-last);
@@ -40,22 +42,27 @@ export const ACT_WORDS: Record<string, string> = {
   write_file: "Wrote", read_file: "Read", list_files: "Looked in", shell: "Ran", shell_output: "Checked", stop_shell: "Stopped",
   web_search: "Searched for", web_fetch: "Read the page", ask_owner: "Asked you", propose_plan: "Proposed a plan",
   open_page: "Opened", read_page: "Read the page", click: "Clicked", type_into: "Typed into", sign_in: "Signed in", check_page: "Checked",
+  write_sheet: "Made the spreadsheet", read_mail: "Read the mail", draft_reply: "Drafted a reply", list_mail: "Looked through the inbox of", tidy_mail: "Tidied the inbox of",
 };
+
+/** The tools that make a file he shows: a text file, a workbook. */
+export const WRITES = new Set(["write_file", "write_sheet"]);
 
 /** The files he made or touched here, newest last, by their path. */
 export const filesOf = (acts: Act[]): string[] => {
   const seen = new Map<string, number>();
   acts.forEach((a, i) => {
-    if ((a.tool === "write_file" || a.tool === "read_file") && typeof a.args.path === "string") seen.set(a.args.path, i);
+    if ((WRITES.has(a.tool) || a.tool === "read_file") && typeof a.args.path === "string") seen.set(a.args.path, i);
   });
   return [...seen.entries()].sort((x, y) => x[1] - y[1]).map(([p]) => p);
 };
 
-export type Kind = "dataset" | "ui" | "dashboard" | "doc" | "calendar" | "code";
+export type Kind = "dataset" | "ui" | "dashboard" | "doc" | "calendar" | "code" | "sheet";
 
 /** The kind of work a file is, from its name (a JSON is a dashboard when its numbers can be drawn). */
 export function kindOf(path: string, text: string | null = null): Kind {
   const ext = path.toLowerCase().split(".").pop() ?? "";
+  if (ext === "xlsx") return "sheet";
   if (ext === "csv" || ext === "tsv") return "dataset";
   if (ext === "html" || ext === "htm") return "ui";
   if (ext === "md" || ext === "markdown" || ext === "txt") return "doc";
@@ -183,4 +190,46 @@ export function icsEvents(text: string): Happening[] {
     }
   }
   return out.sort((a, b) => a.start.localeCompare(b.start));
+}
+
+/** Where a message goes in a tidy (PLAN 4.10): archived, filed into a folder, or marked read where it is. */
+export type Fate = { kind: "archive" } | { kind: "folder"; folder: string } | { kind: "read" };
+/** `gone`: moved out of the inbox by a tidy that was done (kept a moment for his screen to show it leaving). */
+export type InboxRow = { uid: number; from: string; subject: string; date: number | null; seen: boolean; list: boolean; fate: Fate | null; gone: boolean };
+/** An inbox on his screen: as he was shown it, then what he proposes for each message (waiting for your OK), then what
+ * was done (`done`: those moved are gone from it, those marked read are read). `act` is the step it is drawn from. */
+export type Inbox = { account: string; total: number; unread: number; rows: InboxRow[]; state: "shown" | "asking" | "done" | "refused"; act: string; summary: string | null };
+
+const listOf = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+const nums = (v: unknown): number[] => listOf(v).map(Number).filter((n) => Number.isInteger(n));
+
+/** The inbox he looked through last (list_mail's rows), with the tidy he proposed for it after, if any. Null when he
+ * has looked through none. */
+export function inboxOf(acts: Act[]): Inbox | null {
+  const at = acts.findLastIndex((a) => a.tool === "list_mail" && a.view?.inbox);
+  if (at < 0) return null;
+  const v = acts[at]!.view!.inbox as { account?: unknown; total?: unknown; unread?: unknown; rows?: unknown };
+  const account = String(v.account ?? "");
+  const rows: InboxRow[] = listOf(v.rows).map((r0) => {
+    const r = (r0 ?? {}) as Record<string, unknown>;
+    return { uid: Number(r.uid), from: String(r.from ?? ""), subject: String(r.subject ?? ""), date: typeof r.date === "number" ? r.date : null, seen: r.seen === true, list: r.list === true, fate: null, gone: false };
+  });
+  const base = { account, total: Number(v.total ?? rows.length), unread: Number(v.unread ?? 0), rows };
+  const tidy = acts.slice(at + 1).findLast((a) => a.tool === "tidy_mail" && String(a.args.account ?? "") === account);
+  if (!tidy) return { ...base, state: "shown", act: acts[at]!.id, summary: null };
+  const fate = new Map<number, Fate>();
+  for (const u of nums(tidy.args.read)) fate.set(u, { kind: "read" });
+  for (const f of listOf(tidy.args.folders)) {
+    const g = (f ?? {}) as Record<string, unknown>;
+    for (const u of nums(g.uids)) fate.set(u, { kind: "folder", folder: String(g.folder ?? "") });
+  }
+  for (const u of nums(tidy.args.archive)) fate.set(u, { kind: "archive" });
+  const fated = rows.map((r) => ({ ...r, fate: fate.get(r.uid) ?? null }));
+  if (tidy.result === null) return { ...base, rows: fated, state: "asking", act: tidy.id, summary: null };
+  if (tidy.failed || !tidy.view?.tidied) return { ...base, rows: fated, state: "refused", act: tidy.id, summary: tidy.result };
+  // done: what moved has left the inbox, what was marked read is read
+  const after = fated.map((r) => ({ ...r, gone: r.fate?.kind === "archive" || r.fate?.kind === "folder", seen: r.seen || r.fate?.kind === "read" }));
+  const left = after.filter((r) => !r.gone);
+  const unreadElsewhere = Math.max(0, base.unread - rows.filter((r) => !r.seen).length);
+  return { ...base, total: Math.max(0, base.total - (after.length - left.length)), unread: left.filter((r) => !r.seen).length + unreadElsewhere, rows: after, state: "done", act: tidy.id, summary: tidy.result.replace(/^Done in [^:]*: (.)/, (_m, c: string) => c.toUpperCase()) };
 }

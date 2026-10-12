@@ -24,9 +24,12 @@ import { type SearchKey, webFetch, webSearch } from "./web.ts";
 import type { Wrap } from "../computer/sandbox.ts";
 import { noteAsk, type TeamNotes } from "../notes.ts";
 import { GROUPS, type ToolGroup } from "./groups.ts";
+import { bookText, readXlsx, SheetError } from "../sheets/xlsx.ts";
 
 export type Decision = "allow" | "ask" | "never";
-export type ToolResult = { content: string; isError?: boolean; stoppedByUser?: boolean };
+/** `view`: what his computer's screen draws of it (an inbox's rows, PLAN 4.10), kept beside the result for the app and
+ * never sent to a model. */
+export type ToolResult = { content: string; isError?: boolean; stoppedByUser?: boolean; view?: Record<string, unknown> };
 export type ToolContext = {
   orb: string; conversation: string; workspace: string; signal?: AbortSignal; background: Background;
   /** His sandbox (PLAN 4.6): what his commands run inside; absent where none can start. */
@@ -334,13 +337,21 @@ export const TOOLS: ToolDef[] = [
   {
     name: "read_file",
     label: "Reading a file",
-    description: "Read a text file in your workspace.",
+    description: "Read a text file in your workspace; a workbook (.xlsx) as its sheets' cells and formulas.",
     parameters: obj({ path: { type: "string", description: "Relative to your workspace." } }, ["path"]),
     describe: (a) => `read ${s(a.path)} in its workspace`,
     decision: "allow",
     precheck: (a, ctx) => (inWorkspace(ctx.workspace, s(a.path)) ? null : `${s(a.path)} is outside the workspace.`),
     async run(a, ctx) {
       const p = inWorkspace(ctx.workspace, s(a.path))!;
+      if (/\.xlsx$/i.test(p)) {
+        try {
+          return { content: clip(bookText(readXlsx(readFileSync(p)))) };
+        } catch (e) {
+          if (e instanceof SheetError) return { content: `${s(a.path)} could not be read as a workbook: ${e.message}.`, isError: true };
+          throw e;
+        }
+      }
       return { content: clip(readFileSync(p, "utf8")) };
     },
   },

@@ -79,6 +79,7 @@ import { Lessons, lessonTools } from "./lessons.ts";
 import { chat } from "./brain/openai.ts";
 import { TOOLS } from "./agent/tools.ts";
 import { reverseTools } from "./reverse/tools.ts";
+import { SHEET_TOOL } from "./sheets/tools.ts";
 import { Desk } from "./desk/desk.ts";
 import { binanceSource, Market, offlineFetch, offlineSource, type MarketSource } from "./desk/market.ts";
 import { Dex, offlineDex, publicDex, readTokenKey, type DexChain, type DexSource } from "./desk/dex.ts";
@@ -437,6 +438,8 @@ export class Home {
       ...lessonTools(this.lessons),
       // reverse engineering (PLAN 4.8): read what it is handed, statically, on a thread with a ceiling
       ...reverseTools(),
+      // spreadsheets (PLAN 4.9): a real workbook, formatted for whoever it is for
+      SHEET_TOOL,
       // the desk (PLAN 5.25): prices, strategies on paper, notes, your wallets read, a real swap only asked
       ...deskTools({ desk: this.desk, wallets: this.wallets, orders: this.orders, dex: this.dex, safety: (c, a) => this.tokenSafety(c, a), now: () => this.clock.now(), nameOf: (orb) => this.inbox.orb(orb)?.name ?? orb }),
       ...researchTools({ desk: this.desk, nameOf: (orb) => this.inbox.orb(orb)?.name ?? orb }),
