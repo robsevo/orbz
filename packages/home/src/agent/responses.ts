@@ -110,6 +110,10 @@ async function streamOnce(
       }),
     });
     if (!res.ok || !res.body) {
+      // its status says why the plan rests, and for how long (10-13: a 520 read "nothing answered")
+      out.status = res.status;
+      const wait = Number(res.headers.get("retry-after"));
+      if (Number.isFinite(wait) && wait > 0) out.retryAfterS = wait;
       const j = (await res.json().catch(() => ({}))) as { error?: { code?: unknown; message?: unknown; param?: unknown } };
       const code = typeof j.error?.code === "string" ? j.error.code : null;
       const param = typeof j.error?.param === "string" ? j.error.param.split(".")[0]! : null;

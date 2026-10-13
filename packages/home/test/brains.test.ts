@@ -92,7 +92,7 @@ test("ChatGPT at its limit hands over to Gemini by name", async (t) => {
 
 test("none answering: three passes, then one error that names each brain, why, and what would fix it", async (t) => {
   const down = { status: 503 };
-  const h = await home(t, { gemini: [down, down, down, down], local: "down" });
+  const h = await home(t, { gemini: [down, down, down, down, down, down, down], local: "down" });
   h.home.inbox.send("juniper", "chat:1", "hello");
   await h.home.inbox.idle();
   const last = said(h).at(-1)!;
@@ -100,13 +100,33 @@ test("none answering: three passes, then one error that names each brain, why, a
   assert.match(last, /ChatGPT: not set up \(sign in with ChatGPT/, "what to do about the missing one");
   assert.match(last, /Gemini: it failed \(503\)/);
   assert.match(last, /The local coder: nothing answered/);
-  assert.equal(h.gemini.agent.length, 3, "Gemini was asked once a pass, three passes");
+  const pass = ["gemini-3.8-flash", "gemini-3.8-flash-lite"];
+  assert.deepEqual(h.gemini.bodies.map((b) => b.model), [...pass, ...pass, ...pass], "each pass, the flash and then its flash-lite: three passes");
   assert.equal(said(h).some((r) => r.startsWith("assistant:")), false);
   // control: with Gemini answering on a later pass, there is no error
-  const h2 = await home(t, { gemini: [down, { chunks: ["second pass"] }], local: "down" });
+  const h2 = await home(t, { gemini: [down, down, { chunks: ["second pass"] }], local: "down" });
   h2.home.inbox.send("juniper", "chat:1", "hello");
   await h2.home.inbox.idle();
   assert.equal(said(h2).at(-1), "assistant: second pass");
+  assert.equal(h2.gemini.bodies.at(-1)!.model, "gemini-3.8-flash", "a new pass tries the flash again");
+});
+
+test("Gemini's flash busy (a 503, 10-13): its flash-lite answers the same step, saying so, and the steps after it", async (t) => {
+  const busy = { status: 503, body: { error: { code: 503, message: "This model is currently experiencing high demand.", status: "UNAVAILABLE" } } };
+  const note = { calls: [{ name: "write_file", args: { path: "notes/todo.md", content: "buy milk" } }] };
+  const h = await home(t, { gemini: [busy, note, { chunks: ["from the lite"] }], local: [{ chunks: ["from the local coder"] }] });
+  h.home.inbox.send("juniper", "chat:1", "hello");
+  await h.home.inbox.idle();
+  assert.deepEqual(said(h).filter((r) => r.startsWith("notice:")), ["notice: Gemini: gemini-3.8-flash failed (503); answering with gemini-3.8-flash-lite."]);
+  assert.equal(said(h).at(-1), "assistant: from the lite");
+  assert.deepEqual(h.gemini.bodies.map((b) => b.model), ["gemini-3.8-flash", "gemini-3.8-flash-lite", "gemini-3.8-flash-lite"], "the step after the tool, still on the lite: the busy flash is not asked again this pass");
+  assert.equal(h.local!.agent.length, 0, "Gemini still answered: the local coder was not asked");
+  // control: a request Gemini refuses (a 400) is not a busy server: no lighter model, the next brain answers
+  const h2 = await home(t, { gemini: [{ status: 400 }], local: [{ chunks: ["from the local coder"] }] });
+  h2.home.inbox.send("juniper", "chat:1", "hello");
+  await h2.home.inbox.idle();
+  assert.deepEqual(said(h2), ["notice: Gemini: it failed (400); answering with the local coder.", "assistant: from the local coder"]);
+  assert.equal(h2.gemini.bodies.length, 1);
 });
 
 test("the Gemini key: refused keys are never kept; a kept one is in the keychain only, never in a file, the log, a trace or the door", async (t) => {

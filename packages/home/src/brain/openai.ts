@@ -122,7 +122,7 @@ export async function chat(
 /** A completion on the Responses API, which the ChatGPT plan only serves streamed: collected here. */
 async function completeViaResponses(ep: Endpoint, messages: ChatMessage[], opts: { signal?: AbortSignal }): Promise<Completion> {
   const r = await streamResponses(ep, { messages }, opts.signal ? { signal: opts.signal } : {});
-  if (r.error) throw new BrainCallError(ep.name, r.error.replace(`${ep.name}: `, ""), null, r.limited);
+  if (r.error) throw new BrainCallError(ep.name, r.error.replace(`${ep.name}: `, ""), r.status, r.limited);
   return { text: r.text, promptTokens: r.promptTokens, completionTokens: r.completionTokens, costUsd: r.costUsd, costSource: r.costSource, served: ep.model, finish: r.finish };
 }
 

@@ -263,6 +263,22 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ("the error says nothing of how to set a brain up", "src/brain/chain.ts", [
         ('    if (s.state === "absent") return `${cap(s.label)}: not set up (${s.setup})`;', '    if (s.state === "absent") return `${cap(s.label)}: not set up`;'),
     ], ["brains.test.ts", "chain.test.ts"]),
+    # a server error (10-13): the light model first, the status kept, the next pass on the main model again
+    ("a refusal on the plan loses its status: a 520 reads \"nothing answered\"", "src/agent/responses.ts", [
+        ("      out.status = res.status;\n", ""),
+    ], ["chatgpt.test.ts"]),
+    ("a busy model's brain steps aside without trying its light model", "src/agent/loop.ts", [
+        ("r.status !== null && r.status >= 500 && !stepped.has(ep.chain)", "r.status !== null && r.status >= 999 && !stepped.has(ep.chain)"),
+    ], ["brains.test.ts", "chatgpt.test.ts"]),
+    ("a refused request is taken for a busy server", "src/agent/loop.ts", [
+        ("r.status !== null && r.status >= 500 && !stepped.has(ep.chain)", "r.status !== null && r.status >= 400 && !stepped.has(ep.chain)"),
+    ], ["brains.test.ts"]),
+    ("the step after a step-down goes back to the busy model", "src/agent/loop.ts", [
+        ("      return ep?.chain && stepped.has(ep.chain) ?", "      return ep?.chain && false ?"),
+    ], ["brains.test.ts"]),
+    ("a new pass stays on the light model", "src/agent/loop.ts", [
+        ("          stepped.clear();\n", ""),
+    ], ["brains.test.ts"]),
     # each orb's own constitution (PLAN 3.9)
     ("morals leak into every orb's constitution", "src/brain/constitution.ts", [
         ('  refusal_handling: morals("what to help with and what to refuse; Orbs\' floor is code (rule 9)"),', "  refusal_handling: core,"),

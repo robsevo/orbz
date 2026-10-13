@@ -339,6 +339,25 @@ test("at one model's usage limit a lighter one of the plan answers, saying so; t
   assert.equal(h.home.chatgpt.endpoint()?.model, "gpt-5.6-terra", "resumed: the main model again");
 });
 
+test("a server error on the plan (a 520, 10-13): Luna answers the step, saying so; when Luna fails too the error names the status, never \"nothing answered\"", async (t) => {
+  const h = await home(t, [{ chunks: ["from the router"] }]);
+  h.openai.models = PLAN_MODELS;
+  await signIn(h);
+  h.openai.script = [{ status: 520 }, { chunks: ["from luna"] }];
+  h.home.inbox.send("juniper", "chat:1", "hello");
+  await h.home.inbox.idle();
+  assert.deepEqual(h.openai.responses.map((r) => r.body.model), ["gpt-5.6-terra", "gpt-5.6-luna"]);
+  assert.deepEqual(notices(h).map((m) => m.content), ["ChatGPT: gpt-5.6-terra failed (520); answering with gpt-5.6-luna."]);
+  assert.equal(h.home.conversations.list("chat:1").at(-1)!.content, "from luna");
+  assert.equal(h.model.agent.length, 0, "the plan still answered: the router was not asked");
+  // Luna fails as well: the plan steps aside, by its status, and the next brain answers
+  h.openai.script = [{ status: 520 }, { status: 520 }];
+  h.home.inbox.send("juniper", "chat:1", "again");
+  await h.home.inbox.idle();
+  assert.equal(notices(h).at(-1)!.content, "ChatGPT: it failed (520); answering with my other brain.");
+  assert.equal(h.home.conversations.list("chat:1").at(-1)!.content, "from the router");
+});
+
 test("a chime-in on the plan goes to the light model, thinking little and saying little; a field the plan refuses is dropped and never sent again", async (t) => {
   const h = await home(t, [], { agent: { decide: () => "allow" } });
   h.openai.models = PLAN_MODELS;

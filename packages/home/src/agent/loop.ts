@@ -62,7 +62,7 @@ export type AgentOptions = {
   /** The brain order (PLAN 1.11): a brain that cannot answer rests and the next answers; after
    * three passes with none answering, the one error. `endpoint()` is its first brain now. */
   chain?: BrainChain;
-  /** How long the chain waits between passes (1 s, then 2 s). */
+  /** How long the chain waits between passes (5 s, then 10 s). */
   passWaitMs?: number;
   orbName: (orb: string) => string;
   /** What the orb does, and what the person approved for him to remember: his constitution (PLAN 3.9). */
@@ -173,7 +173,7 @@ export class AgentRunner implements Runner {
   readonly #repeats = new WeakMap<RunContext, Map<string, number>>();
 
   constructor(opts: AgentOptions) {
-    this.#o = { tools: TOOLS, maxSteps: 50, compactAtTokens: 100_000, keepRecentTokens: 20_000, passWaitMs: 1000, ...opts };
+    this.#o = { tools: TOOLS, maxSteps: 50, compactAtTokens: 100_000, keepRecentTokens: 20_000, passWaitMs: 5000, ...opts };
     this.#tools = new Map(this.#o.tools.map((t) => [t.name, t]));
     // more of an orb's tools, by kind, for the rest of its run (owner, 10-07: "cut token use but also keep the same
     // functions"): what it says and which groups it offers are the run's own (#toolsFor), its work is here
@@ -332,6 +332,12 @@ export class AgentRunner implements Runner {
     const team = teamOf(ctx);
     const role = team?.role;
     const light = isLight(team);
+    // the brains whose main model failed with a server error this pass: each answers on its light model (10-13)
+    const stepped = new Set<LinkId>();
+    const pick = (): Endpoint | null => {
+      const ep = this.#o.endpoint({ light });
+      return ep?.chain && stepped.has(ep.chain) ? (this.#o.endpoint({ light: true }) ?? ep) : ep;
+    };
     const steps = role === "asked" ? Math.min(ASKED_STEPS, this.#o.maxSteps) : this.#o.maxSteps;
     // its tools to hand (agent/groups.ts): its department's kinds, a session's plans and team, and any kind it used before
     // in this conversation; more_tools loads another
@@ -351,7 +357,7 @@ export class AgentRunner implements Runner {
     let nudged = false;
     for (let n = 0; n < steps; n++) {
       if (ctx.signal.aborted) return this.#ended("stopped", ctx);
-      let ep = own?.ep ?? this.#o.endpoint({ light }); // every step: a plan at its limit since the last one has stepped aside
+      let ep = own?.ep ?? pick(); // every step: a plan at its limit since the last one has stepped aside
       if (!ep) {
         const chain = this.#o.chain;
         const states = chain?.states() ?? [];
@@ -359,9 +365,12 @@ export class AgentRunner implements Runner {
           conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "notice", run: ctx.run, content: "No brain is set up yet, so I can't answer. Choose one in settings." });
           return { outcome: "ok", summary: "no brain" };
         }
-        // some are set up, none can answer now: look again (the ones that were down), three passes in all
+        // some are set up, none can answer now: look again (the ones that were down, each on its main model again),
+        // three passes in all, 5 s then 10 s apart (10-13: a second apart, a minute's busy spell used all three)
         if (++passes < 3) {
           chain.retryDown();
+          stepped.clear();
+          ctx.activity("Waiting for a brain");
           await abortable(this.#o.passWaitMs * passes, ctx.signal);
           n--;
           continue;
@@ -384,7 +393,7 @@ export class AgentRunner implements Runner {
         aloud: ctx.items.some((i) => i.data.said === true), // you spoke (PLAN 4.7): his answer is heard, not read
       });
       await this.#compact(ctx, ep, est(standing) + (note ? est(note) : 0));
-      if (!own) ep = this.#o.endpoint({ light }) ?? ep; // compaction may have met the plan's limit and moved on
+      if (!own) ep = pick() ?? ep; // compaction may have met the plan's limit and moved on
       this.#o.spend.check(); // SpendCapError: the inbox stops the run cleanly ("capped")
       // on the ChatGPT plan the note goes after the conversation: the instructions, the tools and the conversation so far
       // are then the same from run to run, a prefix the plan's cache serves at a tenth of the price; another brain reads
@@ -450,6 +459,17 @@ export class AgentRunner implements Runner {
         return { outcome: "ok", summary: `plan ${r.limited}` };
       }
       if (r.error && ep.chain && !r.text && !r.toolCalls.length && this.#o.chain) {
+        // a server error (10-13: Gemini's flash "experiencing high demand", 503; a 520 on the plan's Sol): the same
+        // brain's light model, often still answering, takes the step first, saying so
+        const lighter = r.status !== null && r.status >= 500 && !stepped.has(ep.chain) ? this.#o.endpoint({ light: true }) : null;
+        if (lighter && lighter.chain === ep.chain && lighter.model !== ep.model) {
+          stepped.add(ep.chain);
+          const label = this.#o.chain.labelOf(ep.chain);
+          conv.add({ conversation: ctx.conversation, orb: ctx.orb, role: "notice", run: ctx.run, content: `${label[0]!.toUpperCase()}${label.slice(1)}: ${ep.model} failed (${r.status}); answering with ${lighter.model}.`, meta: { brain: ep.chain, model: ep.model, lighter: lighter.model } });
+          step("lighter", { from: ep.model, to: lighter.model, status: r.status });
+          n--;
+          continue;
+        }
         // it failed before a word arrived: it steps aside, saying so, and the same step goes to the next
         this.#stepAside(ctx, ep.chain, { status: r.status, message: r.error, retryAfterS: r.retryAfterS });
         step("fallback", { from: ep.chain, status: r.status });
