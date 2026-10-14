@@ -1604,7 +1604,7 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ('    return 1 + (t.Humour + t.Care + t.Pace) / 30;', '    return t ? 1 : 1;'),
     ], ['social-rules.test.ts']),
     ('a friend is never likelier to be met', 'src/social/rules.ts', [
-        ('(x) => 1 + Math.max(0, score(a, x)) / 50', '() => 1'),
+        ('(1 + Math.max(0, score(a, x)) / 50) * (0.5', '(1) * (0.5'),
     ], ['social-rules.test.ts']),
     ('friendships never move', 'src/social/social.ts', [
         ('    const after = clampScore(before + delta);', '    const after = clampScore(before);'),
@@ -1821,6 +1821,72 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
     ('any traits are taken', 'src/social/rules.ts', [
         ('    if (typeof n !== "number" || !Number.isFinite(n) || n < 0 || n > 40) return null;\n', ''),
     ], ['social-rules.test.ts']),
+    # brand (PLAN 5.44)
+    ('a friction weighs no more than a friendship', 'src/social/brand.ts', [
+        ('views.map((v) => (v < 0 ? v * 1.5 : v))', 'views.map((v) => v)'),
+    ], ['brand.test.ts']),
+    ('a job approved then corrected costs no more than one never approved', 'src/social/brand.ts', [
+        ('(approved.has(run) ? POINTS.corrected : POINTS.correctedFirst)', 'POINTS.correctedFirst'),
+    ], ['brand.test.ts']),
+    ('old work counts as much as today\'s', 'src/social/brand.ts', [
+        ('const fade = (age: number, half: number): number => 0.5 ** (Math.max(0, age) / half);', 'const fade = (age: number, half: number): number => (age, half, 1);'),
+    ], ['brand.test.ts']),
+    ('a part goes past its reach', 'src/social/brand.ts', [
+        ('const workPts = clamp(Math.round(work), -REACH.work, REACH.work);', 'const workPts = Math.round(work);'),
+    ], ['brand.test.ts']),
+    ('a brand never changes how a moment lands', 'src/social/rules.ts', [
+        ('clamp(s.lands(a, b, c) + (regard - 50) / 200, 0.1, 0.95)', 'clamp(s.lands(a, b, c), 0.1, 0.95)'),
+    ], ['brand.test.ts']),
+    ('the well regarded are sought out no more', 'src/social/rules.ts', [
+        ('* (0.5 + regard(x) / 100)', '* (regard(x) ? 1 : 1)'),
+    ], ['brand.test.ts']),
+    ('a band crossed is said again and again', 'src/social/brand.ts', [
+        ('    for (const e of this.#events.ofType("brand.changed")) if (e.orb) was.set(e.orb, String(e.data.to));\n', ''),
+    ], ['brand.test.ts']),
+    ('a brand change is never a notice', 'src/notices.ts', [
+        ('    } else if (e.type === "brand.changed" && e.orb) {', '    } else if (e.type === "brand.changed!" && e.orb) {'),
+    ], ['brand.test.ts']),
+    # culture (PLAN 5.45)
+    ('a culture blind to everyone\'s brand', 'src/social/culture.ts', [
+        ('const brands = clamp(Math.round(mean - CULTURE_START), -CULTURE_REACH.brands, CULTURE_REACH.brands);', 'const brands = mean * 0;'),
+    ], ['culture.test.ts']),
+    ('friction weighs no more in a culture', 'src/social/culture.ts', [
+        ('((warm - 1.5 * cold) / pairs)', '((warm - cold) / pairs)'),
+    ], ['culture.test.ts']),
+    ('a run-in from a month ago still counts', 'src/social/culture.ts', [
+        ('e.at > o.at - FORTNIGHT_MS', 'e.at > 0'),
+    ], ['culture.test.ts']),
+    ('a tradition from a single time', 'src/social/culture.ts', [
+        ('.filter((d) => d.times >= d.needs)', '.filter((d) => d.times >= 1)'),
+    ], ['culture.test.ts']),
+    ('a flat dance makes a kitchen disco', 'src/social/culture.ts', [
+        ('(!d.warm || e.data.tone === "warm")', '(d.warm || true)'),
+    ], ['culture.test.ts']),
+    ('a culture changes nothing on the floor', 'src/social/rules.ts', [
+        ('(regard - 50) / 200 + lift, 0.1, 0.95)', '(regard - 50) / 200, 0.1, 0.95)'),
+    ], ['culture.test.ts']),
+    ('a culture never paces the run-ins', 'src/social/social.ts', [
+        (' : MOMENT_GAP_MIN_MS) * this.#o.pace();', ' : MOMENT_GAP_MIN_MS) * (this.#o.pace() ? 1 : 1);'),
+    ], ['culture.test.ts']),
+    ('a champion who did not rise', 'src/social/culture.ts', [
+        ('best && best.rise > 0 ?', 'best ?'),
+    ], ['culture.test.ts']),
+    # the CEO's brand watch (PLAN 5.46)
+    ('the CEO recommends a promotion the brand has not earned', 'src/social/watch.ts', [
+        ('return r.brand >= 50 ? "Promote" : "Brand first";', 'return "Promote";'),
+    ], ['watch.test.ts']),
+    ('the CEO is on its own watch', 'src/social/watch.ts', [
+        ('orbs.filter((o) => o.orb !== ceo?.orb)', 'orbs.filter(() => true)'),
+    ], ['watch.test.ts']),
+    ('skills never count in the CEO\'s merit', 'src/social/watch.ts', [
+        ('brand + Math.min(30, Math.floor(skills / 50))', 'brand + 0 * skills'),
+    ], ['watch.test.ts']),
+    ('the CEO recommends the same promotion again and again', 'src/social/watch.ts', [
+        ('if (r.verdict !== "Promote" || said.has(`${r.orb}\\0${r.next}`)) continue;', 'if (r.verdict !== "Promote") continue;'),
+    ], ['watch.test.ts']),
+    ('every orb is obsessed with brand', 'src/social/watch.ts', [
+        ('if (!w.ceo || w.ceo.orb !== orb) return null;', 'if (!w.ceo) return null;'),
+    ], ['watch.test.ts']),
     # the reading library (PLAN 3.12): robots.txt by the RFC, the manners, the reach, the tools
     ('robots.txt is never consulted', 'src/reading/reading.ts', [
         ('        if (!allowed(rules, pathOf(url))) {', '        if (false) {'),

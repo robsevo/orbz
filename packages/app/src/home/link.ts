@@ -160,7 +160,24 @@ export type CareerState = Standing & {
   lessons?: { at: number; from: string; to: string; line: string; state: string }[];
   /** The office by XP, the most first (owner, 10-07: each wants "to be the best orb"). */
   ranking?: { orb: string; name: string; xp: number }[];
+  /** Its brand (PLAN 5.44): how the office as a whole sees it, 0 to 100, what makes it up, and its last fortnight's
+   * scores, today's last. Older homes leave it out. */
+  brand?: Brand;
 };
+/** The office's culture (PLAN 5.45): its score and three parts, its flavour, the traditions it keeps, the week's champion. */
+export type CultureState = {
+  score: number; word: string; parts: { key: "brands" | "together" | "floor"; label: string; points: number; why: string }[];
+  flavour: string[]; traditions: { key: string; name: string; times: number }[]; champion: { orb: string; name: string; rise: number } | null;
+  brands: { orb: string; name: string; score: number; word: string }[];
+};
+/** The CEO's brand watch (PLAN 5.46): every orb's brand and skills and the CEO's verdict, and whom it recommends. */
+export type WatchState = {
+  ceo: { orb: string; name: string } | null;
+  rows: { orb: string; name: string; brand: number; word: string; week: number; skill: { area: string; xp: number } | null; skills: number; level: string; next: string | null; ready: boolean; verdict: "Promote" | "Brand first" | "Watch" | "Rising" | "Steady"; merit: number }[];
+  pick: { orb: string; name: string; to: string; why: string } | null;
+};
+export type BrandPart = { key: "people" | "work" | "ideas" | "helping" | "record"; label: string; points: number; why: string };
+export type Brand = { score: number; word: string; parts: BrandPart[]; history: number[]; week?: number };
 
 /** The recruiter (PLAN 5.8): the positions you are hiring for, who applied (a seed each, made whole
  * by the app's dice: spec.ts `applicant`), and the orbs you let go who apply again, with their record. */
@@ -431,6 +448,9 @@ export interface Office {
   keep(id: string): Promise<string[]>;
   /** The board (PLAN 5.16), a proposal put to it, an election now. */
   board(): Promise<BoardState>;
+  /** The office's culture (PLAN 5.45) and the CEO's brand watch (5.46). */
+  culture(): Promise<CultureState>;
+  brandWatch(): Promise<WatchState>;
   /** The board's reports, newest first; one made now; your verdict on an idea (approved gives its orb XP). */
   reports(): Promise<Report[]>;
   makeReport(): Promise<void>;
@@ -861,6 +881,12 @@ export function doorOffice(base: Character): Office {
     },
     async board() {
       return call<BoardState>("../board");
+    },
+    async culture() {
+      return (await call<{ culture: CultureState }>("../culture")).culture;
+    },
+    async brandWatch() {
+      return (await call<{ watch: WatchState }>("../watch")).watch;
     },
     async reports() {
       return (await call<{ reports: Report[] }>("../reports")).reports;

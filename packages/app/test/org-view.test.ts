@@ -1,4 +1,4 @@
-// PLAN 5.6_t: the org chart and career pages, on a real home, at desk and phone sizes.
+// PLAN 5.6_t: the org chart and career pages, on a real home, at desk and phone sizes (and PLAN 5.44_t, its brand card; 5.45_t and 5.46_t, the culture and the brand watch on the chart).
 //   - the org chart: everyone by the kind of work they do, the lead of each kind first;
 //   - drawn as a tree (owner, 10-08: "like a family tree or corporate latter"): you, the CEO, the heads, the teams,
 //     with its lines; hung down on a desk, run down the page on a phone;
@@ -72,6 +72,12 @@ test("the org chart and a career page; let go with a hand-off, away, rehired; le
   assert.deepEqual(await org.locator("[data-department]").evaluateAll((ds) => ds.map((d) => d.getAttribute("data-department"))), ["build", "make"], "the departments with orbs, in the company's order");
   assert.equal(await org.locator('[data-department="build"] [data-head]').innerText(), "No CTO yet");
   assert.equal(await org.locator('[data-department="build"] [data-kind="frontend"]').count(), 1, "its kinds of work inside it");
+  // the office's culture (PLAN 5.45) over the tree: the home's score, its three parts; the brand watch (5.46) waits for a CEO
+  const culture = h.culture.now();
+  await page.locator(`[data-culture="${culture.score}"]`).waitFor({ timeout: 20_000 });
+  assert.equal(await page.locator("[data-culture-word]").innerText(), culture.word);
+  assert.deepEqual(await page.locator("[data-culture-part]").evaluateAll((ls) => ls.map((l) => l.getAttribute("data-culture-part"))), ["brands", "together", "floor"]);
+  assert.match(await page.getByRole("region", { name: "Brand watch" }).innerText(), /No CEO yet/);
   assert.deepEqual(await measure(page), [], "the org chart, at desk size");
 
   // a face opens his career page
@@ -94,6 +100,12 @@ test("the org chart and a career page; let go with a hand-off, away, rehired; le
   assert.deepEqual(await career.locator("[data-rank-orb]").evaluateAll((ls) => ls.map((l) => l.getAttribute("data-rank-orb"))), h.ranking().map((r) => r.orb), "the office by XP, the most first");
   assert.equal(await career.locator('[data-rank-orb][aria-current="true"]').getAttribute("data-rank-orb"), "ada", "it, marked");
   assert.match(await career.locator("[data-standing]").innerText(), new RegExp(`^${h.ranking().findIndex((r) => r.orb === "ada") + 1}(st|nd|rd|th) of 3, `));
+  // its brand (PLAN 5.44): the home's score and word, its fortnight, and the five parts that make it
+  const brand = h.brand.of("ada");
+  await career.locator(`[data-brand="${brand.score}"]`).waitFor();
+  assert.equal(await career.locator("[data-brand-word]").innerText(), brand.word);
+  assert.deepEqual(await career.locator("[data-brand-part]").evaluateAll((ls) => ls.map((l) => l.getAttribute("data-brand-part"))), ["people", "work", "ideas", "helping", "record"]);
+  await career.locator("[data-brand-spark]").waitFor();
   assert.deepEqual(await measure(page), [], "his career page, at desk size");
 
   // his week: a notice for you, a press from his career page

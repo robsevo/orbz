@@ -585,6 +585,12 @@ async function handle(
       // the moments under way (owner, 10-07: "micro interactions"), for the floor to play
       moments: home.social.moments(6).filter((m) => m.until > home.clock.now()) };
   }
+  // brands (PLAN 5.44): every orb's, the best first
+  if (method === "GET" && url.pathname === "/brands") return { brands: home.brand.all() };
+  // the office's culture (PLAN 5.45): its score and parts, flavour, traditions, champion, and everyone's brand
+  if (method === "GET" && url.pathname === "/culture") return { culture: home.culture.now() };
+  // the CEO's brand watch (PLAN 5.46): every orb's brand and skills, the CEO's verdict on each, and its pick
+  if (method === "GET" && url.pathname === "/watch") return { watch: home.watch.now() };
   if (method === "GET" && parts[0] === "orbs" && parts.length === 3 && parts[2] === "friends") {
     const id = decodeURIComponent(parts[1]!);
     if (!home.inbox.orb(id)) throw new HttpError(404, `no orb "${id}"`);
@@ -1050,6 +1056,9 @@ async function handle(
         };
       }),
       friends: home.social.of(orb).map((f) => ({ name: f.name, word: f.word, score: f.score, meetings: f.meetings })),
+      // its brand (PLAN 5.44): how the office as a whole sees it, what makes it up, its last fortnight
+      // its week the CEO's brand watch's (5.46): now against seven days ago to the minute
+      brand: { ...home.brand.of(orb), history: home.brand.history(orb), week: home.brand.of(orb).score - home.brand.of(orb, now - 7 * 86_400_000).score },
       lessons: (["waiting", "kept", "dropped"] as const).flatMap((st) => home.social.lessons(st)).filter((l) => l.from === orb || l.to === orb).sort((a, b) => b.at - a.at).slice(0, 6).map((l) => ({
         at: l.at, from: home.inbox.orb(l.from)?.name ?? l.from, to: home.inbox.orb(l.to)?.name ?? l.to, line: l.line, state: l.state,
       })),

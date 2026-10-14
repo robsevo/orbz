@@ -34,7 +34,8 @@ import { computerTools, type PageCheck } from "./computer/tools.ts";
 import { Vault } from "./computer/vault.ts";
 import { defaultStore, type SecretStore } from "./chatgpt/store.ts";
 import type { Undo } from "./gym/card.ts";
-import { type Level, LEVELS, levelOf, nextFor, tenureOf } from "./gym/levels.ts";
+import { AREAS_OF, type Level, LEVELS, levelOf, nextFor, tenureOf } from "./gym/levels.ts";
+import { radarOf } from "./gym/specialty.ts";
 import { orgTools, whoFits } from "./org.ts";
 import { recital } from "./plans/recite.ts";
 import { recentWork } from "./worklog.ts";
@@ -48,6 +49,9 @@ import { interviewSystem, Recruiter, RecruiterError } from "./recruiter.ts";
 import { type Fetcher, Reading, type Sleep } from "./reading/reading.ts";
 import { readingTools, withReading } from "./reading/tools.ts";
 import { Social, type SocialOptions } from "./social/social.ts";
+import { BRAND_START, Brands } from "./social/brand.ts";
+import { Cultures, momentLift, momentPace } from "./social/culture.ts";
+import { BrandWatch } from "./social/watch.ts";
 import { School, SchoolError, type ReportCard, type SchoolOptions } from "./school/school.ts";
 import type { Kind } from "./school/subjects.ts";
 import { habitsOf, shareHabit } from "./gym/share.ts";
@@ -255,6 +259,12 @@ export class Home {
   readonly reading: Reading;
   /** Office life (PLAN 5.9): who meets, what they do, and the friendships it makes. */
   readonly social: Social;
+  /** Each orb's brand (PLAN 5.44): how the office as a whole sees it, from its friendships, its work and its record. */
+  readonly brand: Brands;
+  /** The office's culture (PLAN 5.45): everyone's brand, how the office gets on, the floor's mood; its flavour and traditions. */
+  readonly culture: Cultures;
+  /** The CEO's brand watch (PLAN 5.46): every orb's brand and skills, and who the CEO recommends you promote. */
+  readonly watch: BrandWatch;
   /** The company's board (PLAN 5.16): its odd seats, its officers by their posts, everyone's election, proposals voted on. */
   readonly boardroom: Boardroom;
   /** The board's daily report (PLAN 5.18). */
@@ -464,7 +474,7 @@ export class Home {
         habits: (orb) => habitsOf(this.events, this.dataDir, orb),
         share: (from, to, task) => shareHabit(this.events, this.dataDir, { from, to, task, why: "mentoring" }),
         diplomas: (orb) => this.school.diplomas(orb), // school (PLAN 5.7): who is more qualified for a row
-        affinity: (orb, others) => this.social.affinity(orb, others), // friendships (PLAN 5.9): who works well together
+        affinity: (orb, others) => this.#affinity(orb, others), // friendships (PLAN 5.9) and brand (5.44): who works well together
       }),
     ];
     this.agent = opts.runner
@@ -514,7 +524,7 @@ export class Home {
           orbSpecialty: (orb) => this.inbox.orb(orb)?.specialty ?? "general",
           learned: (orb) => this.learned.list(orb),
           notebook: (orb) => this.school.notebook(orb), // what it kept at school (PLAN 5.7) goes to work with it
-          colleagues: (orb) => this.social.colleaguesLine(orb), // its friends and frictions (PLAN 5.9)
+          colleagues: (orb) => [this.social.colleaguesLine(orb), this.brand.line(orb), this.culture.line(), this.watch.line(orb)].filter(Boolean).join("\n\n"), // its friends and frictions (PLAN 5.9), its brand (5.44), the office's culture (5.45), and the CEO's watch (5.46)
           ambition: (orb) => placeOnBoard(orb, this.ranking()), // to top the office (owner, 10-07)
           company: (orb) => {
             const me = this.inbox.orb(orb);
@@ -589,6 +599,11 @@ export class Home {
       workOf: (orb) => recentWork(this.events, orb, { since: this.clock.now() - 7 * 86_400_000, limit: 1 })[0]?.summary ?? null,
       on: opts.social?.on ?? false,
       ...(opts.social?.dice && { dice: opts.social.dice }),
+      // its brand (PLAN 5.44): the others seek out, and warm to, an orb the office thinks well of
+      regard: (orb) => this.brand.of(orb).score,
+      // and its culture (PLAN 5.45): a warm office's run-ins come oftener and land warmer
+      pace: () => momentPace(this.culture.now().score),
+      lift: () => momentLift(this.culture.now().score),
     });
     this.school = new School(db, this.events, this.clock, {
       // the teacher is the preset's teacher, else the big brain; the orb at school is the shared big brain
@@ -620,7 +635,8 @@ export class Home {
         const since = this.clock.now() - FORTNIGHT_MS;
         return xpLedger(this.events).filter((e) => e.orb === id && e.at >= since).reduce((n, e) => n + e.amount, 0);
       },
-      gets: (voter, other) => this.social.of(voter).find((c) => c.orb === other)?.score ?? 0,
+      // how the voter gets on with it, and (PLAN 5.44) how the whole office sees it
+      gets: (voter, other) => (this.social.of(voter).find((c) => c.orb === other)?.score ?? 0) + Math.round((this.brand.of(other).score - BRAND_START) / 2),
       // a vote on the cheapest brain (owner, 10-07: "Each thinks, cheap brain"), its cost recorded as the board's
       ask: async (member, prompt) => {
         const ep = this.lightBrain();
@@ -631,6 +647,32 @@ export class Home {
         return r.text;
       },
       company: () => this.about.get().company,
+    });
+    this.brand = new Brands(this.events, this.clock, {
+      office: () => this.inbox.orbs().map((o) => ({ id: o.id, name: o.name })),
+      seat: (orb) => this.boardroom.seats().find((x) => x.orb === orb)?.post ?? null,
+    });
+    this.culture = new Cultures(this.events, this.clock, {
+      office: () => this.inbox.orbs().map((o) => ({ id: o.id, name: o.name })),
+      brand: (orb, at) => this.brand.of(orb, at),
+      score: (a, b) => this.social.score(a, b),
+      traits: (orb) => this.social.traitsOf(orb),
+    });
+    this.watch = new BrandWatch(this.events, this.clock, {
+      ceo: () => {
+        const c = this.inbox.orbs().find((o) => o.specialty === "ceo");
+        return c ? { orb: c.id, name: c.name } : null;
+      },
+      office: () => this.inbox.orbs().map((o) => ({ id: o.id, name: o.name })),
+      brand: (orb, at) => this.brand.of(orb, at),
+      skills: (orb) => ({
+        areas: Object.fromEntries(Object.entries(radarOf(this.events, orb)).map(([k, v]) => [k, v.xp])),
+        own: AREAS_OF[(this.inbox.orb(orb)?.specialty ?? "general") as keyof typeof AREAS_OF] ?? [],
+      }),
+      next: (orb) => {
+        const p = nextFor(this.events, orb, { specialty: this.inbox.orb(orb)?.specialty ?? "general", now: this.clock.now() });
+        return { level: levelOf(this.events, orb), to: p?.to ?? null, ready: p?.ready ?? false };
+      },
     });
     this.#reportsOn = opts.reports?.on ?? false;
     this.reports = new BoardReports(this.events, this.clock, {
@@ -789,7 +831,7 @@ export class Home {
     const office = this.inbox.orbs().map((o) => ({ id: o.id, name: o.name, specialty: o.specialty, level: levelOf(this.events, o.id), createdAt: o.createdAt }));
     const dealt = this.team.deal(at.id, {
       tab: at.tab, plan, lead: card.orb, rows,
-      rank: (text, members) => whoFits(this.events, text, office.filter((m) => members.includes(m.id)), (o) => this.school.diplomas(o), (o, others) => this.social.affinity(o, others)).map((r) => r.orb),
+      rank: (text, members) => whoFits(this.events, text, office.filter((m) => members.includes(m.id)), (o) => this.school.diplomas(o), (o, others) => this.#affinity(o, others)).map((r) => r.orb),
       claim: (orb, mine) => this.claims.claim({ session: at.id, plan, orb, rows: mine, paths: [] }),
     });
     if (Object.keys(dealt).length) this.conversations.annotateCard(card.id, { dealt });
@@ -909,6 +951,16 @@ export class Home {
       return light ? { ...light, chain: cur.ep.chain } : cur.ep;
     }
     return this.brains.light(cur.ep);
+  }
+
+  /** How an orb would get on with a team (PLAN 5.9), and (PLAN 5.44) a little for how the whole office sees it: a point
+   * of friendship for every five of brand above or below the start, so it tips a close call and never the work. */
+  #affinity(orb: string, others: string[]): { score: number; why: string | null } {
+    const a = this.social.affinity(orb, others);
+    if (!others.some((o) => o !== orb)) return a;
+    const b = this.brand.of(orb);
+    const said = b.score >= 65 || b.score < 40 ? `${b.word.toLowerCase()} around the office` : null;
+    return { score: a.score + Math.round((b.score - BRAND_START) / 5), why: [a.why, said].filter(Boolean).join("; ") || null };
   }
 
   /** The office by XP (owner, 10-07: every orb wants "to be the best orb ... get xp and please the user"):
@@ -1080,6 +1132,9 @@ export class Home {
     void this.reading.due(); // the reading library's next read, one at a time (PLAN 3.12)
     this.social.due(); // two free orbs meet, in the office's day (PLAN 5.9)
     this.social.momentDue(); // and now and then run into each other (owner, 10-07: "micro interactions")
+    this.brand.due(); // a brand that changed band is said (PLAN 5.44)
+    this.culture.due(); // and the office's culture (PLAN 5.45)
+    this.watch.due(); // the CEO recommends whom to promote, by brand and skills (PLAN 5.46)
     this.boardroom.due(); // the board's election: when there is none, when its size changes, once a week (PLAN 5.16)
     if (this.#reportsOn) void this.reports.due()?.catch(() => undefined); // the board's report, from 08:00 each day (PLAN 5.18)
     if (this.#deskOn) {

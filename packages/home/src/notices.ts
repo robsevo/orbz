@@ -225,6 +225,32 @@ export class Notices {
         title: fell ? `${x} and ${y} have fallen out` : `${x} and ${y} are good friends now`,
         detail: fell ? "They still work together; each knows to be kind and plain with the other" : "They work well together, and who fits a team's work weighs it",
       });
+    } else if (e.type === "brand.changed" && e.orb) {
+      // its brand (PLAN 5.44) crossed into another band: once, the last one put away
+      const name = String(e.data.name ?? this.#nameOf(e.orb));
+      this.#settle("kind = 'friends' AND orb = ? AND title LIKE ?", e.orb, `${name}'s brand%`);
+      this.#add(`brand:${e.seq}`, {
+        kind: "friends", orb: e.orb, conversation: null, due: null,
+        title: `${name}'s brand: ${String(e.data.to).toLowerCase()}`,
+        detail: e.data.up ? "The office thinks better of it: the others seek it out, and its votes and fits weigh a little more" : "The office thinks less of it: its work, its ideas and how it gets on with the others bring it back",
+      });
+    } else if (e.type === "ceo.recommended" && e.orb) {
+      // the CEO's pick (PLAN 5.46), by brand and skills: it takes the place of the evidence's own notice; only you promote
+      this.#settle("kind = 'promotion' AND orb = ? AND key NOT LIKE 'ceo:%'", e.orb);
+      this.#add(`ceo:${e.orb}:${String(e.data.to)}`, {
+        kind: "promotion", orb: e.orb, conversation: null, due: null,
+        title: `${String(e.data.ceoName)}, your CEO, recommends promoting ${String(e.data.name)} to ${String(e.data.to)}`,
+        detail: `${String(e.data.why)} Only you promote.`,
+      });
+    } else if (e.type === "culture.changed") {
+      // the office's culture (PLAN 5.45) crossed into another band: once, the last one put away
+      this.#settle("kind = 'friends' AND title LIKE ?", "The office's culture%");
+      const flavour = (e.data.flavour as string[] | undefined) ?? [];
+      this.#add(`culture:${e.seq}`, {
+        kind: "friends", orb: "", conversation: null, due: null,
+        title: `The office's culture: ${String(e.data.to).toLowerCase()}`,
+        detail: `${flavour.length ? `A ${flavour.join(" and ")} office. ` : ""}${e.data.up ? "Run-ins come oftener now, and land warmer" : "Run-ins come rarer now, and land flatter: brands and friendships bring it back"}`,
+      });
     } else if (e.type === "report.made") {
       // the board's report (PLAN 5.18): yesterday's is put away by today's
       const ideas = (e.data.ideas as unknown[] | undefined)?.length ?? 0;

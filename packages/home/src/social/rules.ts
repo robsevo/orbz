@@ -60,8 +60,9 @@ function weighted<T>(items: T[], weight: (t: T) => number, r: () => number): T {
 }
 
 /** Who meets: anyone with anyone; the sociable (Humour, Care, Pace) start more of them, a friend is a little
- * likelier to be the one met, and the last two do not meet again at once unless no one else is free. */
-export function pickPair(free: string[], traits: (orb: string) => Traits, score: (a: string, b: string) => number, last: readonly [string, string] | null, r: () => number): [string, string] | null {
+ * likelier to be the one met, and so (PLAN 5.44) is an orb the office thinks well of (its brand, 0 to 100: half as
+ * likely at 0, half again at 100); the last two do not meet again at once unless no one else is free. */
+export function pickPair(free: string[], traits: (orb: string) => Traits, score: (a: string, b: string) => number, last: readonly [string, string] | null, r: () => number, regard: (orb: string) => number = () => 50): [string, string] | null {
   if (free.length < 2) return null;
   const a = weighted(free, (o) => {
     const t = traits(o);
@@ -70,7 +71,7 @@ export function pickPair(free: string[], traits: (orb: string) => Traits, score:
   const same = (x: string): boolean => Boolean(last && last.includes(a) && last.includes(x));
   const others = free.filter((x) => x !== a && !same(x));
   const pool = others.length ? others : free.filter((x) => x !== a);
-  const b = weighted(pool, (x) => 1 + Math.max(0, score(a, x)) / 50, r);
+  const b = weighted(pool, (x) => (1 + Math.max(0, score(a, x)) / 50) * (0.5 + regard(x) / 100), r);
   return [a, b];
 }
 
@@ -207,12 +208,14 @@ const SCRIPTS: Record<MomentKind, Script> = {
 export const MOMENT_KINDS = Object.keys(SCRIPTS) as MomentKind[];
 
 /** A moment between `a` (it starts it) and `b`: which, where, how it went, the lines, the gestures and the friendship's
- * change (warm +1 to +3, more the better they get on; flat -1 to -2). */
-export function pickMoment(a: Traits, b: Traits, r: () => number): Moment {
+ * change (warm +1 to +3, more the better they get on; flat -1 to -2). `regard` is the starter's brand (PLAN 5.44, 0 to
+ * 100): the office warms to an orb it thinks well of, a quarter likelier at the top, a quarter less at the bottom; `lift`,
+ * the office's culture's (culture.ts `momentLift`): a warm office's run-ins land warmer. */
+export function pickMoment(a: Traits, b: Traits, r: () => number, regard = 50, lift = 0): Moment {
   const c = compat(a, b);
   const kind = weighted(MOMENT_KINDS, (k) => Math.max(0.05, SCRIPTS[k].weight(a, b)), r);
   const s = SCRIPTS[kind];
-  const tone: MomentTone = r() < clamp(s.lands(a, b, c), 0.1, 0.95) ? "warm" : "flat";
+  const tone: MomentTone = r() < clamp(s.lands(a, b, c) + (regard - 50) / 200 + lift, 0.1, 0.95) ? "warm" : "flat";
   const pool = tone === "warm" ? s.warm : s.flat;
   const lines = pool[Math.floor(r() * pool.length)]!;
   const delta = tone === "warm" ? clamp(Math.round(1 + c * 2 + r()), 1, 3) : -clamp(Math.round(1 + r()), 1, 2);

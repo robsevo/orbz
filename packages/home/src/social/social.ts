@@ -54,6 +54,11 @@ export type SocialOptions = {
   workOf?: (orb: string) => string | null;
   /** The dice (tests pin them). */
   dice?: () => number;
+  /** An orb's brand, 0 to 100 (PLAN 5.44, brand.ts): the others seek it out and warm to it the more they think of it. */
+  regard?: (orb: string) => number;
+  /** The office's culture (PLAN 5.45, culture.ts): how often run-ins come against the usual gap, and how much warmer they land. */
+  pace?: () => number;
+  lift?: () => number;
   /** Whether orbs meet on their own (the real home: yes; a test home: only when it says so). */
   on?: boolean;
 };
@@ -70,7 +75,7 @@ export class Social {
     this.#db = db;
     this.#events = events;
     this.#clock = clock;
-    this.#o = { ...o, dice: o.dice ?? Math.random, on: o.on ?? false, workOf: o.workOf ?? (() => null) };
+    this.#o = { ...o, dice: o.dice ?? Math.random, on: o.on ?? false, workOf: o.workOf ?? (() => null), regard: o.regard ?? (() => 50), pace: o.pace ?? (() => 1), lift: o.lift ?? (() => 0) };
   }
 
   // ── traits, from the app ──────────────────────────────────────────────────────────────────
@@ -151,7 +156,8 @@ export class Social {
   nextMomentAt(): number | null {
     if (!this.#o.on) return null;
     const last = this.#events.ofType("social.moment").at(-1);
-    const gap = last ? MOMENT_GAP_MIN_MS + ((last.seq * 2654435761) % 1000) / 1000 * (MOMENT_GAP_MAX_MS - MOMENT_GAP_MIN_MS) : MOMENT_GAP_MIN_MS;
+    // a warm culture's run-ins come oftener, a tense one's rarer (PLAN 5.45)
+    const gap = (last ? MOMENT_GAP_MIN_MS + ((last.seq * 2654435761) % 1000) / 1000 * (MOMENT_GAP_MAX_MS - MOMENT_GAP_MIN_MS) : MOMENT_GAP_MIN_MS) * this.#o.pace();
     let at = Math.max(last ? last.at + Math.round(gap) : 0, this.#momentRetryAt);
     if (!inOfficeDay(Math.max(at, this.#clock.now()))) at = nextOpening(Math.max(at, this.#clock.now()));
     return at;
@@ -175,10 +181,10 @@ export class Social {
     const meeting = new Set(this.current().flatMap((m) => [m.a, m.b]));
     const free = office.map((o) => o.id).filter((id) => this.#o.free(id) && !meeting.has(id));
     const last = this.#events.ofType("social.moment").at(-1);
-    const pair = pickPair(free, (o) => this.traitsOf(o), (x, y) => this.score(x, y), last ? [String(last.data.a), String(last.data.b)] : null, r);
+    const pair = pickPair(free, (o) => this.traitsOf(o), (x, y) => this.score(x, y), last ? [String(last.data.a), String(last.data.b)] : null, r, this.#o.regard);
     if (!pair) return null;
     const [x, y] = pair;
-    const m = pickMoment(this.traitsOf(x), this.traitsOf(y), r);
+    const m = pickMoment(this.traitsOf(x), this.traitsOf(y), r, this.#o.regard(x), this.#o.lift());
     const before = this.score(x, y);
     const after = clampScore(before + m.delta);
     const [a, b] = pairOf(x, y);
@@ -239,7 +245,7 @@ export class Social {
     const office = this.#o.office();
     const free = office.map((o) => o.id).filter((id) => this.#o.free(id));
     const lastRow = this.#db.prepare("SELECT a, b FROM meetings ORDER BY id DESC LIMIT 1").get() as { a: string; b: string } | undefined;
-    const pair = pickPair(free, (o) => this.traitsOf(o), (x, y) => this.score(x, y), lastRow ? [lastRow.a, lastRow.b] : null, r);
+    const pair = pickPair(free, (o) => this.traitsOf(o), (x, y) => this.score(x, y), lastRow ? [lastRow.a, lastRow.b] : null, r, this.#o.regard);
     if (!pair) return null;
     const [x, y] = pair;
     const tx_ = this.traitsOf(x), ty = this.traitsOf(y);

@@ -17,6 +17,7 @@ import { Tall } from "../ui/Balanced.tsx";
 import { Balanced } from "../ui/Balanced.tsx";
 import { chartOf, HEAD_OF, HUE_OF, type Kind } from "./chart.ts";
 import { ReportCard, SchoolSheet } from "./School.tsx";
+import { CultureAndWatch } from "./Culture.tsx";
 
 const small: CSSProperties = { font: "500 12px/16px var(--font)", color: "var(--text-3)", textWrap: "pretty" };
 const POST: Record<BoardPost, string> = { chair: "Chairperson", vice: "Vice Chair", secretary: "Secretary", treasurer: "Treasurer", director: "Director" };
@@ -157,6 +158,8 @@ export function OrgRoom({ home, office, open, rehired, school = null }: { home: 
   return (
     <div data-org style={{ display: "grid", gap: "var(--s5)", padding: "var(--s5)", alignContent: "start", minWidth: 0 }}>
       <h2 style={{ margin: 0, font: "800 22px/28px var(--font)", color: "var(--text-1)" }}>The org chart</h2>
+      {/* the office's culture (PLAN 5.45) and the CEO's brand watch (5.46), over the tree they are made of */}
+      {home && <CultureAndWatch home={home} />}
       <style>{TREE_CSS}</style>
       {/* the tree: you at its root (owner, 10-07: "You are the Founder of a brand new Orb startup"), the CEO under you,
           every department's head under the CEO, each team under its head */}

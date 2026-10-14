@@ -4,6 +4,8 @@
 // more intricate", "its where we see the orbs growth"): the friends it made, the meetings and the ideas
 // traded in them (each orb's own latest work, by code), the lessons passed; then its habits, reviews, its
 // weekly card and its report card. Promote and Not yet when it is ready: only you promote.
+// Its brand (PLAN 5.44; owner, 10-14: "how theyre perceived as a whole around the office"): the score and its word, the
+// fortnight's line, and the five parts that make it, each a bar from the middle (yours to read, never a model's).
 // And what it wants (owner, 10-07: "they also want to be the best orb also, not only the best at their
 // position. Their one goal in life is to get xp and please the user"): the office by XP, where it stands.
 // On a phone (owner, 10-07: "career page on mobile is not organized. organize it, put scrolls for sections that are
@@ -13,7 +15,7 @@ import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { Orb } from "../orb/Orb.tsx";
 import { sheetOf, SPECIALTIES, type Character } from "../orb/spec.ts";
 import { grownOf, TOTAL } from "../orb/dna.ts";
-import { idOf, type CareerState, type Office } from "../home/link.ts";
+import { idOf, type Brand, type CareerState, type Office } from "../home/link.ts";
 import { span } from "../orb/age.ts";
 import { Radar } from "../ui/Radar.tsx";
 import { NAMES } from "../floor/props.ts";
@@ -49,6 +51,69 @@ function Section({ title, children, label }: { title: string; children: ReactNod
   );
 }
 
+/** The fortnight as a line: the score each day, today's dot at its end. */
+function Spark({ days }: { days: number[] }) {
+  if (days.length < 2) return null;
+  const w = 120, h = 34, lo = Math.min(...days, 40), hi = Math.max(...days, 60);
+  const x = (i: number): number => 3 + (i / (days.length - 1)) * (w - 6);
+  const y = (v: number): number => 3 + (1 - (v - lo) / Math.max(1, hi - lo)) * (h - 6);
+  return (
+    <svg data-brand-spark width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true" style={{ flex: "0 0 auto", overflow: "visible" }}>
+      <line x1={0} x2={w} y1={y(50)} y2={y(50)} style={{ stroke: "var(--hairline)", strokeDasharray: "2 3" }} />
+      <polyline points={days.map((v, i) => `${x(i)},${y(v)}`).join(" ")} style={{ fill: "none", stroke: "var(--accent)", strokeWidth: 2, strokeLinejoin: "round", strokeLinecap: "round" }} />
+      <circle cx={x(days.length - 1)} cy={y(days.at(-1)!)} r={3.5} style={{ fill: "var(--accent)" }} />
+    </svg>
+  );
+}
+
+/** Its brand: how the office as a whole sees it. */
+export function BrandCard({ brand, name, phone }: { brand: Brand; name: string; phone: boolean }) {
+  const week = brand.week ?? (brand.history.length > 7 ? brand.score - brand.history[brand.history.length - 8]! : 0);
+  const REACH: Record<string, number> = { people: 25, work: 25, ideas: 10, helping: 10, record: 15 };
+  return (
+    <Section title="Brand" label="Brand">
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--s3)", flexWrap: "wrap", minWidth: 0 }}>
+        <div role="meter" aria-label={`${name}'s brand`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={brand.score} data-brand={brand.score} style={{ position: "relative", width: 64, height: 64, flex: "0 0 auto", borderRadius: "50%", background: `conic-gradient(var(--accent) ${brand.score * 3.6}deg, var(--fill-2) 0)` }}>
+          <span style={{ position: "absolute", inset: 6, display: "grid", placeItems: "center", borderRadius: "50%", background: "var(--fill)", font: "800 22px/1 var(--font)", color: "var(--text-1)", fontVariantNumeric: "tabular-nums" }}>{brand.score}</span>
+        </div>
+        <div style={{ display: "grid", gap: 2, flex: "1 1 140px", minWidth: 0 }}>
+          <span data-brand-word style={{ font: "800 18px/24px var(--font)", color: "var(--accent)" }}>{brand.word}</span>
+          <span style={small}>{week === 0 ? "Level with a week ago." : `${week > 0 ? "Up" : "Down"} ${Math.abs(week)} since a week ago.`}</span>
+        </div>
+        {!phone && <Spark days={brand.history} />}
+      </div>
+      <span style={small}>{`How the whole office sees ${name}, from 0 to 100. Everyone starts at 50.`}</span>
+      {/* what it changes (home: social/rules.ts pickPair and pickMoment, the board's votes, who fits a team's row) */}
+      <span data-brand-effect style={{ ...small, color: "var(--text-2)" }}>
+        {brand.score >= 65
+          ? `The office seeks ${name} out: its moments land warmer, and the board's votes and team picks lean its way.`
+          : brand.score < 40
+            ? `The office keeps its distance: its moments land flatter, and the board's votes and team picks lean away.`
+            : "Work you approve, ideas you take, helping out and good friendships raise it."}
+      </span>
+      <ul aria-label="What makes it" style={{ display: "grid", gap: 10, margin: 0, padding: 0, listStyle: "none" }}>
+        {brand.parts.map((p) => {
+          const reach = REACH[p.key] ?? 25;
+          const share = Math.min(1, Math.abs(p.points) / reach) * 50;
+          return (
+            <li key={p.key} data-brand-part={p.key} style={{ display: "grid", gap: 3, minWidth: 0 }}>
+              <span style={{ display: "flex", justifyContent: "space-between", gap: 8, minWidth: 0 }}>
+                <span style={{ ...small, color: "var(--text-2)", fontWeight: 700 }}>{p.label}</span>
+                <b style={{ font: "800 13px/18px var(--font)", color: p.points > 0 ? "var(--accent)" : p.points < 0 ? "var(--off)" : "var(--text-3)", fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{p.points > 0 ? `+${p.points}` : p.points}</b>
+              </span>
+              <span style={{ position: "relative", display: "block", height: 6, borderRadius: 3, background: "var(--fill-2)", overflow: "hidden" }}>
+                <i style={{ position: "absolute", top: 0, bottom: 0, left: p.points < 0 ? `${50 - share}%` : "50%", width: `${share}%`, background: p.points < 0 ? "var(--off)" : "var(--accent)" }} />
+                <i style={{ position: "absolute", top: 0, bottom: 0, left: "calc(50% - .5px)", width: 1, background: "var(--text-3)", opacity: 0.5 }} />
+              </span>
+              <span style={small}>{p.why}</span>
+            </li>
+          );
+        })}
+      </ul>
+    </Section>
+  );
+}
+
 export function CareerRoom({ home, orb }: { home: Office | null; orb: Character }) {
   const [c, setC] = useState<CareerState | null>(null);
   const [said, setSaid] = useState<string | null>(null);
@@ -59,7 +124,7 @@ export function CareerRoom({ home, orb }: { home: Office | null; orb: Character 
     load();
     // its work, its level, and its life with the others: a meeting, a friendship, a lesson
     // (anyone's XP moves the office's table)
-    return home.watch({ event: (e) => void ((e.orb === idOf(orb.name) || /^(social|xp)\./.test(e.type)) && /^(xp\.|orb\.|promotion\.|habit\.|performance\.|board\.|run\.finished|social\.)/.test(e.type) && load()) });
+    return home.watch({ event: (e) => void ((e.orb === idOf(orb.name) || /^(social|xp)\./.test(e.type)) && /^(xp\.|orb\.|promotion\.|habit\.|performance\.|board\.|run\.finished|social\.|brand\.|report\.idea_|card\.resolved|trace\.feedback)/.test(e.type) && load()) });
   }, [home, orb.name]);
   if (!home) return <p style={{ ...small, padding: "var(--s5)" }}>Careers are the home's: open the app from your home to see one.</p>;
   if (!c) return <p style={{ ...small, padding: "var(--s5)" }}>{said ?? "Loading…"}</p>;
@@ -114,6 +179,8 @@ export function CareerRoom({ home, orb }: { home: Office | null; orb: Character 
           </div>
         )}
       </header>
+
+      {c.brand && <BrandCard brand={c.brand} name={orb.name} phone={phone} />}
 
       {/* what it wants most: the top of the office's XP table, and your approval */}
       {at >= 0 && (

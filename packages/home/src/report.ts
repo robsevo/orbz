@@ -219,7 +219,7 @@ export function pitchers(office: ReportOrb[], board: string[], lastAsked: (orb: 
 }
 
 /** What the office's news is read from. */
-export const NEWS_TYPES = ["orb.added", "orb.rehired", "orb.let_go", "orb.promoted", "habit.promoted", "board.decided", "board.elected", "social.friends", "social.fell_out", "run.finished"];
+export const NEWS_TYPES = ["orb.added", "orb.rehired", "orb.let_go", "orb.promoted", "habit.promoted", "board.decided", "board.elected", "social.friends", "social.fell_out", "brand.changed", "culture.changed", "run.finished"];
 
 /** The office's own news between two times, by code from the log. */
 export function officeNews(events: readonly HomeEvent[], nameOf: (orb: string) => string): OfficeItem[] {
@@ -242,6 +242,8 @@ export function officeNews(events: readonly HomeEvent[], nameOf: (orb: string) =
         if (x && y) out.push({ orb: null, text: e.type === "social.friends" ? `${x} and ${y} became good friends` : `${x} and ${y} fell out` });
         break;
       }
+      case "culture.changed": out.push({ orb: null, text: `The office's culture is ${String(e.data.to).toLowerCase()} now` }); break;
+      case "brand.changed": out.push({ orb, text: `${String(e.data.name ?? who)}'s brand is ${String(e.data.to).toLowerCase()} now` }); break;
       case "run.finished":
         if (orb && e.data.outcome === "ok") jobs.set(orb, (jobs.get(orb) ?? 0) + 1);
         break;

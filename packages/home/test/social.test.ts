@@ -106,13 +106,14 @@ test("moments: one every 6 to 12 minutes in the office's day between two free or
   home.start();
   await clock.advance(3 * 3_600_000); // 09:00 to 12:00
   const ms = home.events.ofType("social.moment");
-  assert.ok(ms.length >= 12 && ms.length <= 31, `every 6 to 12 minutes, alongside the meetings (${ms.length} in three hours)`);
+  assert.ok(ms.length >= 10 && ms.length <= 40, `every 6 to 12 minutes (by the culture, 4.5 to 15), alongside the meetings (${ms.length} in three hours)`);
   const gaps = ms.slice(1).map((e, i) => e.at - ms[i]!.at);
   // the owner's "every 6 to 12 minutes", written out here: read from the code under test, they moved with it (10-07, a
   // planted gap of one minute went unseen)
-  const [six, twelve] = [6 * 60_000, 12 * 60_000];
+  // and (PLAN 5.45) the office's culture moves it: a quarter oftener when it thrives, a quarter rarer when it is tense
+  const [six, twelve] = [4.5 * 60_000, 15 * 60_000];
   // one due while the two are in a meeting waits for it to end (looked at again every five minutes)
-  assert.ok(gaps.every((g) => g >= six && g <= twelve + MEETING_MS + 5 * 60_000 + 60_000), `6 to 12 minutes apart, or once the two are out of a meeting (${gaps.map((g) => Math.round(g / 60_000)).join(", ")} min)`);
+  assert.ok(gaps.every((g) => g >= six && g <= twelve + MEETING_MS + 5 * 60_000 + 60_000), `6 to 12 minutes apart (4.5 to 15 by the culture), or once the two are out of a meeting (${gaps.map((g) => Math.round(g / 60_000)).join(", ")} min)`);
   assert.ok(gaps.filter((g) => g <= twelve + 60_000).length >= gaps.length / 2, "mostly within 12 minutes");
   for (const e of ms) assert.deepEqual([e.data.a, e.data.b].sort(), ["ada", "bo"], "Cy has work waiting: only Ada and Bo are free");
   // never with one in a meeting under way
