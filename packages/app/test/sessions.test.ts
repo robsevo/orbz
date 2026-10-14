@@ -70,6 +70,11 @@ test("a session: the orbs you bring in, the Brainstorm's turns and what was agre
   h.about.setName("Robin");
   h.inbox.addOrb("hazel", "Hazel", "planning", { shape: "bean", eyes: "classic", hue: "amber" });
   h.inbox.addOrb("milo", "Milo", "research", { shape: "bean", eyes: "classic", hue: "teal" });
+  // Hazel and Milo click (alike in Humour and Pace): a run of coffees makes them good friends (PLAN 5.9), for the team's
+  // chemistry below (5.47)
+  for (const o of ["hazel", "milo"]) h.social.setTraits(o, { Pace: 13, Care: 12, Curiosity: 11, Humour: 14, Focus: 8, Calm: 7, Nerve: 5 });
+  for (let i = 0; i < 30; i++) h.social.meet();
+  assert.ok(h.social.score("hazel", "milo") >= 50, `good friends (${h.social.score("hazel", "milo")})`);
   const d = await serve(h, { port: 0, appDir: dist });
   t.after(() => d.close());
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: "dark" });
@@ -104,8 +109,14 @@ test("a session: the orbs you bring in, the Brainstorm's turns and what was agre
     return cut;
   }, PEOPLE_NAMES);
   assert.deepEqual(cut, [], "every name from our list shows whole in its tile");
-  assert.equal(await making.getByRole("button", { name: "Hazel" }).getAttribute("aria-pressed"), "true", "the office's first is in to start with");
-  await making.getByRole("button", { name: "Milo" }).click();
+  assert.equal(await making.locator('[data-crew-pick="hazel"]').getAttribute("aria-pressed"), "true", "the office's first is in to start with");
+  // the team's chemistry (PLAN 5.47): Milo, not in yet, is Hazel's good friend; once in, the two are great together
+  await making.locator('[data-crew-pick="milo"] [data-crew-hint="friend"]').waitFor({ timeout: 20_000 });
+  assert.equal(await making.locator('[data-crew-pick="milo"] [data-crew-hint]').innerText(), "♥ good friends with Hazel");
+  assert.equal(await making.locator("[data-chemistry]").count(), 0, "one orb: no chemistry to speak of");
+  await making.locator('[data-crew-pick="milo"]').click();
+  await making.locator('[data-chemistry="Great chemistry"]').waitFor();
+  assert.match(await making.locator("[data-chemistry]").innerText(), /^Great chemistry · Hazel and Milo are good friends$/);
   await making.getByRole("button", { name: "Start the session" }).click();
   await page.waitForFunction(() => location.hash === "#/session/1/brainstorm");
   assert.deepEqual(h.team.get(1), { ...h.team.get(1)!, title: "A birthday party", brainstorm: ["hazel", "milo"], floor: ["hazel", "milo"] });

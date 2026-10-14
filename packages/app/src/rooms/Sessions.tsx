@@ -19,6 +19,7 @@ import { Computer } from "./Computer.tsx";
 import { TeamBoard } from "./Board.tsx";
 import { actsOf } from "./work.ts";
 import { useCramped, useFillScreen } from "../ui/fill.ts";
+import { chemistryOf, hintFor, type FriendshipRow } from "./chemistry.ts";
 
 const button: CSSProperties = { font: "600 14px/20px var(--font)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 10, padding: "8px 14px", cursor: "pointer", boxShadow: "inset 0 0 0 .5px var(--hairline)", minHeight: 36 };
 const strong: CSSProperties = { ...button, background: "var(--accent-fill)", boxShadow: "inset 0 0 0 1.5px var(--accent)", fontWeight: 800 };
@@ -57,6 +58,7 @@ function SessionList(o: { home: Office; office: Character[]; sessions: Session[]
     o.home.deleteSession(id).then(() => { setAsking(null); o.gone(id); }, (e: Error) => setFailed(e.message));
   };
   const [crew, setCrew] = useState<string[]>(() => o.office.slice(0, 1).map((c) => idOf(c.name)));
+  const friendships = useFriendships(o.home);
   const [why, setWhy] = useState<string | null>(null);
   const start = (): void => {
     const t = title.trim();
@@ -71,7 +73,7 @@ function SessionList(o: { home: Office; office: Character[]; sessions: Session[]
         <span style={{ font: "700 15px/20px var(--font)", color: "var(--text-1)" }}>A new session: a piece of work, brainstormed, then done</span>
         <input value={title} onChange={(e) => setTitle(e.target.value)} aria-label="What the session is for" placeholder="A landing page, the month's budget, a trip to Lisbon…" size={1} style={{ font: "600 16px/22px var(--font)", color: "var(--text-1)", background: "var(--fill)", border: 0, borderRadius: 10, padding: "10px 12px", outline: 0, boxShadow: "inset 0 0 0 1px var(--hairline)", minWidth: 0 }} />
         <span style={{ font: "700 11px/16px var(--font)", letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)" }}>Who's in</span>
-        <Picker office={o.office} chosen={crew} set={setCrew} />
+        <Picker office={o.office} chosen={crew} set={setCrew} friendships={friendships} />
         {why && <span style={{ font: "500 13px/18px var(--font)", color: "var(--alert)" }}>{why}</span>}
         <button data-sound="create" onClick={start} style={{ ...strong, justifySelf: "start" }}>
           Start the session
@@ -121,24 +123,56 @@ function SessionList(o: { home: Office; office: Character[]; sessions: Session[]
   );
 }
 
-/** Who works a tab: the office's orbs, chosen by a press, in the order chosen (their turn order). */
-function Picker({ office, chosen, set }: { office: Character[]; chosen: string[]; set: (ids: string[]) => void }) {
+/** The office's friendships (PLAN 5.9), for a team's chemistry: loaded once, again when a meeting or a run-in moves one. */
+function useFriendships(home: Office): FriendshipRow[] {
+  const [rows, setRows] = useState<FriendshipRow[]>([]);
+  useEffect(() => {
+    const load = (): void => void home.socialOf().then((s) => setRows(s.friendships), () => setRows([]));
+    load();
+    return home.watch({ event: (e) => void (/^social\.(met|moment|friends|fell_out)/.test(e.type) && load()) });
+  }, [home]);
+  return rows;
+}
+
+/** Who works a tab: the office's orbs, chosen by a press, in the order chosen (their turn order). Each one not chosen
+ * says how it gets on with those already in (a friend to bring along, a friction to think twice about), and the team's
+ * chemistry is said under them (PLAN 5.47; owner, 10-14: friendships "help orbz better work together and match together"). */
+function Picker({ office, chosen, set, friendships = [] }: { office: Character[]; chosen: string[]; set: (ids: string[]) => void; friendships?: FriendshipRow[] }) {
+  const nameOf = (id: string): string => office.find((c) => idOf(c.name) === id)?.name ?? id;
+  const chem = chemistryOf(friendships, chosen);
   return (
+    <div style={{ display: "grid", gap: 8, minWidth: 0 }}>
     <OneLine style={{ justifyContent: "flex-start" }} gap={8}>
       {office.map((c) => {
         const id = idOf(c.name);
         const on = chosen.includes(id);
+        const hint = on ? null : hintFor(friendships, id, chosen);
         return (
           // A wider, rectangular crew tile, with the orb large enough to recognise at a glance (owner, 10-10). It grows
           // with its name: a fixed 148 px left a name 50 px and cut 33 of our 528 (Humphrey, the widest, is 64 px, measured
           // 10-10); only a name past 240 px is cut
           <button key={id} data-crew-pick={id} data-orb={c.hue} aria-pressed={on} onClick={() => set(on ? chosen.filter((x) => x !== id) : [...chosen, id])} style={{ ...button, display: "flex", alignItems: "center", gap: 10, flex: "0 0 auto", minWidth: 148, maxWidth: 240, padding: "8px 12px", borderRadius: 12, textAlign: "left", background: on ? "var(--accent-fill)" : "var(--fill)", boxShadow: on ? "inset 0 0 0 1.5px var(--accent)" : "inset 0 0 0 1px var(--hairline)" }}>
             <Orb character={c} size={64} poke={false} still />
-            <span data-crew-name style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", font: "800 13px/18px var(--font)", color: on ? "var(--text-1)" : "var(--text-3)" }}>{c.name}</span>
+            <span style={{ display: "grid", gap: 1, minWidth: 0 }}>
+              <span data-crew-name style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", font: "800 13px/18px var(--font)", color: on ? "var(--text-1)" : "var(--text-3)" }}>{c.name}</span>
+              {hint && (
+                <span data-crew-hint={hint.score > 0 ? "friend" : "friction"} style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", font: "700 11px/14px var(--font)", color: hint.score > 0 ? "var(--accent)" : "var(--off)" }}>
+                  {`${hint.score > 0 ? "♥" : "⚡"} ${hint.word} with ${nameOf(hint.with)}`}
+                </span>
+              )}
+            </span>
           </button>
         );
       })}
     </OneLine>
+    {chem && (
+      <span data-chemistry={chem.word} style={{ justifySelf: "start", font: "600 13px/18px var(--font)", color: "var(--text-2)", textWrap: "pretty" }}>
+        <b style={{ fontWeight: 800, color: chem.word === "Friction" ? "var(--off)" : chem.word === "Mixed" ? "var(--text-1)" : "var(--accent)" }}>{chem.word}</b>
+        {[chem.best && ` · ${nameOf(chem.best.a)} and ${nameOf(chem.best.b)} are ${chem.best.word}`, chem.worst && ` · ${nameOf(chem.worst.a)} and ${nameOf(chem.worst.b)}: ${chem.worst.word}`].filter(Boolean).join("")}
+        {chem.best || chem.worst ? "" : " · colleagues so far"}
+      </span>
+    )}
+    </div>
   );
 }
 
@@ -146,6 +180,7 @@ function SessionView(o: { home: Office; office: Character[]; session: Session; t
   const [busy, setBusy] = useState<Busy>({});
   const [messages, setMessages] = useState<Message[]>([]);
   const [bringing, setBringing] = useState(false);
+  const friendships = useFriendships(o.home);
   const room = useRef<HTMLDivElement>(null);
   // on a narrow screen the Floor shows its work or its chat, each the whole height (10-07: split, both were slivers)
   const [show, setShow] = useState<"work" | "talk">("work");
@@ -206,7 +241,7 @@ function SessionView(o: { home: Office; office: Character[]; session: Session; t
             {bringing ? "Done" : "Bring someone in"}
           </button>
         </OneLine>
-        {bringing && <Picker office={o.office} chosen={ids} set={(next) => o.home.bring(o.session.id, o.tab, next).then(o.changed, () => {})} />}
+        {bringing && <Picker office={o.office} chosen={ids} friendships={friendships} set={(next) => o.home.bring(o.session.id, o.tab, next).then(o.changed, () => {})} />}
       </header>
       {o.tab === "brainstorm" ? (
         <div style={{ display: "grid", gridTemplateRows: agreed.length ? "auto minmax(0, 1fr)" : "minmax(0, 1fr)", minHeight: 0, minWidth: 0 }}>

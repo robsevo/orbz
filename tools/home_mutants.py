@@ -2333,6 +2333,16 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
 
 # the app (PLAN 2.x): paths are inside packages/app
 APP_MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
+    # a team's chemistry (PLAN 5.47), the app's
+    ('a friction no worse than colleagues on a picker tile', 'src/rooms/chemistry.ts', [
+        ('  if (worst.score <= -20) return { ...worst, word: pairWord(worst.score) };\n', ''),
+    ], ['chemistry.test.ts']),
+    ('a pair never met counts as friends', 'src/rooms/chemistry.ts', [
+        ('?.score ?? 0;', '?.score ?? 50;'),
+    ], ['chemistry.test.ts']),
+    ('a team of two says no chemistry', 'src/rooms/chemistry.ts', [
+        ('if (team.length < 2) return null;', 'if (team.length < 3) return null;'),
+    ], ['chemistry.test.ts']),
     # the news screen (PLAN 5.43)
     ("could move it marks a story of any kind", "src/desk/news.ts", [
         ('    case "moving": return items.filter((x) => x.weight >= MOVING);', '    case "moving": return items.filter((x) => x.weight > 0);'),
