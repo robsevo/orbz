@@ -2132,8 +2132,20 @@ MUTANTS: list[tuple[str, str, list[tuple[str, str]], list[str]]] = [
         ('      if (after) messages.push({ role: "system", content: after });', '      if (after) messages.splice(1, 0, { role: "system", content: after });'),
     ], ['chatgpt.test.ts']),
     ('the note in the instructions on the plan too', 'src/agent/loop.ts', [
-        ('const after = ep.plan === "chatgpt" ? note : null;', 'const after = null as string | null;'),
+        ('const after = ep.plan === "chatgpt" || ep.prefixCache ? note : null;', 'const after = null as string | null;'),
     ], ['chatgpt.test.ts']),
+    ("the local coder reads the clock in its instructions, its tools and the conversation again every run", 'src/agent/loop.ts', [
+        ('const after = ep.plan === "chatgpt" || ep.prefixCache ? note : null;', 'const after = ep.plan === "chatgpt" ? note : null;'),
+    ], ['local-coder.test.ts']),
+    ('a run waits behind a warm-up', 'src/agent/loop.ts', [
+        ('      if (ep.prefixCache) this.#warming?.abort(); // a warm-up gives way; what it read is kept, and this run reads on from it\n', ''),
+    ], ['local-coder.test.ts']),
+    ("the local coder is asked over Node's fetch, which gives up on its headers at 300 s", 'src/brain/openai.ts', [
+        ('return (ep.timeoutMs ?? 0) > FETCH_HEADERS_MS ? (patientFetch as typeof fetch) : fetch;', 'return fetch;'),
+    ], ['local-coder.test.ts']),
+    ("a chat outgrows the local coder's window", 'src/agent/loop.ts', [
+        ('const at = ep.contextTokens ? Math.min(this.#o.compactAtTokens, ep.contextTokens - REPLY_TOKENS - toolTokens) : this.#o.compactAtTokens;', 'const at = this.#o.compactAtTokens;'),
+    ], ['local-coder.test.ts']),
     ('another brain reads the note before its instructions', 'src/agent/loop.ts', [
         ('const system = [standing, after ? null : note, own?.system ?? null]', 'const system = [after ? null : note, standing, own?.system ?? null]'),
     ], ['chatgpt.test.ts']),

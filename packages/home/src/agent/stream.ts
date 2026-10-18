@@ -5,7 +5,7 @@
 // The result always carries the partial text. A stop comes back as `stopped: true`; a transport
 // failure as `error` with the cause's code (ECONNRESET, ECONNREFUSED…) when there is one.
 import type { ModelMessage, ToolCall } from "./conversation.ts";
-import type { CostSource, Endpoint, Limited } from "../brain/openai.ts";
+import { type CostSource, type Endpoint, fetchFor, type Limited } from "../brain/openai.ts";
 import { streamResponses } from "./responses.ts";
 
 export type ToolSpec = { type: "function"; function: { name: string; description: string; parameters: Record<string, unknown> } };
@@ -42,6 +42,9 @@ export const emptyStreamed = (): Streamed => ({
   stopped: false, error: null, errorCode: null, limited: null, status: null, retryAfterS: null,
 });
 
+/** The most a reply may run to, unless a call asks for less. */
+export const REPLY_TOKENS = 8000;
+
 export async function streamChat(
   ep: Endpoint,
   body: { messages: ModelMessage[]; tools?: ToolSpec[]; maxTokens?: number; brief?: boolean; cacheKey?: string },
@@ -58,7 +61,7 @@ export async function streamChat(
 
   try {
     if (opts.signal?.aborted) throw opts.signal.reason;
-    const res = await fetch(`${ep.baseUrl.replace(/\/$/, "")}/chat/completions`, {
+    const res = await fetchFor(ep)(`${ep.baseUrl.replace(/\/$/, "")}/chat/completions`, {
       method: "POST",
       headers,
       signal,
@@ -66,7 +69,7 @@ export async function streamChat(
         model: ep.model,
         messages: wireMessages(body.messages, isGemini(ep)),
         ...(body.tools?.length && { tools: body.tools }),
-        max_tokens: body.maxTokens ?? 8000,
+        max_tokens: body.maxTokens ?? REPLY_TOKENS,
         stream: true,
         stream_options: { include_usage: true },
         ...ep.extra,

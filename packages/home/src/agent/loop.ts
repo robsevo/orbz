@@ -35,7 +35,7 @@ import { MANAGE_USAGE } from "../chatgpt/chatgpt.ts";
 import type { Spend } from "../brain/spend.ts";
 import type { Card, Conversations, Message, ModelMessage, ToolCall } from "./conversation.ts";
 import { AMBITION, nowNote, standingContext } from "./standing.ts";
-import { streamChat } from "./stream.ts";
+import { REPLY_TOKENS, streamChat } from "./stream.ts";
 import { type Background, runTool, type ToolContext, type ToolDef, type ToolResult, TOOLS, toolSpecs } from "./tools.ts";
 import type { CallSite, Guard } from "../rules/guard.ts";
 import type { Case, CaseStep, StepFn } from "../gym/cases.ts";
@@ -171,6 +171,8 @@ export class AgentRunner implements Runner {
   readonly #more: ToolDef;
   /** Each run's calls so far, by name and arguments (the repeat guard). */
   readonly #repeats = new WeakMap<RunContext, Map<string, number>>();
+  /** The warm-up under way (warm), stopped by the first run that needs its brain. */
+  #warming: AbortController | null = null;
 
   constructor(opts: AgentOptions) {
     this.#o = { tools: TOOLS, maxSteps: 50, compactAtTokens: 100_000, keepRecentTokens: 20_000, passWaitMs: 5000, ...opts };
@@ -235,6 +237,63 @@ export class AgentRunner implements Runner {
 
   workspace(orb: string): string {
     return workspaceOf(this.#o.dataDir, orb);
+  }
+
+  /** The kinds of tools a run starts with (agent/groups.ts): its department's kinds, a session's plans and team, and
+   * any kind it used before in this conversation; more_tools loads another. */
+  #startingKinds(orb: string, conversation: string, session: boolean): Set<string> {
+    const specialty = this.#o.orbSpecialty?.(orb) ?? null;
+    const loaded = startingGroups({ family: specialty ? (SPECIALTY_FAMILIES[specialty as Specialty] ?? null) : null, specialty, session });
+    for (const m of this.#o.conversations.history(conversation)) for (const c of m.toolCalls ?? []) {
+      const g = m.orb === orb ? this.#tool(c.name)?.group : undefined;
+      if (g) loaded.add(g.id);
+    }
+    return loaded;
+  }
+
+  /** Its standing context for a step (agent/standing.ts): rebuilt every request, never stored. */
+  #standing(orb: string, conversation: string, workspace: string, kinds: Set<string>, team?: TeamTurn): string {
+    return standingContext({
+      orbName: this.#o.orbName(orb), brainDir: join(this.#o.dataDir, "brain"), workspace,
+      specialty: this.#o.orbSpecialty?.(orb), learned: this.#o.learned?.(orb), notebook: this.#o.notebook?.(orb), colleagues: this.#o.colleagues?.(orb) ?? null, ambition: this.#o.ambition ? AMBITION : null, company: this.#o.company?.(orb) ?? null, ...(team && { team }),
+      // the craft its tools bring (brain/constitution.ts When): what it has to hand, and what it has used here
+      kinds, used: usedBy(this.#o.conversations.history(conversation), orb),
+    });
+  }
+
+  /** Reads each orb's own chat into a brain whose server keeps what it has read (Endpoint.prefixCache: a local coder)
+   * before anyone writes: what its next run there will send, but for the clock and the new message, for one token of
+   * reply. On a CPU a cold Orbz prompt takes minutes (10-18: 5,930 tokens, 385 s); warmed, a run reads only the clock
+   * and what is new. One orb at a time, in the order given; the first run on such a brain stops it (what was read is
+   * kept), and so does nothing listening (the run will say so). */
+  async warm(ep: Endpoint, orbs: readonly string[]): Promise<void> {
+    if (!ep.prefixCache) return;
+    this.stopWarming();
+    const stop = new AbortController();
+    this.#warming = stop;
+    const conv = this.#o.conversations;
+    try {
+      for (const orb of orbs) {
+        if (stop.signal.aborted) return;
+        const conversation = `chat:${orb}`;
+        const workspace = this.#o.workspaceFor?.(orb, conversation) ?? this.workspace(orb);
+        const kinds = this.#startingKinds(orb, conversation, false);
+        const messages: ModelMessage[] = [
+          { role: "system", content: this.#standing(orb, conversation, workspace, kinds) },
+          ...conv.toModel(conv.history(conversation), { me: orb, nameOf: this.#o.orbName, talk: false, brief: false }),
+        ];
+        const r = await streamChat(ep, { messages, tools: toolSpecs(this.#toolsFor(kinds)), maxTokens: 1 }, { signal: stop.signal });
+        if (r.stopped || r.error) return;
+      }
+    } finally {
+      if (this.#warming === stop) this.#warming = null;
+    }
+  }
+
+  /** Stops a warm-up under way (the home closing). */
+  stopWarming(): void {
+    this.#warming?.abort();
+    this.#warming = null;
   }
 
   async run(ctx: RunContext): Promise<RunResult> {
@@ -339,14 +398,7 @@ export class AgentRunner implements Runner {
       return ep?.chain && stepped.has(ep.chain) ? (this.#o.endpoint({ light: true }) ?? ep) : ep;
     };
     const steps = role === "asked" ? Math.min(ASKED_STEPS, this.#o.maxSteps) : this.#o.maxSteps;
-    // its tools to hand (agent/groups.ts): its department's kinds, a session's plans and team, and any kind it used before
-    // in this conversation; more_tools loads another
-    const specialty = this.#o.orbSpecialty?.(ctx.orb) ?? null;
-    const loaded = startingGroups({ family: specialty ? (SPECIALTY_FAMILIES[specialty as Specialty] ?? null) : null, specialty, session: Boolean(team) });
-    for (const m of conv.history(ctx.conversation)) for (const c of m.toolCalls ?? []) {
-      const g = m.orb === ctx.orb ? this.#tool(c.name)?.group : undefined;
-      if (g) loaded.add(g.id);
-    }
+    const loaded = this.#startingKinds(ctx.orb, ctx.conversation, Boolean(team));
     tctx.kinds = loaded;
     const runNow = this.#o.clock.now(); // once a run: the note's clock stays the same from step to step
     // one key for an orb's conversation (owner, 10-07): the plan's requests for it go to the cache that holds them; a hash,
@@ -380,25 +432,23 @@ export class AgentRunner implements Runner {
         step("no-brain", { brains: chain.states().map((s) => ({ id: s.id, state: s.state, why: s.why })) });
         return { outcome: "ok", summary: "no brain answered" };
       }
-      const standing = standingContext({
-        orbName: this.#o.orbName(ctx.orb), brainDir: join(this.#o.dataDir, "brain"), workspace: tctx.workspace,
-        specialty: this.#o.orbSpecialty?.(ctx.orb), learned: this.#o.learned?.(ctx.orb), notebook: this.#o.notebook?.(ctx.orb), colleagues: this.#o.colleagues?.(ctx.orb) ?? null, ambition: this.#o.ambition ? AMBITION : null, company: this.#o.company?.(ctx.orb) ?? null, ...(team && { team }),
-        // the craft its tools bring (brain/constitution.ts When): what it has to hand, and what it has used here
-        kinds: loaded, used: usedBy(conv.history(ctx.conversation), ctx.orb),
-      });
+      if (ep.prefixCache) this.#warming?.abort(); // a warm-up gives way; what it read is kept, and this run reads on from it
+      const standing = this.#standing(ctx.orb, ctx.conversation, tctx.workspace, loaded, team);
       // what changes from run to run: the clock, its place on the XP table, whether you spoke
       const note = nowNote({
         now: runNow,
         place: this.#o.ambition?.(ctx.orb) ?? null,
         aloud: ctx.items.some((i) => i.data.said === true), // you spoke (PLAN 4.7): his answer is heard, not read
       });
-      await this.#compact(ctx, ep, est(standing) + (note ? est(note) : 0));
+      const specs = toolSpecs(role === "chime" ? [] : this.#toolsFor(loaded));
+      await this.#compact(ctx, ep, est(standing) + (note ? est(note) : 0), est(JSON.stringify(specs)));
       if (!own) ep = pick() ?? ep; // compaction may have met the plan's limit and moved on
       this.#o.spend.check(); // SpendCapError: the inbox stops the run cleanly ("capped")
-      // on the ChatGPT plan the note goes after the conversation: the instructions, the tools and the conversation so far
-      // are then the same from run to run, a prefix the plan's cache serves at a tenth of the price; another brain reads
-      // it at the end of its instructions, as before
-      const after = ep.plan === "chatgpt" ? note : null;
+      // on the ChatGPT plan, and on a brain whose server keeps what it has read (a local coder's, 10-18), the note goes
+      // after the conversation: the instructions, the tools and the conversation so far are then the same from run to
+      // run, a prefix the plan's cache serves at a tenth of the price and a local coder reads once instead of every run
+      // (on a CPU, minutes); another brain reads it at the end of its instructions, as before
+      const after = ep.plan === "chatgpt" || ep.prefixCache ? note : null;
       const system = [standing, after ? null : note, own?.system ?? null].filter(Boolean).join("\n\n");
       const messages: ModelMessage[] = [{ role: "system" as const, content: system }, ...conv.toModel(conv.history(ctx.conversation), { me: ctx.orb, nameOf: this.#o.orbName, talk: role === "chime", brief: role === "asked" })];
       if (after) messages.push({ role: "system", content: after });
@@ -413,7 +463,7 @@ export class AgentRunner implements Runner {
       const cut = new AbortController();
       const r = await streamChat(
         ep,
-        { messages, tools: toolSpecs(role === "chime" ? [] : this.#toolsFor(loaded)), brief: role === "chime", cacheKey },
+        { messages, tools: specs, brief: role === "chime", cacheKey },
         {
           signal: AbortSignal.any([ctx.signal, cut.signal]),
           onText: (delta) => {
@@ -843,15 +893,19 @@ export class AgentRunner implements Runner {
     this.#o.conversations.add({ conversation: ctx.conversation, orb: ctx.orb, role: "notice", run: ctx.run, content, meta: { brain: id, rest: r.kind, fallback: next?.id ?? null } });
   }
 
-  async #compact(ctx: RunContext, ep: Endpoint, standingTokens: number): Promise<void> {
+  async #compact(ctx: RunContext, ep: Endpoint, standingTokens: number, toolTokens: number): Promise<void> {
     const conv = this.#o.conversations;
     const hist = conv.history(ctx.conversation);
     // the whole request: the standing context is sent every time, so it counts every time
     const size = standingTokens + hist.reduce((n, m) => n + est(m.content) + (m.toolCalls ? est(JSON.stringify(m.toolCalls)) : 0), 0);
-    if (size < this.#o.compactAtTokens) return;
+    // a brain with a window (a local coder's, 10-18) is tidied before the request outgrows it, its tools and a reply
+    // counted: ollama drops the oldest messages of a longer one and says nothing. What is kept whole is half of that
+    const at = ep.contextTokens ? Math.min(this.#o.compactAtTokens, ep.contextTokens - REPLY_TOKENS - toolTokens) : this.#o.compactAtTokens;
+    if (size < at) return;
+    const recent = Math.min(this.#o.keepRecentTokens, Math.floor(at / 2));
     let keep = 0;
     let k = hist.length;
-    while (k > 0 && keep + est(hist[k - 1]!.content) <= this.#o.keepRecentTokens) keep += est(hist[--k]!.content);
+    while (k > 0 && keep + est(hist[k - 1]!.content) <= recent) keep += est(hist[--k]!.content);
     while (k < hist.length && hist[k]!.role !== "user") k++; // start the kept part at a person's message
     if (k <= 1 || k >= hist.length) return;
     // a part at a time (Ash's context collapse): the oldest third of what no summary covers yet, ended where

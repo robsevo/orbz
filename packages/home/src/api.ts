@@ -513,6 +513,7 @@ async function handle(
       } catch (e) {
         throw new HttpError(400, e instanceof Error ? e.message : String(e));
       }
+      void home.warmLocal(); // the new coder reads the orbs' chats now, not at each one's first message
       return { brains: home.brains.status() };
     }
   }

@@ -20,6 +20,12 @@ export const GEMINI_FALLBACK_MODEL = "gemini-3.5-flash";
 const KEY = "orbs.gemini";
 const SEARCH_KEY = "orbs.tavily";
 export const TAVILY_BASE = "https://api.tavily.com";
+/** How long a local coder may take to answer. On a CPU (10-18: qwen3 8B, Ryzen 5 3600) a cold Orbz prompt of 5,930
+ * tokens took 385 s to read, past the stream's 300 s, and the chain said nothing had answered. */
+export const LOCAL_TIMEOUT_MS = 20 * 60_000;
+/** The window Orbz keeps a chat to on a local coder. Its server may give more (llama-cpu.service gives 65,536, for Ash;
+ * ollama's own default is 4,096): a chat tidied at 32k is read cold in about 11 minutes at the CPU's ~50 tokens a second. */
+export const LOCAL_CONTEXT_TOKENS = 32_768;
 
 /** The newest flash-lite a key may use, or null: the light brain's turns on Gemini (PLAN 5.10). A
  * free key gets far more requests a day on it than on the flash (about 500 to 20, reported 09-03). */
@@ -136,8 +142,11 @@ export class Brains {
 
   #local(): Endpoint | null {
     const l = this.#saved.local;
-    // a local coder costs nothing; the price says so where it reports no cost
-    return l ? { name: "local coder", baseUrl: l.baseUrl, model: l.model, retries: 0, price: { inputPerM: 0, outputPerM: 0 } } : null;
+    // a local coder costs nothing; the price says so where it reports no cost. Its server keeps what it has read
+    // (llama.cpp's prompt cache), so the clock goes last and the home warms it; slow to read, so it is given time
+    return l
+      ? { name: "local coder", baseUrl: l.baseUrl, model: l.model, retries: 0, timeoutMs: LOCAL_TIMEOUT_MS, prefixCache: true, contextTokens: LOCAL_CONTEXT_TOKENS, price: { inputPerM: 0, outputPerM: 0 } }
+      : null;
   }
 
   /** Checks a Gemini key by listing the models it may use, then keeps it (the keychain) and the

@@ -129,6 +129,9 @@ export type HomeOptions = {
   /** The board's daily report (PLAN 5.18): sent by the tick for the real home (main.ts), never in a test home unless
    * it says so (its ideas ask the brain, which would take the replies another test scripted); made on asking in both. */
   reports?: { on?: boolean };
+  /** Reads every orb's chat into the local coder at the start and when one is set up (`warmLocal`): the real home
+   * (main.ts); never a test home unless it says so (the warm-up would take the replies a test scripted). */
+  warm?: boolean;
   /** The desk (PLAN 5.22-5.27): its market (public market data), the DEX routers and the chains' RPCs. `on`
    * steps live strategies and follows sent swaps by the tick: the real home (main.ts); a test home is off and has no
    * network unless it hands in stand-ins (`source`, `routers`, `fetch`, `dex`: any token's data, PLAN 5.28). */
@@ -270,6 +273,9 @@ export class Home {
   /** The board's daily report (PLAN 5.18). */
   readonly reports: BoardReports;
   readonly #reportsOn: boolean;
+  readonly #warmOn: boolean;
+  /** The brains loaded (ChatGPT's tokens, the Gemini key): what a run and a warm-up wait for. */
+  readonly #brainsReady: Promise<void>;
   /** The desk (PLAN 5.22-5.27): the market, the strategies and paper books, your wallets, real swaps. */
   readonly market: Market;
   /** Any token on a DEX (PLAN 5.28): a search, a token's pairs, its candles and last trades, what is trending. */
@@ -350,6 +356,7 @@ export class Home {
     this.learned = new Learned(this.dataDir, this.events);
     this.brains = new Brains({ dataDir: this.dataDir, presetKey: big, chatgpt: () => this.chatgpt.endpoint(), clock: () => this.clock.now(), ...opts.brains });
     const brainsReady = Promise.all([chatgptReady, this.brains.load().catch(() => {})]).then(() => {}); // nor one with no Gemini key
+    this.#brainsReady = brainsReady;
     this.kit = opts.kit
       ? new Kit({ ...(opts.kit === true ? {} : opts.kit), events: this.events, clock: this.clock, dataDir: this.dataDir, sample: (r) => this.#sample(r) })
       : null;
@@ -675,6 +682,7 @@ export class Home {
       },
     });
     this.#reportsOn = opts.reports?.on ?? false;
+    this.#warmOn = opts.warm ?? false;
     this.reports = new BoardReports(this.events, this.clock, {
       office: () => this.inbox.orbs().map((o) => ({ id: o.id, name: o.name, specialty: o.specialty, createdAt: o.createdAt })),
       board: () => this.boardroom.seats(),
@@ -755,6 +763,20 @@ export class Home {
       if (!this.#closed) this.events.append("kit.start_failed", { error: e instanceof Error ? e.message : String(e) });
     });
     void this.connectors.startAll().catch(() => {}); // each fails open, on its own (PLAN 4.2)
+    void this.warmLocal();
+  }
+
+  /** Reads every orb's own chat into the local coder (AgentRunner.warm), the one last spoken to first, once the brains
+   * are loaded: at the start, and when a local coder is set up. A CPU reads a cold Orbz prompt in minutes; this way it
+   * does so before anyone writes. Only where `warm` is on. */
+  async warmLocal(): Promise<void> {
+    if (!this.#warmOn || !this.agent) return;
+    await this.#brainsReady;
+    const ep = this.brains.chain.links.find((l) => l.id === "local")?.endpoint();
+    if (!ep || this.#closed) return;
+    const last = (orb: string): number => this.conversations.history(`chat:${orb}`).at(-1)?.at ?? 0;
+    const orbs = this.inbox.orbs().filter((o) => o.letGoAt === null).map((o) => o.id);
+    await this.agent.warm(ep, orbs.sort((a, b) => last(b) - last(a)));
   }
 
   /** One tick now (also what the timer calls). Ticks never overlap; a tick asked for during one
@@ -1099,6 +1121,7 @@ export class Home {
     if (this.#closed) return;
     this.#closed = true;
     this.#cancelTimer?.();
+    this.agent?.stopWarming();
     await this.#ticking;
     await this.reading.close(); // a read under way ends at once, before the database closes
     await this.gym.close();

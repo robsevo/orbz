@@ -8,9 +8,44 @@
 // is it estimated from the endpoint's price table, marked as an estimate. A call whose cost
 // cannot be known at all says so (`unknown`), so the spend cap is never silently blind.
 
+import http from "node:http";
+import https from "node:https";
+import { Readable } from "node:stream";
 import { streamResponses } from "../agent/responses.ts";
 
 export type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
+
+/** How long Node's fetch waits for a reply's headers, whatever the signal says (undici's headersTimeout: it throws
+ * UND_ERR_HEADERS_TIMEOUT at 300 s). A local coder on a CPU sends none until it has read the whole prompt. */
+export const FETCH_HEADERS_MS = 300_000;
+
+/** The fetch for an endpoint: Node's own, or for one given longer than Node's fetch waits for headers (a local coder:
+ * 10-18, a cold prompt read in 385 s, 766 s with the machine busy) the same request over node:http, which waits as long
+ * as the caller's signal allows. */
+export function fetchFor(ep: Endpoint): typeof fetch {
+  return (ep.timeoutMs ?? 0) > FETCH_HEADERS_MS ? (patientFetch as typeof fetch) : fetch;
+}
+
+/** A request as fetch makes it, over node:http (or https), with no deadline of its own for the headers: the caller's
+ * signal is the only one. The body streams as it comes. */
+export function patientFetch(url: string, init: RequestInit = {}): Promise<Response> {
+  const u = new URL(url);
+  return new Promise((resolve, reject) => {
+    const req = (u.protocol === "https:" ? https : http).request(
+      u,
+      { method: init.method ?? "GET", headers: Object.fromEntries(new Headers(init.headers).entries()), ...(init.signal && { signal: init.signal }) },
+      (res) => {
+        const headers = new Headers();
+        for (const [k, v] of Object.entries(res.headers)) for (const one of [v ?? []].flat()) headers.append(k, one);
+        const status = res.statusCode ?? 502;
+        const body = status === 204 || status === 304 ? null : (Readable.toWeb(res) as ReadableStream<Uint8Array>);
+        resolve(new Response(body, { status, statusText: res.statusMessage ?? "", headers }));
+      },
+    );
+    req.once("error", reject);
+    req.end(typeof init.body === "string" ? init.body : undefined);
+  });
+}
 
 export type Endpoint = {
   /** What the logs call it: "big", "own", "teacher", or a seat name. */
@@ -34,6 +69,13 @@ export type Endpoint = {
   plan?: "chatgpt";
   /** Its place in the brain order (PLAN 1.11, chain.ts): a limit here passes to the next brain. */
   chain?: "chatgpt" | "gemini" | "key" | "local";
+  /** Its server keeps what it has read and reads only what changed (a local coder: llama.cpp's prompt cache). A run
+   * then puts its clock after the conversation, as on the ChatGPT plan, and the home reads each orb's chat into it
+   * before anyone writes (AgentRunner.warm). */
+  prefixCache?: boolean;
+  /** The most tokens it holds, the reply included (a local coder's window): a conversation is tidied before it
+   * outgrows them, where the server would drop the oldest messages and say nothing. */
+  contextTokens?: number;
 };
 
 export type CostSource = "reported" | "price-table" | "unknown";
@@ -82,7 +124,7 @@ export async function chat(
     const signal = opts.signal ? AbortSignal.any([opts.signal, timeout]) : timeout;
     let res: Response;
     try {
-      res = await fetch(`${ep.baseUrl.replace(/\/$/, "")}/chat/completions`, { method: "POST", headers, body, signal });
+      res = await fetchFor(ep)(`${ep.baseUrl.replace(/\/$/, "")}/chat/completions`, { method: "POST", headers, body, signal });
     } catch (e) {
       if (opts.signal?.aborted) throw e;
       last = e instanceof Error ? (e.cause instanceof Error ? e.cause.message : e.message) : String(e);

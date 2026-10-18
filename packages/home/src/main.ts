@@ -49,7 +49,7 @@ const localPort = Number(process.env.ORBS_PORT ?? 47070);
 
 let home: Home;
 try {
-  home = Home.open({ dataDir, kit: true, projects: { on: true }, social: { on: true }, reports: { on: true }, desk: { on: true }, ...(choice && { brain: { preset: presets[choice]!() } }) });
+  home = Home.open({ dataDir, kit: true, projects: { on: true }, social: { on: true }, reports: { on: true }, desk: { on: true }, warm: true, ...(choice && { brain: { preset: presets[choice]!() } }) });
 } catch (e) {
   if (e instanceof HomeLockedError) {
     console.error(e.message);
