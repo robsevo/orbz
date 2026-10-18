@@ -43,6 +43,7 @@ uniform vec4 uShapeD;   // ear width (radians), scale, hem frequency, a tip at t
 uniform vec4 uShapeE;   // squircle (the corners filled out), a notch at the top (a heart), lopsided (a blob), -
 uniform vec4 uShapeF;   // points (5 a star, 3 an onigiri), how far they reach, how sharp, -
 uniform float uGoo;     // how soft he is: 0 is Ash's glass, 1 is jelly (owner, 2026-10-01: "more gooey")
+uniform float uSolid;   // 1: his glass lets nothing behind it through (the floors; owner, 10-18: "they look a bit like ghosts")
 uniform float uSquash;  // squash (+) and stretch (-) for hops and pokes; volume is roughly kept
 uniform vec4 uEyeA;     // radius, aspect (1 round, >1 tall ovals), gap, height
 uniform vec4 uEyeB;     // sparkle (0..1), lids at rest (0 open .. 1 shut), happy at rest, a wink (his left eye an arc)
@@ -659,8 +660,9 @@ void main(){
       body *= 1.0 - uAccShade*(below > 0.0 ? exp(-below/0.05) : 0.0)*step(-5.0, lowest);
     }
     col += body * edge;
-    // thin glass lets what is behind it through; the edge and the fluid do not
-    A = max(A, edge * clamp(0.80 + 0.20*max(fres*1.6, core*0.75) + hot, 0.0, 1.0));
+    // thin glass lets what is behind it through; the edge and the fluid do not. On a floor nothing does: a busy room
+    // through him read as a ghost walking past (owner, 10-18)
+    A = max(A, edge * mix(clamp(0.80 + 0.20*max(fres*1.6, core*0.75) + hot, 0.0, 1.0), 1.0, uSolid));
   }
 
   // ---- outer glow ---------------------------------------------------------

@@ -384,7 +384,7 @@ type Lean = [number, number, number, number, number, number, number, number]; //
 // owner, 10-07: "add a few more positions and its own category and restructure things just a bit ... restructure it so it
 // fits this makes things easier to see": the Executive first (every department's head), and Finance (every money orb, the
 // CFO's) beside Business
-export const FAMILIES = { exec: "Executive", build: "Build", think: "Think", make: "Make", finance: "Finance", business: "Business", life: "Life", desk: NAMES.dept } as const;
+export const FAMILIES = { exec: "Executive", build: "Build", think: "Think", make: "Make", finance: "Finance", business: "Business", life: "Life", desk: NAMES.dept, studio: "Studio" } as const;
 export type Family = keyof typeof FAMILIES;
 
 type Specialty = { family: Family; label: string; title: string; focus: string; lean: Lean; hat: HatName; glasses: GlassesName; limits?: string };
@@ -404,7 +404,7 @@ export const SPECIALTIES = {
   security: { family: "build", label: "Security", title: "Guardian", focus: "keeping secrets secret and doors shut", lean: [3, 4, 2, 1, 2, 4, 2, 2], hat: "none", glasses: "aviators" },
   data: { family: "build", label: "Data", title: "Data Wrangler", focus: "data: cleaning, queries, charts and what they mean", lean: [3, 3, 5, 2, 2, 3, 2, 1], hat: "none", glasses: "round" },
   ai: { family: "build", label: "AI", title: "AI Builder", focus: "models, prompts, evals and the pipes between them", lean: [3, 4, 4, 1, 2, 4, 1, 1], hat: "none", glasses: "visor" },
-  games: { family: "build", label: "Games", title: "Game Maker", focus: "games: play, levels, physics and feel", lean: [3, 4, 2, 5, 2, 2, 1, 2], hat: "propeller", glasses: "stars" },
+  games: { family: "studio", label: "Games", title: "Game Maker", focus: "games: play, levels, physics and feel", lean: [3, 4, 2, 5, 2, 2, 1, 2], hat: "propeller", glasses: "stars" },
   automation: { family: "build", label: "Automation", title: "Automator", focus: "scripts and workflows that do the boring parts for you", lean: [3, 4, 3, 1, 2, 2, 2, 2], hat: "none", glasses: "rectangle" },
   // think
   planning: { family: "think", label: "Planning", title: "Planner", focus: "plans, roadmaps and breaking work into rows", lean: [5, 2, 2, 2, 4, 3, 2, 2], hat: "grad cap", glasses: "reading" },
@@ -479,6 +479,36 @@ export const SPECIALTIES = {
   quantres: { family: "desk", ...NAMES.jobs.quantres, lean: [2, 3, 5, 1, 3, 5, 4, 1], hat: "grad cap", glasses: "round" },
   quantdev: { family: "desk", ...NAMES.jobs.quantdev, lean: [2, 5, 5, 1, 2, 3, 3, 1], hat: "headphones", glasses: "rectangle" },
   riskanalyst: { family: "desk", ...NAMES.jobs.riskanalyst, lean: [3, 1, 5, 1, 3, 4, 5, 2], hat: "eyeshade", glasses: "square" },
+  // the game studio (owner, 10-18: "one of the rooms needs to be a gaming studio ... make the game dev jobs and career
+  // paths more intricate. games will be huge, to industry standards"): its own department and floor, opened by its head,
+  // a studio's disciplines as a real one has them (leadership, design, engineering, art and animation, audio,
+  // production, QA, live ops and community); the Game Maker above is its all-rounder. Last, as every addition is
+  studiohead: { family: "studio", label: "Studio head", title: "Studio Head", focus: "runs the game studio: its slate of games, who works on what, budgets and milestones, hiring, and its culture; answers to the CEO", lean: [5, 2, 3, 3, 4, 3, 4, 4], hat: "fedora", glasses: "round shades" },
+  gamedirector: { family: "studio", label: "Game director", title: "Game Director", focus: "one game's vision from pitch to launch: its pillars, what makes it fun, what gets cut, and every discipline pulling the same way", lean: [5, 2, 2, 5, 4, 3, 2, 3], hat: "star clip", glasses: "shades" },
+  gamedesign: { family: "studio", label: "Game design", title: "Game Designer", focus: "core loops, mechanics and rules: what the player does and why it is fun, and the design doc and prototypes that prove it", lean: [4, 3, 2, 5, 4, 3, 1, 2], hat: "cap", glasses: "round" },
+  systemsdesign: { family: "studio", label: "Systems design", title: "Systems Designer", focus: "the game's maths: progression, combat numbers, abilities and balance, in spreadsheets and simulations that hold up", lean: [4, 2, 5, 4, 2, 3, 2, 1], hat: "none", glasses: "hexagon" },
+  leveldesign: { family: "studio", label: "Level design", title: "Level Designer", focus: "spaces to play in: blockouts and greyboxes, layouts, pacing, encounters, sightlines and the paths players take", lean: [4, 3, 2, 5, 2, 3, 1, 2], hat: "hard hat", glasses: "goggles" },
+  narrative: { family: "studio", label: "Narrative", title: "Narrative Designer", focus: "story told through play: quests, dialogue, branching choices, characters and lore that fit the mechanics", lean: [3, 1, 1, 4, 5, 4, 1, 3], hat: "quill", glasses: "reading" },
+  economy: { family: "studio", label: "Economy design", title: "Economy Designer", focus: "currencies, rewards, sinks and sources, prices and pacing; the live economy read by its data, and fair to the player", lean: [4, 1, 5, 3, 2, 3, 5, 2], hat: "top hat", glasses: "monocle" },
+  gameux: { family: "studio", label: "Game UX", title: "Game UX Designer", focus: "how the game reads: the HUD, menus, onboarding and accessibility, and playtests that show where players get lost", lean: [3, 2, 3, 5, 3, 4, 1, 4], hat: "beanie", glasses: "cat-eye" },
+  gameplay: { family: "studio", label: "Gameplay code", title: "Gameplay Programmer", focus: "the player in code: controllers, abilities, combat, cameras and game feel, tuned with the designers until it feels right", lean: [2, 5, 2, 3, 1, 2, 1, 1], hat: "headphones", glasses: "rectangle" },
+  engine: { family: "studio", label: "Engine", title: "Engine Programmer", focus: "the runtime under everything: memory, threads, loading, the frame budget and every platform the game ships on", lean: [3, 5, 3, 1, 1, 3, 1, 1], hat: "antenna", glasses: "square" },
+  graphics: { family: "studio", label: "Graphics", title: "Graphics Programmer", focus: "rendering: shaders, lighting, shadows, post-processing and performance, a frame at a time", lean: [2, 5, 3, 4, 1, 3, 1, 1], hat: "sun visor", glasses: "visor" },
+  gameai: { family: "studio", label: "Game AI", title: "AI Programmer", focus: "how the world acts back: NPC behaviour, pathfinding, behaviour trees, perception, and the director that paces a fight", lean: [3, 5, 3, 2, 1, 4, 1, 1], hat: "wizard hat", glasses: "bold round" },
+  netcode: { family: "studio", label: "Netcode", title: "Network Programmer", focus: "multiplayer: replication, prediction and rollback, matchmaking, servers, and latency players never notice", lean: [3, 5, 4, 1, 1, 3, 1, 1], hat: "headset", glasses: "half-rims" },
+  tools: { family: "studio", label: "Tools", title: "Tools Programmer", focus: "what the team builds with: editors, importers, build pipelines and automation that save everyone hours", lean: [3, 5, 3, 2, 2, 2, 1, 3], hat: "bucket hat", glasses: "rectangle" },
+  concept: { family: "studio", label: "Concept art", title: "Concept Artist", focus: "what the game looks like before it is built: characters, worlds, props, mood boards and key art", lean: [2, 1, 1, 5, 2, 3, 1, 2], hat: "beret", glasses: "rose tint" },
+  envart: { family: "studio", label: "Environment art", title: "Environment Artist", focus: "the world in 3D: modular kits, terrain, set dressing, lighting passes, and the story a room tells", lean: [2, 2, 1, 5, 1, 2, 1, 2], hat: "straw hat", glasses: "oval" },
+  charart: { family: "studio", label: "Character art", title: "Character Artist", focus: "characters in 3D: sculpting, retopology, textures, and a silhouette you know at a glance", lean: [2, 2, 1, 5, 1, 2, 1, 3], hat: "bow", glasses: "butterfly" },
+  techart: { family: "studio", label: "Tech art", title: "Technical Artist", focus: "the bridge between art and code: shaders, rigs, tools and pipelines that keep the art looking right and running fast", lean: [3, 4, 3, 5, 1, 3, 1, 1], hat: "star clip", glasses: "sport" },
+  animator: { family: "studio", label: "Animation", title: "Animator", focus: "movement with weight and timing: character animation, motion-capture clean-up, blend trees, and the feel of every jump", lean: [2, 2, 1, 5, 1, 2, 1, 3], hat: "sweatband", glasses: "big round" },
+  vfx: { family: "studio", label: "VFX", title: "VFX Artist", focus: "effects: particles, impacts, magic, explosions, and the flash that tells a player something happened", lean: [2, 3, 2, 5, 1, 2, 1, 1], hat: "party hat", glasses: "hearts" },
+  sounddesign: { family: "studio", label: "Sound design", title: "Sound Designer", focus: "the game's sound: effects, ambiences, foley and the mix, put into the game with its audio middleware", lean: [2, 2, 2, 4, 1, 3, 1, 2], hat: "headphones", glasses: "round shades" },
+  composer: { family: "studio", label: "Music", title: "Composer", focus: "the score: themes, adaptive music that follows the play, stingers, and the recording session", lean: [2, 1, 1, 5, 2, 2, 1, 3], hat: "laurel", glasses: "round" },
+  producer: { family: "studio", label: "Production", title: "Producer", focus: "gets the game made: the schedule, milestones, scope and risk, every discipline unblocked, and what is cut said early", lean: [5, 1, 3, 2, 4, 3, 3, 4], hat: "cowboy hat", glasses: "square" },
+  gameqa: { family: "studio", label: "Game QA", title: "Game QA Tester", focus: "breaking the game before players do: test passes, clear bug reports, regressions, compatibility and certification checks", lean: [3, 2, 3, 2, 3, 4, 1, 2], hat: "eyeshade", glasses: "bold round" },
+  liveops: { family: "studio", label: "Live ops", title: "Live Ops Manager", focus: "the game after launch: seasons, events, updates and offers, planned on a calendar and judged by what players do", lean: [5, 1, 4, 2, 3, 3, 4, 3], hat: "headset", glasses: "visor" },
+  community: { family: "studio", label: "Community", title: "Community Manager", focus: "the players' voice: Discord and socials, patch notes, feedback carried back to the team, and the tone of every announcement", lean: [3, 1, 2, 2, 5, 3, 1, 5], hat: "flower crown", glasses: "hearts" },
 } satisfies Record<string, Specialty>;
 export type SpecialtyName = keyof typeof SPECIALTIES;
 /** What a seed's dice can come up as when nothing fixes its specialty: the 56 there were before 10-10, kept so (a seed keeps

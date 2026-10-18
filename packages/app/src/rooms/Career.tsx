@@ -22,6 +22,7 @@ import { NAMES } from "../floor/props.ts";
 import { Balanced, Tall } from "../ui/Balanced.tsx";
 import { useCramped } from "../ui/fill.ts";
 import { ReportCard } from "./School.tsx";
+import { ladderOf, movesOf, pathOf, titleAt, TRACKS } from "../orb/careers.ts";
 
 const head: CSSProperties = { font: "700 11px/16px var(--font)", letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)" };
 const small: CSSProperties = { font: "500 13px/18px var(--font)", color: "var(--text-3)", textWrap: "pretty", overflowWrap: "anywhere" };
@@ -140,6 +141,11 @@ export function CareerRoom({ home, orb }: { home: Office | null; orb: Character 
   const board = c.ranking ?? [];
   const at = board.findIndex((r) => r.orb === idOf(orb.name));
   const most = Math.max(1, ...board.map((r) => r.xp));
+  // a studio job's path (owner, 10-18: "career paths more intricate ... to industry standards"): its titles, what each
+  // rung owns, where it can lead
+  const path = pathOf(orb.specialty);
+  const ladder = ladderOf(orb.specialty);
+  const moves = movesOf(orb.specialty, c.level);
   return (
     <div data-career={idOf(orb.name)} data-orb={orb.hue} style={{ display: "grid", gap: "var(--s4)", padding: "var(--s5)", alignContent: "start", minWidth: 0 }}>
       {/* who, and where it stands: the whole orb, its hat and all (10-07: the close-up cut its top off) */}
@@ -152,7 +158,7 @@ export function CareerRoom({ home, orb }: { home: Office | null; orb: Character 
           </div>
           <div style={{ display: "grid", gap: 2, minWidth: 0, flex: phone ? "0 0 auto" : "1 1 200px", justifyItems: phone ? "center" : undefined }}>
             <h2 style={{ margin: 0, font: "800 26px/32px var(--font)", color: "var(--accent)" }}>{orb.name}</h2>
-            <span style={{ font: "600 15px/20px var(--font)", color: "var(--text-1)" }}>{`${c.level} ${SPECIALTIES[orb.specialty].title}`}</span>
+            <span data-title style={{ font: "600 15px/20px var(--font)", color: "var(--text-1)" }}>{titleAt(orb.specialty, c.level)}</span>
             <span data-tenure style={small}>{`Age ${span(c.born, c.now)} · ${c.left === null ? `${span(c.hired, c.now)} in the company` : `${span(c.hired, c.left)} in the company, then let go`}`}</span>
           </div>
           <div style={phone ? { display: "flex", alignItems: "baseline", gap: 8 } : { display: "grid", justifyItems: "end", gap: 2, flex: "0 0 auto" }}>
@@ -233,6 +239,34 @@ export function CareerRoom({ home, orb }: { home: Office | null; orb: Character 
           {areas.every(([, a]) => a.xp === 0) ? <span style={small}>Nothing yet: finished work you approve fills this in, by the kind of work it was.</span> : c.niches.length > 0 && <span style={small}>{`Its work leans on ${c.niches.map((n) => n.word).join(" · ")}.`}</span>}
         </Section>
       </div>
+
+      {path && ladder && (
+        <Section title={`${TRACKS[path.track].name} career path`} label="Career path">
+          <ol data-career-path style={{ display: "grid", gap: 8, margin: 0, padding: 0, listStyle: "none" }}>
+            {ladder.map((r, i) => (
+              <li key={r.level} data-path-rung={r.level} aria-current={i === rung ? "step" : undefined}
+                style={{ display: "grid", gridTemplateColumns: "12px minmax(0, 1fr)", gap: 10, alignItems: "start", opacity: i < rung ? 0.6 : 1 }}>
+                <i aria-hidden style={{ marginTop: 4, width: 12, height: 12, borderRadius: "50%", background: i <= rung ? "var(--accent)" : "transparent", boxShadow: i === rung ? "0 0 0 3px var(--accent-fill)" : "inset 0 0 0 1.5px var(--text-3)" }} />
+                <span style={{ display: "grid", gap: 1, minWidth: 0 }}>
+                  <span style={{ font: `${i === rung ? 800 : 700} 14px/20px var(--font)`, color: i === rung ? "var(--accent)" : "var(--text-1)" }}>{r.title}</span>
+                  <span style={small}>{r.scope}</span>
+                </span>
+              </li>
+            ))}
+          </ol>
+          {moves.length > 0 && (
+            <div data-career-moves style={{ display: "grid", gap: 6 }}>
+              <span style={head}>Where it can lead</span>
+              <Balanced min={170} gap={6}>
+                {moves.map((m) => (
+                  <span key={m.specialty} data-move={m.specialty} style={{ padding: "4px 10px", borderRadius: 999, font: "600 12px/18px var(--font)", color: "var(--text-1)", background: "var(--fill-2)", boxShadow: "inset 0 0 0 .5px var(--hairline)", textAlign: "center" }}>{m.title}</span>
+                ))}
+              </Balanced>
+              <span style={small}>Where its craft carries, and the title it would start at there: a level under, to learn the new craft, as studios do it.</span>
+            </div>
+          )}
+        </Section>
+      )}
 
       <Section title="Lately" label="Its latest work">
         {c.work?.length ? (

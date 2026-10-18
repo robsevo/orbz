@@ -53,7 +53,7 @@ export const ZONES: Zone[] = [
   zone("life", FAMILIES.life, "mint", 2, ROW_B),
 ];
 /** Each department's mark, on its sign on the floor and its branch of the org chart. */
-export const MARKS: Record<Family | "play", string> = { exec: "👑", build: "🛠", think: "💡", make: "🎨", finance: "💰", business: "📈", life: "🌿", play: "🎮", desk: "💹" };
+export const MARKS: Record<Family | "play", string> = { exec: "👑", build: "🛠", think: "💡", make: "🎨", finance: "💰", business: "📈", life: "🌿", play: "🎮", desk: "💹", studio: "🕹" };
 
 /** A room: `wall` is the y of its wall on the hallway, the door in it (the top rooms' front wall, the bottom rooms' back). */
 export type Room = { id: "lounge" | "meeting" | "kitchen" | "gym" | "classroom" | "library" | "interview"; name: string; hue: HueName; rect: Rect; door: { x: number; w: number }; wall: number };

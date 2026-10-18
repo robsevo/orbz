@@ -19,7 +19,7 @@
  * holds the two together. */
 export const SPECIALTY_FAMILIES = {
   general: "build", frontend: "build", backend: "build", fullstack: "build", mobile: "build", devops: "build", testing: "build", qa: "build",
-  security: "build", data: "build", ai: "build", games: "build", automation: "build",
+  security: "build", data: "build", ai: "build", automation: "build",
   reverse: "build", // owner, 10-10: reverse engineering, REA's logic made ours (PLAN 4.8)
   // owner, 10-10: the desk (PLAN 5.25), its own department, opened by its head
   deskhead: "desk", dealer: "desk", quant: "desk", onchain: "desk", risk: "desk", quantres: "desk", quantdev: "desk", riskanalyst: "desk",
@@ -34,9 +34,21 @@ export const SPECIALTY_FAMILIES = {
   home: "life", events: "life", career: "life", language: "life",
   ceo: "exec", cfo: "exec", coo: "exec", cto: "exec", cmo: "exec", chiefofstaff: "exec",
   sports: "think", // owner, 10-07: "add a Sports stats and odds skill too"
+  // owner, 10-18: the game studio, its own department and floor, opened by its head; the Game Maker its all-rounder
+  games: "studio", studiohead: "studio", gamedirector: "studio",
+  gamedesign: "studio", systemsdesign: "studio", leveldesign: "studio", narrative: "studio", economy: "studio", gameux: "studio",
+  gameplay: "studio", engine: "studio", graphics: "studio", gameai: "studio", netcode: "studio", tools: "studio",
+  concept: "studio", envart: "studio", charart: "studio", techart: "studio", animator: "studio", vfx: "studio",
+  sounddesign: "studio", composer: "studio", producer: "studio", gameqa: "studio", liveops: "studio", community: "studio",
 } as const;
 export type Specialty = keyof typeof SPECIALTY_FAMILIES;
 export type Family = (typeof SPECIALTY_FAMILIES)[Specialty];
+
+/** The game studio's coders (owner, 10-18): they take the builders' craft sections by name, since the studio is not Build
+ * (the Game Maker had them through Build until it moved). */
+const STUDIO_CODERS = ["games", "gameplay", "engine", "graphics", "gameai", "netcode", "tools", "techart"] satisfies Specialty[];
+/** Who leads the studio's work: its head, a game's director, and its producer. */
+const STUDIO_LEADS = ["studiohead", "gamedirector", "producer"] satisfies Specialty[];
 
 export type Placement =
   | { to: "core" }
@@ -73,52 +85,52 @@ export const SECTION_MAP: Record<string, Placement> = {
   communication: core,
   financial_advice: work(["finance"], ["analyst", "operations", "cfo", "sports"]), // odds are money too
   tone_and_formatting: core,
-  user_wellbeing: work(["life"], ["support", "people", "money"]),
+  user_wellbeing: work(["life"], ["support", "people", "money", "community"]),
   evenhandedness: morals("contested political and moral questions"),
   responding_to_mistakes_and_criticism: core,
   injection_defense: core,
   // how to search, at length: the craft of the orbs that find things out (and your assistant's, who answers the day's
   // questions); every other orb carries its rule in brief (brain/values.ts SEARCH_BRIEF), 740 tokens less a request
-  knowledge_and_search: work(["think", "finance", "exec"], ["general", "assistant", "research", "factcheck", "analyst", "travel", "career", "marketing", "product", "fundamentals", "sports"], SEARCHING),
+  knowledge_and_search: work(["think", "finance", "exec"], ["general", "assistant", "research", "factcheck", "analyst", "travel", "career", "marketing", "product", "fundamentals", "sports", "gamedirector", "narrative", "liveops", "community"], SEARCHING),
   execution: core,
   persistence: core,
-  completion_criteria: work(["build", "think", "make", "business", "finance", "exec"], [], PLANNING), // its tests are files on disk and runs
-  state_changing_actions: work(["build"], ["operations", "architect", "cto", "coo"], CODING), // restarts, deletes, migrations
+  completion_criteria: work(["build", "think", "make", "business", "finance", "exec", "studio"], [], PLANNING), // its tests are files on disk and runs
+  state_changing_actions: work(["build"], ["operations", "architect", "cto", "coo", ...STUDIO_CODERS], CODING), // restarts, deletes, migrations
   decoding_intent: core,
-  reasoning_before_acting: work(["build", "think", "finance", "exec"], ["office", "paperwork"]), // "reads the relevant code"
-  reasoning_method: work(["think", "build", "finance", "exec"], ["paperwork"]),
-  critical_thinking: work(["think", "build", "finance", "exec"], ["paperwork", "health", "dietitian"]),
-  planning: work(["think", "exec"], ["general", "operations", "events", "travel", "home", "assistant", "sales"], PLANNING),
+  reasoning_before_acting: work(["build", "think", "finance", "exec", "studio"], ["office", "paperwork"]), // "reads the relevant code"
+  reasoning_method: work(["think", "build", "finance", "exec", "studio"], ["paperwork"]),
+  critical_thinking: work(["think", "build", "finance", "exec", "studio"], ["paperwork", "health", "dietitian"]),
+  planning: work(["think", "exec"], ["general", "operations", "events", "travel", "home", "assistant", "sales", ...STUDIO_LEADS, "liveops"], PLANNING),
   // the owner's agent's own machinery, which nothing in Orbs runs (owner, 10-07: "Trim the constitution and take out things
   // we dont need ... just nothign that affects logic or the functionality it already has"): left out for every orb
   progress: { to: "replaced", by: "Orbs' own compaction: the summary a long run gets says to go on from it (agent/conversation.ts); no progress file is injected in Orbs" },
   accuracy: core,
-  grounding: work(["build", "think"], ["office", "accountant"]), // claims about a codebase, its files and symbols
+  grounding: work(["build", "think"], ["office", "accountant", ...STUDIO_CODERS]), // claims about a codebase, its files and symbols
   self_check: core,
-  delegation: work(["exec"], ["lead", "planning", "product", "architect", "general", "operations"], DELEGATING),
-  when_to_delegate: work(["exec"], ["lead", "planning", "product", "architect", "general", "operations"], DELEGATING),
-  parallel_vs_sequential: work(["exec"], ["lead", "planning", "product", "architect", "general", "operations"], DELEGATING),
-  briefing_subagents: work(["exec"], ["lead", "planning", "product", "architect", "general", "operations"], DELEGATING),
-  synthesizing_results: work(["exec"], ["lead", "planning", "product", "architect", "general", "operations", "research", "analyst", "fundamentals"], DELEGATING),
+  delegation: work(["exec"], ["lead", "planning", "product", "architect", "general", "operations", ...STUDIO_LEADS], DELEGATING),
+  when_to_delegate: work(["exec"], ["lead", "planning", "product", "architect", "general", "operations", ...STUDIO_LEADS], DELEGATING),
+  parallel_vs_sequential: work(["exec"], ["lead", "planning", "product", "architect", "general", "operations", ...STUDIO_LEADS], DELEGATING),
+  briefing_subagents: work(["exec"], ["lead", "planning", "product", "architect", "general", "operations", ...STUDIO_LEADS], DELEGATING),
+  synthesizing_results: work(["exec"], ["lead", "planning", "product", "architect", "general", "operations", "research", "analyst", "fundamentals", ...STUDIO_LEADS], DELEGATING),
   agent_completion: { to: "replaced", by: "ask_orb's answer comes back in the conversation; Orbs has no agent output file to check" },
   memory: { to: "replaced", by: "each orb's own memory (PLAN 2.4); what an orb learns is its own (3.5)" },
-  engineering: work(["build"], ["architect", "cto"]),
-  minimal_targeted_changes: work(["build"], ["architect", "cto"], CODING),
-  simplicity: work(["build"], ["architect", "cto"], CODING),
-  borrowed_code_is_a_draft: work(["build"], ["architect", "cto"]),
-  fit_the_codebase: work(["build"], ["architect", "cto"], CODING),
-  readability: work(["build"], ["architect", "cto"], CODING),
-  object_orientation: work(["build"], ["architect", "cto"]),
-  frontend_and_ux: work([], ["frontend", "fullstack", "mobile", "games", "design"], { tools: ["check_page"] }),
-  common_failure_modes: work(["build"], ["architect", "cto"], CODING),
-  security: work(["build"], ["architect", "cto"]),
+  engineering: work(["build"], ["architect", "cto", ...STUDIO_CODERS]),
+  minimal_targeted_changes: work(["build"], ["architect", "cto", ...STUDIO_CODERS], CODING),
+  simplicity: work(["build"], ["architect", "cto", ...STUDIO_CODERS], CODING),
+  borrowed_code_is_a_draft: work(["build"], ["architect", "cto", ...STUDIO_CODERS]),
+  fit_the_codebase: work(["build"], ["architect", "cto", ...STUDIO_CODERS], CODING),
+  readability: work(["build"], ["architect", "cto", ...STUDIO_CODERS], CODING),
+  object_orientation: work(["build"], ["architect", "cto", ...STUDIO_CODERS]),
+  frontend_and_ux: work([], ["frontend", "fullstack", "mobile", "games", "design", "gameux", "gamedesign", "leveldesign", "graphics", "techart"], { tools: ["check_page"] }),
+  common_failure_modes: work(["build"], ["architect", "cto", ...STUDIO_CODERS], CODING),
+  security: work(["build"], ["architect", "cto", ...STUDIO_CODERS]),
   secrets: core,
   untrusted_input: core,
   least_privilege_and_dependencies: work([], ["security", "backend", "devops", "fullstack", "ai", "automation", "architect"]),
   crypto_and_high_risk: work([], ["security", "backend", "devops", "fullstack", "architect"]),
-  debugging: work(["build"], [], CODING),
-  coding: work(["build"], [], CODING),
-  file_creation: work(["build", "make", "finance", "exec"], ["office"]),
+  debugging: work(["build"], [...STUDIO_CODERS], CODING),
+  coding: work(["build"], [...STUDIO_CODERS], CODING),
+  file_creation: work(["build", "make", "finance", "exec", "studio"], ["office"]),
   producing_outputs: core,
   identity: { to: "replaced", by: "the orb's own first line: who the orb is, and whose" },
   values: morals("the owner's agent's values"),

@@ -14,10 +14,10 @@ export type ToolGroup = { id: string; about: string; families: readonly string[]
 
 export const GROUPS = {
   day: { id: "day", about: "the person's day: reminders and bills, schedules, their mail and calendars", families: ["life", "finance", "business", "exec"] },
-  plans: { id: "plans", about: "plans in the house format and their rows: propose a plan, use a template, start a row, check it, review one", families: ["build", "think", "make", "exec"] },
+  plans: { id: "plans", about: "plans in the house format and their rows: propose a plan, use a template, start a row, check it, review one", families: ["build", "think", "make", "exec", "studio"] },
   team: { id: "team", about: "working on a plan with other orbs: take rows, hand off, propose and agree changes, record a decision, who fits a row, pass a habit on", families: ["exec"] },
-  computer: { id: "computer", about: "your own browser: open a page, read it, click, type, sign in, check a page you built", families: ["build", "make", "business", "life"] },
-  reading: { id: "reading", about: "the office's reading library: follow a site, search and read what it has read, unfollow", families: ["think", "finance", "exec"] },
+  computer: { id: "computer", about: "your own browser: open a page, read it, click, type, sign in, check a page you built", families: ["build", "make", "business", "life", "studio"] },
+  reading: { id: "reading", about: "the office's reading library: follow a site, search and read what it has read, unfollow", families: ["think", "finance", "exec"], specialties: ["gamedirector", "narrative", "liveops"] },
   // reverse engineering (PLAN 4.8; owner, 10-10): the Reverse Engineer's, and the Guardian's (security), by specialty
   reverse: { id: "reverse", about: "reverse engineering, statically: a binary's anatomy (ELF, PE, Mach-O), a JavaScript or Electron app, a smart contract's bytecode, a network capture", families: [], specialties: ["reverse", "security"] },
   // the desk's research and its risk (PLAN 5.40), by specialty: its strategist, researcher and developer, its two on
@@ -29,7 +29,7 @@ export const GROUPS = {
   trace: { id: "trace", about: "the desk's investigations: a case on coins, each coin's launch (who deployed and funded it, its first hands), who holds it grouped by who funded them, a wallet's money followed, the patterns across coins and cases, findings kept with their evidence", families: [], specialties: ["onchain", "deskhead"] },
   // spreadsheets (PLAN 4.9; owner, 10-12: "a professional excel sheet for your boss"): the departments that keep numbers,
   // the builders' data and automation orbs, and your personal assistant
-  sheets: { id: "sheets", about: "spreadsheets: a real Excel workbook (.xlsx), formatted as an analyst would, with formulas and a totals row", families: ["business", "finance", "exec", "think"], specialties: ["data", "automation", "assistant"] },
+  sheets: { id: "sheets", about: "spreadsheets: a real Excel workbook (.xlsx), formatted as an analyst would, with formulas and a totals row", families: ["business", "finance", "exec", "think"], specialties: ["data", "automation", "assistant", "systemsdesign", "economy", "producer", "liveops"] },
   // the desk (PLAN 5.25): its department's, and the money orbs' by specialty
   desk: { id: "desk", about: "the desk: prices and charts of the majors and of any token on a DEX by its name or address (pump.fun's too), what a token can do to its holders, strategies backtested and run on its account, orders placed on that account, notes on a coin, the person's wallets (read only)", families: ["desk"], specialties: ["investor", "crypto", "fundamentals", "cfo"] },
 } as const satisfies Record<string, ToolGroup>;

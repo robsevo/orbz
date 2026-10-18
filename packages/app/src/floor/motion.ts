@@ -1,6 +1,11 @@
-// The office orbs' little walk (owner, 10-11: less opaque, and a giggle/wobble as they move).
+// The office orbs' little walk (owner, 10-11: a giggle/wobble as they move), and how they stand on every floor.
 // Kept pure so its character is held by the floor test instead of depending on animation timing.
-export const OFFICE_ORB_OPACITY = 0.86;
+
+/** An orb on a floor (the office's, the desk's, the studio's): solid and bigger (owner, 10-18: "they look a bit like
+ * ghosts. can we have them not look like that? ... bigger maybe?"). They were drawn at 84 (the desk's 80) and see-through
+ * twice over: the floor's 0.86 (owner, 10-11: "less opaque") on top of the glass's own 0.8, so the room showed through
+ * them. Now their glass is solid (Orb `solid`) and they are a fifth bigger. */
+export const FLOOR_ORB = { size: 100, solid: true } as const;
 
 export function walkWobble(phase: number, scale: number): string {
   const x = Math.sin(phase * 2.1) * 2 * scale;

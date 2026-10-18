@@ -7,9 +7,9 @@ import { FAMILIES, SPECIALTIES, type Family, type SpecialtyName } from "./spec.t
 import { NAMES } from "../floor/props.ts";
 
 export const FOUNDING: readonly SpecialtyName[] = ["ceo", "assistant"];
-export const HEAD_OF: Record<Family, SpecialtyName> = { exec: "ceo", build: "cto", think: "chiefofstaff", make: "cmo", finance: "cfo", business: "coo", life: "assistant", desk: "deskhead" };
-const POST: Partial<Record<SpecialtyName, string>> = { ceo: "CEO", assistant: "personal assistant", cfo: "CFO", cto: "CTO", chiefofstaff: "Chief of Staff", cmo: "CMO", coo: "COO", deskhead: NAMES.jobs.deskhead.title };
-const DEPARTMENT: Record<Family, string> = { exec: "the Executive", build: "Build", think: "Think", make: "Make", finance: "Finance", business: "Business", life: "Life", desk: NAMES.dept };
+export const HEAD_OF: Record<Family, SpecialtyName> = { exec: "ceo", build: "cto", think: "chiefofstaff", make: "cmo", finance: "cfo", business: "coo", life: "assistant", desk: "deskhead", studio: "studiohead" };
+const POST: Partial<Record<SpecialtyName, string>> = { studiohead: "Studio Head", ceo: "CEO", assistant: "personal assistant", cfo: "CFO", cto: "CTO", chiefofstaff: "Chief of Staff", cmo: "CMO", coo: "COO", deskhead: NAMES.jobs.deskhead.title };
+const DEPARTMENT: Record<Family, string> = { exec: "the Executive", build: "Build", think: "Think", make: "Make", finance: "Finance", business: "Business", life: "Life", desk: NAMES.dept, studio: "the Game Studio" };
 
 /** Who is to be appointed next, while the CEO and your assistant are not both in. */
 export function nextFounding(office: readonly string[]): SpecialtyName | null {

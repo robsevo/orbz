@@ -32,6 +32,8 @@ const ROOMS: [string, string][] = [
 // and its chart for pros (PLAN 5.32): studies over the price and in panes, a strategy drawn on paper, its menu open
 const DESK_ROOMS: [string, string][] = [["desk", "#/desk"], ...["trade", "books", "strategies", "desk", "limits"].map((tab) => [`desk-${tab}`, "#/desk"] as [string, string]), ["desk-screen", "#/desk"], ["desk-coin", "#/desk"], ["desk-chart", "#/desk"], ["desk-chart-menu", "#/desk"]];
 const COIN = "9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump";
+// the game studio (owner, 10-18): its floor, its team and its careers, and a programmer's career page (its ladder)
+const STUDIO_ROOMS: [string, string][] = [["studio", "#/studio"], ["studio-team", "#/studio/team"], ["studio-careers", "#/studio/careers"], ["career-studio", "#/career/Gil"]];
 const only = arg("--rooms")?.split(",");
 const sizes = (arg("--sizes") ?? "desk,phone").split(",");
 const cleanups: (() => unknown)[] = [];
@@ -104,6 +106,19 @@ const desk = async (): Promise<void> => {
   h.desk.note("oz", "SOL", "Unlocks this month", "About 2% of the supply unlocks on the 28th; the last two unlocks were sold into within a week.");
   for (const t of TURNS) h.about.keep(keptBy(t));
 };
+/** The game studio's crew: its head first (a department opens with its head), then a team across its disciplines; two
+ * gameplay programmers (the second a Junior) and a promotion, so its titles climb. */
+const studio = (): void => {
+  const crew = [
+    ["lia", "Lia", "studiohead", "honey", "egg", "fedora"], ["rex", "Rex", "gamedirector", "orchid", "pebble", "beret"], ["pam", "Pam", "producer", "amber", "bean", "headset"],
+    ["mo", "Mo", "gamedesign", "iris", "drop", "beanie"], ["kai", "Kai", "leveldesign", "lavender", "cub", "hard hat"], ["gil", "Gil", "gameplay", "cornflower", "fox", "headphones"],
+    ["eli", "Eli", "engine", "cyan", "squircle", "none"], ["ari", "Ari", "concept", "coral", "kitty", "beret"], ["tam", "Tam", "animator", "apricot", "blob", "sweatband"],
+    ["zed", "Zed", "sounddesign", "violet", "owl", "headphones"], ["tess", "Tess", "gameqa", "teal", "chick", "antenna"], ["lou", "Lou", "liveops", "mint", "moon", "bowler"],
+  ] as const;
+  for (const [id, name, sp, hue, shape, hat] of crew) h.inbox.addOrb(id, name, sp, { shape, eyes: "big", hue, hat } as never);
+  h.inbox.addOrb("ben", "Ben", "gameplay", { shape: "teddy", eyes: "big", hue: "rose", hat: "party hat" } as never);
+  h.events.append("orb.promoted", { from: "Senior", to: "Staff", evidence: {} }, { orb: "gil" });
+};
 const shoot = async (rooms: [string, string][]): Promise<void> => {
 for (const size of sizes) {
   const vp = size === "phone" ? { width: 390, height: 844 } : { width: 1280, height: 900 };
@@ -169,6 +184,10 @@ await shoot(ROOMS);
 if (!only || only.some((r) => r.startsWith("desk"))) {
   await desk();
   await shoot(DESK_ROOMS);
+}
+if (!only || only.some((r) => r.startsWith("studio") || r === "career-studio")) {
+  studio();
+  await shoot(STUDIO_ROOMS);
 }
 await browser.close();
 await d.close();

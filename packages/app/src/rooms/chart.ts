@@ -7,7 +7,7 @@ import { FAMILIES, SPECIALTIES, type Family } from "../orb/spec.ts";
 import { ZONES } from "../floor/plan.ts";
 
 /** Each department's head's post (home org.ts HEAD_OF). */
-export const HEAD_OF: Record<Family, keyof typeof SPECIALTIES> = { exec: "ceo", build: "cto", think: "chiefofstaff", make: "cmo", finance: "cfo", business: "coo", life: "assistant", desk: "deskhead" };
+export const HEAD_OF: Record<Family, keyof typeof SPECIALTIES> = { exec: "ceo", build: "cto", think: "chiefofstaff", make: "cmo", finance: "cfo", business: "coo", life: "assistant", desk: "deskhead", studio: "studiohead" };
 
 /** Each department's colour: its zone's on the floor, and for the three with no zone of their own the CEO's gold, the
  * CFO's green and the desk's lime. */

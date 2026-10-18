@@ -15,14 +15,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { CELL, CLASS_DESKS, CORRIDOR, DESKS, FOOD, GH, GRID, GW, GYM, HALL, POIS, ROOMS, SEATS, W, ZONES, clear, dice, dwell, isMeeting, meetPlan, meetSpot, momentPlan, next, route, seating, sentBy, speed, type MomentKind, type Plan, type PoiId, type Traits } from "../src/floor/plan.ts";
-import { OFFICE_ORB_OPACITY, walkWobble } from "../src/floor/motion.ts";
+import { FLOOR_ORB, walkWobble } from "../src/floor/motion.ts";
 
 const corridor = { x: 600, y: CORRIDOR.y + CORRIDOR.h / 2 };
 const spots = [...DESKS.map((d) => [`desk ${d.zone}${d.n}`, d.approach] as const), ...SEATS.map((s, i) => [`seat ${i}`, s.approach] as const), ...POIS.map((p) => [`${p.id}`, p.approach] as const), ...CLASS_DESKS.map((d, i) => [`class desk ${i}`, d.approach] as const)];
 const even: Traits = { Pace: 10, Care: 10, Curiosity: 10, Humour: 10, Focus: 10, Calm: 10, Nerve: 10 };
 
-test("office orbs are a little translucent and giggle side to side while they walk", () => {
-  assert.ok(OFFICE_ORB_OPACITY < 0.9 && OFFICE_ORB_OPACITY > 0.75);
+test("floor orbs are solid and bigger than they were (owner, 10-18: \"like ghosts\"), and giggle side to side while they walk", () => {
+  assert.equal(FLOOR_ORB.solid, true);
+  assert.ok(FLOOR_ORB.size > 84, "bigger than the office's 84");
   const a = walkWobble(Math.PI / 2, 1);
   const b = walkWobble(Math.PI * 1.5, 1);
   assert.match(a, /translate\([^,]+, -6\.0px\) rotate\(7\.0deg\) scaleY\(/);

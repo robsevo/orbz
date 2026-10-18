@@ -54,6 +54,7 @@ import { Floor } from "./floor/Floor.tsx";
 import { Carried, PaperIcon, PaperView, StickIcon } from "./floor/Props.tsx";
 import { CARRIED, NAMES, piecesOf } from "./floor/props.ts";
 import { DeskRoom } from "./desk/Room.tsx";
+import { StudioRoom } from "./studio/Room.tsx";
 import { applyTheme, savedTheme } from "./ui/theme.ts";
 
 applyTheme(savedTheme(), false); // before the first paint: the theme you chose, never a flash of another
@@ -1075,6 +1076,18 @@ function CandlesIcon() {
   );
 }
 
+/** The game studio in the menu: a controller, drawn as the lab's flask is (its body lightly filled, its buttons solid). */
+function PadIcon() {
+  return (
+    <svg data-icon="pad" width="16" height="16" viewBox="0 0 16 16" aria-hidden style={{ display: "block", overflow: "visible" }}>
+      <path d="M4.6 4.4 H11.4 Q14.6 4.4 15 9.6 Q15.3 12.6 13.4 12.6 Q12.2 12.6 11.2 10.8 H4.8 Q3.8 12.6 2.6 12.6 Q0.7 12.6 1 9.6 Q1.4 4.4 4.6 4.4 Z" fill="currentColor" fillOpacity=".38" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+      <path d="M4.6 6.6 V9 M3.4 7.8 H5.8" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      <circle cx="10.6" cy="7.2" r=".95" fill="currentColor" />
+      <circle cx="12" cy="8.7" r=".95" fill="currentColor" />
+    </svg>
+  );
+}
+
 /** Notifications in the menu: a bell (owner, 10-10: "Change notification Icon to a bell in menu"), drawn as the lab's
  * flask is: its body lightly filled, its outline in the menu's colour, the clapper under it. */
 function BellIcon() {
@@ -1185,12 +1198,16 @@ function App() {
     if (home) home.setName(p).catch((e: Error) => setSaid(e.message));
     else savePerson(p);
   };
-  const [room, setRoom] = useState<"home" | "office" | "settings" | "chat" | "sessions" | "notices" | "calendar" | "lab" | "org" | "career" | "recruiter" | "report" | "stats" | "desk">(() => {
+  const [room, setRoom] = useState<"home" | "office" | "settings" | "chat" | "sessions" | "notices" | "calendar" | "lab" | "org" | "career" | "recruiter" | "report" | "stats" | "desk" | "studio">(() => {
     const r = parseRoute(location.hash).room;
-    return r === "home" || r === "settings" || r === "chat" || r === "sessions" || r === "notices" || r === "calendar" || r === "lab" || r === "org" || r === "career" || r === "recruiter" || r === "report" || r === "stats" || r === "desk" ? r : "office";
+    return r === "home" || r === "settings" || r === "chat" || r === "sessions" || r === "notices" || r === "calendar" || r === "lab" || r === "org" || r === "career" || r === "recruiter" || r === "report" || r === "stats" || r === "desk" || r === "studio" ? r : "office";
   });
   // which chart the stats show (PLAN 2.19): the brains' tokens or the XP
   const [deskTab, setDeskTab] = useState<string | null>(null); // a tab the address opens the desk on (#/desk/trade)
+  const [studioTab, setStudioTab] = useState<string | null>(() => { // and the studio (#/studio/careers)
+    const r = parseRoute(location.hash);
+    return r.room === "studio" ? (r.tab ?? null) : null;
+  });
   const [statsTab, setStatsTab] = useState<"brain" | "xp">(() => {
     const r = parseRoute(location.hash);
     return r.room === "stats" ? r.tab : "brain";
@@ -1263,8 +1280,9 @@ function App() {
   const moodNow = useMood(home, view.kind === "new" ? null : idOf(me.name));
   const live = home && view.kind !== "new" ? moodNow : null;
   const moods = useMoods(home, office.map((c) => idOf(c.name))); // the side menu's dots (PLAN 2.4)
-  // the desk works on its own floor (PLAN 5.22): the office's floor holds everyone else
-  const onTheFloor = useMemo(() => office.filter((c) => SPECIALTIES[c.specialty].family !== "desk"), [office]);
+  // the desk works on its own floor (PLAN 5.22), and the game studio on its own (owner, 10-18): the office's floor holds
+  // everyone else
+  const onTheFloor = useMemo(() => office.filter((c) => SPECIALTIES[c.specialty].family !== "desk" && SPECIALTIES[c.specialty].family !== "studio"), [office]);
   // where he stands, on a home (PLAN 3.8): his level and XP, kept up as they change
   const [standing, setStanding] = useState<Standing | null>(null);
   const [career, setCareer] = useState<CareerState | null>(null); // what his work has grown him into (PLAN 3.11)
@@ -1372,10 +1390,11 @@ function App() {
   // where you are is an address (ui/nav.ts): going somewhere adds it to the history, so the side
   // menu's Back and the browser's Back are the same Back
   const routeOf = (): Route =>
-    room === "home" ? { room: "home" } : room === "desk" ? { room: "desk" } : room === "stats" ? { room: "stats", tab: statsTab } : room === "settings" ? { room: "settings" } : room === "notices" ? { room: "notices" } : room === "calendar" ? { room: "calendar" } : room === "lab" ? { room: "lab" } : room === "report" ? { room: "report" } : room === "org" ? { room: "org", school: schoolFor } : room === "recruiter" ? { room: "recruiter", family: hiringFor } : room === "career" && careerOf ? { room: "career", orb: careerOf } : room === "sessions" ? { room: "sessions", ...inSession } : room === "chat" && talking ? { room: "chat", orb: talking } : view.kind === "new" ? { room: "new" } : { room: "office", orb: view.kind === "orb" ? view.name : null };
+    room === "home" ? { room: "home" } : room === "desk" ? { room: "desk" } : room === "studio" ? { room: "studio" } : room === "stats" ? { room: "stats", tab: statsTab } : room === "settings" ? { room: "settings" } : room === "notices" ? { room: "notices" } : room === "calendar" ? { room: "calendar" } : room === "lab" ? { room: "lab" } : room === "report" ? { room: "report" } : room === "org" ? { room: "org", school: schoolFor } : room === "recruiter" ? { room: "recruiter", family: hiringFor } : room === "career" && careerOf ? { room: "career", orb: careerOf } : room === "sessions" ? { room: "sessions", ...inSession } : room === "chat" && talking ? { room: "chat", orb: talking } : view.kind === "new" ? { room: "new" } : { room: "office", orb: view.kind === "orb" ? view.name : null };
   const show = (r: Route): void => {
     if (r.room === "home") setRoom("home"); // the home page (owner, 10-07): what the app opens on
     else if (r.room === "desk") (setRoom("desk"), setDeskTab(r.tab ?? null)); // the desk's own floor, on a tab when it says
+    else if (r.room === "studio") (setRoom("studio"), setStudioTab(r.tab ?? null)); // the game studio's own floor (owner, 10-18)
     else if (r.room === "settings") setRoom("settings");
     else if (r.room === "notices") setRoom("notices");
     else if (r.room === "calendar") setRoom("calendar");
@@ -1608,6 +1627,7 @@ function App() {
             {navItem("Home", room === "home" || room === "stats", { room: "home" }, "⌂") /* the charts are the home page's numbers */}
             {navItem("The office", room === "office" && view.kind === "floor", { room: "office", orb: null }, "◉")}
             {open && navItem(NAMES.room, room === "desk", { room: "desk" }, <CandlesIcon />)}
+            {navItem("Game studio", room === "studio", { room: "studio" }, <PadIcon />)}
             {navItem("New orb", room === "office" && making, { room: "new" }, "+", 0, true) /* asks to be pressed (owner, 10-03) */}
             {navItem("Sessions", room === "sessions", { room: "sessions", id: null, tab: "brainstorm" }, "▦")}
             {navItem("Notifications", room === "notices", { room: "notices" }, <BellIcon />, notices.notices.length)}
@@ -1665,6 +1685,8 @@ function App() {
           <HomeRoom home={home} office={office} person={person?.name ?? null} moods={moods} go={go} />
         ) : room === "desk" && open ? (
           <DeskRoom home={home} office={office} moods={moods} go={go} tab={deskTab} />
+        ) : room === "studio" ? (
+          <StudioRoom key={studioTab ?? ""} home={home} office={office} moods={moods} go={go} tab={studioTab} />
         ) : room === "recruiter" && !founding ? (
           <RecruiterRoom home={home} office={office} hide={hide} family={hiringFor} pick={(family) => go({ room: "recruiter", family })} hired={() => void home?.orbs().then((o) => o && setOffice(o))} profile={(c, startsAs) => <Sheet c={c} replies={replies} startsAs={startsAs} applying />} />
         ) : room === "org" ? (

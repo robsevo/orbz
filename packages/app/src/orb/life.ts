@@ -165,6 +165,8 @@ export type LifeInput = {
   still?: boolean;
   /** A still that holds one moment of a gesture instead (the app's icon: a wink, happy eyes), `into` seconds in. */
   pose?: { gesture: Gesture; into: number };
+  /** His glass solid, nothing behind it seen through (the floors). */
+  solid?: boolean;
 };
 
 export function lifeFrame(o: LifeInput, t: number): OrbFrame {
@@ -184,7 +186,7 @@ export function lifeFrame(o: LifeInput, t: number): OrbFrame {
     })(),
     sway: [1.2 * m.sway * (noise(t * 0.13, s + 11) - 0.5), 0.8 * m.sway * (noise(t * 0.17, s + 17) - 0.5)],
     happy: 0, sleepy: 0, yawn: 0, surprise: 0, tilt: 0.06 * (noise(t * 0.05, s + 23) - 0.5), mad: 0, jiggle: 0,
-    sat: o.sat ?? 1, val: o.val ?? 1, hue2: o.turn2 ?? o.turn, grad: o.grad ?? 0, goo: o.goo, squash: 0, wink: 0,
+    sat: o.sat ?? 1, val: o.val ?? 1, hue2: o.turn2 ?? o.turn, grad: o.grad ?? 0, goo: o.goo, squash: 0, wink: 0, solid: o.solid ? 1 : 0,
   };
   f.sway[1] -= 0.6 * f.breath; // he rises a touch as he breathes in
   if (o.pointer) {

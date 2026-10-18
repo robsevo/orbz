@@ -14,6 +14,7 @@
 //   #/recruiter    the recruiter (PLAN 5.8)   #/recruiter/build   who applied to one department
 //   #/stats/brain  the brains' tokens, as charts (PLAN 2.19)   #/stats/xp   the XP
 //   #/desk         the desk's floor (PLAN 5.22)   #/desk/trade   opened on one of its tabs
+//   #/studio       the game studio's floor (owner, 10-18)   #/studio/careers   opened on one of its tabs
 // Rooms join this list as they are built (the lab 2.13, the calendar 2.12...).
 
 export type Room = "office" | "settings";
@@ -32,7 +33,8 @@ export type Route =
   | { room: "org"; school?: string | null }
   | { room: "recruiter"; family?: string | null }
   | { room: "career"; orb: string }
-  | { room: "desk"; tab?: string };
+  | { room: "desk"; tab?: string }
+  | { room: "studio"; tab?: string };
 
 export function parseRoute(hash: string): Route {
   const parts = hash.replace(/^#\/?/, "").split("/").filter(Boolean).map((p) => {
@@ -53,6 +55,7 @@ export function parseRoute(hash: string): Route {
   if (parts[0] === "recruiter") return { room: "recruiter", family: parts[1] ?? null };
   if (parts[0] === "career" && parts[1]) return { room: "career", orb: parts[1] };
   if (parts[0] === "desk") return parts[1] ? { room: "desk", tab: parts[1] } : { room: "desk" };
+  if (parts[0] === "studio") return parts[1] ? { room: "studio", tab: parts[1] } : { room: "studio" };
   if (parts[0] === "chat" && parts[1]) return { room: "chat", orb: parts[1] };
   if (parts[0] === "sessions") return { room: "sessions", id: null, tab: "brainstorm" };
   if (parts[0] === "session" && /^\d+$/.test(parts[1] ?? "")) return { room: "sessions", id: Number(parts[1]), tab: parts[2] === "floor" ? "floor" : "brainstorm" };
@@ -73,6 +76,7 @@ export function routeHash(r: Route): string {
   if (r.room === "recruiter") return r.family ? `#/recruiter/${encodeURIComponent(r.family)}` : "#/recruiter";
   if (r.room === "career") return `#/career/${encodeURIComponent(r.orb)}`;
   if (r.room === "desk") return r.tab ? `#/desk/${encodeURIComponent(r.tab)}` : "#/desk";
+  if (r.room === "studio") return r.tab ? `#/studio/${encodeURIComponent(r.tab)}` : "#/studio";
   if (r.room === "chat") return `#/chat/${encodeURIComponent(r.orb)}`;
   if (r.room === "sessions") return r.id === null ? "#/sessions" : `#/session/${r.id}/${r.tab}`;
   return r.orb ? `#/office/${encodeURIComponent(r.orb)}` : "#/office";

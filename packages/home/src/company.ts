@@ -23,9 +23,9 @@ export const FOUNDING: readonly Specialty[] = ["ceo", "assistant"];
 /** Each department's head, by its post (owner, 10-07: "restructure it so it fits this makes things easier to see"):
  * the Executive the CEO, Build the CTO, Think the Chief of Staff, Make the CMO, Finance the CFO, Business the COO, Life
  * your personal assistant. A department opens for hiring with its head. */
-export const HEAD_OF: Record<Family, Specialty> = { exec: "ceo", build: "cto", think: "chiefofstaff", make: "cmo", finance: "cfo", business: "coo", life: "assistant", desk: "deskhead" };
-const POST: Partial<Record<Specialty, string>> = { ceo: "CEO", assistant: "personal assistant", cfo: "CFO", cto: "CTO", chiefofstaff: "Chief of Staff", cmo: "CMO", coo: "COO", deskhead: DESK_NAMES.head };
-const DEPARTMENT: Record<Family, string> = { exec: "the Executive", build: "Build", think: "Think", make: "Make", finance: "Finance", business: "Business", life: "Life", desk: DESK_NAMES.dept };
+export const HEAD_OF: Record<Family, Specialty> = { exec: "ceo", build: "cto", think: "chiefofstaff", make: "cmo", finance: "cfo", business: "coo", life: "assistant", desk: "deskhead", studio: "studiohead" };
+const POST: Partial<Record<Specialty, string>> = { studiohead: "Studio Head", ceo: "CEO", assistant: "personal assistant", cfo: "CFO", cto: "CTO", chiefofstaff: "Chief of Staff", cmo: "CMO", coo: "COO", deskhead: DESK_NAMES.head };
+const DEPARTMENT: Record<Family, string> = { exec: "the Executive", build: "Build", think: "Think", make: "Make", finance: "Finance", business: "Business", life: "Life", desk: DESK_NAMES.dept, studio: "the Game Studio" };
 
 /** Who is to be appointed next, while the CEO and your assistant are not both in. */
 export function nextFounding(office: readonly string[]): Specialty | null {

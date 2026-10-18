@@ -13,12 +13,13 @@ import { WORN } from "../orb/useMood.ts";
 import { idOf, type DeskEvent } from "../home/link.ts";
 import type { Route } from "../ui/nav.ts";
 import { FLOOR_CSS, skyAt } from "../floor/art.tsx";
+import { FLOOR_ORB } from "../floor/motion.ts";
 import { route, speed, type Spot } from "../floor/plan.ts";
 import { NAMES } from "../floor/props.ts";
 import { Backdrop, Bell, Station, TRADE_CSS, type WallPrice } from "./art.tsx";
 import { AREAS, H, momentOf, nextT, TDESKS, TGRID, TPIECES, TPOIS, deskSeats, W, type TMoment, type TPlan, type TPoiId } from "./plan.ts";
 
-const ORB = 80;
+const ORB = FLOOR_ORB.size;
 const tag: CSSProperties = { display: "inline-block", padding: "1px 8px", borderRadius: 999, font: "800 11px/16px var(--font)", whiteSpace: "nowrap" };
 const sign: CSSProperties = { position: "absolute", zIndex: 1, ...tag, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--text-1)", background: "var(--card)", boxShadow: "inset 0 0 0 1px var(--accent)", pointerEvents: "none" };
 type Traits = Parameters<typeof nextT>[0]["traits"];
@@ -292,7 +293,7 @@ export function DeskFloor({ crew, moods, events, prices, spark, notes, strategie
                   <button className="orbs-tag" type="button" data-desk-orb={c.name} data-at={sh?.at} data-arrived={sh?.arrived ? "true" : "false"} data-orb={c.hue}
                     onClick={() => go({ room: "office", orb: c.name })} aria-label={`${c.name}, ${SPECIALTIES[c.specialty].title}: ${sh?.label ?? "on the floor"}. Open the profile`} title={`${c.name} · ${sh?.label ?? ""}`}
                     style={{ position: "absolute", left: -size / 2, top, width: size, height: size * 1.25, padding: 0, border: 0, background: "transparent", cursor: "pointer" }}>
-                    <Orb character={c} size={size} state={talking ? "speaking" : WORN[m].state} gesture={gest[c.name] ?? null} poke={false} every={2} />
+                    <Orb character={c} size={size} state={talking ? "speaking" : WORN[m].state} gesture={gest[c.name] ?? null} poke={false} every={2} solid={FLOOR_ORB.solid} />
                   </button>
                   <span data-orb={c.hue} aria-hidden style={{ position: "absolute", left: 0, top: above - 4, transform: "translate(-50%, -100%)", display: "flex", alignItems: "center", gap: 4, pointerEvents: "none", whiteSpace: "nowrap" }}>
                     <span style={{ ...tag, color: "var(--ground)", background: "var(--accent)" }}>{c.name}</span>

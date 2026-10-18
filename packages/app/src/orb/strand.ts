@@ -16,6 +16,12 @@
 // at the end of the colours, and each colour chosen as any colour (his own, the gradient's, the hat's, the frames') as
 // its hex, 24 bits each, with which of the four there are; it is a letter longer and five more for each. An orb of the
 // 24 alone keeps the first version's strand, so every strand made so far reads, and is made, the same.
+//
+// "3" (10-18): the specialty's field had room for 64 and the roster reached 65, so the 65th (one of the desk's jobs) was
+// written past its room and read back as the first (an All-Rounder) with its personality one along; nothing said so.
+// The third version is the second with room for 256 specialties (the game studio's jobs came on top), made only for an
+// orb whose specialty is past the first 64, so every strand made so far still reads, and is made, the same. A choice
+// past its field's room now throws, never spills into the next field.
 import type { HueName } from "../design/tokens.ts";
 import { hexOf } from "./colour.ts";
 import { type AccessoryHue, type Character, EYES, FINISHES, GLASSES, HATS, PERSONALITIES, SHAPES, SPECIALTIES, VOICES } from "./spec.ts";
@@ -23,6 +29,7 @@ import { type AccessoryHue, type Character, EYES, FINISHES, GLASSES, HATS, PERSO
 const ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 const VERSION = "1";
 const VERSION2 = "2";
+const VERSION3 = "3";
 
 /** The 24 as the first version lists them, written out on 10-08 and kept so: built from HUES, a colour added would
  * have moved white and black (and every colour after it) in every strand made before. */
@@ -59,16 +66,22 @@ const FIELDS2: Field[] = FIELDS.map((f) => (f.key === "hue" ? { ...f, list: () =
 const TINTS = ["tint", "tint2", "hatTint", "glassesTint"] as const;
 const RGB = 2n ** 24n;
 const BODY2 = (k: number): number => Math.ceil((Math.log2(FIELDS2.reduce((p, f) => p * f.cap, 1) * GOO * SEED) + 4 + 24 * k) / 5);
+/** The third version's fields: the second's, with room for 256 specialties. */
+const FIELDS3: Field[] = FIELDS2.map((f) => (f.key === "specialty" ? { ...f, cap: 256 } : f));
+const BODY3 = (k: number): number => Math.ceil((Math.log2(FIELDS3.reduce((p, f) => p * f.cap, 1) * GOO * SEED) + 4 + 24 * k) / 5);
+const WIDE = FIELDS.find((f) => f.key === "specialty")!.cap;
 
 /** The code alone (no name), for an orb. */
 export function strandOf(c: Character): string {
   if (!Number.isInteger(c.seed) || c.seed < 0 || c.seed >= SEED) throw new Error(`${c.name}'s dice (${c.seed}) do not fit a strand`);
   const tints = TINTS.map((k) => hexOf(c[k]));
-  const v2 = c.hue === "dark" || tints.some(Boolean);
+  const v3 = Object.keys(SPECIALTIES).indexOf(c.specialty) >= WIDE;
+  const v2 = v3 || c.hue === "dark" || tints.some(Boolean); // the third carries the second's colours too
   let n = 0n;
-  for (const f of v2 ? FIELDS2 : FIELDS) {
+  for (const f of v3 ? FIELDS3 : v2 ? FIELDS2 : FIELDS) {
     const at = f.list().indexOf(c[f.key] ?? null);
     if (at < 0) throw new Error(`${c.name}'s ${f.key} (${String(c[f.key])}) is not one a strand knows`);
+    if (at >= f.cap) throw new Error(`${c.name}'s ${f.key} (${String(c[f.key])}) is past the room a strand has for it`);
     n = n * BigInt(f.cap) + BigInt(at);
   }
   n = n * BigInt(GOO) + BigInt(Math.round(Math.max(0, Math.min(1, c.goo)) * 100));
@@ -83,7 +96,8 @@ export function strandOf(c: Character): string {
     body = ALPHABET[Number(n % 32n)] + body;
     n /= 32n;
   }
-  const code = (v2 ? VERSION2 : VERSION) + body.padStart(v2 ? BODY2(tints.filter(Boolean).length) : BODY, "0");
+  const k = tints.filter(Boolean).length;
+  const code = (v3 ? VERSION3 : v2 ? VERSION2 : VERSION) + body.padStart(v3 ? BODY3(k) : v2 ? BODY2(k) : BODY, "0");
   return group(code + check(code));
 }
 
@@ -98,8 +112,9 @@ export function readStrand(text: string, fallbackName = "Orb"): { ok: true; orb:
   const raw = (dot > 0 ? t.slice(dot + 1) : t).toUpperCase().replace(/[\s-]/g, "").replace(/O/g, "0").replace(/[IL]/g, "1");
   if (!raw) return { ok: false, why: "There is no DNA there to read." };
   if (/[^0-9A-Z]/.test(raw) || /U/.test(raw)) return { ok: false, why: "That is not a DNA strand: it has letters a strand never uses." };
-  if (raw[0] !== VERSION && raw[0] !== VERSION2) return { ok: false, why: "That strand is from a newer Orbz than this one." };
-  const v2 = raw[0] === VERSION2;
+  if (raw[0] !== VERSION && raw[0] !== VERSION2 && raw[0] !== VERSION3) return { ok: false, why: "That strand is from a newer Orbz than this one." };
+  const v3 = raw[0] === VERSION3;
+  const v2 = v3 || raw[0] === VERSION2;
   const code = raw.slice(0, -1);
   const mistyped = { ok: false as const, why: "That DNA does not check out: a letter is missing or mistyped." };
   if (check(code) !== raw.at(-1) || (!v2 && raw.length !== BODY + 2)) return mistyped;
@@ -114,14 +129,14 @@ export function readStrand(text: string, fallbackName = "Orb"): { ok: true; orb:
       tints[TINTS[i]!] = `#${(n % RGB).toString(16).padStart(6, "0")}`;
       n /= RGB;
     }
-    if (raw.length !== BODY2(Object.keys(tints).length) + 2) return mistyped;
+    if (raw.length !== (v3 ? BODY3 : BODY2)(Object.keys(tints).length) + 2) return mistyped;
   }
   const seed = Number(n % BigInt(SEED));
   n /= BigInt(SEED);
   const goo = Number(n % BigInt(GOO)) / 100;
   n /= BigInt(GOO);
   const orb: Record<string, unknown> = { name: name || fallbackName, seed, goo, ...tints };
-  for (const f of [...(v2 ? FIELDS2 : FIELDS)].reverse()) {
+  for (const f of [...(v3 ? FIELDS3 : v2 ? FIELDS2 : FIELDS)].reverse()) {
     const at = Number(n % BigInt(f.cap));
     n /= BigInt(f.cap);
     const list = f.list();

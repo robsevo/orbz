@@ -35,12 +35,14 @@ export type OrbProps = {
   /** He looks at your pointer and leans toward it: only where he is the page (his own, and the creator's; owner, 10-11:
    * "on the home page, they dont need to follow my mouse lol ... or in the office etc ... only when on their personal page"). */
   watch?: boolean;
+  /** His glass solid: on a floor, where a busy room seen through him made him a ghost (owner, 10-18). */
+  solid?: boolean;
   style?: CSSProperties;
 };
 
 const seedOf = (s: string): number => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 9973, 7) / 97;
 
-export function Orb({ character, size = 120, state = "idle", gesture = null, fidget = true, poke = true, tint = 0.8, every = 1, still = false, framing = "window", pose, pop = true, light = true, watch = false, style }: OrbProps) {
+export function Orb({ character, size = 120, state = "idle", gesture = null, fidget = true, poke = true, tint = 0.8, every = 1, still = false, framing = "window", pose, pop = true, light = true, watch = false, solid = false, style }: OrbProps) {
   // the close-up: cut to his width, his hat kept in (spec.ts closeUp)
   const frame: Framing = useMemo(() => (framing === "portrait" ? closeUp(PORTRAIT, character) : DESIGN), [framing, character.shape, character.hat]);
   const ref = useRef<HTMLCanvasElement>(null);
@@ -94,6 +96,7 @@ export function Orb({ character, size = 120, state = "idle", gesture = null, fid
         })(),
         motion: motionOf(live.current.character),
         still,
+        solid,
         ...(pose && { pose }),
         seed, tint: live.current.tint, goo: live.current.character.goo, state: live.current.state,
         plays: live.current.fidget && live.current.state === "idle" ? [...own, ...plays.current] : plays.current,
@@ -126,7 +129,7 @@ export function Orb({ character, size = 120, state = "idle", gesture = null, fid
       window.removeEventListener("pointermove", move);
       document.removeEventListener("pointerleave", away);
     };
-  }, [size, seed, every, still, frame, light, watch, ...(still ? [JSON.stringify(character)] : [])]);
+  }, [size, seed, every, still, frame, light, watch, solid, ...(still ? [JSON.stringify(character)] : [])]);
 
   // the CEO and the CFO glow (owner, 10-07: "a special glow or smt to let you know theyre the CEO or CFO"), by their post
   const rank = character.specialty === "ceo" ? "ceo" : character.specialty === "cfo" ? "cfo" : null;

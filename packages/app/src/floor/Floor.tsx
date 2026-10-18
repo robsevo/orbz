@@ -22,12 +22,12 @@ import type { Route } from "../ui/nav.ts";
 import { CameraFeed } from "./camera.tsx";
 import { COIN_DESK, Props } from "./Props.tsx";
 import { DeskPiece, FLOOR_CSS, MeetingTable, PingPong, Room, RoomPieces, SideTables, skyAt, type Screen } from "./art.tsx";
-import { OFFICE_ORB_OPACITY, walkWobble } from "./motion.ts";
+import { FLOOR_ORB, walkWobble } from "./motion.ts";
 import { busiest, CLASS_DESKS, CORRIDOR, MARKS, PIECES, VIEWS, viewRect, WAITING, zoneOf, type ViewId } from "./plan.ts";
 import { DESKS, H, POIS, ROOMS, SEATS, W, WALL, ZONES, dice, dwell, meetPlan, meetPoi, meetSpot, momentPlan, next, route, seating, sentBy, speed, type Desk, type Plan, type PoiId, type Spot, type Traits } from "./plan.ts";
 
 /** An orb's size on the plan (its window's width). */
-const ORB = 84;
+const ORB = FLOOR_ORB.size;
 const head: CSSProperties = { font: "700 11px/16px var(--font)", letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)" };
 const small: CSSProperties = { font: "500 13px/18px var(--font)", color: "var(--text-3)", textWrap: "pretty", overflowWrap: "anywhere" };
 const panel: CSSProperties = { display: "grid", gap: 10, alignContent: "start", padding: "var(--s4)", borderRadius: 18, background: "var(--fill)", boxShadow: "inset 0 0 0 1px var(--hairline)", minWidth: 0 };
@@ -532,6 +532,16 @@ export function Floor({ home, office, moods, person, go, kept = [], keep, holdin
                 <span aria-hidden>{MARKS[z.id]}</span> {z.id === "play" ? "Games" : FAMILIES[z.id]}
               </span>
             ))}
+            {/* the games corner's door to the game studio, a floor of its own (owner, 10-18) */}
+            {(() => {
+              const play = ZONES.find((z) => z.id === "play")!.rect;
+              return (
+                <button type="button" className="orbs-tag" data-studio-door onClick={() => go({ room: "studio" })} aria-label="The game studio: its own floor" data-orb="iris"
+                  style={{ ...sign, left: px(play.x + 134), top: px(play.y - 34), cursor: "pointer", border: 0, pointerEvents: "auto", background: "var(--accent-fill)", color: "var(--text-1)" }}>
+                  Game studio ›
+                </button>
+              );
+            })()}
             {ROOMS.map((r) => (
               <span key={r.id} data-orb={r.hue} data-room={r.id} style={{ ...sign, left: px(r.door.x + r.door.w / 2), top: px(r.wall < CORRIDOR.y ? r.wall - 30 : r.wall + 14), translate: "-50% 0" }}>{r.name}</span>
             ))}
@@ -596,7 +606,7 @@ export function Floor({ home, office, moods, person, go, kept = [], keep, holdin
                       title={`${c.name} · ${words}`}
                       style={{ position: "absolute", left: -size / 2, top, width: size, height: size * 1.25, padding: 0, border: 0, background: "transparent", cursor: "pointer" }}
                     >
-                      <Orb character={c} size={size} state={talking ? "speaking" : WORN[m].state} gesture={gest[c.name] ?? null} poke={false} every={2} style={{ opacity: OFFICE_ORB_OPACITY }} />
+                      <Orb character={c} size={size} state={talking ? "speaking" : WORN[m].state} gesture={gest[c.name] ?? null} poke={false} every={2} solid={FLOOR_ORB.solid} />
                     </button>
                     {/* the name, and what it is doing as a mark */}
                     <span ref={(el) => void (el ? tags.current.set(c.name, el) : tags.current.delete(c.name))} data-orb={c.hue} aria-hidden style={{ position: "absolute", left: 0, top: above - 4, transform: "translate(-50%, -100%)", display: "flex", alignItems: "center", gap: 4, pointerEvents: "none", whiteSpace: "nowrap" }}>

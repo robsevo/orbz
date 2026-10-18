@@ -40,6 +40,8 @@ export type OrbFrame = {
   squash: number;
   /** One eye shut (a wink, life.ts): 1 while it is. */
   wink: number;
+  /** 1: his glass is solid, nothing behind it seen through (the floors, owner 10-18); 0 his glass as Ash's. */
+  solid: number;
 };
 
 /** Who he is: the parts of a character the shader draws (spec.ts makes these from a spec). */
@@ -96,7 +98,7 @@ const SUPERSAMPLE = 1.5;
 const UNIFORMS = [
   "uRes", "uTime", "uLevel", "uState", "uWake", "uR", "uCy", "uEdge", "uBreath", "uBlink", "uMorph", "uGaze", "uSway",
   "uHappy", "uSleepy", "uYawn", "uSurprise", "uTilt", "uMad", "uJiggle", "uHue", "uSat", "uVal", "uHue2", "uGrad", "uTint",
-  "uShapeA", "uShapeB", "uShapeC", "uShapeD", "uShapeE", "uShapeF", "uGoo", "uSquash", "uEyeA", "uEyeB", "uEyeX", "uAccFit", "uAccTilt", "uAccGlow", "uAccGlowK", "uAccGlowCol", "uAccEdge", "uAccShade",
+  "uShapeA", "uShapeB", "uShapeC", "uShapeD", "uShapeE", "uShapeF", "uGoo", "uSolid", "uSquash", "uEyeA", "uEyeB", "uEyeX", "uAccFit", "uAccTilt", "uAccGlow", "uAccGlowK", "uAccGlowCol", "uAccEdge", "uAccShade",
 ] as const;
 const HAT_UNIFORMS = ["uRes", "uSway", "uAccFit", "uGaze", "uTime", "uLevel", "uState", "uWake", "uR", "uCy", "uBreath", "uMorph", "uSquash", "uAccTilt", "uTilt", "uFace", "uShapeD", "uCol", "uCol2", "uCol3", "uOrb", "uPal"] as const;
 
@@ -236,6 +238,7 @@ export class OrbRenderer {
     gl.uniform1f(u.uGrad, f.grad);
     gl.uniform1f(u.uTint, f.tint);
     gl.uniform1f(u.uGoo, f.goo);
+    gl.uniform1f(u.uSolid, f.solid);
     gl.uniform1f(u.uSquash, f.squash);
     gl.uniform4f(u.uShapeA, ...look.shapeA);
     gl.uniform4f(u.uShapeB, ...look.shapeB);

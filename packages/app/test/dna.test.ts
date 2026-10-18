@@ -143,6 +143,20 @@ test("levels, Pokémon's way: XP brings a level; each level adds a point to its 
   assert.ok(growthProblems([3, 3, 3], [6, 2.5, 3], [true, false, false], 0.3).includes("Building lost 0.5"));
 });
 
+test("every specialty comes back from its strand; one past the first 64 takes the third version, the rest keep theirs (10-18)", async () => {
+  const { SPECIALTIES } = await import("../src/orb/spec.ts");
+  const keys = Object.keys(SPECIALTIES) as Character["specialty"][];
+  for (const [i, specialty] of keys.entries()) {
+    const c: Character = { ...surprise(7), specialty };
+    const s = strandOf(c);
+    const read = readStrand(s);
+    // the 65th (one of the desk's jobs) once read back as the first, an All-Rounder, its personality one along
+    assert.ok(read.ok && read.orb.specialty === specialty && read.orb.personality === c.personality, `${specialty}: ${read.ok ? read.orb.specialty : read.why}`);
+    assert.equal(s[0], i >= 64 ? "3" : c.hue === "dark" ? "2" : "1", `${specialty}'s version`);
+  }
+  assert.equal(strandOf(ASH)[0], "1", "Ash keeps the first version's strand");
+});
+
 test("a DNA strand makes the same orb again, name and traits and all; a typo is caught, not read as another", () => {
   for (let seed = 0; seed < 2000; seed++) {
     const c = surprise(seed);
@@ -178,7 +192,7 @@ test("a DNA strand makes the same orb again, name and traits and all; a typo is 
     assert.equal(readStrand(swapped).ok, false, `a swap at ${i} read as another orb`);
   }
   assert.equal(readStrand("").ok, false);
-  assert.equal(readStrand(`3${flat.slice(1)}`).ok, false, "a newer version is refused, not misread (2 is any colour's, PLAN 2.20)");
+  assert.equal(readStrand(`4${flat.slice(1)}`).ok, false, "a newer version is refused, not misread (2 is any colour's, PLAN 2.20; 3 the wider roster's, 10-18)");
 });
 
 test("the skills web is weighed like the traits: 24 points for every orb, pulled by its traits", async () => {
