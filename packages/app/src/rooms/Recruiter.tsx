@@ -52,7 +52,15 @@ export function RecruiterRoom({ home, office, family, pick, hired, profile, hide
     if (!home) return;
     const load = (): void => void home.recruiting().then(setState, (e: Error) => setSaid(e.message));
     load();
-    return home.watch({ event: (e) => void (/^(position\.|applicant\.|orb\.)/.test(e.type) && load()) });
+    // a burst of events is one reload (10-18: All positions ticks 83 at once, an event each, and a reload and a ranking of
+    // everyone who applied for each one held the page past 20 s)
+    let soon = 0;
+    const later = (): void => void (soon ||= window.setTimeout(() => ((soon = 0), load()), 150));
+    const stop = home.watch({ event: (e) => void (/^(position\.|applicant\.|orb\.)/.test(e.type) && later()) });
+    return () => {
+      stop();
+      window.clearTimeout(soon);
+    };
   }, [home]);
   // arriving at a department (from the floor's Hiring tag), its applicants come into view, past the positions
   const loaded = state !== null;

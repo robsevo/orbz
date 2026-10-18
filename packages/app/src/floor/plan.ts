@@ -368,6 +368,14 @@ export function clear(a: Spot, b: Spot, grid: Uint8Array = GRID): boolean {
  * Board room and their own places come (PLAN 5.17). */
 export const zoneOf = (f: Family): Family => (f === "exec" ? "think" : f === "finance" ? "business" : f);
 
+/** Where an orb stands to drop in on a colleague: beside its desk on the side it chose, or on the other side where a
+ * whole orb (`half` either side of its feet) would leave the floor (10-18: a bigger orb visiting a desk by the right wall
+ * stood past the floor's edge). */
+export function visitSpot(approach: Spot, side: -1 | 1, half: number): Spot {
+  const x = approach.x + side * 40;
+  return { x: x - half < 0 || x + half > W ? approach.x - side * 40 : x, y: approach.y };
+}
+
 /** Each orb's desk: in its department, in the office's order; past six, the first desk free anywhere. */
 export function seating(orbs: { name: string; family: Family }[]): Map<string, Desk> {
   const out = new Map<string, Desk>();

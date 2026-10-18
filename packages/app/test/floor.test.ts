@@ -14,7 +14,7 @@
 //   - each orb's desk is in its department, six to a department, the seventh at a free desk elsewhere.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { CELL, CLASS_DESKS, CORRIDOR, DESKS, FOOD, GH, GRID, GW, GYM, HALL, POIS, ROOMS, SEATS, W, ZONES, clear, dice, dwell, isMeeting, meetPlan, meetSpot, momentPlan, next, route, seating, sentBy, speed, type MomentKind, type Plan, type PoiId, type Traits } from "../src/floor/plan.ts";
+import { CELL, CLASS_DESKS, CORRIDOR, DESKS, FOOD, GH, GRID, GW, GYM, HALL, POIS, ROOMS, SEATS, W, ZONES, clear, dice, dwell, isMeeting, meetPlan, meetSpot, momentPlan, next, route, seating, sentBy, speed, visitSpot, type MomentKind, type Plan, type PoiId, type Traits } from "../src/floor/plan.ts";
 import { FLOOR_ORB, walkWobble } from "../src/floor/motion.ts";
 
 const corridor = { x: 600, y: CORRIDOR.y + CORRIDOR.h / 2 };
@@ -29,6 +29,22 @@ test("floor orbs are solid and bigger than they were (owner, 10-18: \"like ghost
   assert.match(a, /translate\([^,]+, -6\.0px\) rotate\(7\.0deg\) scaleY\(/);
   assert.match(b, /translate\([^,]+, -6\.0px\) rotate\(-7\.0deg\) scaleY\(/);
   assert.notEqual(a, b, "the wobble changes side as its step changes");
+});
+
+test("an orb dropping in on a colleague stands beside its desk, and never past the floor's edge (10-18: the bigger orbs)", () => {
+  const half = FLOOR_ORB.size / 2;
+  for (const d of DESKS)
+    for (const side of [-1, 1] as const) {
+      const at = visitSpot(d.approach, side, half);
+      assert.equal(Math.abs(at.x - d.approach.x), 40, `desk ${d.zone}${d.n}: beside it`);
+      assert.ok(at.x - half >= 0 && at.x + half <= 1200, `desk ${d.zone}${d.n} from ${side}: a whole orb on the floor (${at.x})`);
+    }
+  // the control: the desk by the right wall, asked for its right side, gives its left; a desk in the middle keeps its side
+  const right = DESKS.reduce((a, b) => (b.approach.x > a.approach.x ? b : a));
+  assert.equal(visitSpot(right.approach, 1, half).x, right.approach.x - 40);
+  assert.ok(right.approach.x + 40 + half > 1200, "the right wall's desk is one a side would leave the floor from");
+  const mid = DESKS.find((d) => d.approach.x > 400 && d.approach.x < 800)!;
+  assert.equal(visitSpot(mid.approach, 1, half).x, mid.approach.x + 40);
 });
 
 test("every desk, seat and place to go is reachable from the corridor, and no way crosses a wall; walled off, they are not", () => {

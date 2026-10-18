@@ -37,7 +37,7 @@ import { THEMES } from "../src/design/tokens.ts";
 const APP = fileURLToPath(new URL("..", import.meta.url));
 /** Your CEO and every department's head, so the Recruiter is open throughout (PLAN 5.13). */
 const heads = (h: Home): void => {
-  for (const [id, name, sp, hue] of [["max", "Max", "ceo", "honey"], ["ivo", "Ivo", "cto", "violet"], ["cos", "Cos", "chiefofstaff", "orchid"], ["cam", "Cam", "cmo", "coral"], ["fin", "Fin", "cfo", "jade"], ["oto", "Oto", "coo", "cornflower"]] as const) {
+  for (const [id, name, sp, hue] of [["max", "Max", "ceo", "honey"], ["ivo", "Ivo", "cto", "violet"], ["cos", "Cos", "chiefofstaff", "orchid"], ["cam", "Cam", "cmo", "coral"], ["fin", "Fin", "cfo", "jade"], ["oto", "Oto", "coo", "cornflower"], ["lia", "Lia", "studiohead", "honey"]] as const) {
     h.inbox.addOrb(id, name, sp, { shape: "bean", eyes: "classic", hue });
   }
 };
@@ -287,7 +287,7 @@ test("the floor's Hiring tags open on who applied to their department; All and t
   assert.deepEqual(await measure(phone), [], "and at phone size");
 });
 
-test("the positions in their departments, each named; one department's or All; every one shown ticked in one press; desk and phone", { skip, timeout: 150_000 }, async (t) => {
+test("the positions in their departments, each named; one department's or All; every one shown ticked in one press; desk and phone", { skip, timeout: 300_000 }, async (t) => {
   const model = await fakeModel(t, []);
   const data = mkdtempSync(join(tmpdir(), "orbs-recruiter-home-"));
   t.after(() => rmSync(data, { recursive: true, force: true }));
@@ -315,7 +315,7 @@ test("the positions in their departments, each named; one department's or All; e
   const groups = (page: Page) => page.locator("[data-position-group]").evaluateAll((gs) => gs.map((g) => g.getAttribute("data-position-group")));
   const all = (page: Page) => page.locator("[data-tick-shown]");
   const page = await open({ width: 1280, height: 900 });
-  assert.deepEqual(await groups(page), ["exec", "build", "think", "make", "finance", "business", "life"], "All: every department, the Executive and Finance among them (10-07)");
+  assert.deepEqual(await groups(page), ["exec", "build", "think", "make", "finance", "business", "life", "studio"], "All: every department, the Executive and Finance among them (10-07), the Game Studio last (10-18)");
   const finance = Object.entries(SPECIALTIES).filter(([, v]) => v.family === "finance").map(([k]) => k);
   assert.match(await page.locator('[data-position-group="finance"]').innerText(), new RegExp(`^Finance\\s+0 of ${finance.length}`), "each named, with how many are ticked");
   assert.equal(await page.locator('[data-position-group="finance"] [data-position="fundamentals"]').innerText(), "Fundamental Analyst");
@@ -345,13 +345,15 @@ test("the positions in their departments, each named; one department's or All; e
 
   // All: every position in one press, then none
   await page.locator("select[data-position-filter]").selectOption("");
-  assert.equal((await groups(page)).length, 7);
+  assert.equal((await groups(page)).length, 8, "every department, the Game Studio among them");
   assert.equal(await all(page).innerText(), "All positions", "not all of them yet");
   await all(page).click();
   await page.waitForFunction(() => document.querySelector("[data-tick-shown]")?.textContent === "✓ All positions", undefined, { timeout: 20_000 });
   // every position shown: the desk's are not, while it is shut (PLAN 5.21)
   assert.equal(h.recruiter.positions().length, Object.values(SPECIALTIES).filter((v) => v.family !== "desk").length, "every position");
-  await all(page).click();
+  // everyone who applied to every position is drawn now, an orb each (166 since the studio's jobs, 10-18): in software
+  // WebGL that holds the page about 45 s, a GPU a moment, so this press waits for it
+  await all(page).click({ timeout: 120_000 });
   await page.waitForFunction(() => document.querySelector("[data-tick-shown]")?.textContent === "All positions", undefined, { timeout: 20_000 });
   assert.deepEqual(h.recruiter.positions(), [], "and none, in one press");
   assert.equal(puts.length, 3);

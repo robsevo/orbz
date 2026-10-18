@@ -24,7 +24,7 @@ import { COIN_DESK, Props } from "./Props.tsx";
 import { DeskPiece, FLOOR_CSS, MeetingTable, PingPong, Room, RoomPieces, SideTables, skyAt, type Screen } from "./art.tsx";
 import { FLOOR_ORB, walkWobble } from "./motion.ts";
 import { busiest, CLASS_DESKS, CORRIDOR, MARKS, PIECES, VIEWS, viewRect, WAITING, zoneOf, type ViewId } from "./plan.ts";
-import { DESKS, H, POIS, ROOMS, SEATS, W, WALL, ZONES, dice, dwell, meetPlan, meetPoi, meetSpot, momentPlan, next, route, seating, sentBy, speed, type Desk, type Plan, type PoiId, type Spot, type Traits } from "./plan.ts";
+import { DESKS, H, POIS, ROOMS, SEATS, W, WALL, ZONES, dice, dwell, meetPlan, meetPoi, meetSpot, momentPlan, next, route, seating, sentBy, speed, visitSpot, type Desk, type Plan, type PoiId, type Spot, type Traits } from "./plan.ts";
 
 /** An orb's size on the plan (its window's width). */
 const ORB = FLOOR_ORB.size;
@@ -240,7 +240,7 @@ export function Floor({ home, office, moods, person, go, kept = [], keep, holdin
     }
     const theirs = live.current.desks.get(plan.who);
     const side = s.r() < 0.5 ? -1 : 1;
-    const at = theirs ? { x: theirs.approach.x + side * 40, y: theirs.approach.y } : { x: s.x, y: s.y };
+    const at = theirs ? visitSpot(theirs.approach, side, ORB / 2) : { x: s.x, y: s.y };
     return { approach: at, at };
   };
   const assign = (s: Sim, plan: Plan, instant = false): void => {
