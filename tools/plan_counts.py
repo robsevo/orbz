@@ -85,14 +85,18 @@ def render(text: str) -> tuple[str, list[str]]:
     return out, problems
 
 
-def main(argv: list[str]) -> int:
-    text = PLAN.read_text()
+def main(argv: list[str], plan: Path = PLAN) -> int:
+    # the plan is kept out of public clones: there is nothing to count without it
+    if not plan.exists():
+        print("plan: no PLAN.md in this checkout, nothing to count")
+        return 0
+    text = plan.read_text()
     out, problems = render(text)
     for p in problems:
         print("FAIL ", p)
     if "--write" in argv:
         if out != text:
-            PLAN.write_text(out)
+            plan.write_text(out)
             print("PLAN.md: count summary regenerated")
         return 1 if problems else 0
     if out != text:

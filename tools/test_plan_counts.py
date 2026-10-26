@@ -4,7 +4,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from plan_counts import render  # noqa: E402
+from plan_counts import main, render  # noqa: E402
+import tempfile  # noqa: E402
 
 GOOD = """\
 ### PHASE 0 — Prove it → M0
@@ -64,6 +65,12 @@ check("P.6 a missing boxes line is a problem, not a silent pass", any("missing" 
 
 out, problems = render(GOOD.replace("| 0.2 | Spike | x | [~] |", "| 0.2 | Spike | x | *a note* | [~] |"))
 check("P.7 a row with a fifth cell is a problem (the box falls out of the rendered table)", any("has 5 cells" in p for p in problems))
+
+with tempfile.TemporaryDirectory() as d:
+    check("P.8 a checkout without PLAN.md has nothing to count", main([], Path(d) / "PLAN.md") == 0)
+    stale = Path(d) / "stale.md"
+    stale.write_text(GOOD.replace("| Phase 0 (prove it) | 2 | 2 |", "| Phase 0 (prove it) | 5 | 2 |"))
+    check("P.9 control: a plan that is there is still checked, and a stale one fails", main([], stale) == 1)
 
 print("ALL PASS" if not FAIL else f"{len(FAIL)} FAILED")
 sys.exit(1 if FAIL else 0)

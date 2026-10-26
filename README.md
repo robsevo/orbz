@@ -90,7 +90,7 @@ pnpm check:controls   # proof the gate can fail
 ```
 
 `pnpm check` runs the typecheck, the TypeScript tests, the kit's Python suites, the carry
-check, copyscan and the plan counts. The TypeScript tests cover the home, the terminal
+check and copyscan. The TypeScript tests cover the home, the terminal
 (driven in a real pty) and the app, which is rendered in Chromium at phone and desk sizes
 and checked for overflow, spills, orphans and widows. `pnpm check:controls` plants a type
 error, a failing TypeScript test and a failing kit test, one at a time, and each must turn
@@ -108,11 +108,9 @@ The app's render tests use software WebGL, so they are slow. Give them a quiet m
 | `packages/terminal` | the `orbs` terminal client (Ink) |
 | `kit` | the Python kit, an MCP server the home supervises: voice (Kokoro, Whisper, Smart Turn), lessons, the habit sandbox |
 | `kit/ash` | modules carried over from Ash, an earlier assistant, by `tools/adoption/carry.py`, never edited by hand |
-| `spike` | the habit spike that decided the project (Phase 0) |
+| `spike` | the habit spike that decided the project |
 | `docs` | the name check, adoption maps, spike results, third-party notes |
 | `tools` | the gate's runner, the mutants, copyscan, the desktop launcher |
-| `PLAN.md` | the plan: every feature with a test row under it; its counts are generated |
-| `CLAUDE.md` | the rules the code is built under, read by the coding agents that work on it |
 
 On screen the product is Orbz. In code, paths, packages and `ORBS_*` variables it is `orbs`.
 

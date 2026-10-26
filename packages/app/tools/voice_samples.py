@@ -195,7 +195,7 @@ def main() -> None:
     ap.add_argument("--more", action="store_true", help="only the takes after the first (the first is kept as it is)")
     a = ap.parse_args()
     if not (a.models / "kokoro-v1.0.onnx").exists():
-        sys.exit(f"no Kokoro model in {a.models} (see CLAUDE.md: the kit's model files)")
+        sys.exit(f"no Kokoro model in {a.models} (see README.md: the voice models)")
     ash_cfg = json.loads(a.ash_voice.read_text()) if a.ash_voice.exists() else {}
     if not ash_cfg:
         sys.exit(f"Classic is Ash's own blend, read from {a.ash_voice}: it is not there")
