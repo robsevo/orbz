@@ -267,7 +267,9 @@ test("the desk: the floor and its tabs at desk and phone sizes; a strategy kept 
   await page.locator("[data-trending]").waitFor();
   await page.locator("[data-token-close]").click();
   await page.locator("[data-token-desk]").waitFor({ state: "detached" });
-  await page.waitForFunction((id) => document.querySelector(`[data-swap="${id}"]`)?.getAttribute("data-state") === "sent", mine.id, { timeout: 20_000 });
+  // the trade is listed once sent; the home's own tick follows it on its chain, so on a busy machine it may already be
+  // confirmed by the time the list is read (seen 3 runs in 4 under load)
+  await page.waitForFunction((id) => ["sent", "confirmed"].includes(document.querySelector(`[data-swap="${id}"]`)?.getAttribute("data-state") ?? ""), mine.id, { timeout: 20_000 });
   await h.swaps.due();
   await page.locator(`[data-swap="${mine.id}"][data-state="confirmed"]`).waitFor({ timeout: 20_000 });
 

@@ -1,4 +1,4 @@
-// PLAN 2.5_t, the opening story's music (owner, 10-02: "some cool ass music"), read note by note from
+// PLAN 2.5_t, the opening story's music (owner, 10-02: "some cool ... music"), read note by note from
 // its score (src/ui/music.ts), no audio needed:
 //   - Every pitched note is in D minor; every note starts on the sixteenth grid, inside its bar.
 //   - Never too loud: what sounds at once stays under full scale before the volume is even applied.

@@ -1,7 +1,7 @@
 // Pressing feels like pressing (owner, 2026-10-01: "when i push something, i wanna feel like im
 // pushing it"). One listener covers the whole page. A button sounds the moment it goes down, not
 // when it comes up, so the press is felt at once. Few presses sound (owner, 10-07: "those click
-// sounds the app makes. fkn limit them please"):
+// sounds the app makes ... limit them please"):
 //   - a choice not yet chosen clicks ("pick");
 //   - `data-sound` names the sound of an act that matters (sending, approving, roll, create, delete,
 //     poke), or "none";

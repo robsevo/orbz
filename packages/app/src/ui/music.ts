@@ -1,4 +1,4 @@
-// The opening story's music (owner, 10-02: "opening story should have some cool ass music too").
+// The opening story's music (owner, 10-02: "opening story should have some cool ... music too").
 // Made here, like every sound in the app (sound.ts): oscillators and a breath of noise, no samples,
 // nobody else's files. A synthwave groove at 96 beats a minute in D minor, on the old epic loop
 // (Dm, B flat, F, C): a warm pad under a filter and a round bass first, the kick coming in, then the

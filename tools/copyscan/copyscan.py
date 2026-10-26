@@ -17,7 +17,7 @@ words is allowed, reproducing their code is not.
 Exit 0 = clean, 1 = a copy was found, 2 = the scan could not run (missing tree). A scan that
 cannot run must never read as a pass.
 
-  python3 tools/copyscan/copyscan.py                    # scan ~/orbs against the cached checkout
+  python3 tools/copyscan/copyscan.py                    # scan the repo against the cached checkout (cloned if missing)
   python3 tools/copyscan/copyscan.py --fetch            # clone/refresh Open Dot first
   python3 tools/copyscan/copyscan.py --ours DIR --theirs DIR
 """
@@ -249,8 +249,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--fetch", action="store_true", help="clone or refresh Open Dot into the cache first")
     args = ap.parse_args(argv)
 
-    if args.fetch:
-        fetch()
+    # a fresh clone has no cached tree yet (it is git-ignored): clone it once instead of failing the gate;
+    # a fetch that fails is still a scan that cannot run
+    if args.fetch or (args.theirs == CACHE and not (CACHE / ".git").exists()):
+        try:
+            fetch()
+        except (subprocess.CalledProcessError, OSError) as e:
+            print(f"copyscan: CANNOT RUN — could not fetch Open Dot ({e})", file=sys.stderr)
+            return 2
     if not args.theirs.is_dir() or not any(args.theirs.iterdir()):
         print(f"copyscan: CANNOT RUN — no Open Dot tree at {args.theirs} (use --fetch)", file=sys.stderr)
         return 2

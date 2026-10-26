@@ -1,0 +1,46 @@
+Orbz
+Copyright (c) 2026 robsevo
+
+Orbz is released under the MIT License (LICENSE), except for the parts below.
+
+
+Not covered by the MIT License
+------------------------------
+
+kit/ash/wakeword/model_out/hey_ash.onnx
+  A wake-word model carried over from Ash, trained with openWakeWord
+  (https://github.com/dscripka/openWakeWord) on its published training features,
+  which include the ACAV100M set. openWakeWord releases the models it trains that
+  way under CC BY-NC-SA 4.0, and this file is offered on the same terms. Orbz does
+  not load it: an orb hears its name through Whisper (kit/orbs_kit/voicebox.py).
+
+packages/app/public/fonts/Nunito.ttf
+  Nunito, copyright 2014 The Nunito Project Authors (https://github.com/googlefonts/nunito),
+  under the SIL Open Font License 1.1 (packages/app/public/fonts/OFL.txt).
+
+
+Logic ported from other projects
+--------------------------------
+
+packages/home/src/reverse/
+  The reverse-engineering tools take their logic from REA (https://github.com/morluto/rea,
+  MIT). No REA file was copied; each file carries REA's notice, and
+  docs/third-party/rea.md lists what came from where.
+
+Open Dot (composio-community/open-dot) has no licence, so it was read for ideas and
+never copied. tools/copyscan checks every source file against it on each run of the
+test gate.
+
+
+Downloaded on first setup, not part of this repository
+------------------------------------------------------
+
+`python -m orbs_kit.models` (kit/orbs_kit/models.py) fetches these from their own
+publishers, under their own licences, and keeps each only if its SHA-256 matches:
+
+  Kokoro-82M (text to speech), via https://github.com/thewh1teagle/kokoro-onnx
+  Smart Turn v3.2 (end of turn), https://huggingface.co/pipecat-ai/smart-turn-v3
+  Whisper base.en (speech to text), as converted by https://huggingface.co/Systran/faster-whisper-base.en
+
+The voice samples in packages/app/public/voices/ were spoken by Kokoro-82M
+(tools/voice_samples.py) and are released with Orbz under the MIT License.

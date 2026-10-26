@@ -3,7 +3,7 @@
 // in Chromium:
 //   - a button squishes the moment it goes down and springs back when let go;
 //   - it sounds on the way down, and the sound fits what was pressed;
-//   - few presses sound (owner, 10-07: "fkn limit them please"): a tab, a plain button and a choice
+//   - few presses sound (owner, 10-07: "... limit them please"): a tab, a plain button and a choice
 //     already made are silent, by mouse or by key, and a double press is one click;
 //   - quick presses climb and fall back, walked on a clock of the test's own;
 //   - he reacts to what you choose for him;
